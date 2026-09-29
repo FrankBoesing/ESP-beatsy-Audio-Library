@@ -1,25 +1,32 @@
 #include <Arduino.h>
 #include <SD_MMC.h>
 
-#include "AudioStream.h"
-#include "play_sd_wav.h"
-#include "output_i2s.h"
-#include "control_es8388.h"
+#include "AudioSourceFile.h"
+#include "AudioInputBuffer.h"
 
 
-AudioPlaySdWav wav;
+static const char *TEST_FILE = "/test.mp3";
 
-AudioOutputI2S i2s({
-    27,  // BCLK
-    25,  // WS / LRCLK
-    26,  // DOUT
-    0    // MCLK
-});
+AudioSourceFile source;
 
-AudioControlES8388 codec;
+AudioInputBuffer inputBuffer(32 * 1024);
 
-AudioConnection patchCord1(wav, 0, i2s, 0);
-AudioConnection patchCord2(wav, 0, i2s, 1);
+
+void printBufferState(const char *label)
+{
+    size_t readable = 0;
+
+    inputBuffer.acquireRead(readable);
+
+    Serial.printf(
+        "%-20s readable=%6u  free=%6u  capacity=%6u  PSRAM=%s\n",
+        label,
+        (unsigned)readable,
+        (unsigned)inputBuffer.freeSpace(),
+        (unsigned)inputBuffer.capacity(),
+        inputBuffer.usingPSRAM() ? "yes" : "no"
+    );
+}
 
 
 void setup()
@@ -28,79 +35,496 @@ void setup()
     delay(1000);
 
     Serial.println();
-    Serial.println("================================");
-    Serial.println(" AUDIO PLAY SD WAV TEST");
-    Serial.println("================================");
+    Serial.println("======================================");
+    Serial.println(" AudioInputBuffer SD_MMC TEST");
+    Serial.println("======================================");
 
-    AudioMemory(12);
 
-    Serial.println("Initializing ES8388...");
+    // ------------------------------------------------------------------------
+    // PSRAM
+    // ------------------------------------------------------------------------
 
-    if (!codec.enable()) {
-        Serial.println("ERROR: ES8388 initialization failed");
+#if defined(ARDUINO_ARCH_ESP32)
 
-        while (1) {
-            delay(1000);
-        }
-    }
+    Serial.printf(
+        "PSRAM found:      %s\n",
+        psramFound() ? "yes" : "no"
+    );
 
-    Serial.println("ES8388 initialized");
+    Serial.printf(
+        "PSRAM size:       %u bytes\n",
+        (unsigned)ESP.getPsramSize()
+    );
 
-    // Optional – currently both variants work.
-    // i2s.begin();
+    Serial.printf(
+        "Free PSRAM:       %u bytes\n",
+        (unsigned)ESP.getFreePsram()
+    );
 
+#endif
+
+
+    // ------------------------------------------------------------------------
+    // SD_MMC
+    // ------------------------------------------------------------------------
+
+    Serial.println();
     Serial.println("Initializing SD_MMC...");
 
-    // ESP32 Audio Kit V2.2:
-    // first test in 1-bit mode.
     if (!SD_MMC.begin("/sdcard", true)) {
 
         Serial.println(
             "ERROR: SD_MMC initialization failed"
         );
 
-        while (1) {
+        while (true) {
             delay(1000);
         }
     }
 
     Serial.println("SD_MMC initialized");
 
-    Serial.println("Opening /test.wav...");
 
-    //if (!wav.play("/test.wav")) {
-    if (!wav.play(SD_MMC, "/test.wav")) {
+    // ------------------------------------------------------------------------
+    // Source
+    // ------------------------------------------------------------------------
 
+    Serial.printf(
+        "Opening %s...\n",
+        TEST_FILE
+    );
+
+    if (!source.open(
+            SD_MMC,
+            TEST_FILE))
+    {
         Serial.println(
-            "ERROR: WAV playback could not be started"
+            "ERROR: Could not open test file"
         );
 
-        while (1) {
+        while (true) {
             delay(1000);
         }
     }
 
-    Serial.println("WAV playback started");
+    Serial.printf(
+        "Source opened, size=%llu bytes\n",
+        (unsigned long long)source.size()
+    );
+
+
+    // ------------------------------------------------------------------------
+    // Input buffer
+    // ------------------------------------------------------------------------
+
+    Serial.println();
+    Serial.println("Initializing AudioInputBuffer...");
+
+    if (!inputBuffer.begin()) {
+
+        Serial.println(
+            "ERROR: AudioInputBuffer allocation failed"
+        );
+
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    Serial.println("AudioInputBuffer initialized");
+
+    printBufferState("Initial");
+
+
+    // ========================================================================
+    // TEST 1
+    // ========================================================================
+
+    Serial.println();
+    Serial.println("--------------------------------------");
+    Serial.println("TEST 1: initial fill");
+    Serial.println("--------------------------------------");
+
+    AudioSourceStatus status =
+        inputBuffer.fill(source);
+
+    Serial.printf(
+        "fill() status: %d\n",
+        (int)status
+    );
+
+    printBufferState("After fill");
+
+
+    size_t readable = 0;
+
+    const uint8_t *ptr =
+        inputBuffer.acquireRead(readable);
+
+    if (ptr == nullptr) {
+
+        Serial.println(
+            "ERROR: acquireRead() returned nullptr"
+        );
+
+    }
+    else {
+
+        Serial.println(
+            "acquireRead() returned valid pointer"
+        );
+
+        Serial.printf(
+            "Readable bytes: %u\n",
+            (unsigned)readable
+        );
+
+        Serial.print(
+            "First 16 bytes:"
+        );
+
+        const size_t count =
+            min(
+                (size_t)16,
+                readable
+            );
+
+        for (size_t i = 0; i < count; ++i) {
+
+            Serial.printf(
+                " %02X",
+                ptr[i]
+            );
+        }
+
+        Serial.println();
+    }
+
+
+    // ========================================================================
+    // TEST 2
+    // ========================================================================
+
+    Serial.println();
+    Serial.println("--------------------------------------");
+    Serial.println("TEST 2: releaseRead without memcpy");
+    Serial.println("--------------------------------------");
+
+    const size_t consumeSize =
+        min(
+            (size_t)1024,
+            readable
+        );
+
+    Serial.printf(
+        "Releasing %u bytes...\n",
+        (unsigned)consumeSize
+    );
+
+    if (!inputBuffer.releaseRead(
+            consumeSize))
+    {
+        Serial.println(
+            "ERROR: releaseRead() failed"
+        );
+
+    }
+    else {
+
+        Serial.println(
+            "releaseRead() successful"
+        );
+    }
+
+    printBufferState("After release");
+
+
+    // ========================================================================
+    // TEST 3
+    // ========================================================================
+
+    Serial.println();
+    Serial.println("--------------------------------------");
+    Serial.println("TEST 3: refill");
+    Serial.println("--------------------------------------");
+
+    status =
+        inputBuffer.fill(source);
+
+    Serial.printf(
+        "fill() status: %d\n",
+        (int)status
+    );
+
+    printBufferState("After refill");
+
+
+    // ========================================================================
+    // TEST 4
+    // ========================================================================
+
+    Serial.println();
+    Serial.println("--------------------------------------");
+    Serial.println("TEST 4: force wrap-around");
+    Serial.println("--------------------------------------");
+
+
+    /*
+     * Nur 4096 Bytes sollen übrig bleiben.
+     */
+    inputBuffer.acquireRead(readable);
+
+    if (readable > 4096) {
+
+        const size_t amount =
+            readable - 4096;
+
+        if (!inputBuffer.releaseRead(
+                amount))
+        {
+            Serial.println(
+                "ERROR: release before wrap failed"
+            );
+        }
+    }
+
+    printBufferState("Before wrap fill");
+
+
+    /*
+     * Jetzt sollte der freie Bereich hinter A gefüllt werden.
+     */
+    status =
+        inputBuffer.fill(source);
+
+    Serial.printf(
+        "fill #1 -> status=%d\n",
+        (int)status
+    );
+
+    printBufferState("After wrap fill");
+
+
+    /*
+     * 1024 Bytes konsumieren.
+     */
+    inputBuffer.acquireRead(readable);
+
+    if (readable >= 1024) {
+
+        inputBuffer.releaseRead(1024);
+    }
+
+    printBufferState("After consume 1");
+
+
+    /*
+     * Jetzt erneut füllen.
+     *
+     * Wenn der Bip-Buffer korrekt funktioniert, kann
+     * dieser Fill am Anfang des Buffers eine zweite Region
+     * erzeugen.
+     */
+    status =
+        inputBuffer.fill(source);
+
+    Serial.printf(
+        "fill #2 -> status=%d\n",
+        (int)status
+    );
+
+    printBufferState("After fill 2");
+
+
+    // ========================================================================
+    // TEST 5
+    // ========================================================================
+
+    Serial.println();
+    Serial.println("--------------------------------------");
+    Serial.println("TEST 5: region transition");
+    Serial.println("--------------------------------------");
+
+
+    /*
+     * Aktuelle Region A schrittweise vollständig verbrauchen.
+     *
+     * Wenn Region B existiert, muss sie danach automatisch
+     * zur neuen Region A werden.
+     */
+    while (true) {
+
+        inputBuffer.acquireRead(readable);
+
+        if (readable == 0) {
+            break;
+        }
+
+        Serial.printf(
+            "Current read region: %u bytes\n",
+            (unsigned)readable
+        );
+
+        const size_t consume =
+            min(
+                readable,
+                (size_t)1024
+            );
+
+        if (!inputBuffer.releaseRead(
+                consume))
+        {
+            Serial.println(
+                "ERROR: releaseRead() failed"
+            );
+
+            break;
+        }
+    }
+
+    printBufferState("After region transition");
+
+
+    // ========================================================================
+    // TEST 6
+    // ========================================================================
+
+    Serial.println();
+    Serial.println("--------------------------------------");
+    Serial.println("TEST 6: acquireWrite / commitWrite");
+    Serial.println("--------------------------------------");
+
+
+    size_t writeLength = 0;
+
+    uint8_t *writePtr =
+        inputBuffer.acquireWrite(writeLength);
+
+    if (writePtr == nullptr) {
+
+        Serial.println(
+            "No writable region available"
+        );
+
+    }
+    else {
+
+        Serial.printf(
+            "Writable region: %u bytes\n",
+            (unsigned)writeLength
+        );
+
+
+        const size_t testBytes =
+            min(
+                writeLength,
+                (size_t)16
+            );
+
+
+        for (size_t i = 0; i < testBytes; ++i) {
+
+            writePtr[i] =
+                static_cast<uint8_t>(
+                    0xA0 + i
+                );
+        }
+
+
+        if (!inputBuffer.commitWrite(
+                testBytes))
+        {
+            Serial.println(
+                "ERROR: commitWrite() failed"
+            );
+
+        }
+        else {
+
+            Serial.printf(
+                "Committed %u bytes\n",
+                (unsigned)testBytes
+            );
+        }
+    }
+
+
+    // ========================================================================
+    // TEST 7
+    // ========================================================================
+
+    Serial.println();
+    Serial.println("--------------------------------------");
+    Serial.println("TEST 7: pointer stability");
+    Serial.println("--------------------------------------");
+
+
+    inputBuffer.acquireRead(readable);
+
+    const uint8_t *ptr1 =
+        inputBuffer.acquireRead(readable);
+
+    Serial.printf(
+        "Pointer before fill: %p\n",
+        ptr1
+    );
+
+    Serial.printf(
+        "Readable before fill: %u\n",
+        (unsigned)readable
+    );
+
+
+    inputBuffer.fill(source);
+
+
+    size_t readableAfter = 0;
+
+    const uint8_t *ptr2 =
+        inputBuffer.acquireRead(
+            readableAfter
+        );
+
+    Serial.printf(
+        "Pointer after fill:  %p\n",
+        ptr2
+    );
+
+    Serial.printf(
+        "Readable after fill: %u\n",
+        (unsigned)readableAfter
+    );
+
+
+    if (ptr1 == ptr2) {
+
+        Serial.println(
+            "PASS: read pointer remained stable"
+        );
+
+    }
+    else {
+
+        Serial.println(
+            "NOTE: read pointer changed"
+        );
+    }
+
+
+    // ------------------------------------------------------------------------
+    // Done
+    // ------------------------------------------------------------------------
+
+    Serial.println();
+    Serial.println("======================================");
+    Serial.println(" TEST COMPLETE");
+    Serial.println("======================================");
+
+    printBufferState("Final");
 }
 
 
 void loop()
 {
-    static uint32_t lastStatus = 0;
-
-    if (millis() - lastStatus >= 1000) {
-
-        lastStatus = millis();
-
-        Serial.print("Playing: ");
-        Serial.print(wav.isPlaying());
-
-        Serial.print("  Position: ");
-        Serial.print(wav.positionMillis());
-
-        Serial.print(" ms / ");
-        Serial.print(wav.lengthMillis());
-
-        Serial.println(" ms");
-    }
+    delay(1000);
 }
