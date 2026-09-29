@@ -1,37 +1,37 @@
-/* ***** BEGIN LICENSE BLOCK ***** 
- * Version: RCSL 1.0/RPSL 1.0 
- *  
- * Portions Copyright (c) 1995-2002 RealNetworks, Inc. All Rights Reserved. 
- *      
- * The contents of this file, and the files included with this file, are 
- * subject to the current version of the RealNetworks Public Source License 
- * Version 1.0 (the "RPSL") available at 
- * http://www.helixcommunity.org/content/rpsl unless you have licensed 
- * the file under the RealNetworks Community Source License Version 1.0 
- * (the "RCSL") available at http://www.helixcommunity.org/content/rcsl, 
- * in which case the RCSL will apply. You may also obtain the license terms 
- * directly from RealNetworks.  You may not use this file except in 
- * compliance with the RPSL or, if you have a valid RCSL with RealNetworks 
- * applicable to this file, the RCSL.  Please see the applicable RPSL or 
- * RCSL for the rights, obligations and limitations governing use of the 
- * contents of the file.  
- *  
- * This file is part of the Helix DNA Technology. RealNetworks is the 
- * developer of the Original Code and owns the copyrights in the portions 
- * it created. 
- *  
- * This file, and the files included with this file, is distributed and made 
- * available on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER 
- * EXPRESS OR IMPLIED, AND REALNETWORKS HEREBY DISCLAIMS ALL SUCH WARRANTIES, 
- * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY, FITNESS 
- * FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT. 
- * 
- * Technology Compatibility Kit Test Suite(s) Location: 
- *    http://www.helixcommunity.org/content/tck 
- * 
- * Contributor(s): 
- *  
- * ***** END LICENSE BLOCK ***** */ 
+/* ***** BEGIN LICENSE BLOCK *****
+ * Version: RCSL 1.0/RPSL 1.0
+ *
+ * Portions Copyright (c) 1995-2002 RealNetworks, Inc. All Rights Reserved.
+ *
+ * The contents of this file, and the files included with this file, are
+ * subject to the current version of the RealNetworks Public Source License
+ * Version 1.0 (the "RPSL") available at
+ * http://www.helixcommunity.org/content/rpsl unless you have licensed
+ * the file under the RealNetworks Community Source License Version 1.0
+ * (the "RCSL") available at http://www.helixcommunity.org/content/rcsl,
+ * in which case the RCSL will apply. You may also obtain the license terms
+ * directly from RealNetworks.  You may not use this file except in
+ * compliance with the RPSL or, if you have a valid RCSL with RealNetworks
+ * applicable to this file, the RCSL.  Please see the applicable RPSL or
+ * RCSL for the rights, obligations and limitations governing use of the
+ * contents of the file.
+ *
+ * This file is part of the Helix DNA Technology. RealNetworks is the
+ * developer of the Original Code and owns the copyrights in the portions
+ * it created.
+ *
+ * This file, and the files included with this file, is distributed and made
+ * available on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND REALNETWORKS HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ *
+ * Technology Compatibility Kit Test Suite(s) Location:
+ *    http://www.helixcommunity.org/content/tck
+ *
+ * Contributor(s):
+ *
+ * ***** END LICENSE BLOCK ***** */
 
 /**************************************************************************************
  * Fixed-point MP3 decoder
@@ -86,48 +86,69 @@ void SetBitstreamPointer(BitStreamInfo *bsi, int nBytes, unsigned char *buf)
  **************************************************************************************/
 static __inline void RefillBitstreamCache(BitStreamInfo *bsi)
 {
-	int nBytes = bsi->nBytes;	
-	if (nBytes >= 4) {
-		/* optimize for common case, independent of machine endian-ness */
-		/*
-		bsi->iCache  = (*bsi->bytePtr++) << 24;
-		bsi->iCache |= (*bsi->bytePtr++) << 16;
-		bsi->iCache |= (*bsi->bytePtr++) <<  8;
-		bsi->iCache |= (*bsi->bytePtr++);
-		*/
-	
-		/* Optimize for ARM instead (FB)*/
-		unsigned int *Ptr32;
-		Ptr32 =(unsigned int*)bsi->bytePtr;
-		bsi->iCache = REV32(*Ptr32);
-		bsi->bytePtr+=4;
-	
-	
-		bsi->cachedBits = 32;
-		bsi->nBytes -= 4;
-	} else if (nBytes == 2) { //FB	
-		unsigned short *Ptr16;
-		Ptr16 =(unsigned short*)bsi->bytePtr;
-		bsi->iCache = REV16(*Ptr16);
-		bsi->bytePtr +=2;	
-		bsi->cachedBits = 16;
-		bsi->nBytes -= 2;
-			
-	} /*else { //FB
-		bsi->iCache = 0;
-		while (nBytes--) {
-			bsi->iCache |= (*bsi->bytePtr++);
-			bsi->iCache <<= 8;
-		}
-		bsi->iCache <<= ((3 - bsi->nBytes)*8);
-		bsi->cachedBits = 8*bsi->nBytes;
-		bsi->nBytes = 0;
-	} */
-	else { //FB		
-		bsi->iCache = (*bsi->bytePtr++) << 24;		
-		bsi->cachedBits = 8;
-		bsi->nBytes = 0;
-	}
+    int nBytes = bsi->nBytes;
+
+    if (nBytes >= 4) {
+
+        /*
+         * Optimize for 32-bit loads.
+         * REV32() converts the native ESP32 byte order
+         * to the big-endian representation expected
+         * by the bitstream decoder.
+         */
+        unsigned int *Ptr32;
+
+        Ptr32 = (unsigned int *)bsi->bytePtr;
+
+        bsi->iCache = REV32(*Ptr32);
+
+        bsi->bytePtr += 4;
+        bsi->cachedBits = 32;
+        bsi->nBytes -= 4;
+
+    } else if (nBytes == 2) {
+
+        /*
+         * Special case for exactly 2 remaining bytes.
+         */
+        unsigned short *Ptr16;
+
+        Ptr16 = (unsigned short *)bsi->bytePtr;
+
+        bsi->iCache = REV16(*Ptr16);
+
+        bsi->bytePtr += 2;
+        bsi->cachedBits = 16;
+        bsi->nBytes -= 2;
+
+    } else {
+
+        /*
+         * 1 or 3 remaining bytes.
+         *
+         * The original implementation handles both cases
+         * byte-by-byte. Do NOT treat 3 bytes as a single byte.
+         */
+        bsi->iCache = 0;
+
+        while (nBytes--) {
+            bsi->iCache |= *bsi->bytePtr++;
+            bsi->iCache <<= 8;
+        }
+
+        /*
+         * Align the remaining bytes to the MSB side of
+         * the 32-bit cache.
+         *
+         * bsi->nBytes still contains the original number
+         * of bytes here because only the local nBytes was
+         * decremented above.
+         */
+        bsi->iCache <<= ((3 - bsi->nBytes) * 8);
+
+        bsi->cachedBits = 8 * bsi->nBytes;
+        bsi->nBytes = 0;
+    }
 }
 
 /**************************************************************************************
@@ -143,7 +164,7 @@ static __inline void RefillBitstreamCache(BitStreamInfo *bsi)
  * Return:      the next nBits bits of data from bitstream buffer
  *
  * Notes:       nBits must be in range [0, 31], nBits outside this range masked by 0x1f
- *              for speed, does not indicate error if you overrun bit buffer 
+ *              for speed, does not indicate error if you overrun bit buffer
  *              if nBits = 0, returns 0 (useful for scalefactor unpacking)
  *
  * TODO:        optimize for ARM
@@ -163,7 +184,7 @@ unsigned int GetBits(BitStreamInfo *bsi, int nBits)
 		lowBits = -bsi->cachedBits;
 		RefillBitstreamCache(bsi);
 		data |= bsi->iCache >> (32 - lowBits);		/* get the low-order bits */
-	
+
 		bsi->cachedBits -= lowBits;			/* how many bits have we drawn from the cache so far */
 		bsi->iCache <<= lowBits;			/* left-justify cache */
 	}
@@ -178,7 +199,7 @@ unsigned int GetBits(BitStreamInfo *bsi, int nBits)
  *
  * Inputs:      pointer to initialized BitStreamInfo struct
  *              pointer to start of bitstream buffer
- *              bit offset into first byte of startBuf (0-7) 
+ *              bit offset into first byte of startBuf (0-7)
  *
  * Outputs:     none
  *
@@ -200,7 +221,7 @@ int CalcBitsUsed(BitStreamInfo *bsi, unsigned char *startBuf, int startOffset)
  *
  * Description: check whether padding byte is present in an MP3 frame
  *
- * Inputs:      MP3DecInfo struct with valid FrameHeader struct 
+ * Inputs:      MP3DecInfo struct with valid FrameHeader struct
  *                (filled by UnpackFrameHeader())
  *
  * Outputs:     none
@@ -258,7 +279,7 @@ int UnpackFrameHeader(MP3DecInfo *mp3DecInfo, unsigned char *buf)
 	fh->srIdx =      (buf[2] >> 2) & 0x03;
 	fh->paddingBit = (buf[2] >> 1) & 0x01;
 	fh->privateBit = (buf[2] >> 0) & 0x01;
-	fh->sMode =      (StereoMode)((buf[3] >> 6) & 0x03);      /* maps to correct enum (see definition) */    
+	fh->sMode =      (StereoMode)((buf[3] >> 6) & 0x03);      /* maps to correct enum (see definition) */
 	fh->modeExt =    (buf[3] >> 4) & 0x03;
 	fh->copyFlag =   (buf[3] >> 3) & 0x01;
 	fh->origFlag =   (buf[3] >> 2) & 0x01;
@@ -279,18 +300,18 @@ int UnpackFrameHeader(MP3DecInfo *mp3DecInfo, unsigned char *buf)
 	mp3DecInfo->nGranSamps = ((int)samplesPerFrameTab[fh->ver][fh->layer - 1]) / mp3DecInfo->nGrans;
 	mp3DecInfo->layer = fh->layer;
 	mp3DecInfo->version = fh->ver;
-	
+
 	/* get bitrate and nSlots from table, unless brIdx == 0 (free mode) in which case caller must figure it out himself
 	 * question - do we want to overwrite mp3DecInfo->bitrate with 0 each time if it's free mode, and
-	 *  copy the pre-calculated actual free bitrate into it in mp3dec.c (according to the spec, 
+	 *  copy the pre-calculated actual free bitrate into it in mp3dec.c (according to the spec,
 	 *  this shouldn't be necessary, since it should be either all frames free or none free)
 	 */
 	if (fh->brIdx) {
 		mp3DecInfo->bitrate = ((int)bitrateTab[fh->ver][fh->layer - 1][fh->brIdx]) * 1000;
-	
+
 		/* nSlots = total frame bytes (from table) - sideInfo bytes - header - CRC (if present) + pad (if present) */
-		mp3DecInfo->nSlots = (int)slotTab[fh->ver][fh->srIdx][fh->brIdx] - 
-			(int)sideBytesTab[fh->ver][(fh->sMode == Mono ? 0 : 1)] - 
+		mp3DecInfo->nSlots = (int)slotTab[fh->ver][fh->srIdx][fh->brIdx] -
+			(int)sideBytesTab[fh->ver][(fh->sMode == Mono ? 0 : 1)] -
 			4 - (fh->crc ? 2 : 0) + (fh->paddingBit ? 1 : 0);
 	}
 
@@ -406,6 +427,6 @@ int UnpackSideInfo(MP3DecInfo *mp3DecInfo, unsigned char *buf)
 
 	ASSERT(nBytes == CalcBitsUsed(bsi, buf, 0) >> 3);
 
-	return nBytes;	
+	return nBytes;
 }
 
