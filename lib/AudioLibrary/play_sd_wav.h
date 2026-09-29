@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <AudioStream.h>
+#include "AudioSource.h"
 
 #if defined(ARDUINO_ARCH_ESP32)
 #include <FS.h>
@@ -16,15 +17,29 @@ public:
     AudioPlaySdWav()
         : AudioStream(0, nullptr),
           state(STOPPED),
+          source(nullptr),
+          own_source(false),
           block_left(nullptr),
           block_right(nullptr)
     {
         begin();
     }
 
+    ~AudioPlaySdWav() override;
+
     void begin();
 
+    // Bestehende API
     bool play(const char *filename);
+
+#if defined(ARDUINO_ARCH_ESP32)
+    // Beliebiges Arduino-ESP32 Filesystem
+    bool play(fs::FS &fs, const char *filename);
+#endif
+
+    // Generische AudioSource
+    bool play(AudioSource &source);
+
     void stop();
     void togglePlayPause();
 
@@ -47,15 +62,24 @@ private:
 
     State state;
 
-#if defined(ARDUINO_ARCH_ESP32)
-    fs::File wavfile;
-#else
-    void *wavfile;
-#endif
+    /*
+     * Aktive AudioSource.
+     */
+    AudioSource *source;
 
-    uint32_t data_start;
-    uint32_t data_length;
-    uint32_t total_length;
+    /*
+     * true:
+     *   Der Player hat die Source selbst erzeugt
+     *   und ist für deren Lebensdauer verantwortlich.
+     *
+     * false:
+     *   Die Source gehört dem Aufrufer.
+     */
+    bool own_source;
+
+    uint64_t data_start;
+    uint64_t data_length;
+    uint64_t total_length;
 
     uint32_t sample_rate;
     uint16_t channels;
@@ -83,18 +107,52 @@ private:
     uint32_t resample_phase;
     uint32_t resample_step;
 
-    bool readExact(void *buffer, size_t length);
-    bool seekAbsolute(uint32_t position);
-    bool skip(uint32_t length);
+    /*
+     * Gemeinsamer Startpfad für alle Sources.
+     */
+    bool startPlayback(
+        AudioSource &source,
+        bool takeOwnership
+    );
 
+    /*
+     * Source-Verwaltung.
+     */
+    void closeSource();
+
+    /*
+     * Source I/O.
+     */
+    bool readExact(void *buffer, size_t length);
+    bool seekAbsolute(uint64_t position);
+    bool skip(uint64_t length);
+
+    /*
+     * WAV parsing.
+     *
+     * Diese Funktionen entsprechen funktional dem
+     * bisherigen WAV-Parser.
+     */
     bool parseWav();
-    bool parseFmtChunk(uint32_t position, uint32_t size);
+    bool parseFmtChunk(uint64_t position, uint32_t size);
     bool findDataChunk();
 
-    bool readSourceFrame(int32_t &left, int32_t &right);
-    int32_t decodeSample(const uint8_t *data) const;
+    /*
+     * PCM decoding.
+     */
+    bool readSourceFrame(
+        int32_t &left,
+        int32_t &right
+    );
 
-    bool getOutputSample(int16_t &left, int16_t &right);
+    int32_t decodeSample(
+        const uint8_t *data
+    ) const;
+
+    bool getOutputSample(
+        int16_t &left,
+        int16_t &right
+    );
 
     void releaseBlocks();
     void finishPlayback();

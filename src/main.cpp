@@ -68,7 +68,8 @@ void setup()
 
     Serial.println("Opening /test.wav...");
 
-    if (!wav.play("/test.wav")) {
+    //if (!wav.play("/test.wav")) {
+    if (!wav.play(SD_MMC, "/test.wav")) {
 
         Serial.println(
             "ERROR: WAV playback could not be started"

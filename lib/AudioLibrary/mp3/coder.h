@@ -48,6 +48,7 @@
 
 
 #include "mp3common.h"
+#include "assembly.h"
 
 #if defined(ASSERT)
 #undef ASSERT
