@@ -6,37 +6,34 @@
 #include <cstring>
 
 namespace {
+
 constexpr const char *TAG = "AudioPlayMp3";
 
-/*
- * Maximum Helix MP3 frame output:
- *   MAX_NCHAN * MAX_NGRAN * MAX_NSAMP
- *
- * Stereo/interleaved PCM therefore occupies exactly this many int16_t
- * values for the largest MPEG1 stereo frame.
- */
-constexpr size_t MP3_PCM_BUFFER_SAMPLES =
-    MAX_NCHAN * MAX_NGRAN * MAX_NSAMP;
+} // namespace
 
-constexpr size_t MP3_INPUT_BUFFER_SIZE =
-    32U * 1024U;
-}
 
 AudioPlayMp3::AudioPlayMp3()
-    : AudioDecoderStream(MP3_PCM_BUFFER_SAMPLES),
-      _inputBuffer(MP3_INPUT_BUFFER_SIZE)
+    : AudioDecoderStream(MP3_PCM_BUFFER_SAMPLES)
 {
     /*
-     * Intentionally empty:
-     * no decoder and no task are created here.
+     * Intentionally empty.
+     *
+     * Neither MP3InitDecoder() nor the decoder task is created here.
+     * Playback startup does that work from play().
      */
 }
+
 
 AudioPlayMp3::~AudioPlayMp3()
 {
     stop();
     closeSource();
 }
+
+
+// ============================================================================
+// Source lifetime
+// ============================================================================
 
 void AudioPlayMp3::closeSource()
 {
@@ -54,10 +51,16 @@ void AudioPlayMp3::closeSource()
     _ownSource = false;
 }
 
+
+// ============================================================================
+// Public play API
+// ============================================================================
+
 bool AudioPlayMp3::play(const char *filename)
 {
     return play(SD_MMC, filename);
 }
+
 
 bool AudioPlayMp3::play(
     fs::FS &fs,
@@ -71,12 +74,22 @@ bool AudioPlayMp3::play(
 
     if (filename == nullptr) {
         _lastError = ERR_FILE_NOT_FOUND;
-        ESP_LOGE(TAG, "filename is null");
+
+        ESP_LOGE(
+            TAG,
+            "filename is null"
+        );
+
         return false;
     }
 
-    AudioSourceFile *fileSource =
-        new AudioSourceFile();
+    AudioSourceFile *fileSource = nullptr;
+
+    /*
+     * AudioSourceFile is deliberately allocated on playback start,
+     * not in the constructor.
+     */
+    fileSource = new AudioSourceFile();
 
     if (fileSource == nullptr) {
         _lastError = ERR_OUT_OF_MEMORY;
@@ -89,6 +102,7 @@ bool AudioPlayMp3::play(
             FILE_READ))
     {
         delete fileSource;
+
         _lastError = ERR_FILE_NOT_FOUND;
 
         ESP_LOGE(
@@ -106,6 +120,7 @@ bool AudioPlayMp3::play(
     );
 }
 
+
 bool AudioPlayMp3::play(AudioSource &source)
 {
     stop();
@@ -118,6 +133,11 @@ bool AudioPlayMp3::play(AudioSource &source)
         false
     );
 }
+
+
+// ============================================================================
+// Start / stop
+// ============================================================================
 
 bool AudioPlayMp3::startPlayback(
     AudioSource &source,
@@ -132,32 +152,27 @@ bool AudioPlayMp3::startPlayback(
         }
 
         _lastError = ERR_FILE_NOT_FOUND;
+
         return false;
     }
 
     _source = &source;
     _ownSource = takeOwnership;
 
-    _inputBuffer.end();
-
-    if (!_inputBuffer.begin()) {
-        _lastError = ERR_OUT_OF_MEMORY;
-        closeSource();
-        return false;
-    }
-
     /*
-     * Decoder initialization is playback startup work. Actual MP3Decode()
-     * calls only happen after startDecoderTask() has created the task.
+     * The source may be a reusable object. Reset MP3 input state for every
+     * new playback.
      */
-    _decoder = MP3InitDecoder();
+    _inputPos = 0;
+    _inputLeft = 0;
+    _inputEof = false;
+    _inputPrepared = false;
 
-    if (_decoder == nullptr) {
-        _lastError = ERR_OUT_OF_MEMORY;
-        _inputBuffer.end();
-        closeSource();
-        return false;
-    }
+    std::memset(
+        _input,
+        0,
+        sizeof(_input)
+    );
 
     std::memset(
         &_frameInfo,
@@ -168,19 +183,31 @@ bool AudioPlayMp3::startPlayback(
     _sampleRate = 0;
     _channels = 0;
     _bitrate = 0;
-    _dataSamplesPlayed = 0;
-    _inputPrepared = false;
     _paused = false;
 
+    /*
+     * Match the existing AudioPlaySdWav source handling:
+     * seek to the beginning when the source is seekable.
+     */
     if (_source->isSeekable() &&
         !_source->seek(0))
     {
         _lastError = ERR_FILE_NOT_FOUND;
 
-        MP3FreeDecoder(_decoder);
-        _decoder = nullptr;
+        closeSource();
+        return false;
+    }
 
-        _inputBuffer.end();
+    /*
+     * Decoder initialization is startup work.
+     * MP3Decode() itself is called only by decodePcmBuffer(), i.e. from the
+     * FreeRTOS decoder task created below.
+     */
+    _decoder = MP3InitDecoder();
+
+    if (_decoder == nullptr) {
+        _lastError = ERR_OUT_OF_MEMORY;
+
         closeSource();
         return false;
     }
@@ -191,7 +218,6 @@ bool AudioPlayMp3::startPlayback(
         MP3FreeDecoder(_decoder);
         _decoder = nullptr;
 
-        _inputBuffer.end();
         closeSource();
         return false;
     }
@@ -199,11 +225,13 @@ bool AudioPlayMp3::startPlayback(
     return true;
 }
 
+
 void AudioPlayMp3::stop()
 {
     /*
-     * First stop the realtime side and wait for the decoder task.
-     * Only then are the source, input buffer and decoder released.
+     * First stop the decoder task. This is the non-realtime shutdown path.
+     * Only after the task has stopped may the decoder and source buffers be
+     * released.
      */
     stopDecoderTask();
 
@@ -212,21 +240,29 @@ void AudioPlayMp3::stop()
         _decoder = nullptr;
     }
 
-    _inputBuffer.end();
-
+    _inputPos = 0;
+    _inputLeft = 0;
+    _inputEof = false;
     _inputPrepared = false;
-    _paused = false;
-    _dataSamplesPlayed = 0;
 
-    _lastError = ERR_NONE;
+    _paused = false;
 }
+
 
 bool AudioPlayMp3::isPlaying() const
 {
-    return isActive() &&
-           !_paused &&
-           !decoderFinished();
+    /*
+     * decoderFinished() only means that no more compressed data will be
+     * decoded. The final READY PCM buffer may still be draining through
+     * AudioDecoderStream::update().
+     */
+    return isActive() && !_paused;
 }
+
+
+// ============================================================================
+// Position / length
+// ============================================================================
 
 uint32_t AudioPlayMp3::positionMillis() const
 {
@@ -234,16 +270,19 @@ uint32_t AudioPlayMp3::positionMillis() const
         _sampleRate != 0
             ? _sampleRate
             : static_cast<uint32_t>(
-                AudioStream::sampleRate());
+                AudioStream::sampleRate()
+            );
 
     if (rate == 0) {
         return 0;
     }
 
     return static_cast<uint32_t>(
-        (samplesPlayed() * 1000ULL) / rate
+        (samplesPlayed() * 1000ULL) /
+        rate
     );
 }
+
 
 uint32_t AudioPlayMp3::lengthMillis() const
 {
@@ -254,8 +293,9 @@ uint32_t AudioPlayMp3::lengthMillis() const
     }
 
     /*
-     * This is intentionally only an approximate length for VBR files,
-     * matching the traditional codec-player behavior.
+     * Approximate length, especially for VBR files.
+     * This follows the traditional player approach of using the available
+     * file size and the observed bitrate.
      */
     const uint64_t millis =
         (_source->size() * 8000ULL) /
@@ -263,6 +303,11 @@ uint32_t AudioPlayMp3::lengthMillis() const
 
     return static_cast<uint32_t>(millis);
 }
+
+
+// ============================================================================
+// ID3
+// ============================================================================
 
 size_t AudioPlayMp3::id3TagSize(
     const uint8_t header[10]
@@ -277,7 +322,7 @@ size_t AudioPlayMp3::id3TagSize(
     }
 
     /*
-     * ID3v2 uses a 28-bit synchsafe size.
+     * ID3v2 uses a 28-bit synchsafe tag-data length.
      */
     const uint32_t tagDataSize =
         ((uint32_t)(header[6] & 0x7F) << 21) |
@@ -298,149 +343,130 @@ size_t AudioPlayMp3::id3TagSize(
     return total;
 }
 
-bool AudioPlayMp3::appendInput(size_t requested)
-{
-    if (_source == nullptr ||
-        requested == 0)
-    {
-        return false;
-    }
 
-    size_t writable = 0;
-
-    uint8_t *destination =
-        _inputBuffer.acquireWrite(writable);
-
-    if (destination == nullptr ||
-        writable == 0)
-    {
-        return false;
-    }
-
-    requested = std::min(requested, writable);
-
-    size_t received = 0;
-
-    const AudioSourceStatus status =
-        _source->read(
-            destination,
-            requested,
-            received
-        );
-
-    if (!_inputBuffer.commitWrite(received)) {
-        return false;
-    }
-
-    if (status == AudioSourceStatus::DATA &&
-        received > 0)
-    {
-        return true;
-    }
-
-    return false;
-}
+// ============================================================================
+// Compressed input buffer
+// ============================================================================
 
 bool AudioPlayMp3::fillInput(size_t minimumBytes)
 {
-    if (_source == nullptr) {
+    if (_source == nullptr ||
+        minimumBytes > MP3_INPUT_BUFFER_SIZE)
+    {
         return false;
     }
 
-    while (_inputBuffer.availableRead() < minimumBytes) {
-
-        const size_t before =
-            _inputBuffer.availableRead();
+    while (_inputLeft < minimumBytes) {
 
         /*
-         * Prefer the existing generic refill policy.
+         * Compact unread compressed data to the beginning of the buffer.
+         *
+         * This is the important part that makes MP3Decode() see one
+         * contiguous frame, including a frame that crosses a refill boundary.
+         *
+         * It corresponds to the fillReadBuffer() approach used by the
+         * Teensy AudioPlaySdMp3 implementation.
          */
-        const AudioSourceStatus status =
-            _inputBuffer.fill(*_source);
+        if (_inputPos > 0) {
 
-        if (_inputBuffer.availableRead() >= minimumBytes) {
+            if (_inputLeft > 0) {
+                std::memmove(
+                    _input,
+                    _input + _inputPos,
+                    _inputLeft
+                );
+            }
+
+            _inputPos = 0;
+        }
+
+        if (_inputLeft >= minimumBytes) {
             return true;
         }
 
-        const size_t after =
-            _inputBuffer.availableRead();
+        const size_t freeSpace =
+            MP3_INPUT_BUFFER_SIZE - _inputLeft;
 
-        if (after > before) {
-            continue;
-        }
-
-        /*
-         * AudioInputBuffer deliberately refuses a normal refill once its
-         * filesystem threshold is reached. For a decoder we occasionally
-         * need more input than that (e.g. a frame spanning a refill).
-         *
-         * Use the buffer's write side directly. This still keeps all source
-         * I/O in the decoder task and does not introduce another PCM buffer.
-         */
-        if (after > 0 &&
-            after < _inputBuffer.capacity() &&
-            status != AudioSourceStatus::END_OF_STREAM &&
-            status != AudioSourceStatus::ERROR)
-        {
-            const size_t missing =
-                minimumBytes - after;
-
-            const size_t request =
-                std::max<size_t>(missing, 512U);
-
-            if (appendInput(request)) {
-                continue;
-            }
-        }
-
-        if (status == AudioSourceStatus::END_OF_STREAM ||
-            status == AudioSourceStatus::ERROR)
-        {
+        if (freeSpace == 0) {
             return false;
         }
 
-        /*
-         * WOULD_BLOCK is allowed for future streaming AudioSource
-         * implementations. Waiting is legal here because this is the
-         * decoder task, never update().
-         */
-        vTaskDelay(1);
+        size_t received = 0;
+
+        const AudioSourceStatus status =
+            _source->read(
+                _input + _inputLeft,
+                freeSpace,
+                received
+            );
+
+        if (received > 0) {
+            _inputLeft += received;
+
+            if (_inputLeft >= minimumBytes) {
+                return true;
+            }
+        }
+
+        switch (status) {
+
+        case AudioSourceStatus::DATA:
+            /*
+             * DATA with zero bytes would otherwise create a busy loop.
+             */
+            if (received == 0) {
+                vTaskDelay(1);
+            }
+            break;
+
+        case AudioSourceStatus::WOULD_BLOCK:
+            /*
+             * This is allowed to block only inside the decoder task.
+             */
+            vTaskDelay(1);
+            break;
+
+        case AudioSourceStatus::END_OF_STREAM:
+            _inputEof = true;
+
+            return _inputLeft >= minimumBytes;
+
+        case AudioSourceStatus::ERROR:
+        default:
+            return false;
+        }
     }
 
     return true;
 }
 
+
 bool AudioPlayMp3::skipInput(size_t bytes)
 {
     while (bytes > 0) {
 
-        if (!fillInput(1)) {
-            return false;
-        }
+        if (_inputLeft == 0) {
 
-        size_t available = 0;
-
-        const uint8_t *data =
-            _inputBuffer.acquireRead(available);
-
-        if (data == nullptr ||
-            available == 0)
-        {
-            return false;
+            if (!fillInput(1)) {
+                return false;
+            }
         }
 
         const size_t consume =
-            std::min(bytes, available);
+            std::min(
+                bytes,
+                _inputLeft
+            );
 
-        if (!_inputBuffer.releaseRead(consume)) {
-            return false;
-        }
+        _inputPos += consume;
+        _inputLeft -= consume;
 
         bytes -= consume;
     }
 
     return true;
 }
+
 
 bool AudioPlayMp3::prepareMp3Input()
 {
@@ -449,17 +475,8 @@ bool AudioPlayMp3::prepareMp3Input()
         return false;
     }
 
-    size_t length = 0;
-
     const uint8_t *header =
-        _inputBuffer.acquireRead(length);
-
-    if (header == nullptr ||
-        length < 10)
-    {
-        _lastError = ERR_FILE_NOT_FOUND;
-        return false;
-    }
+        _input + _inputPos;
 
     const size_t tagSize =
         id3TagSize(header);
@@ -475,6 +492,10 @@ bool AudioPlayMp3::prepareMp3Input()
         static_cast<unsigned>(tagSize)
     );
 
+    /*
+     * Skip exactly the complete ID3 tag before MP3FindSyncWord(), just as
+     * AudioPlaySdMp3 skips the tag before starting frame decoding.
+     */
     if (!skipInput(tagSize)) {
         _lastError = ERR_FILE_NOT_FOUND;
         return false;
@@ -483,6 +504,11 @@ bool AudioPlayMp3::prepareMp3Input()
     _inputPrepared = true;
     return true;
 }
+
+
+// ============================================================================
+// Frame information
+// ============================================================================
 
 bool AudioPlayMp3::validateFrameInfo(
     const MP3FrameInfo &info
@@ -524,6 +550,21 @@ bool AudioPlayMp3::validateFrameInfo(
         return false;
     }
 
+    if (info.outputSamps <= 0 ||
+        static_cast<size_t>(info.outputSamps) >
+            MP3_PCM_BUFFER_SAMPLES)
+    {
+        _lastError = ERR_FORMAT;
+
+        ESP_LOGE(
+            TAG,
+            "invalid MP3 output sample count: %d",
+            info.outputSamps
+        );
+
+        return false;
+    }
+
     _sampleRate =
         static_cast<uint32_t>(info.samprate);
 
@@ -542,6 +583,11 @@ bool AudioPlayMp3::validateFrameInfo(
     return true;
 }
 
+
+// ============================================================================
+// MP3 frame decoding
+// ============================================================================
+
 AudioPlayMp3::DecodeResult
 AudioPlayMp3::decodePcmBuffer(
     int16_t *destination,
@@ -553,175 +599,123 @@ AudioPlayMp3::decodePcmBuffer(
 
     if (_decoder == nullptr ||
         destination == nullptr ||
-        capacity < 2)
+        capacity < MP3_PCM_BUFFER_SAMPLES)
     {
         _lastError = ERR_DECODER;
         return DecodeResult::ERROR;
     }
 
     /*
-     * Everything in this function runs exclusively in the decoder task.
+     * MP3InitDecoder(), MP3FindSyncWord(), MP3Decode() and
+     * MP3GetLastFrameInfo() are all kept on the decoder-task side.
      */
     if (!_inputPrepared) {
         if (!prepareMp3Input()) {
-            return DecodeResult::END_OF_STREAM;
+            return DecodeResult::ERROR;
         }
     }
 
-    while (outSamples < capacity) {
+    for (;;) {
 
-        /*
-         * A valid MP3 frame needs at least enough bytes for its header.
-         * More data is requested below whenever the decoder reports that a
-         * complete frame is not currently available.
-         */
         if (!fillInput(4)) {
-            return DecodeResult::END_OF_STREAM;
+            return _inputEof
+                ? DecodeResult::END_OF_STREAM
+                : DecodeResult::RETRY;
         }
 
-        size_t available = 0;
-
-        const uint8_t *readPtr =
-            _inputBuffer.acquireRead(available);
-
-        if (readPtr == nullptr ||
-            available < 4)
-        {
-            return DecodeResult::RETRY;
-        }
-
-        const int offset =
+        int offset =
             MP3FindSyncWord(
-                const_cast<unsigned char *>(
-                    reinterpret_cast<const unsigned char *>(
-                        readPtr
-                    )
-                ),
-                static_cast<int>(available)
+                _input + _inputPos,
+                static_cast<int>(_inputLeft)
             );
 
         if (offset < 0) {
+
             /*
-             * Preserve one byte for a sync word split across a refill.
+             * Preserve enough bytes for a sync/header pattern that crosses
+             * the next refill boundary.
              */
-            if (available > 1) {
-                if (!_inputBuffer.releaseRead(
-                        available - 1))
-                {
-                    _lastError = ERR_DECODER;
-                    return DecodeResult::ERROR;
-                }
+            if (_inputLeft > 3) {
+                _inputPos += _inputLeft - 3;
+                _inputLeft = 3;
             }
 
-            if (!appendInput(512U) &&
-                _inputBuffer.availableRead() <= 1)
-            {
+            if (_inputEof) {
                 return DecodeResult::END_OF_STREAM;
+            }
+
+            if (!fillInput(4)) {
+                return _inputEof
+                    ? DecodeResult::END_OF_STREAM
+                    : DecodeResult::RETRY;
             }
 
             continue;
         }
 
         if (offset > 0) {
-            if (!_inputBuffer.releaseRead(
-                    static_cast<size_t>(offset)))
-            {
-                _lastError = ERR_DECODER;
-                return DecodeResult::ERROR;
-            }
-
-            continue;
+            _inputPos += static_cast<size_t>(offset);
+            _inputLeft -= static_cast<size_t>(offset);
         }
 
         /*
-         * We are exactly at a frame sync word.
+         * We are now exactly at an MP3 frame sync word.
+         *
+         * IMPORTANT:
+         * MP3Decode() is called exactly like the Teensy implementation:
+         *
+         *   MP3Decode(decoder, &input, &bytesLeft, outbuf, 0)
+         *
+         * No MP3GetNextFrameInfo() pre-scan is performed.
          */
-        readPtr =
-            _inputBuffer.acquireRead(available);
-
-        if (readPtr == nullptr ||
-            available < 4)
-        {
-            return DecodeResult::RETRY;
-        }
-
-        MP3FrameInfo nextInfo = {};
-
-        const int infoResult =
-            MP3GetNextFrameInfo(
-                _decoder,
-                &nextInfo,
-                const_cast<unsigned char *>(
-                    reinterpret_cast<const unsigned char *>(
-                        readPtr
-                    )
-                )
-            );
-
-        if (infoResult == ERR_MP3_NONE &&
-            nextInfo.outputSamps > 0)
-        {
-            const size_t frameOutputSamples =
-                static_cast<size_t>(
-                    nextInfo.outputSamps
-                ) *
-                (
-                    nextInfo.nChans == 1
-                        ? 2U
-                        : 1U
-                );
-
-            if (frameOutputSamples >
-                capacity - outSamples)
-            {
-                /*
-                 * Never start a frame that cannot fit completely into this
-                 * PCM buffer.
-                 */
-                return outSamples > 0
-                    ? DecodeResult::FILLED
-                    : DecodeResult::ERROR;
-            }
-        }
-
         unsigned char *input =
-            const_cast<unsigned char *>(
-                reinterpret_cast<const unsigned char *>(
-                    readPtr
-                )
-            );
+            _input + _inputPos;
 
         int bytesLeft =
-            static_cast<int>(available);
+            static_cast<int>(_inputLeft);
 
-        const int beforeBytes =
+        const int bytesBefore =
             bytesLeft;
 
-        const int result =
+        const int decodeResult =
             MP3Decode(
                 _decoder,
                 &input,
                 &bytesLeft,
-                destination + outSamples,
+                destination,
                 0
             );
 
         const int consumed =
-            beforeBytes - bytesLeft;
+            bytesBefore - bytesLeft;
 
-        if (consumed > 0) {
-            if (!_inputBuffer.releaseRead(
-                    static_cast<size_t>(consumed)))
-            {
-                _lastError = ERR_DECODER;
-                return DecodeResult::ERROR;
-            }
+        if (consumed < 0 ||
+            static_cast<size_t>(consumed) > _inputLeft)
+        {
+            _lastError = ERR_DECODER;
+
+            ESP_LOGE(
+                TAG,
+                "MP3 decoder returned invalid byte count"
+            );
+
+            return DecodeResult::ERROR;
         }
 
-        if (result == ERR_MP3_NONE) {
+        if (decodeResult == ERR_MP3_NONE) {
+
+            /*
+             * Commit the bytes consumed by the successful frame.
+             */
+            _inputPos += static_cast<size_t>(consumed);
+            _inputLeft -= static_cast<size_t>(consumed);
 
             MP3FrameInfo info = {};
 
+            /*
+             * Exactly as in AudioPlaySdMp3::decodeMp3():
+             * query frame information immediately after MP3Decode().
+             */
             MP3GetLastFrameInfo(
                 _decoder,
                 &info
@@ -731,7 +725,7 @@ AudioPlayMp3::decodePcmBuffer(
                 return DecodeResult::ERROR;
             }
 
-            const size_t frameSamples =
+            const size_t decoderSamples =
                 static_cast<size_t>(
                     info.outputSamps
                 );
@@ -739,91 +733,123 @@ AudioPlayMp3::decodePcmBuffer(
             if (info.nChans == 2) {
 
                 /*
-                 * Stereo decoder output already is interleaved.
+                 * Helix already outputs LRLR... for stereo.
+                 *
+                 * outputSamps is the total number of interleaved int16_t
+                 * samples, as defined by the decoder itself.
                  */
-                outSamples += frameSamples;
-
+                outSamples = decoderSamples;
             }
             else {
 
                 /*
-                 * Helix returns mono samples for a mono frame. Expand to
-                 * stereo in-place, backwards so no source sample is lost.
+                 * Helix outputs mono samples for a mono frame.
+                 *
+                 * The Teensy player sends mono to both output channels.
+                 * Convert that here to the common stereo-interleaved format
+                 * required by AudioDecoderStream.
+                 *
+                 * Work backwards so expansion is performed in-place.
                  */
-                if (outSamples +
-                        frameSamples * 2U >
-                    capacity)
-                {
+                if (decoderSamples * 2U > capacity) {
                     _lastError = ERR_DECODER;
+
+                    ESP_LOGE(
+                        TAG,
+                        "mono frame does not fit output buffer"
+                    );
+
                     return DecodeResult::ERROR;
                 }
 
-                for (size_t i = frameSamples;
+                for (size_t i = decoderSamples;
                      i > 0;
                      --i)
                 {
                     const int16_t sample =
-                        destination[
-                            outSamples + i - 1U
-                        ];
+                        destination[i - 1U];
 
-                    destination[
-                        outSamples + (2U * i) - 2U
-                    ] = sample;
-
-                    destination[
-                        outSamples + (2U * i) - 1U
-                    ] = sample;
+                    destination[(2U * i) - 2U] = sample;
+                    destination[(2U * i) - 1U] = sample;
                 }
 
-                outSamples +=
-                    frameSamples * 2U;
+                outSamples =
+                    decoderSamples * 2U;
             }
 
-            if (outSamples >= capacity) {
-                return DecodeResult::FILLED;
-            }
-
-            continue;
+            return outSamples > 0
+                ? DecodeResult::FILLED
+                : DecodeResult::ERROR;
         }
 
-        if (result == ERR_MP3_INDATA_UNDERFLOW) {
+        if (decodeResult == ERR_MP3_INDATA_UNDERFLOW) {
 
             /*
-             * The current compressed frame is incomplete. Refill more input
-             * and retry from the same frame start.
+             * This is the critical difference from MAINDATA_UNDERFLOW:
+             *
+             * MP3Decode() has not consumed the complete MP3 frame. Do NOT
+             * advance _inputPos/_inputLeft here.
+             *
+             * The complete frame must remain available for the next
+             * MP3Decode() call after more input has been appended.
+             *
+             * This reproduces the effective fill/compact/retry behavior of
+             * the Teensy implementation without running decode() from an
+             * interrupt.
              */
-            if (!fillInput(
-                    _inputBuffer.availableRead() + 1024U))
-            {
-                return outSamples > 0
+            if (_inputPos > 0) {
+                std::memmove(
+                    _input,
+                    _input + _inputPos,
+                    _inputLeft
+                );
+
+                _inputPos = 0;
+            }
+
+            if (_inputEof) {
+                return DecodeResult::END_OF_STREAM;
+            }
+
+            if (!fillInput(MP3_INPUT_BUFFER_SIZE)) {
+                return _inputEof
                     ? DecodeResult::END_OF_STREAM
-                    : DecodeResult::END_OF_STREAM;
+                    : DecodeResult::RETRY;
             }
 
             continue;
         }
 
-        if (result == ERR_MP3_MAINDATA_UNDERFLOW) {
+        if (decodeResult == ERR_MP3_MAINDATA_UNDERFLOW) {
 
             /*
-             * This can occur for a stream started without enough preceding
-             * bit-reservoir data. The original Teensy codec continues with
-             * the next decoder step.
+             * Match the Teensy implementation:
+             *
+             *   case ERR_MP3_MAINDATA_UNDERFLOW:
+             *       break;
+             *
+             * MP3Decode() has consumed the current frame into the decoder's
+             * main-data buffer, but there was not enough previous reservoir
+             * data to reconstruct it. Commit the consumed bytes and continue
+             * with the next frame.
              */
+            _inputPos += static_cast<size_t>(consumed);
+            _inputLeft -= static_cast<size_t>(consumed);
+
             continue;
         }
 
-        _lastError = result;
+        _inputPos += static_cast<size_t>(consumed);
+        _inputLeft -= static_cast<size_t>(consumed);
+
+        _lastError = decodeResult;
 
         ESP_LOGE(
             TAG,
             "MP3Decode failed: %d",
-            result
+            decodeResult
         );
 
         return DecodeResult::ERROR;
     }
-
-    return DecodeResult::FILLED;
 }

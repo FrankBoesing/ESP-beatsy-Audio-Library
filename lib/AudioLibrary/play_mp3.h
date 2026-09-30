@@ -6,7 +6,6 @@
 #include <FS.h>
 
 #include "softcodecs/AudioDecoderStream.h"
-#include "softcodecs/AudioInputBuffer.h"
 #include "softcodecs/AudioSource.h"
 #include "softcodecs/AudioSourceFile.h"
 #include "softcodecs/mp3/mp3dec.h"
@@ -65,6 +64,17 @@ protected:
     ) override;
 
 private:
+    static constexpr size_t MP3_PCM_BUFFER_SAMPLES =
+        MAX_NCHAN * MAX_NGRAN * MAX_NSAMP;
+
+    /*
+     * Same compressed-input buffer size as the Teensy
+     * AudioPlaySdMp3 implementation.
+     *
+     * The buffer is codec input, not a PCM buffer.
+     */
+    static constexpr size_t MP3_INPUT_BUFFER_SIZE = 2048;
+
     bool startPlayback(
         AudioSource &source,
         bool takeOwnership
@@ -74,9 +84,12 @@ private:
 
     /*
      * Decoder-task-only input handling.
+     *
+     * This deliberately follows the Teensy decoder's model:
+     * one contiguous input buffer, compact remaining bytes, refill,
+     * MP3FindSyncWord(), then MP3Decode(..., useSize=0).
      */
     bool fillInput(size_t minimumBytes);
-    bool appendInput(size_t requested);
     bool skipInput(size_t bytes);
     bool prepareMp3Input();
 
@@ -91,7 +104,11 @@ private:
     AudioSource *_source = nullptr;
     bool _ownSource = false;
 
-    AudioInputBuffer _inputBuffer;
+    uint8_t _input[MP3_INPUT_BUFFER_SIZE] = {};
+    size_t _inputPos = 0;
+    size_t _inputLeft = 0;
+    bool _inputEof = false;
+    bool _inputPrepared = false;
 
     HMP3Decoder _decoder = nullptr;
     MP3FrameInfo _frameInfo = {};
@@ -100,9 +117,6 @@ private:
     uint16_t _channels = 0;
     uint32_t _bitrate = 0;
 
-    uint64_t _dataSamplesPlayed = 0;
-
-    bool _inputPrepared = false;
     volatile bool _paused = false;
     volatile int _lastError = ERR_NONE;
 };
