@@ -98,7 +98,6 @@ static void ClearBuffer(void *buf, int nBytes)
  **************************************************************************************/
 
 MP3DecInfo *AllocateBuffers(void) {
-
     MP3DecInfo *mp3DecInfo;
     FrameHeader *fh;
     SideInfo *si;

@@ -411,11 +411,9 @@ audio_block_t *AudioStream::allocate_locked(void) {
     uint16_t index = memory_pool_first_mask;
 
     while (index < memory_pool_mask_words) {
-
         uint32_t available = memory_pool_available_mask[index];
 
         if (available != 0) {
-
             // Find the lowest available bit.
             uint32_t bit = available & (~available + 1U);
 
@@ -554,7 +552,6 @@ void AudioStream::transmit(audio_block_t *block, unsigned char index) {
 
     for (AudioConnection *c = destination_list; c != nullptr;
          c = c->next_dest) {
-
         if (c->src_index != index) {
             continue;
         }
@@ -629,7 +626,6 @@ audio_block_t *AudioStream::receiveWritable(unsigned int index) {
     audio_block_t *copy = allocate_locked();
 
     if (copy != nullptr) {
-
         memcpy(copy->data, input->data, sizeof(copy->data));
 
         // We no longer own the input block.
@@ -751,12 +747,9 @@ int AudioConnection::connect(void) {
 
     for (AudioStream *s = AudioStream::first_update; s != nullptr;
          s = s->next_update) {
-
         for (AudioConnection *p = s->destination_list; p != nullptr;
              p = p->next_dest) {
-
             if (p->dst == dst && p->dest_index == dest_index) {
-
                 portEXIT_CRITICAL(&AudioStream::audio_mux);
                 return 4;
             }
@@ -768,11 +761,8 @@ int AudioConnection::connect(void) {
     AudioConnection *p = src->destination_list;
 
     if (p == nullptr) {
-
         src->destination_list = this;
-
     } else {
-
         while (p->next_dest != nullptr) {
             p = p->next_dest;
         }
@@ -839,18 +829,12 @@ int AudioConnection::disconnect(void) {
     AudioConnection *p = src->destination_list;
 
     if (p == nullptr) {
-
         portEXIT_CRITICAL(&AudioStream::audio_mux);
         return 3;
-
     } else if (p == this) {
-
         src->destination_list = next_dest;
-
     } else {
-
         while (p != nullptr) {
-
             if (p->next_dest == this) {
                 p->next_dest = next_dest;
                 break;
@@ -865,7 +849,6 @@ int AudioConnection::disconnect(void) {
     audio_block_t *pending = dst->inputQueue[dest_index];
 
     if (pending != nullptr) {
-
         dst->inputQueue[dest_index] = nullptr;
 
         AudioStream::release_locked(pending);

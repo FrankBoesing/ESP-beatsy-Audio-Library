@@ -404,7 +404,6 @@ int MP3Decode(HMP3Decoder hMP3Decoder, unsigned char **inbuf, int *bytesLeft,
     /* decode one complete frame */
     for (gr = 0; gr < mp3DecInfo->nGrans; gr++) {
         for (ch = 0; ch < mp3DecInfo->nChans; ch++) {
-
 #ifdef PROFILE
             time = systime_get();
 #endif

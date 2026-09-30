@@ -59,7 +59,6 @@ void setup() {
     Serial.println("Initializing ES8388...");
 
     if (!codec.enable()) {
-
         Serial.println("ERROR: ES8388 initialization failed");
 
         while (true) {
@@ -130,7 +129,6 @@ void setup() {
     Serial.println("Starting MP3 playback...");
 
     if (!mp3.play(source)) {
-
         Serial.println("ERROR: MP3 playback could not be started");
 
         while (true) {
@@ -149,7 +147,6 @@ void loop() {
     static uint32_t lastStatus = 0;
 
     if (millis() - lastStatus >= 1000) {
-
         lastStatus = millis();
 
         Serial.println();
@@ -177,12 +174,13 @@ void loop() {
          * total time inside MP3Decode(), relative to the audio time generated.
          * Source/SD waiting and vTaskDelay() are deliberately excluded.
          */
+#if SOFTCODEC_METRICS
         Serial.printf("MP3 decode: avg %.2f%%, frame max %.2f%%, "
                       "frames %lu, decode %.3f s\n",
                       mp3.decodeProcessorUsage(), mp3.decodeProcessorUsageMax(),
                       (unsigned long)mp3.decodeFrames(),
                       (double)mp3.decodeTimeUsTotal() / 1000000.0);
-
+#endif
         Serial.printf("Position: %lu ms / %lu ms\n",
                       (unsigned long)mp3.positionMillis(),
                       (unsigned long)mp3.lengthMillis());

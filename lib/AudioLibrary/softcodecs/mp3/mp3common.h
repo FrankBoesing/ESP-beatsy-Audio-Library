@@ -92,7 +92,6 @@ typedef struct _MP3DecInfo {
     int mainDataBytes;
 
     int part23Length[MAX_NGRAN][MAX_NCHAN];
-
 } MP3DecInfo;
 
 typedef struct _SFBandTable {

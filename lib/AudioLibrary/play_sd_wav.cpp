@@ -37,7 +37,6 @@ void printChunk(uint32_t id, uint32_t size, uint32_t position) {
     ESP_LOGI(TAG, "chunk '%s': position=%lu size=%lu", name,
              (unsigned long)position, (unsigned long)size);
 }
-
 } // namespace
 
 // ============================================================================
@@ -169,7 +168,6 @@ bool AudioPlaySdWav::play(AudioSource &newSource) {
 
 bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
     if (!newSource.isOpen()) {
-
         ESP_LOGE(TAG, "Audio source is not open");
 
         /*
@@ -191,7 +189,6 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
              (unsigned long long)source->size());
 
     if (!parseWav()) {
-
         ESP_LOGE(TAG, "WAV parsing failed");
 
         closeSource();
@@ -204,7 +201,6 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
              (unsigned long long)data_length);
 
     if (sample_rate != 11025 && sample_rate != 22050 && sample_rate != 44100) {
-
         ESP_LOGE(TAG, "Unsupported sample rate: %lu Hz",
                  (unsigned long)sample_rate);
 
@@ -213,7 +209,6 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
     }
 
     if (channels != 1 && channels != 2) {
-
         ESP_LOGE(TAG, "Unsupported channel count: %u", channels);
 
         closeSource();
@@ -222,7 +217,6 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
 
     if (bits_per_sample != 8 && bits_per_sample != 16 &&
         bits_per_sample != 24 && bits_per_sample != 32) {
-
         ESP_LOGE(TAG, "Unsupported bits per sample: %u", bits_per_sample);
 
         closeSource();
@@ -230,7 +224,6 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
     }
 
     if (!seekAbsolute(data_start)) {
-
         ESP_LOGE(TAG, "Failed to seek to audio data at %llu",
                  (unsigned long long)data_start);
 
@@ -253,19 +246,12 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
      * of 44.1 kHz.
      */
     if (sample_rate == AUDIO_SAMPLE_RATE_EXACT) {
-
         resample_step = 1;
-
     } else if (sample_rate == 22050 && AUDIO_SAMPLE_RATE_EXACT == 44100) {
-
         resample_step = 2;
-
     } else if (sample_rate == 11025 && AUDIO_SAMPLE_RATE_EXACT == 44100) {
-
         resample_step = 4;
-
     } else {
-
         ESP_LOGE(TAG, "Source rate %lu cannot be resampled to audio rate %.1f",
                  (unsigned long)sample_rate, (double)AUDIO_SAMPLE_RATE_EXACT);
 
@@ -369,13 +355,11 @@ bool AudioPlaySdWav::readExact(void *buffer, size_t length) {
     uint8_t *p = static_cast<uint8_t *>(buffer);
 
     while (length > 0) {
-
         size_t received = 0;
 
         const AudioSourceStatus status = source->read(p, length, received);
 
         if (received > 0) {
-
             p += received;
             length -= received;
 
@@ -383,7 +367,6 @@ bool AudioPlaySdWav::readExact(void *buffer, size_t length) {
         }
 
         switch (status) {
-
         case AudioSourceStatus::DATA:
             /*
              * DATA ohne Bytes sollte nicht vorkommen.
@@ -427,14 +410,12 @@ bool AudioPlaySdWav::seekAbsolute(uint64_t position) {
     }
 
     if (!source->isSeekable()) {
-
         ESP_LOGE(TAG, "Audio source is not seekable");
 
         return false;
     }
 
     if (!source->seek(position)) {
-
         ESP_LOGE(TAG, "seek(%llu) failed, current position=%llu",
                  (unsigned long long)position,
                  (unsigned long long)source->position());
@@ -467,7 +448,6 @@ bool AudioPlaySdWav::skip(uint64_t length) {
 
 bool AudioPlaySdWav::parseFmtChunk(uint64_t position, uint32_t size) {
     if (size < 16) {
-
         ESP_LOGE(TAG, "'fmt ' chunk too small: %lu bytes", (unsigned long)size);
 
         return false;
@@ -476,7 +456,6 @@ bool AudioPlaySdWav::parseFmtChunk(uint64_t position, uint32_t size) {
     uint8_t fmt[40] = {};
 
     if (!seekAbsolute(position)) {
-
         ESP_LOGE(TAG, "Could not seek to fmt chunk");
 
         return false;
@@ -511,11 +490,8 @@ bool AudioPlaySdWav::parseFmtChunk(uint64_t position, uint32_t size) {
     ESP_LOGI(TAG, "  bits/sample  = %u", bits_per_sample);
 
     if (format == WAV_PCM) {
-
         ESP_LOGI(TAG, "  format type  = PCM");
-
     } else if (format == WAV_EXTENSIBLE) {
-
         ESP_LOGI(TAG, "  format type  = WAVE_FORMAT_EXTENSIBLE");
 
         if (size < 40 || bytesToRead < 40) {
@@ -533,14 +509,11 @@ bool AudioPlaySdWav::parseFmtChunk(uint64_t position, uint32_t size) {
         ESP_LOGI(TAG, "  SubFormat    = 0x%08lX", (unsigned long)subFormat);
 
         if (subFormat != 1) {
-
             ESP_LOGE(TAG, "Unsupported WAVE_FORMAT_EXTENSIBLE SubFormat");
 
             return false;
         }
-
     } else {
-
         ESP_LOGE(TAG, "Unsupported WAV format code: %u", format);
 
         return false;
@@ -564,7 +537,6 @@ bool AudioPlaySdWav::parseFmtChunk(uint64_t position, uint32_t size) {
     const uint16_t expectedBlockAlign = bytes_per_sample * channels;
 
     if (block_align != expectedBlockAlign) {
-
         ESP_LOGE(TAG, "Invalid block align: file=%u expected=%u", block_align,
                  expectedBlockAlign);
 
@@ -590,7 +562,6 @@ bool AudioPlaySdWav::findDataChunk() {
     const uint32_t fileSize = (uint32_t)source->size();
 
     while ((uint64_t)source->position() + 8 <= fileSize) {
-
         uint8_t chunk[8];
 
         const uint32_t chunkPosition = (uint32_t)source->position();
@@ -609,7 +580,6 @@ bool AudioPlaySdWav::findDataChunk() {
         printChunk(id, size, chunkPosition);
 
         if (id == DATA_ID) {
-
             data_start = source->position();
 
             data_length = size;
@@ -635,7 +605,6 @@ bool AudioPlaySdWav::findDataChunk() {
         const uint32_t next = size + (size & 1U);
 
         if (!skip(next)) {
-
             ESP_LOGE(TAG, "Could not skip chunk '%lu' bytes",
                      (unsigned long)next);
 
@@ -656,7 +625,6 @@ bool AudioPlaySdWav::parseWav() {
     uint8_t header[12];
 
     if (!seekAbsolute(0)) {
-
         ESP_LOGE(TAG, "Could not seek to beginning of WAV file");
 
         return false;
@@ -678,14 +646,12 @@ bool AudioPlaySdWav::parseWav() {
              (unsigned long)riff, (unsigned long)riffSize, (unsigned long)wave);
 
     if (riff != RIFF_ID) {
-
         ESP_LOGE(TAG, "Not a RIFF file: id=0x%08lX", (unsigned long)riff);
 
         return false;
     }
 
     if (wave != WAVE_ID) {
-
         ESP_LOGE(TAG, "RIFF file is not WAVE: type=0x%08lX",
                  (unsigned long)wave);
 
@@ -697,7 +663,6 @@ bool AudioPlaySdWav::parseWav() {
     const uint32_t fileSize = (uint32_t)source->size();
 
     while ((uint64_t)source->position() + 8 <= fileSize) {
-
         uint8_t chunk[8];
 
         const uint32_t chunkPosition = (uint32_t)source->position();
@@ -716,7 +681,6 @@ bool AudioPlaySdWav::parseWav() {
         printChunk(id, size, chunkPosition);
 
         if (id == FMT_ID) {
-
             if (!parseFmtChunk(source->position(), size)) {
                 ESP_LOGE(TAG, "Parsing fmt chunk failed");
 
@@ -728,7 +692,6 @@ bool AudioPlaySdWav::parseWav() {
         }
 
         if (!skip(size)) {
-
             ESP_LOGE(TAG, "Could not skip pre-fmt chunk");
 
             return false;
@@ -736,7 +699,6 @@ bool AudioPlaySdWav::parseWav() {
     }
 
     if (!fmtFound) {
-
         ESP_LOGE(TAG, "No 'fmt ' chunk found");
 
         return false;
@@ -746,7 +708,6 @@ bool AudioPlaySdWav::parseWav() {
      * Continue from the chunk after fmt.
      */
     if (!findDataChunk()) {
-
         ESP_LOGE(TAG, "Could not find audio data");
 
         return false;
@@ -761,7 +722,6 @@ bool AudioPlaySdWav::parseWav() {
 
 int32_t AudioPlaySdWav::decodeSample(const uint8_t *data) const {
     switch (bits_per_sample) {
-
     case 8:
 
         // WAV 8-bit PCM is unsigned.
@@ -774,7 +734,6 @@ int32_t AudioPlaySdWav::decodeSample(const uint8_t *data) const {
             << 16);
 
     case 24: {
-
         int32_t value = (int32_t)data[0] | ((int32_t)data[1] << 8) |
                         ((int32_t)data[2] << 16);
 
@@ -817,11 +776,8 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
     left = decodeSample(frame);
 
     if (channels == 2) {
-
         right = decodeSample(frame + bytes_per_sample);
-
     } else {
-
         right = left;
     }
 
@@ -840,7 +796,6 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right) {
      * Interpolation is relevant for 22.05 / 11.025 kHz.
      */
     if (!have_previous) {
-
         if (!readSourceFrame(previous_left, previous_right)) {
             return false;
         }
@@ -848,7 +803,6 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right) {
         have_previous = true;
 
         if (resample_step > 1) {
-
             if (readSourceFrame(next_left, next_right)) {
                 have_next = true;
             }
@@ -856,7 +810,6 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right) {
     }
 
     if (resample_step == 1) {
-
         left = (int16_t)(previous_left >> 16);
 
         right = (int16_t)(previous_right >> 16);
@@ -887,7 +840,6 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right) {
     ++resample_phase;
 
     if ((resample_phase % resample_step) == 0) {
-
         previous_left = next_left;
 
         previous_right = next_right;
@@ -908,13 +860,11 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right) {
 
 void AudioPlaySdWav::releaseBlocks() {
     if (block_left) {
-
         release(block_left);
         block_left = nullptr;
     }
 
     if (block_right) {
-
         release(block_right);
         block_right = nullptr;
     }
@@ -928,7 +878,6 @@ void AudioPlaySdWav::releaseBlocks() {
 
 void AudioPlaySdWav::finishPlayback() {
     if (block_left) {
-
         for (uint16_t i = block_offset; i < AUDIO_BLOCK_SAMPLES; ++i) {
             block_left->data[i] = 0;
         }
@@ -940,7 +889,6 @@ void AudioPlaySdWav::finishPlayback() {
     }
 
     if (block_right) {
-
         for (uint16_t i = block_offset; i < AUDIO_BLOCK_SAMPLES; ++i) {
             block_right->data[i] = 0;
         }
@@ -977,7 +925,6 @@ void AudioPlaySdWav::update() {
     block_left = allocate();
 
     if (!block_left) {
-
         ESP_LOGE(TAG, "Audio block allocation failed: left");
 
         return;
@@ -986,7 +933,6 @@ void AudioPlaySdWav::update() {
     block_right = allocate();
 
     if (!block_right) {
-
         ESP_LOGE(TAG, "Audio block allocation failed: right");
 
         release(block_left);
@@ -998,7 +944,6 @@ void AudioPlaySdWav::update() {
     block_offset = 0;
 
     while (block_offset < AUDIO_BLOCK_SAMPLES) {
-
         int16_t left;
         int16_t right;
 

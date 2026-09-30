@@ -13,45 +13,31 @@ constexpr const char *TAG = "AudioDecoderStream";
 }
 
 AudioDecoderStream::AudioDecoderStream(size_t pcmBufferSamples)
-    : AudioStream(0, nullptr),
-      _pcmBufferSamples(pcmBufferSamples)
-{
+    : AudioStream(0, nullptr), _pcmBufferSamples(pcmBufferSamples) {
     /*
      * No task creation and no decoding here.
      */
 }
 
-AudioDecoderStream::~AudioDecoderStream()
-{
+AudioDecoderStream::~AudioDecoderStream() {
     stopDecoderTask();
 }
 
-bool AudioDecoderStream::allocatePcmBuffers()
-{
+bool AudioDecoderStream::allocatePcmBuffers() {
     if (_pcmBufferSamples == 0) {
         return false;
     }
 
-    const size_t bytes =
-        _pcmBufferSamples * sizeof(int16_t);
+    const size_t bytes = _pcmBufferSamples * sizeof(int16_t);
 
     for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
-
 #if defined(ARDUINO_ARCH_ESP32)
         _pcm[i] = static_cast<int16_t *>(
-            heap_caps_malloc(
-                bytes,
-                MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT
-            )
-        );
+            heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 
         if (_pcm[i] == nullptr && psramFound()) {
             _pcm[i] = static_cast<int16_t *>(
-                heap_caps_malloc(
-                    bytes,
-                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT
-                )
-            );
+                heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
         }
 #else
         _pcm[i] = static_cast<int16_t *>(malloc(bytes));
@@ -66,8 +52,7 @@ bool AudioDecoderStream::allocatePcmBuffers()
     return true;
 }
 
-void AudioDecoderStream::freePcmBuffers()
-{
+void AudioDecoderStream::freePcmBuffers() {
     for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
         if (_pcm[i] == nullptr) {
             continue;
@@ -83,8 +68,7 @@ void AudioDecoderStream::freePcmBuffers()
     }
 }
 
-void AudioDecoderStream::clearDecoderState()
-{
+void AudioDecoderStream::clearDecoderState() {
     portENTER_CRITICAL(&_decoderMux);
 
     _pcmState[0] = PCM_FREE;
@@ -109,16 +93,13 @@ void AudioDecoderStream::clearDecoderState()
     portEXIT_CRITICAL(&_decoderMux);
 }
 
-bool AudioDecoderStream::startDecoderTask()
-{
+bool AudioDecoderStream::startDecoderTask() {
     /*
      * startDecoderTask() is only allowed to allocate new PCM storage once
      * no previous owner is using the old buffers.
      */
     portENTER_CRITICAL(&_decoderMux);
-    const bool busy =
-        _decoderTaskRunning ||
-        _updateRunning;
+    const bool busy = _decoderTaskRunning || _updateRunning;
     portEXIT_CRITICAL(&_decoderMux);
 
     if (busy) {
@@ -139,15 +120,9 @@ bool AudioDecoderStream::startDecoderTask()
     active = true;
     _decoderTaskRunning = true;
 
-    const BaseType_t result =
-        xTaskCreate(
-            &AudioDecoderStream::decoderTaskEntry,
-            "AudioDecoder",
-            DECODER_TASK_STACK,
-            this,
-            DECODER_TASK_PRIORITY,
-            &_decoderTask
-        );
+    const BaseType_t result = xTaskCreate(
+        &AudioDecoderStream::decoderTaskEntry, "AudioDecoder",
+        DECODER_TASK_STACK, this, DECODER_TASK_PRIORITY, &_decoderTask);
 
     if (result != pdPASS) {
         active = false;
@@ -158,18 +133,14 @@ bool AudioDecoderStream::startDecoderTask()
         return false;
     }
 
-    ESP_LOGI(
-        TAG,
-        "decoder task started: priority=%lu, PCM samples/buffer=%u",
-        static_cast<unsigned long>(DECODER_TASK_PRIORITY),
-        static_cast<unsigned>(_pcmBufferSamples)
-    );
+    ESP_LOGI(TAG, "decoder task started: priority=%lu, PCM samples/buffer=%u",
+             static_cast<unsigned long>(DECODER_TASK_PRIORITY),
+             static_cast<unsigned>(_pcmBufferSamples));
 
     return true;
 }
 
-void AudioDecoderStream::stopDecoderTask()
-{
+void AudioDecoderStream::stopDecoderTask() {
     /*
      * Non-realtime shutdown path.
      *
@@ -239,8 +210,7 @@ void AudioDecoderStream::stopDecoderTask()
     clearDecoderState();
 }
 
-int AudioDecoderStream::claimFreeBuffer()
-{
+int AudioDecoderStream::claimFreeBuffer() {
     portENTER_CRITICAL(&_decoderMux);
 
     for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
@@ -257,8 +227,7 @@ int AudioDecoderStream::claimFreeBuffer()
     return -1;
 }
 
-void AudioDecoderStream::releaseFilledBuffer(uint8_t index)
-{
+void AudioDecoderStream::releaseFilledBuffer(uint8_t index) {
     if (index >= PCM_BUFFER_COUNT) {
         return;
     }
@@ -271,11 +240,7 @@ void AudioDecoderStream::releaseFilledBuffer(uint8_t index)
     portEXIT_CRITICAL(&_decoderMux);
 }
 
-void AudioDecoderStream::publishReadyBuffer(
-    uint8_t index,
-    size_t samples
-)
-{
+void AudioDecoderStream::publishReadyBuffer(uint8_t index, size_t samples) {
     if (index >= PCM_BUFFER_COUNT) {
         return;
     }
@@ -288,8 +253,7 @@ void AudioDecoderStream::publishReadyBuffer(
     portEXIT_CRITICAL(&_decoderMux);
 }
 
-int AudioDecoderStream::acquireReadyBuffer()
-{
+int AudioDecoderStream::acquireReadyBuffer() {
     portENTER_CRITICAL(&_decoderMux);
 
     if (_readBuffer >= 0) {
@@ -299,9 +263,7 @@ int AudioDecoderStream::acquireReadyBuffer()
     }
 
     for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
-        if (_pcmState[i] == PCM_READY &&
-            _pcmSamples[i] > 0)
-        {
+        if (_pcmState[i] == PCM_READY && _pcmSamples[i] > 0) {
             _readBuffer = static_cast<int8_t>(i);
             _readPosition = 0;
 
@@ -315,8 +277,7 @@ int AudioDecoderStream::acquireReadyBuffer()
     return -1;
 }
 
-void AudioDecoderStream::releaseReadBuffer(uint8_t index)
-{
+void AudioDecoderStream::releaseReadBuffer(uint8_t index) {
     if (index >= PCM_BUFFER_COUNT) {
         return;
     }
@@ -332,8 +293,7 @@ void AudioDecoderStream::releaseReadBuffer(uint8_t index)
     portEXIT_CRITICAL(&_decoderMux);
 }
 
-void AudioDecoderStream::setDecoderFinished(int errorCode)
-{
+void AudioDecoderStream::setDecoderFinished(int errorCode) {
     portENTER_CRITICAL(&_decoderMux);
 
     _decoderFinished = true;
@@ -342,30 +302,24 @@ void AudioDecoderStream::setDecoderFinished(int errorCode)
     portEXIT_CRITICAL(&_decoderMux);
 }
 
-bool AudioDecoderStream::decoderTaskRunning() const
-{
+bool AudioDecoderStream::decoderTaskRunning() const {
     return _decoderTaskRunning;
 }
 
-bool AudioDecoderStream::decoderFinished() const
-{
+bool AudioDecoderStream::decoderFinished() const {
     return _decoderFinished;
 }
 
-int AudioDecoderStream::decoderError() const
-{
+int AudioDecoderStream::decoderError() const {
     return _decoderError;
 }
 
-void AudioDecoderStream::decoderTaskEntry(void *arg)
-{
+void AudioDecoderStream::decoderTaskEntry(void *arg) {
     static_cast<AudioDecoderStream *>(arg)->decoderTaskLoop();
 }
 
-void AudioDecoderStream::decoderTaskLoop()
-{
+void AudioDecoderStream::decoderTaskLoop() {
     for (;;) {
-
         portENTER_CRITICAL(&_decoderMux);
         const bool stopRequested = _decoderStopRequested;
         portEXIT_CRITICAL(&_decoderMux);
@@ -384,19 +338,12 @@ void AudioDecoderStream::decoderTaskLoop()
         size_t produced = 0;
 
         const DecodeResult result =
-            decodePcmBuffer(
-                _pcm[bufferIndex],
-                _pcmBufferSamples,
-                produced
-            );
+            decodePcmBuffer(_pcm[bufferIndex], _pcmBufferSamples, produced);
 
         if (produced > _pcmBufferSamples) {
-            ESP_LOGE(
-                TAG,
-                "codec returned too many PCM samples: %u > %u",
-                static_cast<unsigned>(produced),
-                static_cast<unsigned>(_pcmBufferSamples)
-            );
+            ESP_LOGE(TAG, "codec returned too many PCM samples: %u > %u",
+                     static_cast<unsigned>(produced),
+                     static_cast<unsigned>(_pcmBufferSamples));
 
             releaseFilledBuffer(static_cast<uint8_t>(bufferIndex));
             setDecoderFinished(-1);
@@ -407,11 +354,8 @@ void AudioDecoderStream::decoderTaskLoop()
          * All codecs in this layer use interleaved stereo PCM.
          */
         if ((produced & 1U) != 0) {
-            ESP_LOGE(
-                TAG,
-                "codec returned odd interleaved PCM sample count: %u",
-                static_cast<unsigned>(produced)
-            );
+            ESP_LOGE(TAG, "codec returned odd interleaved PCM sample count: %u",
+                     static_cast<unsigned>(produced));
 
             releaseFilledBuffer(static_cast<uint8_t>(bufferIndex));
             setDecoderFinished(-1);
@@ -419,19 +363,12 @@ void AudioDecoderStream::decoderTaskLoop()
         }
 
         switch (result) {
-
         case DecodeResult::FILLED:
 
             if (produced > 0) {
-                publishReadyBuffer(
-                    static_cast<uint8_t>(bufferIndex),
-                    produced
-                );
-            }
-            else {
-                releaseFilledBuffer(
-                    static_cast<uint8_t>(bufferIndex)
-                );
+                publishReadyBuffer(static_cast<uint8_t>(bufferIndex), produced);
+            } else {
+                releaseFilledBuffer(static_cast<uint8_t>(bufferIndex));
             }
 
             vTaskDelay(1);
@@ -439,9 +376,7 @@ void AudioDecoderStream::decoderTaskLoop()
 
         case DecodeResult::RETRY:
 
-            releaseFilledBuffer(
-                static_cast<uint8_t>(bufferIndex)
-            );
+            releaseFilledBuffer(static_cast<uint8_t>(bufferIndex));
 
             vTaskDelay(1);
             break;
@@ -449,15 +384,9 @@ void AudioDecoderStream::decoderTaskLoop()
         case DecodeResult::END_OF_STREAM:
 
             if (produced > 0) {
-                publishReadyBuffer(
-                    static_cast<uint8_t>(bufferIndex),
-                    produced
-                );
-            }
-            else {
-                releaseFilledBuffer(
-                    static_cast<uint8_t>(bufferIndex)
-                );
+                publishReadyBuffer(static_cast<uint8_t>(bufferIndex), produced);
+            } else {
+                releaseFilledBuffer(static_cast<uint8_t>(bufferIndex));
             }
 
             setDecoderFinished(0);
@@ -467,15 +396,9 @@ void AudioDecoderStream::decoderTaskLoop()
         default:
 
             if (produced > 0) {
-                publishReadyBuffer(
-                    static_cast<uint8_t>(bufferIndex),
-                    produced
-                );
-            }
-            else {
-                releaseFilledBuffer(
-                    static_cast<uint8_t>(bufferIndex)
-                );
+                publishReadyBuffer(static_cast<uint8_t>(bufferIndex), produced);
+            } else {
+                releaseFilledBuffer(static_cast<uint8_t>(bufferIndex));
             }
 
             setDecoderFinished(-1);
@@ -496,8 +419,7 @@ decoder_exit:
 }
 
 OSPEED
-void AudioDecoderStream::update()
-{
+void AudioDecoderStream::update() {
     /*
      * Synchronize entry against stopDecoderTask().
      *
@@ -536,77 +458,52 @@ void AudioDecoderStream::update()
         return;
     }
 
-    std::memset(
-        left->data,
-        0,
-        sizeof(left->data)
-    );
+    std::memset(left->data, 0, sizeof(left->data));
 
-    std::memset(
-        right->data,
-        0,
-        sizeof(right->data)
-    );
+    std::memset(right->data, 0, sizeof(right->data));
 
     size_t outputFrames = 0;
 
     while (outputFrames < AUDIO_BLOCK_SAMPLES) {
-
         const int index = acquireReadyBuffer();
 
         if (index < 0) {
             break;
         }
 
-        const size_t totalSamples =
-            _pcmSamples[index];
+        const size_t totalSamples = _pcmSamples[index];
 
         if (_readPosition >= totalSamples) {
-            releaseReadBuffer(
-                static_cast<uint8_t>(index)
-            );
+            releaseReadBuffer(static_cast<uint8_t>(index));
             continue;
         }
 
-        const size_t availableSamples =
-            totalSamples - _readPosition;
+        const size_t availableSamples = totalSamples - _readPosition;
 
-        const size_t availableFrames =
-            availableSamples / 2U;
+        const size_t availableFrames = availableSamples / 2U;
 
         if (availableFrames == 0) {
-            releaseReadBuffer(
-                static_cast<uint8_t>(index)
-            );
+            releaseReadBuffer(static_cast<uint8_t>(index));
             continue;
         }
 
         const size_t frames =
-            std::min(
-                availableFrames,
-                static_cast<size_t>(
-                    AUDIO_BLOCK_SAMPLES - outputFrames
-                )
-            );
+            std::min(availableFrames,
+                     static_cast<size_t>(AUDIO_BLOCK_SAMPLES - outputFrames));
 
-        const int16_t *source =
-            _pcm[index] + _readPosition;
+        const int16_t *source = _pcm[index] + _readPosition;
 
         for (size_t i = 0; i < frames; ++i) {
-            left->data[outputFrames + i] =
-                source[2U * i];
+            left->data[outputFrames + i] = source[2U * i];
 
-            right->data[outputFrames + i] =
-                source[2U * i + 1U];
+            right->data[outputFrames + i] = source[2U * i + 1U];
         }
 
         _readPosition += frames * 2U;
         outputFrames += frames;
 
         if (_readPosition >= totalSamples) {
-            releaseReadBuffer(
-                static_cast<uint8_t>(index)
-            );
+            releaseReadBuffer(static_cast<uint8_t>(index));
         }
     }
 
@@ -622,11 +519,8 @@ void AudioDecoderStream::update()
 
     portENTER_CRITICAL(&_decoderMux);
 
-    if (_decoderFinished &&
-        _readBuffer < 0 &&
-        _pcmState[0] != PCM_READY &&
-        _pcmState[1] != PCM_READY)
-    {
+    if (_decoderFinished && _readBuffer < 0 && _pcmState[0] != PCM_READY &&
+        _pcmState[1] != PCM_READY) {
         finishNow = true;
     }
 

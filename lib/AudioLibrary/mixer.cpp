@@ -67,7 +67,6 @@ void AudioMixer4::update(void) {
     audio_block_t *out = nullptr;
 
     for (unsigned int channel = 0; channel < 4; channel++) {
-
         if (!out) {
             // The first available input becomes the destination block.
             out = receiveWritable(channel);
@@ -101,15 +100,12 @@ void AudioAmplifier::update(void) {
     const int32_t mult = multiplier;
 
     if (mult == 0) {
-
         // Zero gain: discard the input.
         block = receiveReadOnly(0);
         if (block) {
             release(block);
         }
-
     } else if (mult == MULTI_UNITYGAIN) {
-
         // Unity gain: no sample calculation required.
         block = receiveReadOnly(0);
 
@@ -117,9 +113,7 @@ void AudioAmplifier::update(void) {
             transmit(block);
             release(block);
         }
-
     } else {
-
         // Apply gain and saturate the result to 16-bit.
         block = receiveWritable(0);
 

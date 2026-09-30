@@ -317,7 +317,8 @@ AudioSourceStatus AudioInputBuffer::fill(AudioSource &source) {
 }
 
 size_t AudioInputBuffer::availableRead() const {
-    return region_a_length + region_b_length;;
+    return region_a_length + region_b_length;
+    ;
 }
 
 size_t AudioInputBuffer::availableWrite() const {

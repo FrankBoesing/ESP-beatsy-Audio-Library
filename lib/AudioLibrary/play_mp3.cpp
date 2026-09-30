@@ -9,24 +9,18 @@ namespace {
 constexpr const char *TAG = "AudioPlayMp3";
 }
 
-AudioPlayMp3::AudioPlayMp3()
-    : AudioDecoderStream(MP3_PCM_BUFFER_SAMPLES)
-{
-}
+AudioPlayMp3::AudioPlayMp3() : AudioDecoderStream(MP3_PCM_BUFFER_SAMPLES) {}
 
-AudioPlayMp3::~AudioPlayMp3()
-{
+AudioPlayMp3::~AudioPlayMp3() {
     stop();
     closeSource();
 }
-
 
 // ============================================================================
 // Source lifetime
 // ============================================================================
 
-void AudioPlayMp3::closeSource()
-{
+void AudioPlayMp3::closeSource() {
     if (_source == nullptr) {
         _ownSource = false;
         return;
@@ -41,21 +35,15 @@ void AudioPlayMp3::closeSource()
     _ownSource = false;
 }
 
-
 // ============================================================================
 // Public play API
 // ============================================================================
 
-bool AudioPlayMp3::play(const char *filename)
-{
+bool AudioPlayMp3::play(const char *filename) {
     return play(SD_MMC, filename);
 }
 
-bool AudioPlayMp3::play(
-    fs::FS &fs,
-    const char *filename
-)
-{
+bool AudioPlayMp3::play(fs::FS &fs, const char *filename) {
     stop();
     closeSource();
 
@@ -64,10 +52,7 @@ bool AudioPlayMp3::play(
     if (filename == nullptr) {
         _lastError = ERR_FILE_NOT_FOUND;
 
-        ESP_LOGE(
-            TAG,
-            "filename is null"
-        );
+        ESP_LOGE(TAG, "filename is null");
 
         return false;
     }
@@ -79,55 +64,34 @@ bool AudioPlayMp3::play(
         return false;
     }
 
-    if (!fileSource->open(
-            fs,
-            filename,
-            FILE_READ))
-    {
+    if (!fileSource->open(fs, filename, FILE_READ)) {
         delete fileSource;
 
         _lastError = ERR_FILE_NOT_FOUND;
 
-        ESP_LOGE(
-            TAG,
-            "failed to open MP3 file: %s",
-            filename
-        );
+        ESP_LOGE(TAG, "failed to open MP3 file: %s", filename);
 
         return false;
     }
 
-    return startPlayback(
-        *fileSource,
-        true
-    );
+    return startPlayback(*fileSource, true);
 }
 
-bool AudioPlayMp3::play(AudioSource &source)
-{
+bool AudioPlayMp3::play(AudioSource &source) {
     stop();
     closeSource();
 
     _lastError = ERR_NONE;
 
-    return startPlayback(
-        source,
-        false
-    );
+    return startPlayback(source, false);
 }
-
 
 // ============================================================================
 // Start / stop
 // ============================================================================
 
-bool AudioPlayMp3::startPlayback(
-    AudioSource &source,
-    bool takeOwnership
-)
-{
+bool AudioPlayMp3::startPlayback(AudioSource &source, bool takeOwnership) {
     if (!source.isOpen()) {
-
         if (takeOwnership) {
             source.close();
             delete &source;
@@ -146,33 +110,25 @@ bool AudioPlayMp3::startPlayback(
     _inputEof = false;
     _inputPrepared = false;
 
-    std::memset(
-        _input,
-        0,
-        sizeof(_input)
-    );
+    std::memset(_input, 0, sizeof(_input));
 
-    std::memset(
-        &_frameInfo,
-        0,
-        sizeof(_frameInfo)
-    );
+    std::memset(&_frameInfo, 0, sizeof(_frameInfo));
 
     _sampleRate = 0;
     _channels = 0;
     _bitrate = 0;
 
+#if SOFTCODEC_METRICS
     _decodeFrames = 0;
     _decodeTimeUsTotal = 0;
     _decodeAudioTimeUsTotal = 0;
-    _decodeProcessorUsageMax = 0.0f;
+    _decodeProcessorUsageMaxX100 = 0;
+#endif
 
     _paused = false;
     _playing = false;
 
-    if (_source->isSeekable() &&
-        !_source->seek(0))
-    {
+    if (_source->isSeekable() && !_source->seek(0)) {
         _lastError = ERR_FILE_NOT_FOUND;
 
         closeSource();
@@ -203,8 +159,7 @@ bool AudioPlayMp3::startPlayback(
     return true;
 }
 
-void AudioPlayMp3::stop()
-{
+void AudioPlayMp3::stop() {
     /*
      * Mark playback stopped immediately for the public API. The base-class
      * shutdown below still waits for the realtime update() and decoder task
@@ -227,8 +182,7 @@ void AudioPlayMp3::stop()
     _paused = false;
 }
 
-bool AudioPlayMp3::isPlaying() const
-{
+bool AudioPlayMp3::isPlaying() const {
     /*
      * AudioStream::active describes graph participation, not playback state:
      * AudioConnection::connect() can set it before play() is called.
@@ -240,108 +194,91 @@ bool AudioPlayMp3::isPlaying() const
     return _playing && !_paused;
 }
 
-
 // ============================================================================
 // Position / length
 // ============================================================================
 
-uint32_t AudioPlayMp3::positionMillis() const
-{
+uint32_t AudioPlayMp3::positionMillis() const {
     const uint32_t rate =
-        _sampleRate != 0
-            ? _sampleRate
-            : static_cast<uint32_t>(
-                AudioStream::sampleRate()
-            );
+        _sampleRate != 0 ? _sampleRate
+                         : static_cast<uint32_t>(AudioStream::sampleRate());
 
     if (rate == 0) {
         return 0;
     }
 
-    return static_cast<uint32_t>(
-        (samplesPlayed() * 1000ULL) /
-        rate
-    );
+    return static_cast<uint32_t>((samplesPlayed() * 1000ULL) / rate);
 }
 
-uint32_t AudioPlayMp3::lengthMillis() const
-{
-    if (_source == nullptr ||
-        _bitrate == 0)
-    {
+uint32_t AudioPlayMp3::lengthMillis() const {
+    if (_source == nullptr || _bitrate == 0) {
         return 0;
     }
 
-    const uint64_t millis =
-        (_source->size() * 8000ULL) /
-        _bitrate;
+    const uint64_t millis = (_source->size() * 8000ULL) / _bitrate;
 
     return static_cast<uint32_t>(millis);
 }
-
 
 // ============================================================================
 // Decoder diagnostics
 // ============================================================================
 
-float AudioPlayMp3::decodeProcessorUsage() const
-{
-    const uint64_t audioTimeUs =
-        _decodeAudioTimeUsTotal;
+#if SOFTCODEC_METRICS
+
+float AudioPlayMp3::decodeProcessorUsage() const {
+    const uint64_t audioTimeUs = _decodeAudioTimeUsTotal;
 
     if (audioTimeUs == 0) {
         return 0.0f;
     }
 
-    return static_cast<float>(
-        (static_cast<double>(_decodeTimeUsTotal) * 100.0) /
-        static_cast<double>(audioTimeUs)
-    );
+    /*
+     * Result in hundredths of a percent:
+     *
+     *   usage[%] * 100 =
+     *       decodeTimeUs * 10000
+     *       --------------------
+     *          audioTimeUs
+     *
+     * Integer arithmetic only.
+     */
+    const uint64_t usageX100 =
+        (_decodeTimeUsTotal * 10000ULL + audioTimeUs / 2ULL) / audioTimeUs;
+
+    return static_cast<float>(usageX100) * 0.01f;
 }
 
-
-float AudioPlayMp3::decodeProcessorUsageMax() const
-{
-    return _decodeProcessorUsageMax;
+float AudioPlayMp3::decodeProcessorUsageMax() const {
+    return static_cast<float>(_decodeProcessorUsageMaxX100) * 0.01f;
 }
 
-
-uint32_t AudioPlayMp3::decodeFrames() const
-{
+uint32_t AudioPlayMp3::decodeFrames() const {
     return _decodeFrames;
 }
 
-
-uint64_t AudioPlayMp3::decodeTimeUsTotal() const
-{
+uint64_t AudioPlayMp3::decodeTimeUsTotal() const {
     return _decodeTimeUsTotal;
 }
 
+#endif
 
 // ============================================================================
 // ID3
 // ============================================================================
 
-size_t AudioPlayMp3::id3TagSize(
-    const uint8_t header[10]
-)
-{
-    if (header == nullptr ||
-        header[0] != 'I' ||
-        header[1] != 'D' ||
-        header[2] != '3')
-    {
+size_t AudioPlayMp3::id3TagSize(const uint8_t header[10]) {
+    if (header == nullptr || header[0] != 'I' || header[1] != 'D' ||
+        header[2] != '3') {
         return 0;
     }
 
-    const uint32_t tagDataSize =
-        ((uint32_t)(header[6] & 0x7F) << 21) |
-        ((uint32_t)(header[7] & 0x7F) << 14) |
-        ((uint32_t)(header[8] & 0x7F) << 7)  |
-        ((uint32_t)(header[9] & 0x7F));
+    const uint32_t tagDataSize = ((uint32_t)(header[6] & 0x7F) << 21) |
+                                 ((uint32_t)(header[7] & 0x7F) << 14) |
+                                 ((uint32_t)(header[8] & 0x7F) << 7) |
+                                 ((uint32_t)(header[9] & 0x7F));
 
-    size_t total =
-        10U + static_cast<size_t>(tagDataSize);
+    size_t total = 10U + static_cast<size_t>(tagDataSize);
 
     if ((header[5] & 0x10U) != 0) {
         total += 10U;
@@ -350,29 +287,19 @@ size_t AudioPlayMp3::id3TagSize(
     return total;
 }
 
-
 // ============================================================================
 // Compressed input buffer
 // ============================================================================
 
-bool AudioPlayMp3::fillInput(size_t minimumBytes)
-{
-    if (_source == nullptr ||
-        minimumBytes > MP3_INPUT_BUFFER_SIZE)
-    {
+bool AudioPlayMp3::fillInput(size_t minimumBytes) {
+    if (_source == nullptr || minimumBytes > MP3_INPUT_BUFFER_SIZE) {
         return false;
     }
 
     while (_inputLeft < minimumBytes) {
-
         if (_inputPos > 0) {
-
             if (_inputLeft > 0) {
-                std::memmove(
-                    _input,
-                    _input + _inputPos,
-                    _inputLeft
-                );
+                std::memmove(_input, _input + _inputPos, _inputLeft);
             }
 
             _inputPos = 0;
@@ -382,8 +309,7 @@ bool AudioPlayMp3::fillInput(size_t minimumBytes)
             return true;
         }
 
-        const size_t freeSpace =
-            MP3_INPUT_BUFFER_SIZE - _inputLeft;
+        const size_t freeSpace = MP3_INPUT_BUFFER_SIZE - _inputLeft;
 
         if (freeSpace == 0) {
             return false;
@@ -392,11 +318,7 @@ bool AudioPlayMp3::fillInput(size_t minimumBytes)
         size_t received = 0;
 
         const AudioSourceStatus status =
-            _source->read(
-                _input + _inputLeft,
-                freeSpace,
-                received
-            );
+            _source->read(_input + _inputLeft, freeSpace, received);
 
         if (received > 0) {
             _inputLeft += received;
@@ -407,7 +329,6 @@ bool AudioPlayMp3::fillInput(size_t minimumBytes)
         }
 
         switch (status) {
-
         case AudioSourceStatus::DATA:
             if (received == 0) {
                 vTaskDelay(1);
@@ -431,22 +352,15 @@ bool AudioPlayMp3::fillInput(size_t minimumBytes)
     return true;
 }
 
-bool AudioPlayMp3::skipInput(size_t bytes)
-{
+bool AudioPlayMp3::skipInput(size_t bytes) {
     while (bytes > 0) {
-
         if (_inputLeft == 0) {
-
             if (!fillInput(1)) {
                 return false;
             }
         }
 
-        const size_t consume =
-            std::min(
-                bytes,
-                _inputLeft
-            );
+        const size_t consume = std::min(bytes, _inputLeft);
 
         _inputPos += consume;
         _inputLeft -= consume;
@@ -457,29 +371,22 @@ bool AudioPlayMp3::skipInput(size_t bytes)
     return true;
 }
 
-bool AudioPlayMp3::prepareMp3Input()
-{
+bool AudioPlayMp3::prepareMp3Input() {
     if (!fillInput(10)) {
         _lastError = ERR_FILE_NOT_FOUND;
         return false;
     }
 
-    const uint8_t *header =
-        _input + _inputPos;
+    const uint8_t *header = _input + _inputPos;
 
-    const size_t tagSize =
-        id3TagSize(header);
+    const size_t tagSize = id3TagSize(header);
 
     if (tagSize == 0) {
         _inputPrepared = true;
         return true;
     }
 
-    ESP_LOGI(
-        TAG,
-        "ID3 tag detected: %u bytes",
-        static_cast<unsigned>(tagSize)
-    );
+    ESP_LOGI(TAG, "ID3 tag detected: %u bytes", static_cast<unsigned>(tagSize));
 
     if (!skipInput(tagSize)) {
         _lastError = ERR_FILE_NOT_FOUND;
@@ -490,102 +397,61 @@ bool AudioPlayMp3::prepareMp3Input()
     return true;
 }
 
-
 // ============================================================================
 // Frame information
 // ============================================================================
 
-bool AudioPlayMp3::validateFrameInfo(
-    const MP3FrameInfo &info
-)
-{
-    if (info.bitsPerSample != 16 ||
-        info.nChans < 1 ||
-        info.nChans > 2)
-    {
+bool AudioPlayMp3::validateFrameInfo(const MP3FrameInfo &info) {
+    if (info.bitsPerSample != 16 || info.nChans < 1 || info.nChans > 2) {
         _lastError = ERR_FORMAT;
 
-        ESP_LOGE(
-            TAG,
-            "unsupported MP3 format: channels=%d bits=%d",
-            info.nChans,
-            info.bitsPerSample
-        );
+        ESP_LOGE(TAG, "unsupported MP3 format: channels=%d bits=%d",
+                 info.nChans, info.bitsPerSample);
 
         return false;
     }
 
     const uint32_t outputRate =
-        static_cast<uint32_t>(
-            AudioStream::sampleRate()
-        );
+        static_cast<uint32_t>(AudioStream::sampleRate());
 
     if (info.samprate <= 0 ||
-        static_cast<uint32_t>(info.samprate) != outputRate)
-    {
+        static_cast<uint32_t>(info.samprate) != outputRate) {
         _lastError = ERR_FORMAT;
 
-        ESP_LOGE(
-            TAG,
-            "MP3 sample rate %d Hz does not match audio rate %lu Hz",
-            info.samprate,
-            static_cast<unsigned long>(outputRate)
-        );
+        ESP_LOGE(TAG, "MP3 sample rate %d Hz does not match audio rate %lu Hz",
+                 info.samprate, static_cast<unsigned long>(outputRate));
 
         return false;
     }
 
     if (info.outputSamps <= 0 ||
-        static_cast<size_t>(info.outputSamps) >
-            MP3_PCM_BUFFER_SAMPLES)
-    {
+        static_cast<size_t>(info.outputSamps) > MP3_PCM_BUFFER_SAMPLES) {
         _lastError = ERR_FORMAT;
 
-        ESP_LOGE(
-            TAG,
-            "invalid MP3 output sample count: %d",
-            info.outputSamps
-        );
+        ESP_LOGE(TAG, "invalid MP3 output sample count: %d", info.outputSamps);
 
         return false;
     }
 
-    _sampleRate =
-        static_cast<uint32_t>(info.samprate);
-
-    _channels =
-        static_cast<uint16_t>(info.nChans);
-
-    _bitrate =
-        static_cast<uint32_t>(
-            info.bitrate > 0
-                ? info.bitrate
-                : 0
-        );
-
+    _sampleRate = static_cast<uint32_t>(info.samprate);
+    _channels = static_cast<uint16_t>(info.nChans);
+    _bitrate = static_cast<uint32_t>(info.bitrate > 0 ? info.bitrate : 0);
     _frameInfo = info;
 
     return true;
 }
 
-
 // ============================================================================
 // MP3 frame decoding
 // ============================================================================
 
-AudioPlayMp3::DecodeResult
-AudioPlayMp3::decodePcmBuffer(
-    int16_t *destination,
-    size_t capacity,
-    size_t &outSamples
-)
-{
+AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination,
+                                                         size_t capacity,
+                                                         size_t &outSamples) {
     outSamples = 0;
 
-    if (_decoder == nullptr ||
-        destination == nullptr ||
-        capacity < MP3_PCM_BUFFER_SAMPLES)
-    {
+    if (_decoder == nullptr || destination == nullptr ||
+        capacity < MP3_PCM_BUFFER_SAMPLES) {
         _lastError = ERR_DECODER;
         return DecodeResult::ERROR;
     }
@@ -597,21 +463,15 @@ AudioPlayMp3::decodePcmBuffer(
     }
 
     for (;;) {
-
         if (!fillInput(4)) {
-            return _inputEof
-                ? DecodeResult::END_OF_STREAM
-                : DecodeResult::RETRY;
+            return _inputEof ? DecodeResult::END_OF_STREAM
+                             : DecodeResult::RETRY;
         }
 
         int offset =
-            MP3FindSyncWord(
-                _input + _inputPos,
-                static_cast<int>(_inputLeft)
-            );
+            MP3FindSyncWord(_input + _inputPos, static_cast<int>(_inputLeft));
 
         if (offset < 0) {
-
             if (_inputLeft > 3) {
                 _inputPos += _inputLeft - 3;
                 _inputLeft = 3;
@@ -622,9 +482,8 @@ AudioPlayMp3::decodePcmBuffer(
             }
 
             if (!fillInput(4)) {
-                return _inputEof
-                    ? DecodeResult::END_OF_STREAM
-                    : DecodeResult::RETRY;
+                return _inputEof ? DecodeResult::END_OF_STREAM
+                                 : DecodeResult::RETRY;
             }
 
             continue;
@@ -635,56 +494,34 @@ AudioPlayMp3::decodePcmBuffer(
             _inputLeft -= static_cast<size_t>(offset);
         }
 
-        unsigned char *input =
-            _input + _inputPos;
+        unsigned char *input = _input + _inputPos;
 
-        int bytesLeft =
-            static_cast<int>(_inputLeft);
-
-        const int bytesBefore =
-            bytesLeft;
-
+        int bytesLeft = static_cast<int>(_inputLeft);
+        const int bytesBefore = bytesLeft;
         const uint32_t decodeStartUs = micros();
-
         const int decodeResult =
-            MP3Decode(
-                _decoder,
-                &input,
-                &bytesLeft,
-                destination,
-                0
-            );
+            MP3Decode(_decoder, &input, &bytesLeft, destination, 0);
 
-        const uint32_t decodeElapsedUs =
-            micros() - decodeStartUs;
+#if SOFTCODEC_METRICS
+        const uint32_t decodeElapsedUs = micros() - decodeStartUs;
+#endif
+        const int consumed = bytesBefore - bytesLeft;
 
-        const int consumed =
-            bytesBefore - bytesLeft;
-
-        if (consumed < 0 ||
-            static_cast<size_t>(consumed) > _inputLeft)
-        {
+        if (consumed < 0 || static_cast<size_t>(consumed) > _inputLeft) {
             _lastError = ERR_DECODER;
 
-            ESP_LOGE(
-                TAG,
-                "MP3 decoder returned invalid byte count"
-            );
+            ESP_LOGE(TAG, "MP3 decoder returned invalid byte count");
 
             return DecodeResult::ERROR;
         }
 
         if (decodeResult == ERR_MP3_NONE) {
-
             _inputPos += static_cast<size_t>(consumed);
             _inputLeft -= static_cast<size_t>(consumed);
 
             MP3FrameInfo info = {};
 
-            MP3GetLastFrameInfo(
-                _decoder,
-                &info
-            );
+            MP3GetLastFrameInfo(_decoder, &info);
 
             if (!validateFrameInfo(info)) {
                 return DecodeResult::ERROR;
@@ -696,81 +533,61 @@ AudioPlayMp3::decodePcmBuffer(
              * each frame, so MPEG-1 (1152 samples/frame) and MPEG-2/2.5
              * (576 samples/frame) are handled correctly.
              */
+#if SOFTCODEC_METRICS
             const uint64_t frameAudioSamples =
                 (static_cast<uint64_t>(info.outputSamps) /
                  static_cast<uint64_t>(info.nChans));
 
             const uint64_t frameAudioTimeUs =
-                info.samprate > 0
-                    ? (frameAudioSamples * 1000000ULL) /
-                      static_cast<uint64_t>(info.samprate)
-                    : 0ULL;
+                info.samprate > 0 ? (frameAudioSamples * 1000000ULL) /
+                                        static_cast<uint64_t>(info.samprate)
+                                  : 0ULL;
 
             _decodeFrames = _decodeFrames + 1;
             _decodeTimeUsTotal += decodeElapsedUs;
             _decodeAudioTimeUsTotal += frameAudioTimeUs;
 
             if (frameAudioTimeUs > 0) {
-                const float usage =
-                    static_cast<float>(
-                        (static_cast<double>(decodeElapsedUs) * 100.0) /
-                        static_cast<double>(frameAudioTimeUs)
-                    );
+                const uint64_t usageX100 =
+                    (static_cast<uint64_t>(decodeElapsedUs) * 10000ULL +
+                     frameAudioTimeUs / 2ULL) /
+                    frameAudioTimeUs;
 
-                if (usage > _decodeProcessorUsageMax) {
-                    _decodeProcessorUsageMax = usage;
+                if (usageX100 > _decodeProcessorUsageMaxX100) {
+                    _decodeProcessorUsageMaxX100 =
+                        static_cast<uint32_t>(usageX100);
                 }
             }
-
-            const size_t decoderSamples =
-                static_cast<size_t>(
-                    info.outputSamps
-                );
+#endif
+            const size_t decoderSamples = static_cast<size_t>(info.outputSamps);
 
             if (info.nChans == 2) {
                 outSamples = decoderSamples;
-            }
-            else {
-
+            } else {
                 if (decoderSamples * 2U > capacity) {
                     _lastError = ERR_DECODER;
 
-                    ESP_LOGE(
-                        TAG,
-                        "mono frame does not fit output buffer"
-                    );
+                    ESP_LOGE(TAG, "mono frame does not fit output buffer");
 
                     return DecodeResult::ERROR;
                 }
 
-                for (size_t i = decoderSamples;
-                     i > 0;
-                     --i)
-                {
-                    const int16_t sample =
-                        destination[i - 1U];
+                for (size_t i = decoderSamples; i > 0; --i) {
+                    const int16_t sample = destination[i - 1U];
 
                     destination[(2U * i) - 2U] = sample;
                     destination[(2U * i) - 1U] = sample;
                 }
 
-                outSamples =
-                    decoderSamples * 2U;
+                outSamples = decoderSamples * 2U;
             }
 
-            return outSamples > 0
-                ? DecodeResult::FILLED
-                : DecodeResult::ERROR;
+            return outSamples > 0 ? DecodeResult::FILLED : DecodeResult::ERROR;
         }
 
         if (decodeResult == ERR_MP3_INDATA_UNDERFLOW) {
-
             if (_inputPos > 0) {
-                std::memmove(
-                    _input,
-                    _input + _inputPos,
-                    _inputLeft
-                );
+                std::memmove(_input, _input + _inputPos, _inputLeft);
 
                 _inputPos = 0;
             }
@@ -780,16 +597,14 @@ AudioPlayMp3::decodePcmBuffer(
             }
 
             if (!fillInput(MP3_INPUT_BUFFER_SIZE)) {
-                return _inputEof
-                    ? DecodeResult::END_OF_STREAM
-                    : DecodeResult::RETRY;
+                return _inputEof ? DecodeResult::END_OF_STREAM
+                                 : DecodeResult::RETRY;
             }
 
             continue;
         }
 
         if (decodeResult == ERR_MP3_MAINDATA_UNDERFLOW) {
-
             _inputPos += static_cast<size_t>(consumed);
             _inputLeft -= static_cast<size_t>(consumed);
 
@@ -801,11 +616,7 @@ AudioPlayMp3::decodePcmBuffer(
 
         _lastError = decodeResult;
 
-        ESP_LOGE(
-            TAG,
-            "MP3Decode failed: %d",
-            decodeResult
-        );
+        ESP_LOGE(TAG, "MP3Decode failed: %d", decodeResult);
 
         return DecodeResult::ERROR;
     }

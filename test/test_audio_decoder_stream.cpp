@@ -73,7 +73,6 @@ void test_decoder_task_can_be_started_and_stopped() {
 
     TEST_ASSERT_FALSE(decoder.decoderTaskRunning());
 }
-
 } // namespace
 
 void setup() {

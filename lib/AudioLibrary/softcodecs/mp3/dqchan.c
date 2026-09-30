@@ -203,31 +203,22 @@ DequantBlock(int *inbuf, int *outbuf, int num, int scale) {
     tab4[3] = tab16[3] >> shift;
 
     do {
-
         sx = *inbuf++;
         x = sx & 0x7fffffff; /* sx = sign|mag */
 
         if (x < 4) {
-
             y = tab4[x];
-
         } else if (x < 16) {
-
             y = tab16[x];
             y = (scalei < 0) ? y << -scalei : y >> scalei;
-
         } else {
-
             if (x < 64) {
-
                 y = pow43[x - 16];
 
                 /* fractional scale */
                 y = MULSHIFT32(y, scalef);
                 shift = scalei - 3;
-
             } else {
-
                 /* normalize to [0x40000000, 0x7fffffff] */
                 x <<= 17;
                 shift = 0;
@@ -268,7 +259,6 @@ DequantBlock(int *inbuf, int *outbuf, int num, int scale) {
         /* sign and store */
         mask |= y;
         *outbuf++ = (sx < 0) ? -y : y;
-
     } while (--num);
 
     return mask;
@@ -345,7 +335,6 @@ DequantChannel(int *sampleBuf, int *workBuf, int *nonZeroBound, FrameHeader *fh,
 
     /* long blocks */
     for (cb = 0; cb < cbEndL; cb++) {
-
         nonZero = 0;
         nSamps = fh->sfBand->l[cb + 1] - fh->sfBand->l[cb];
         gainI = 210 - globalGain +
@@ -377,7 +366,6 @@ DequantChannel(int *sampleBuf, int *workBuf, int *nonZeroBound, FrameHeader *fh,
     /* short blocks */
     cbMax[2] = cbMax[1] = cbMax[0] = cbStartS;
     for (cb = cbStartS; cb < cbEndS; cb++) {
-
         nSamps = fh->sfBand->s[cb + 1] - fh->sfBand->s[cb];
         for (w = 0; w < 3; w++) {
             nonZero = 0;

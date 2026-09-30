@@ -87,7 +87,6 @@ static __inline void RefillBitstreamCache(BitStreamInfo *bsi) {
     int nBytes = bsi->nBytes;
 
     if (nBytes >= 4) {
-
         /*
          * Optimize for 32-bit loads.
          * REV32() converts the native ESP32 byte order
@@ -103,9 +102,7 @@ static __inline void RefillBitstreamCache(BitStreamInfo *bsi) {
         bsi->bytePtr += 4;
         bsi->cachedBits = 32;
         bsi->nBytes -= 4;
-
     } else if (nBytes == 2) {
-
         unsigned short *Ptr16;
 
         Ptr16 = (unsigned short *)bsi->bytePtr;
@@ -115,26 +112,22 @@ static __inline void RefillBitstreamCache(BitStreamInfo *bsi) {
         bsi->bytePtr += 2;
         bsi->cachedBits = 16;
         bsi->nBytes -= 2;
+    } else if (nBytes == 3) {
+        uint8_t *p = bsi->bytePtr;
 
-    }  else if (nBytes == 3) {
-		uint8_t *p = bsi->bytePtr;
+        uint32_t cache = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+                         ((uint32_t)p[2] << 8);
 
-		uint32_t cache =
-			((uint32_t)p[0] << 24) |
-			((uint32_t)p[1] << 16) |
-			((uint32_t)p[2] << 8);
-
-		bsi->iCache = cache;
-		bsi->bytePtr = p + 3;
-		bsi->cachedBits = 24;
-		bsi->nBytes = 0;
-
-	} else {    // nBytes == 1
-		bsi->iCache = (uint32_t)bsi->bytePtr[0] << 24;
-		bsi->bytePtr++;
-		bsi->cachedBits = 8;
-		bsi->nBytes = 0;
-	}
+        bsi->iCache = cache;
+        bsi->bytePtr = p + 3;
+        bsi->cachedBits = 24;
+        bsi->nBytes = 0;
+    } else { // nBytes == 1
+        bsi->iCache = (uint32_t)bsi->bytePtr[0] << 24;
+        bsi->bytePtr++;
+        bsi->cachedBits = 8;
+        bsi->nBytes = 0;
+    }
 }
 
 /**************************************************************************************
@@ -244,7 +237,6 @@ int CheckPadBit(MP3DecInfo *mp3DecInfo) {
  *              test CRC on actual stream (verify no endian problems)
  **************************************************************************************/
 int UnpackFrameHeader(MP3DecInfo *mp3DecInfo, unsigned char *buf) {
-
     int verIdx;
     FrameHeader *fh;
 
