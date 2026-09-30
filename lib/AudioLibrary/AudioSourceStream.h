@@ -27,6 +27,10 @@ public:
 
     bool isOpen() const override;
 
+    size_t refillThreshold() const override;
+    size_t fillSize() const override;
+    bool fillToThreshold() const override;
+
     Stream *stream();
 
 private:

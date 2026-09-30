@@ -72,12 +72,6 @@ AudioSourceStatus AudioSourceFile::read(
         return AudioSourceStatus::END_OF_STREAM;
     }
 
-    /*
-     * Die File-Implementierung hat keine Daten geliefert,
-     * obwohl noch Daten vorhanden sein sollten.
-     *
-     * Wir behandeln das nicht als EOF.
-     */
     return AudioSourceStatus::WOULD_BLOCK;
 }
 
@@ -111,11 +105,9 @@ bool AudioSourceFile::seek(uint64_t position)
     }
 
     /*
-     * Arduino-ESP32 File::seek() verwendet eine 32-Bit
-     * Position. Für normale Audiofiles ist das ausreichend.
-     *
      * Annahme:
-     * Dateien > 4 GiB werden zunächst nicht benötigt.
+     * Die Audio-Dateien bleiben zunächst unter 4 GiB.
+     * Arduino-ESP32 File::seek() verwendet hier eine 32-Bit-Position.
      */
     if (position > UINT32_MAX) {
         return false;
@@ -134,6 +126,21 @@ void AudioSourceFile::close()
 bool AudioSourceFile::isOpen() const
 {
     return static_cast<bool>(_file);
+}
+
+size_t AudioSourceFile::refillThreshold() const
+{
+    return 2 * 1024;
+}
+
+size_t AudioSourceFile::fillSize() const
+{
+    return 2 * 1024;
+}
+
+bool AudioSourceFile::fillToThreshold() const
+{
+    return false;
 }
 
 File &AudioSourceFile::file()
