@@ -25,12 +25,11 @@
 // -----------------------------------------------------------------------------
 
 typedef struct audio_block_struct {
-    uint8_t  ref_count;
-    uint8_t  reserved1;
+    uint8_t ref_count;
+    uint8_t reserved1;
     uint16_t memory_pool_index;
-    int16_t  data[AUDIO_BLOCK_SAMPLES];
+    int16_t data[AUDIO_BLOCK_SAMPLES];
 } audio_block_t;
-
 
 // -----------------------------------------------------------------------------
 // Forward declarations
@@ -39,28 +38,22 @@ typedef struct audio_block_struct {
 class AudioStream;
 class AudioConnection;
 
-
 // -----------------------------------------------------------------------------
 // AudioConnection
 // -----------------------------------------------------------------------------
 
-class AudioConnection
-{
-public:
+class AudioConnection {
+  public:
     AudioConnection();
 
     AudioConnection(AudioStream &source, AudioStream &destination)
-        : AudioConnection()
-    {
+        : AudioConnection() {
         connect(source, destination);
     }
 
-    AudioConnection(AudioStream &source,
-                    unsigned char sourceOutput,
-                    AudioStream &destination,
-                    unsigned char destinationInput)
-        : AudioConnection()
-    {
+    AudioConnection(AudioStream &source, unsigned char sourceOutput,
+                    AudioStream &destination, unsigned char destinationInput)
+        : AudioConnection() {
         connect(source, sourceOutput, destination, destinationInput);
     }
 
@@ -69,19 +62,16 @@ public:
     int disconnect(void);
     int connect(void);
 
-    int connect(AudioStream &source, AudioStream &destination)
-    {
+    int connect(AudioStream &source, AudioStream &destination) {
         return connect(source, 0, destination, 0);
     }
 
-    int connect(AudioStream &source,
-                unsigned char sourceOutput,
-                AudioStream &destination,
-                unsigned char destinationInput);
+    int connect(AudioStream &source, unsigned char sourceOutput,
+                AudioStream &destination, unsigned char destinationInput);
 
     friend class AudioStream;
 
-protected:
+  protected:
     AudioStream *src;
     AudioStream *dst;
 
@@ -91,9 +81,7 @@ protected:
     AudioConnection *next_dest;
 
     bool isConnected;
-
 };
-
 
 // -----------------------------------------------------------------------------
 // Audio memory
@@ -106,25 +94,20 @@ protected:
 
 #define AUDIO_MEMORY_MASK_WORDS(num) (((num) + 31U) / 32U)
 
-#define AudioMemory(num)                                                   \
-    do {                                                                   \
-        static audio_block_t data[num];                                    \
-        static uint32_t audio_memory_masks[AUDIO_MEMORY_MASK_WORDS(num)];  \
-        AudioStream::initialize_memory(                                   \
-            data,                                                          \
-            (num),                                                         \
-            audio_memory_masks,                                            \
-            AUDIO_MEMORY_MASK_WORDS(num));                                 \
+#define AudioMemory(num)                                                       \
+    do {                                                                       \
+        static audio_block_t data[num];                                        \
+        static uint32_t audio_memory_masks[AUDIO_MEMORY_MASK_WORDS(num)];      \
+        AudioStream::initialize_memory(data, (num), audio_memory_masks,        \
+                                       AUDIO_MEMORY_MASK_WORDS(num));          \
     } while (0)
-
 
 // -----------------------------------------------------------------------------
 // AudioStream
 // -----------------------------------------------------------------------------
 
-class AudioStream
-{
-public:
+class AudioStream {
+  public:
     AudioStream(unsigned char ninput, audio_block_t **iqueue);
 
     virtual ~AudioStream() = default;
@@ -133,8 +116,7 @@ public:
     // Memory pool
     // -------------------------------------------------------------------------
 
-    static void initialize_memory(audio_block_t *data,
-                                  unsigned int num,
+    static void initialize_memory(audio_block_t *data, unsigned int num,
                                   uint32_t *available_mask,
                                   unsigned int mask_words);
 
@@ -150,8 +132,7 @@ public:
     static uint16_t memoryUsageMax(void);
     static void memoryUsageMaxReset(void);
 
-    bool isActive(void) const
-    {
+    bool isActive(void) const {
         return active;
     }
 
@@ -163,8 +144,7 @@ public:
     static uint32_t cpu_time_total_us;
     static uint32_t cpu_time_total_max_us;
 
-protected:
-
+  protected:
     // -------------------------------------------------------------------------
     // Audio block ownership
     // -------------------------------------------------------------------------
@@ -203,7 +183,9 @@ protected:
     // execution. The real scheduler uses update_all().
     static void process_all_now(void);
 
-    virtual bool beginHardware() {return true;}
+    virtual bool beginHardware() {
+        return true;
+    }
     friend class AudioConnection;
 
     // -------------------------------------------------------------------------
@@ -217,8 +199,8 @@ protected:
     uint8_t numConnections;
 
     virtual void update(void) = 0;
-private:
 
+  private:
     // -------------------------------------------------------------------------
     // Memory pool
     // -------------------------------------------------------------------------
@@ -275,6 +257,5 @@ private:
     static bool external_update_clock;
     static float audio_sample_rate;
 };
-
 
 #endif // AudioStream_h

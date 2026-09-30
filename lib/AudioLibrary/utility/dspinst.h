@@ -34,20 +34,23 @@
 
 static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift)
     __attribute__((always_inline, unused));
-static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift)
-{
+static inline int32_t signed_saturate_rshift(int32_t val, int bits,
+                                             int rshift) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
-    asm volatile("ssat %0, %1, %2, asr %3" : "=r" (out)
-                 : "I" (bits), "r" (val), "I" (rshift));
+    asm volatile("ssat %0, %1, %2, asr %3"
+                 : "=r"(out)
+                 : "I"(bits), "r"(val), "I"(rshift));
     return out;
 #else
     int32_t out = val >> rshift;
     const int32_t max = (int32_t)1 << (bits - 1);
     if (out >= 0) {
-        if (out > max - 1) out = max - 1;
+        if (out > max - 1)
+            out = max - 1;
     } else {
-        if (out < -max) out = -max;
+        if (out < -max)
+            out = -max;
     }
     return out;
 #endif
@@ -55,26 +58,26 @@ static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift)
 
 static inline int16_t saturate16(int32_t val)
     __attribute__((always_inline, unused));
-static inline int16_t saturate16(int32_t val)
-{
+static inline int16_t saturate16(int32_t val) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t tmp;
-    asm volatile("ssat %0, %1, %2" : "=r" (tmp) : "I" (16), "r" (val));
+    asm volatile("ssat %0, %1, %2" : "=r"(tmp) : "I"(16), "r"(val));
     return (int16_t)tmp;
 #else
-    if (val > 32767) val = 32767;
-    else if (val < -32768) val = -32768;
+    if (val > 32767)
+        val = 32767;
+    else if (val < -32768)
+        val = -32768;
     return (int16_t)val;
 #endif
 }
 
 static inline int32_t signed_multiply_32x16b(int32_t a, uint32_t b)
     __attribute__((always_inline, unused));
-static inline int32_t signed_multiply_32x16b(int32_t a, uint32_t b)
-{
+static inline int32_t signed_multiply_32x16b(int32_t a, uint32_t b) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
-    asm volatile("smulwb %0, %1, %2" : "=r" (out) : "r" (a), "r" (b));
+    asm volatile("smulwb %0, %1, %2" : "=r"(out) : "r"(a), "r"(b));
     return out;
 #else
     return (int32_t)(((int64_t)a * (int16_t)(b & 0xFFFF)) >> 16);
@@ -83,11 +86,10 @@ static inline int32_t signed_multiply_32x16b(int32_t a, uint32_t b)
 
 static inline int32_t signed_multiply_32x16t(int32_t a, uint32_t b)
     __attribute__((always_inline, unused));
-static inline int32_t signed_multiply_32x16t(int32_t a, uint32_t b)
-{
+static inline int32_t signed_multiply_32x16t(int32_t a, uint32_t b) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
-    asm volatile("smulwt %0, %1, %2" : "=r" (out) : "r" (a), "r" (b));
+    asm volatile("smulwt %0, %1, %2" : "=r"(out) : "r"(a), "r"(b));
     return out;
 #else
     return (int32_t)(((int64_t)a * (int16_t)(b >> 16)) >> 16);
@@ -96,11 +98,10 @@ static inline int32_t signed_multiply_32x16t(int32_t a, uint32_t b)
 
 static inline int32_t multiply_32x32_rshift32(int32_t a, int32_t b)
     __attribute__((always_inline, unused));
-static inline int32_t multiply_32x32_rshift32(int32_t a, int32_t b)
-{
+static inline int32_t multiply_32x32_rshift32(int32_t a, int32_t b) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
-    asm volatile("smmul %0, %1, %2" : "=r" (out) : "r" (a), "r" (b));
+    asm volatile("smmul %0, %1, %2" : "=r"(out) : "r"(a), "r"(b));
     return out;
 #else
     return (int32_t)(((int64_t)a * (int64_t)b) >> 32);
@@ -109,42 +110,47 @@ static inline int32_t multiply_32x32_rshift32(int32_t a, int32_t b)
 
 static inline int32_t multiply_32x32_rshift32_rounded(int32_t a, int32_t b)
     __attribute__((always_inline, unused));
-static inline int32_t multiply_32x32_rshift32_rounded(int32_t a, int32_t b)
-{
+static inline int32_t multiply_32x32_rshift32_rounded(int32_t a, int32_t b) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
-    asm volatile("smmulr %0, %1, %2" : "=r" (out) : "r" (a), "r" (b));
+    asm volatile("smmulr %0, %1, %2" : "=r"(out) : "r"(a), "r"(b));
     return out;
 #else
     return (int32_t)((((int64_t)a * (int64_t)b) + INT64_C(0x80000000)) >> 32);
 #endif
 }
 
-static inline int32_t multiply_accumulate_32x32_rshift32_rounded(int32_t sum, int32_t a, int32_t b)
+static inline int32_t
+multiply_accumulate_32x32_rshift32_rounded(int32_t sum, int32_t a, int32_t b)
     __attribute__((always_inline, unused));
-static inline int32_t multiply_accumulate_32x32_rshift32_rounded(int32_t sum, int32_t a, int32_t b)
-{
+static inline int32_t
+multiply_accumulate_32x32_rshift32_rounded(int32_t sum, int32_t a, int32_t b) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
-    asm volatile("smmlar %0, %2, %3, %1" : "=r" (out)
-                 : "r" (sum), "r" (a), "r" (b));
+    asm volatile("smmlar %0, %2, %3, %1"
+                 : "=r"(out)
+                 : "r"(sum), "r"(a), "r"(b));
     return out;
 #else
-    return sum + (int32_t)((((int64_t)a * (int64_t)b) + INT64_C(0x80000000)) >> 32);
+    return sum +
+           (int32_t)((((int64_t)a * (int64_t)b) + INT64_C(0x80000000)) >> 32);
 #endif
 }
 
-static inline int32_t multiply_subtract_32x32_rshift32_rounded(int32_t sum, int32_t a, int32_t b)
+static inline int32_t
+multiply_subtract_32x32_rshift32_rounded(int32_t sum, int32_t a, int32_t b)
     __attribute__((always_inline, unused));
-static inline int32_t multiply_subtract_32x32_rshift32_rounded(int32_t sum, int32_t a, int32_t b)
-{
+static inline int32_t
+multiply_subtract_32x32_rshift32_rounded(int32_t sum, int32_t a, int32_t b) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
-    asm volatile("smmlsr %0, %2, %3, %1" : "=r" (out)
-                 : "r" (sum), "r" (a), "r" (b));
+    asm volatile("smmlsr %0, %2, %3, %1"
+                 : "=r"(out)
+                 : "r"(sum), "r"(a), "r"(b));
     return out;
 #else
-    return sum - (int32_t)((((int64_t)a * (int64_t)b) + INT64_C(0x80000000)) >> 32);
+    return sum -
+           (int32_t)((((int64_t)a * (int64_t)b) + INT64_C(0x80000000)) >> 32);
 #endif
 }
 

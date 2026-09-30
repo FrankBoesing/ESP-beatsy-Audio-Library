@@ -21,17 +21,14 @@
 // The audio sample is 16-bit, the gain is Q16.16.
 // The multiplication is performed in 64-bit so that the full
 // intermediate product cannot overflow before the shift.
-static inline int32_t applyGain32(int16_t sample, int32_t mult)
-{
+static inline int32_t applyGain32(int16_t sample, int32_t mult) {
     return (int32_t)(((int64_t)sample * mult) >> 16);
 }
-
 
 // Apply gain to a complete block.
 // The result intentionally remains 32-bit until it is saturated
 // back to the 16-bit audio representation.
-static void applyGain(int16_t *data, int32_t mult)
-{
+static void applyGain(int16_t *data, int32_t mult) {
     const int16_t *end = data + AUDIO_BLOCK_SAMPLES;
 
     if (mult == MULTI_UNITYGAIN) {
@@ -44,13 +41,11 @@ static void applyGain(int16_t *data, int32_t mult)
     } while (data < end);
 }
 
-
 // Add a gain-scaled source block to an existing destination block.
 //
 // The addition is performed in 32-bit arithmetic. Saturation happens
 // only after the complete sample value has been calculated.
-static void applyGainThenAdd(int16_t *dst, const int16_t *src, int32_t mult)
-{
+static void applyGainThenAdd(int16_t *dst, const int16_t *src, int32_t mult) {
     const int16_t *end = dst + AUDIO_BLOCK_SAMPLES;
 
     if (mult == MULTI_UNITYGAIN) {
@@ -67,14 +62,11 @@ static void applyGainThenAdd(int16_t *dst, const int16_t *src, int32_t mult)
     } while (dst < end);
 }
 
-
-void AudioMixer4::update(void)
-{
+void AudioMixer4::update(void) {
     audio_block_t *in;
     audio_block_t *out = nullptr;
 
     for (unsigned int channel = 0; channel < 4; channel++) {
-
         if (!out) {
             // The first available input becomes the destination block.
             out = receiveWritable(channel);
@@ -103,22 +95,17 @@ void AudioMixer4::update(void)
     }
 }
 
-
-void AudioAmplifier::update(void)
-{
+void AudioAmplifier::update(void) {
     audio_block_t *block;
     const int32_t mult = multiplier;
 
     if (mult == 0) {
-
         // Zero gain: discard the input.
         block = receiveReadOnly(0);
         if (block) {
             release(block);
         }
-
     } else if (mult == MULTI_UNITYGAIN) {
-
         // Unity gain: no sample calculation required.
         block = receiveReadOnly(0);
 
@@ -126,9 +113,7 @@ void AudioAmplifier::update(void)
             transmit(block);
             release(block);
         }
-
     } else {
-
         // Apply gain and saturate the result to 16-bit.
         block = receiveWritable(0);
 

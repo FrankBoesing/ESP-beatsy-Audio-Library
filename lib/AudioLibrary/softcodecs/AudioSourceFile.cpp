@@ -1,21 +1,16 @@
 #include "AudioSourceFile.h"
 
-AudioSourceFile::AudioSourceFile()
-{
-}
+AudioSourceFile::AudioSourceFile() {}
 
-AudioSourceFile::AudioSourceFile(const File &file)
-{
+AudioSourceFile::AudioSourceFile(const File &file) {
     open(file);
 }
 
-AudioSourceFile::~AudioSourceFile()
-{
+AudioSourceFile::~AudioSourceFile() {
     close();
 }
 
-bool AudioSourceFile::open(const File &file)
-{
+bool AudioSourceFile::open(const File &file) {
     close();
 
     if (!file) {
@@ -27,12 +22,7 @@ bool AudioSourceFile::open(const File &file)
     return static_cast<bool>(_file);
 }
 
-bool AudioSourceFile::open(
-    fs::FS &fs,
-    const char *path,
-    const char *mode
-)
-{
+bool AudioSourceFile::open(fs::FS &fs, const char *path, const char *mode) {
     close();
 
     if (!path) {
@@ -44,12 +34,8 @@ bool AudioSourceFile::open(
     return static_cast<bool>(_file);
 }
 
-AudioSourceStatus AudioSourceFile::read(
-    uint8_t *buffer,
-    size_t requested,
-    size_t &received
-)
-{
+AudioSourceStatus AudioSourceFile::read(uint8_t *buffer, size_t requested,
+                                        size_t &received) {
     received = 0;
 
     if (!_file) {
@@ -75,8 +61,7 @@ AudioSourceStatus AudioSourceFile::read(
     return AudioSourceStatus::WOULD_BLOCK;
 }
 
-uint64_t AudioSourceFile::position() const
-{
+uint64_t AudioSourceFile::position() const {
     if (!_file) {
         return 0;
     }
@@ -84,8 +69,7 @@ uint64_t AudioSourceFile::position() const
     return static_cast<uint64_t>(_file.position());
 }
 
-uint64_t AudioSourceFile::size() const
-{
+uint64_t AudioSourceFile::size() const {
     if (!_file) {
         return 0;
     }
@@ -93,13 +77,11 @@ uint64_t AudioSourceFile::size() const
     return static_cast<uint64_t>(_file.size());
 }
 
-bool AudioSourceFile::isSeekable() const
-{
+bool AudioSourceFile::isSeekable() const {
     return static_cast<bool>(_file);
 }
 
-bool AudioSourceFile::seek(uint64_t position)
-{
+bool AudioSourceFile::seek(uint64_t position) {
     if (!_file) {
         return false;
     }
@@ -116,39 +98,32 @@ bool AudioSourceFile::seek(uint64_t position)
     return _file.seek(static_cast<uint32_t>(position));
 }
 
-void AudioSourceFile::close()
-{
+void AudioSourceFile::close() {
     if (_file) {
         _file.close();
     }
 }
 
-bool AudioSourceFile::isOpen() const
-{
+bool AudioSourceFile::isOpen() const {
     return static_cast<bool>(_file);
 }
 
-size_t AudioSourceFile::refillThreshold() const
-{
+size_t AudioSourceFile::refillThreshold() const {
     return 2 * 1024;
 }
 
-size_t AudioSourceFile::fillSize() const
-{
+size_t AudioSourceFile::fillSize() const {
     return 2 * 1024;
 }
 
-bool AudioSourceFile::fillToThreshold() const
-{
+bool AudioSourceFile::fillToThreshold() const {
     return false;
 }
 
-File &AudioSourceFile::file()
-{
+File &AudioSourceFile::file() {
     return _file;
 }
 
-const File &AudioSourceFile::file() const
-{
+const File &AudioSourceFile::file() const {
     return _file;
 }

@@ -1,32 +1,21 @@
 #include "AudioSourceStream.h"
 
-AudioSourceStream::AudioSourceStream()
-    : _stream(nullptr),
-      _position(0)
-{
-}
+AudioSourceStream::AudioSourceStream() : _stream(nullptr), _position(0) {}
 
 AudioSourceStream::AudioSourceStream(Stream &stream)
-    : _stream(nullptr),
-      _position(0)
-{
+    : _stream(nullptr), _position(0) {
     open(stream);
 }
 
-bool AudioSourceStream::open(Stream &stream)
-{
+bool AudioSourceStream::open(Stream &stream) {
     _stream = &stream;
     _position = 0;
 
     return true;
 }
 
-AudioSourceStatus AudioSourceStream::read(
-    uint8_t *buffer,
-    size_t requested,
-    size_t &received
-)
-{
+AudioSourceStatus AudioSourceStream::read(uint8_t *buffer, size_t requested,
+                                          size_t &received) {
     received = 0;
 
     if (!_stream) {
@@ -49,10 +38,7 @@ AudioSourceStatus AudioSourceStream::read(
         toRead = static_cast<size_t>(available);
     }
 
-    size_t n = _stream->readBytes(
-        reinterpret_cast<char *>(buffer),
-        toRead
-    );
+    size_t n = _stream->readBytes(reinterpret_cast<char *>(buffer), toRead);
 
     received = n;
     _position += n;
@@ -64,54 +50,44 @@ AudioSourceStatus AudioSourceStream::read(
     return AudioSourceStatus::WOULD_BLOCK;
 }
 
-uint64_t AudioSourceStream::position() const
-{
+uint64_t AudioSourceStream::position() const {
     return _position;
 }
 
-uint64_t AudioSourceStream::size() const
-{
+uint64_t AudioSourceStream::size() const {
     return 0;
 }
 
-bool AudioSourceStream::isSeekable() const
-{
+bool AudioSourceStream::isSeekable() const {
     return false;
 }
 
-bool AudioSourceStream::seek(uint64_t position)
-{
+bool AudioSourceStream::seek(uint64_t position) {
     (void)position;
     return false;
 }
 
-void AudioSourceStream::close()
-{
+void AudioSourceStream::close() {
     _stream = nullptr;
     _position = 0;
 }
 
-bool AudioSourceStream::isOpen() const
-{
+bool AudioSourceStream::isOpen() const {
     return _stream != nullptr;
 }
 
-size_t AudioSourceStream::refillThreshold() const
-{
+size_t AudioSourceStream::refillThreshold() const {
     return 32 * 1024;
 }
 
-size_t AudioSourceStream::fillSize() const
-{
+size_t AudioSourceStream::fillSize() const {
     return 32 * 1024;
 }
 
-bool AudioSourceStream::fillToThreshold() const
-{
+bool AudioSourceStream::fillToThreshold() const {
     return true;
 }
 
-Stream *AudioSourceStream::stream()
-{
+Stream *AudioSourceStream::stream() {
     return _stream;
 }

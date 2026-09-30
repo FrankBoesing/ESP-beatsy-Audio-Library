@@ -6,37 +6,21 @@
 #include <cstring>
 
 namespace {
-
 constexpr const char *TAG = "AudioPlayMp3";
-
-} // namespace
-
-
-AudioPlayMp3::AudioPlayMp3()
-    : AudioDecoderStream(MP3_PCM_BUFFER_SAMPLES)
-{
-    /*
-     * Intentionally empty.
-     *
-     * Neither MP3InitDecoder() nor the decoder task is created here.
-     * Playback startup does that work from play().
-     */
 }
 
+AudioPlayMp3::AudioPlayMp3() : AudioDecoderStream(MP3_PCM_BUFFER_SAMPLES) {}
 
-AudioPlayMp3::~AudioPlayMp3()
-{
+AudioPlayMp3::~AudioPlayMp3() {
     stop();
     closeSource();
 }
-
 
 // ============================================================================
 // Source lifetime
 // ============================================================================
 
-void AudioPlayMp3::closeSource()
-{
+void AudioPlayMp3::closeSource() {
     if (_source == nullptr) {
         _ownSource = false;
         return;
@@ -51,22 +35,15 @@ void AudioPlayMp3::closeSource()
     _ownSource = false;
 }
 
-
 // ============================================================================
 // Public play API
 // ============================================================================
 
-bool AudioPlayMp3::play(const char *filename)
-{
+bool AudioPlayMp3::play(const char *filename) {
     return play(SD_MMC, filename);
 }
 
-
-bool AudioPlayMp3::play(
-    fs::FS &fs,
-    const char *filename
-)
-{
+bool AudioPlayMp3::play(fs::FS &fs, const char *filename) {
     stop();
     closeSource();
 
@@ -75,77 +52,46 @@ bool AudioPlayMp3::play(
     if (filename == nullptr) {
         _lastError = ERR_FILE_NOT_FOUND;
 
-        ESP_LOGE(
-            TAG,
-            "filename is null"
-        );
+        ESP_LOGE(TAG, "filename is null");
 
         return false;
     }
 
-    AudioSourceFile *fileSource = nullptr;
-
-    /*
-     * AudioSourceFile is deliberately allocated on playback start,
-     * not in the constructor.
-     */
-    fileSource = new AudioSourceFile();
+    AudioSourceFile *fileSource = new AudioSourceFile();
 
     if (fileSource == nullptr) {
         _lastError = ERR_OUT_OF_MEMORY;
         return false;
     }
 
-    if (!fileSource->open(
-            fs,
-            filename,
-            FILE_READ))
-    {
+    if (!fileSource->open(fs, filename, FILE_READ)) {
         delete fileSource;
 
         _lastError = ERR_FILE_NOT_FOUND;
 
-        ESP_LOGE(
-            TAG,
-            "failed to open MP3 file: %s",
-            filename
-        );
+        ESP_LOGE(TAG, "failed to open MP3 file: %s", filename);
 
         return false;
     }
 
-    return startPlayback(
-        *fileSource,
-        true
-    );
+    return startPlayback(*fileSource, true);
 }
 
-
-bool AudioPlayMp3::play(AudioSource &source)
-{
+bool AudioPlayMp3::play(AudioSource &source) {
     stop();
     closeSource();
 
     _lastError = ERR_NONE;
 
-    return startPlayback(
-        source,
-        false
-    );
+    return startPlayback(source, false);
 }
-
 
 // ============================================================================
 // Start / stop
 // ============================================================================
 
-bool AudioPlayMp3::startPlayback(
-    AudioSource &source,
-    bool takeOwnership
-)
-{
+bool AudioPlayMp3::startPlayback(AudioSource &source, bool takeOwnership) {
     if (!source.isOpen()) {
-
         if (takeOwnership) {
             source.close();
             delete &source;
@@ -159,50 +105,36 @@ bool AudioPlayMp3::startPlayback(
     _source = &source;
     _ownSource = takeOwnership;
 
-    /*
-     * The source may be a reusable object. Reset MP3 input state for every
-     * new playback.
-     */
     _inputPos = 0;
     _inputLeft = 0;
     _inputEof = false;
     _inputPrepared = false;
 
-    std::memset(
-        _input,
-        0,
-        sizeof(_input)
-    );
+    std::memset(_input, 0, sizeof(_input));
 
-    std::memset(
-        &_frameInfo,
-        0,
-        sizeof(_frameInfo)
-    );
+    std::memset(&_frameInfo, 0, sizeof(_frameInfo));
 
     _sampleRate = 0;
     _channels = 0;
     _bitrate = 0;
-    _paused = false;
 
-    /*
-     * Match the existing AudioPlaySdWav source handling:
-     * seek to the beginning when the source is seekable.
-     */
-    if (_source->isSeekable() &&
-        !_source->seek(0))
-    {
+#if SOFTCODEC_METRICS
+    _decodeFrames = 0;
+    _decodeTimeUsTotal = 0;
+    _decodeAudioTimeUsTotal = 0;
+    _decodeProcessorUsageMaxX100 = 0;
+#endif
+
+    _paused = false;
+    _playing = false;
+
+    if (_source->isSeekable() && !_source->seek(0)) {
         _lastError = ERR_FILE_NOT_FOUND;
 
         closeSource();
         return false;
     }
 
-    /*
-     * Decoder initialization is startup work.
-     * MP3Decode() itself is called only by decodePcmBuffer(), i.e. from the
-     * FreeRTOS decoder task created below.
-     */
     _decoder = MP3InitDecoder();
 
     if (_decoder == nullptr) {
@@ -222,17 +154,19 @@ bool AudioPlayMp3::startPlayback(
         return false;
     }
 
+    _playing = true;
+
     return true;
 }
 
-
-void AudioPlayMp3::stop()
-{
+void AudioPlayMp3::stop() {
     /*
-     * First stop the decoder task. This is the non-realtime shutdown path.
-     * Only after the task has stopped may the decoder and source buffers be
-     * released.
+     * Mark playback stopped immediately for the public API. The base-class
+     * shutdown below still waits for the realtime update() and decoder task
+     * before any PCM storage is freed.
      */
+    _playing = false;
+
     stopDecoderTask();
 
     if (_decoder != nullptr) {
@@ -248,94 +182,104 @@ void AudioPlayMp3::stop()
     _paused = false;
 }
 
-
-bool AudioPlayMp3::isPlaying() const
-{
+bool AudioPlayMp3::isPlaying() const {
     /*
-     * decoderFinished() only means that no more compressed data will be
-     * decoded. The final READY PCM buffer may still be draining through
-     * AudioDecoderStream::update().
+     * AudioStream::active describes graph participation, not playback state:
+     * AudioConnection::connect() can set it before play() is called.
+     *
+     * _playing is therefore the actual playback state. It is cleared by
+     * stop() and by AudioDecoderStream::onPlaybackFinished() after the final
+     * READY PCM buffer has drained.
      */
-    return isActive() && !_paused;
+    return _playing && !_paused;
 }
-
 
 // ============================================================================
 // Position / length
 // ============================================================================
 
-uint32_t AudioPlayMp3::positionMillis() const
-{
+uint32_t AudioPlayMp3::positionMillis() const {
     const uint32_t rate =
-        _sampleRate != 0
-            ? _sampleRate
-            : static_cast<uint32_t>(
-                AudioStream::sampleRate()
-            );
+        _sampleRate != 0 ? _sampleRate
+                         : static_cast<uint32_t>(AudioStream::sampleRate());
 
     if (rate == 0) {
         return 0;
     }
 
-    return static_cast<uint32_t>(
-        (samplesPlayed() * 1000ULL) /
-        rate
-    );
+    return static_cast<uint32_t>((samplesPlayed() * 1000ULL) / rate);
 }
 
-
-uint32_t AudioPlayMp3::lengthMillis() const
-{
-    if (_source == nullptr ||
-        _bitrate == 0)
-    {
+uint32_t AudioPlayMp3::lengthMillis() const {
+    if (_source == nullptr || _bitrate == 0) {
         return 0;
     }
 
-    /*
-     * Approximate length, especially for VBR files.
-     * This follows the traditional player approach of using the available
-     * file size and the observed bitrate.
-     */
-    const uint64_t millis =
-        (_source->size() * 8000ULL) /
-        _bitrate;
+    const uint64_t millis = (_source->size() * 8000ULL) / _bitrate;
 
     return static_cast<uint32_t>(millis);
 }
 
+// ============================================================================
+// Decoder diagnostics
+// ============================================================================
+
+#if SOFTCODEC_METRICS
+
+float AudioPlayMp3::decodeProcessorUsage() const {
+    const uint64_t audioTimeUs = _decodeAudioTimeUsTotal;
+
+    if (audioTimeUs == 0) {
+        return 0.0f;
+    }
+
+    /*
+     * Result in hundredths of a percent:
+     *
+     *   usage[%] * 100 =
+     *       decodeTimeUs * 10000
+     *       --------------------
+     *          audioTimeUs
+     *
+     * Integer arithmetic only.
+     */
+    const uint64_t usageX100 =
+        (_decodeTimeUsTotal * 10000ULL + audioTimeUs / 2ULL) / audioTimeUs;
+
+    return static_cast<float>(usageX100) * 0.01f;
+}
+
+float AudioPlayMp3::decodeProcessorUsageMax() const {
+    return static_cast<float>(_decodeProcessorUsageMaxX100) * 0.01f;
+}
+
+uint32_t AudioPlayMp3::decodeFrames() const {
+    return _decodeFrames;
+}
+
+uint64_t AudioPlayMp3::decodeTimeUsTotal() const {
+    return _decodeTimeUsTotal;
+}
+
+#endif
 
 // ============================================================================
 // ID3
 // ============================================================================
 
-size_t AudioPlayMp3::id3TagSize(
-    const uint8_t header[10]
-)
-{
-    if (header == nullptr ||
-        header[0] != 'I' ||
-        header[1] != 'D' ||
-        header[2] != '3')
-    {
+size_t AudioPlayMp3::id3TagSize(const uint8_t header[10]) {
+    if (header == nullptr || header[0] != 'I' || header[1] != 'D' ||
+        header[2] != '3') {
         return 0;
     }
 
-    /*
-     * ID3v2 uses a 28-bit synchsafe tag-data length.
-     */
-    const uint32_t tagDataSize =
-        ((uint32_t)(header[6] & 0x7F) << 21) |
-        ((uint32_t)(header[7] & 0x7F) << 14) |
-        ((uint32_t)(header[8] & 0x7F) << 7)  |
-        ((uint32_t)(header[9] & 0x7F));
+    const uint32_t tagDataSize = ((uint32_t)(header[6] & 0x7F) << 21) |
+                                 ((uint32_t)(header[7] & 0x7F) << 14) |
+                                 ((uint32_t)(header[8] & 0x7F) << 7) |
+                                 ((uint32_t)(header[9] & 0x7F));
 
-    size_t total =
-        10U + static_cast<size_t>(tagDataSize);
+    size_t total = 10U + static_cast<size_t>(tagDataSize);
 
-    /*
-     * ID3v2.4 footer-present flag.
-     */
     if ((header[5] & 0x10U) != 0) {
         total += 10U;
     }
@@ -343,38 +287,19 @@ size_t AudioPlayMp3::id3TagSize(
     return total;
 }
 
-
 // ============================================================================
 // Compressed input buffer
 // ============================================================================
 
-bool AudioPlayMp3::fillInput(size_t minimumBytes)
-{
-    if (_source == nullptr ||
-        minimumBytes > MP3_INPUT_BUFFER_SIZE)
-    {
+bool AudioPlayMp3::fillInput(size_t minimumBytes) {
+    if (_source == nullptr || minimumBytes > MP3_INPUT_BUFFER_SIZE) {
         return false;
     }
 
     while (_inputLeft < minimumBytes) {
-
-        /*
-         * Compact unread compressed data to the beginning of the buffer.
-         *
-         * This is the important part that makes MP3Decode() see one
-         * contiguous frame, including a frame that crosses a refill boundary.
-         *
-         * It corresponds to the fillReadBuffer() approach used by the
-         * Teensy AudioPlaySdMp3 implementation.
-         */
         if (_inputPos > 0) {
-
             if (_inputLeft > 0) {
-                std::memmove(
-                    _input,
-                    _input + _inputPos,
-                    _inputLeft
-                );
+                std::memmove(_input, _input + _inputPos, _inputLeft);
             }
 
             _inputPos = 0;
@@ -384,8 +309,7 @@ bool AudioPlayMp3::fillInput(size_t minimumBytes)
             return true;
         }
 
-        const size_t freeSpace =
-            MP3_INPUT_BUFFER_SIZE - _inputLeft;
+        const size_t freeSpace = MP3_INPUT_BUFFER_SIZE - _inputLeft;
 
         if (freeSpace == 0) {
             return false;
@@ -394,11 +318,7 @@ bool AudioPlayMp3::fillInput(size_t minimumBytes)
         size_t received = 0;
 
         const AudioSourceStatus status =
-            _source->read(
-                _input + _inputLeft,
-                freeSpace,
-                received
-            );
+            _source->read(_input + _inputLeft, freeSpace, received);
 
         if (received > 0) {
             _inputLeft += received;
@@ -409,26 +329,18 @@ bool AudioPlayMp3::fillInput(size_t minimumBytes)
         }
 
         switch (status) {
-
         case AudioSourceStatus::DATA:
-            /*
-             * DATA with zero bytes would otherwise create a busy loop.
-             */
             if (received == 0) {
                 vTaskDelay(1);
             }
             break;
 
         case AudioSourceStatus::WOULD_BLOCK:
-            /*
-             * This is allowed to block only inside the decoder task.
-             */
             vTaskDelay(1);
             break;
 
         case AudioSourceStatus::END_OF_STREAM:
             _inputEof = true;
-
             return _inputLeft >= minimumBytes;
 
         case AudioSourceStatus::ERROR:
@@ -440,23 +352,15 @@ bool AudioPlayMp3::fillInput(size_t minimumBytes)
     return true;
 }
 
-
-bool AudioPlayMp3::skipInput(size_t bytes)
-{
+bool AudioPlayMp3::skipInput(size_t bytes) {
     while (bytes > 0) {
-
         if (_inputLeft == 0) {
-
             if (!fillInput(1)) {
                 return false;
             }
         }
 
-        const size_t consume =
-            std::min(
-                bytes,
-                _inputLeft
-            );
+        const size_t consume = std::min(bytes, _inputLeft);
 
         _inputPos += consume;
         _inputLeft -= consume;
@@ -467,35 +371,23 @@ bool AudioPlayMp3::skipInput(size_t bytes)
     return true;
 }
 
-
-bool AudioPlayMp3::prepareMp3Input()
-{
+bool AudioPlayMp3::prepareMp3Input() {
     if (!fillInput(10)) {
         _lastError = ERR_FILE_NOT_FOUND;
         return false;
     }
 
-    const uint8_t *header =
-        _input + _inputPos;
+    const uint8_t *header = _input + _inputPos;
 
-    const size_t tagSize =
-        id3TagSize(header);
+    const size_t tagSize = id3TagSize(header);
 
     if (tagSize == 0) {
         _inputPrepared = true;
         return true;
     }
 
-    ESP_LOGI(
-        TAG,
-        "ID3 tag detected: %u bytes",
-        static_cast<unsigned>(tagSize)
-    );
+    ESP_LOGI(TAG, "ID3 tag detected: %u bytes", static_cast<unsigned>(tagSize));
 
-    /*
-     * Skip exactly the complete ID3 tag before MP3FindSyncWord(), just as
-     * AudioPlaySdMp3 skips the tag before starting frame decoding.
-     */
     if (!skipInput(tagSize)) {
         _lastError = ERR_FILE_NOT_FOUND;
         return false;
@@ -505,110 +397,65 @@ bool AudioPlayMp3::prepareMp3Input()
     return true;
 }
 
-
 // ============================================================================
 // Frame information
 // ============================================================================
 
-bool AudioPlayMp3::validateFrameInfo(
-    const MP3FrameInfo &info
-)
-{
-    if (info.bitsPerSample != 16 ||
-        info.nChans < 1 ||
-        info.nChans > 2)
-    {
+bool AudioPlayMp3::validateFrameInfo(const MP3FrameInfo &info) {
+    if (info.bitsPerSample != 16 || info.nChans < 1 || info.nChans > 2) {
         _lastError = ERR_FORMAT;
 
-        ESP_LOGE(
-            TAG,
-            "unsupported MP3 format: channels=%d bits=%d",
-            info.nChans,
-            info.bitsPerSample
-        );
+        ESP_LOGE(TAG, "unsupported MP3 format: channels=%d bits=%d",
+                 info.nChans, info.bitsPerSample);
 
         return false;
     }
 
     const uint32_t outputRate =
-        static_cast<uint32_t>(
-            AudioStream::sampleRate()
-        );
+        static_cast<uint32_t>(AudioStream::sampleRate());
 
     if (info.samprate <= 0 ||
-        static_cast<uint32_t>(info.samprate) != outputRate)
-    {
+        static_cast<uint32_t>(info.samprate) != outputRate) {
         _lastError = ERR_FORMAT;
 
-        ESP_LOGE(
-            TAG,
-            "MP3 sample rate %d Hz does not match audio rate %lu Hz",
-            info.samprate,
-            static_cast<unsigned long>(outputRate)
-        );
+        ESP_LOGE(TAG, "MP3 sample rate %d Hz does not match audio rate %lu Hz",
+                 info.samprate, static_cast<unsigned long>(outputRate));
 
         return false;
     }
 
     if (info.outputSamps <= 0 ||
-        static_cast<size_t>(info.outputSamps) >
-            MP3_PCM_BUFFER_SAMPLES)
-    {
+        static_cast<size_t>(info.outputSamps) > MP3_PCM_BUFFER_SAMPLES) {
         _lastError = ERR_FORMAT;
 
-        ESP_LOGE(
-            TAG,
-            "invalid MP3 output sample count: %d",
-            info.outputSamps
-        );
+        ESP_LOGE(TAG, "invalid MP3 output sample count: %d", info.outputSamps);
 
         return false;
     }
 
-    _sampleRate =
-        static_cast<uint32_t>(info.samprate);
-
-    _channels =
-        static_cast<uint16_t>(info.nChans);
-
-    _bitrate =
-        static_cast<uint32_t>(
-            info.bitrate > 0
-                ? info.bitrate
-                : 0
-        );
-
+    _sampleRate = static_cast<uint32_t>(info.samprate);
+    _channels = static_cast<uint16_t>(info.nChans);
+    _bitrate = static_cast<uint32_t>(info.bitrate > 0 ? info.bitrate : 0);
     _frameInfo = info;
 
     return true;
 }
 
-
 // ============================================================================
 // MP3 frame decoding
 // ============================================================================
 
-AudioPlayMp3::DecodeResult
-AudioPlayMp3::decodePcmBuffer(
-    int16_t *destination,
-    size_t capacity,
-    size_t &outSamples
-)
-{
+AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination,
+                                                         size_t capacity,
+                                                         size_t &outSamples) {
     outSamples = 0;
 
-    if (_decoder == nullptr ||
-        destination == nullptr ||
-        capacity < MP3_PCM_BUFFER_SAMPLES)
-    {
+    if (_decoder == nullptr || destination == nullptr ||
+        capacity < MP3_PCM_BUFFER_SAMPLES) {
         _lastError = ERR_DECODER;
         return DecodeResult::ERROR;
     }
 
-    /*
-     * MP3InitDecoder(), MP3FindSyncWord(), MP3Decode() and
-     * MP3GetLastFrameInfo() are all kept on the decoder-task side.
-     */
     if (!_inputPrepared) {
         if (!prepareMp3Input()) {
             return DecodeResult::ERROR;
@@ -616,25 +463,15 @@ AudioPlayMp3::decodePcmBuffer(
     }
 
     for (;;) {
-
         if (!fillInput(4)) {
-            return _inputEof
-                ? DecodeResult::END_OF_STREAM
-                : DecodeResult::RETRY;
+            return _inputEof ? DecodeResult::END_OF_STREAM
+                             : DecodeResult::RETRY;
         }
 
         int offset =
-            MP3FindSyncWord(
-                _input + _inputPos,
-                static_cast<int>(_inputLeft)
-            );
+            MP3FindSyncWord(_input + _inputPos, static_cast<int>(_inputLeft));
 
         if (offset < 0) {
-
-            /*
-             * Preserve enough bytes for a sync/header pattern that crosses
-             * the next refill boundary.
-             */
             if (_inputLeft > 3) {
                 _inputPos += _inputLeft - 3;
                 _inputLeft = 3;
@@ -645,9 +482,8 @@ AudioPlayMp3::decodePcmBuffer(
             }
 
             if (!fillInput(4)) {
-                return _inputEof
-                    ? DecodeResult::END_OF_STREAM
-                    : DecodeResult::RETRY;
+                return _inputEof ? DecodeResult::END_OF_STREAM
+                                 : DecodeResult::RETRY;
             }
 
             continue;
@@ -658,151 +494,100 @@ AudioPlayMp3::decodePcmBuffer(
             _inputLeft -= static_cast<size_t>(offset);
         }
 
-        /*
-         * We are now exactly at an MP3 frame sync word.
-         *
-         * IMPORTANT:
-         * MP3Decode() is called exactly like the Teensy implementation:
-         *
-         *   MP3Decode(decoder, &input, &bytesLeft, outbuf, 0)
-         *
-         * No MP3GetNextFrameInfo() pre-scan is performed.
-         */
-        unsigned char *input =
-            _input + _inputPos;
+        unsigned char *input = _input + _inputPos;
 
-        int bytesLeft =
-            static_cast<int>(_inputLeft);
-
-        const int bytesBefore =
-            bytesLeft;
-
+        int bytesLeft = static_cast<int>(_inputLeft);
+        const int bytesBefore = bytesLeft;
+        const uint32_t decodeStartUs = micros();
         const int decodeResult =
-            MP3Decode(
-                _decoder,
-                &input,
-                &bytesLeft,
-                destination,
-                0
-            );
+            MP3Decode(_decoder, &input, &bytesLeft, destination, 0);
 
-        const int consumed =
-            bytesBefore - bytesLeft;
+#if SOFTCODEC_METRICS
+        const uint32_t decodeElapsedUs = micros() - decodeStartUs;
+#endif
+        const int consumed = bytesBefore - bytesLeft;
 
-        if (consumed < 0 ||
-            static_cast<size_t>(consumed) > _inputLeft)
-        {
+        if (consumed < 0 || static_cast<size_t>(consumed) > _inputLeft) {
             _lastError = ERR_DECODER;
 
-            ESP_LOGE(
-                TAG,
-                "MP3 decoder returned invalid byte count"
-            );
+            ESP_LOGE(TAG, "MP3 decoder returned invalid byte count");
 
             return DecodeResult::ERROR;
         }
 
         if (decodeResult == ERR_MP3_NONE) {
-
-            /*
-             * Commit the bytes consumed by the successful frame.
-             */
             _inputPos += static_cast<size_t>(consumed);
             _inputLeft -= static_cast<size_t>(consumed);
 
             MP3FrameInfo info = {};
 
-            /*
-             * Exactly as in AudioPlaySdMp3::decodeMp3():
-             * query frame information immediately after MP3Decode().
-             */
-            MP3GetLastFrameInfo(
-                _decoder,
-                &info
-            );
+            MP3GetLastFrameInfo(_decoder, &info);
 
             if (!validateFrameInfo(info)) {
                 return DecodeResult::ERROR;
             }
 
-            const size_t decoderSamples =
-                static_cast<size_t>(
-                    info.outputSamps
-                );
+            /*
+             * Account successful MP3 frames only. The decoder time is
+             * normalized against the actual audio duration represented by
+             * each frame, so MPEG-1 (1152 samples/frame) and MPEG-2/2.5
+             * (576 samples/frame) are handled correctly.
+             */
+#if SOFTCODEC_METRICS
+            const uint64_t frameAudioSamples =
+                (static_cast<uint64_t>(info.outputSamps) /
+                 static_cast<uint64_t>(info.nChans));
+
+            const uint64_t frameAudioTimeUs =
+                info.samprate > 0 ? (frameAudioSamples * 1000000ULL) /
+                                        static_cast<uint64_t>(info.samprate)
+                                  : 0ULL;
+
+            _decodeFrames = _decodeFrames + 1;
+            _decodeTimeUsTotal += decodeElapsedUs;
+            _decodeAudioTimeUsTotal += frameAudioTimeUs;
+
+            if (frameAudioTimeUs > 0) {
+                const uint64_t usageX100 =
+                    (static_cast<uint64_t>(decodeElapsedUs) * 10000ULL +
+                     frameAudioTimeUs / 2ULL) /
+                    frameAudioTimeUs;
+
+                if (usageX100 > _decodeProcessorUsageMaxX100) {
+                    _decodeProcessorUsageMaxX100 =
+                        static_cast<uint32_t>(usageX100);
+                }
+            }
+#endif
+            const size_t decoderSamples = static_cast<size_t>(info.outputSamps);
 
             if (info.nChans == 2) {
-
-                /*
-                 * Helix already outputs LRLR... for stereo.
-                 *
-                 * outputSamps is the total number of interleaved int16_t
-                 * samples, as defined by the decoder itself.
-                 */
                 outSamples = decoderSamples;
-            }
-            else {
-
-                /*
-                 * Helix outputs mono samples for a mono frame.
-                 *
-                 * The Teensy player sends mono to both output channels.
-                 * Convert that here to the common stereo-interleaved format
-                 * required by AudioDecoderStream.
-                 *
-                 * Work backwards so expansion is performed in-place.
-                 */
+            } else {
                 if (decoderSamples * 2U > capacity) {
                     _lastError = ERR_DECODER;
 
-                    ESP_LOGE(
-                        TAG,
-                        "mono frame does not fit output buffer"
-                    );
+                    ESP_LOGE(TAG, "mono frame does not fit output buffer");
 
                     return DecodeResult::ERROR;
                 }
 
-                for (size_t i = decoderSamples;
-                     i > 0;
-                     --i)
-                {
-                    const int16_t sample =
-                        destination[i - 1U];
+                for (size_t i = decoderSamples; i > 0; --i) {
+                    const int16_t sample = destination[i - 1U];
 
                     destination[(2U * i) - 2U] = sample;
                     destination[(2U * i) - 1U] = sample;
                 }
 
-                outSamples =
-                    decoderSamples * 2U;
+                outSamples = decoderSamples * 2U;
             }
 
-            return outSamples > 0
-                ? DecodeResult::FILLED
-                : DecodeResult::ERROR;
+            return outSamples > 0 ? DecodeResult::FILLED : DecodeResult::ERROR;
         }
 
         if (decodeResult == ERR_MP3_INDATA_UNDERFLOW) {
-
-            /*
-             * This is the critical difference from MAINDATA_UNDERFLOW:
-             *
-             * MP3Decode() has not consumed the complete MP3 frame. Do NOT
-             * advance _inputPos/_inputLeft here.
-             *
-             * The complete frame must remain available for the next
-             * MP3Decode() call after more input has been appended.
-             *
-             * This reproduces the effective fill/compact/retry behavior of
-             * the Teensy implementation without running decode() from an
-             * interrupt.
-             */
             if (_inputPos > 0) {
-                std::memmove(
-                    _input,
-                    _input + _inputPos,
-                    _inputLeft
-                );
+                std::memmove(_input, _input + _inputPos, _inputLeft);
 
                 _inputPos = 0;
             }
@@ -812,27 +597,14 @@ AudioPlayMp3::decodePcmBuffer(
             }
 
             if (!fillInput(MP3_INPUT_BUFFER_SIZE)) {
-                return _inputEof
-                    ? DecodeResult::END_OF_STREAM
-                    : DecodeResult::RETRY;
+                return _inputEof ? DecodeResult::END_OF_STREAM
+                                 : DecodeResult::RETRY;
             }
 
             continue;
         }
 
         if (decodeResult == ERR_MP3_MAINDATA_UNDERFLOW) {
-
-            /*
-             * Match the Teensy implementation:
-             *
-             *   case ERR_MP3_MAINDATA_UNDERFLOW:
-             *       break;
-             *
-             * MP3Decode() has consumed the current frame into the decoder's
-             * main-data buffer, but there was not enough previous reservoir
-             * data to reconstruct it. Commit the consumed bytes and continue
-             * with the next frame.
-             */
             _inputPos += static_cast<size_t>(consumed);
             _inputLeft -= static_cast<size_t>(consumed);
 
@@ -844,11 +616,7 @@ AudioPlayMp3::decodePcmBuffer(
 
         _lastError = decodeResult;
 
-        ESP_LOGE(
-            TAG,
-            "MP3Decode failed: %d",
-            decodeResult
-        );
+        ESP_LOGE(TAG, "MP3Decode failed: %d", decodeResult);
 
         return DecodeResult::ERROR;
     }

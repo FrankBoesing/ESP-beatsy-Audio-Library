@@ -4,17 +4,14 @@
 #include <Arduino.h>
 
 class AudioSourceStream : public AudioSource {
-public:
+  public:
     AudioSourceStream();
     explicit AudioSourceStream(Stream &stream);
 
     bool open(Stream &stream);
 
-    AudioSourceStatus read(
-        uint8_t *buffer,
-        size_t requested,
-        size_t &received
-    ) override;
+    AudioSourceStatus read(uint8_t *buffer, size_t requested,
+                           size_t &received) override;
 
     uint64_t position() const override;
     uint64_t size() const override;
@@ -33,7 +30,7 @@ public:
 
     Stream *stream();
 
-private:
+  private:
     Stream *_stream;
     uint64_t _position;
 };

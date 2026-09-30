@@ -28,11 +28,9 @@
  * The AudioStream blocks remain 16-bit. Conversion to the 32-bit
  * I2S slot format is performed only in the TX task.
  */
-class AudioOutputI2S : public AudioStream
-{
-public:
-    struct Pins
-    {
+class AudioOutputI2S : public AudioStream {
+  public:
+    struct Pins {
         int8_t bclk;
         int8_t ws;
         int8_t dout;
@@ -49,8 +47,7 @@ public:
      * These are board-specific defaults and can be overridden with
      * AudioOutputI2S(Pins) or begin(Pins).
      */
-    static constexpr Pins defaultPins()
-    {
+    static constexpr Pins defaultPins() {
 #if defined(CONFIG_IDF_TARGET_ESP32)
         return {27, 25, 26, 0};
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
@@ -69,17 +66,22 @@ public:
     bool begin(const Pins &pins);
     void end();
 
-    bool isRunning() const { return running; }
-    uint32_t txCallbackCount() const { return txCallbackCountValue; }
-    const Pins &pins() const { return i2sPins; }
+    bool isRunning() const {
+        return running;
+    }
+    uint32_t txCallbackCount() const {
+        return txCallbackCountValue;
+    }
+    const Pins &pins() const {
+        return i2sPins;
+    }
 
-protected:
+  protected:
     void update() override;
     bool beginHardware() override;
 
-private:
-    struct BlockPair
-    {
+  private:
+    struct BlockPair {
         audio_block_t *left;
         audio_block_t *right;
     };
@@ -87,7 +89,7 @@ private:
     static constexpr size_t QUEUE_LENGTH = 4;
 
     // Same DMA sizing as the reference ESP32-audioI2S configuration.
-    static constexpr uint16_t DMA_DESC_NUM  = 16;
+    static constexpr uint16_t DMA_DESC_NUM = 16;
     static constexpr uint16_t DMA_FRAME_NUM = AUDIO_BLOCK_SAMPLES;
 
     Pins i2sPins = defaultPins();

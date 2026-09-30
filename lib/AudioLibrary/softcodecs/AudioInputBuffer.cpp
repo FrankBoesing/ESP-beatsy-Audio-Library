@@ -5,26 +5,16 @@
 #endif
 
 AudioInputBuffer::AudioInputBuffer(size_t capacity)
-    : buffer(nullptr),
-      buffer_size(capacity),
-      region_a_start(0),
-      region_a_length(0),
-      region_b_start(0),
-      region_b_length(0),
-      write_acquired(false),
-      write_start(0),
-      write_length(0),
-      psram_allocated(false)
-{
-}
+    : buffer(nullptr), buffer_size(capacity), region_a_start(0),
+      region_a_length(0), region_b_start(0), region_b_length(0),
+      write_acquired(false), write_start(0), write_length(0),
+      psram_allocated(false) {}
 
-AudioInputBuffer::~AudioInputBuffer()
-{
+AudioInputBuffer::~AudioInputBuffer() {
     end();
 }
 
-bool AudioInputBuffer::begin()
-{
+bool AudioInputBuffer::begin() {
     end();
 
     if (buffer_size == 0) {
@@ -40,14 +30,12 @@ bool AudioInputBuffer::begin()
     return true;
 }
 
-void AudioInputBuffer::end()
-{
+void AudioInputBuffer::end() {
     freeBuffer();
     reset();
 }
 
-void AudioInputBuffer::reset()
-{
+void AudioInputBuffer::reset() {
     region_a_start = 0;
     region_a_length = 0;
 
@@ -59,16 +47,11 @@ void AudioInputBuffer::reset()
     write_length = 0;
 }
 
-bool AudioInputBuffer::allocateBuffer()
-{
+bool AudioInputBuffer::allocateBuffer() {
 #if defined(ARDUINO_ARCH_ESP32)
     if (psramFound()) {
         buffer = static_cast<uint8_t *>(
-            heap_caps_malloc(
-                buffer_size,
-                MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT
-            )
-        );
+            heap_caps_malloc(buffer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
 
         if (buffer != nullptr) {
             psram_allocated = true;
@@ -88,8 +71,7 @@ bool AudioInputBuffer::allocateBuffer()
     return true;
 }
 
-void AudioInputBuffer::freeBuffer()
-{
+void AudioInputBuffer::freeBuffer() {
     if (buffer == nullptr) {
         return;
     }
@@ -104,8 +86,7 @@ void AudioInputBuffer::freeBuffer()
     psram_allocated = false;
 }
 
-const uint8_t *AudioInputBuffer::acquireRead(size_t &length) const
-{
+const uint8_t *AudioInputBuffer::acquireRead(size_t &length) const {
     length = 0;
 
     if (buffer == nullptr || region_a_length == 0) {
@@ -116,8 +97,7 @@ const uint8_t *AudioInputBuffer::acquireRead(size_t &length) const
     return buffer + region_a_start;
 }
 
-bool AudioInputBuffer::releaseRead(size_t consumed)
-{
+bool AudioInputBuffer::releaseRead(size_t consumed) {
     if (consumed > region_a_length) {
         return false;
     }
@@ -136,8 +116,7 @@ bool AudioInputBuffer::releaseRead(size_t consumed)
 
             region_b_start = 0;
             region_b_length = 0;
-        }
-        else {
+        } else {
             region_a_start = 0;
             region_a_length = 0;
 
@@ -149,8 +128,7 @@ bool AudioInputBuffer::releaseRead(size_t consumed)
     return validate();
 }
 
-uint8_t *AudioInputBuffer::getWriteRegion(size_t &length)
-{
+uint8_t *AudioInputBuffer::getWriteRegion(size_t &length) {
     length = 0;
 
     if (buffer == nullptr) {
@@ -158,8 +136,7 @@ uint8_t *AudioInputBuffer::getWriteRegion(size_t &length)
     }
 
     if (region_b_length > 0) {
-        const size_t end =
-            region_b_start + region_b_length;
+        const size_t end = region_b_start + region_b_length;
 
         if (region_a_start > end) {
             length = region_a_start - end;
@@ -169,14 +146,11 @@ uint8_t *AudioInputBuffer::getWriteRegion(size_t &length)
         return nullptr;
     }
 
-    const size_t end_of_a =
-        region_a_start + region_a_length;
+    const size_t end_of_a = region_a_start + region_a_length;
 
-    const size_t free_after_a =
-        buffer_size - end_of_a;
+    const size_t free_after_a = buffer_size - end_of_a;
 
-    const size_t free_before_a =
-        region_a_start;
+    const size_t free_before_a = region_a_start;
 
     if (region_a_length == 0) {
         length = buffer_size;
@@ -200,8 +174,7 @@ uint8_t *AudioInputBuffer::getWriteRegion(size_t &length)
     return nullptr;
 }
 
-uint8_t *AudioInputBuffer::acquireWrite(size_t &length)
-{
+uint8_t *AudioInputBuffer::acquireWrite(size_t &length) {
     if (write_acquired) {
         length = 0;
         return nullptr;
@@ -215,16 +188,14 @@ uint8_t *AudioInputBuffer::acquireWrite(size_t &length)
 
     write_acquired = true;
 
-    write_start =
-        static_cast<size_t>(ptr - buffer);
+    write_start = static_cast<size_t>(ptr - buffer);
 
     write_length = length;
 
     return ptr;
 }
 
-bool AudioInputBuffer::commitWrite(size_t written)
-{
+bool AudioInputBuffer::commitWrite(size_t written) {
     if (!write_acquired) {
         return false;
     }
@@ -243,15 +214,11 @@ bool AudioInputBuffer::commitWrite(size_t written)
         return true;
     }
 
-    if (region_a_length == 0 &&
-        region_b_length == 0)
-    {
+    if (region_a_length == 0 && region_b_length == 0) {
         region_a_start = write_start;
         region_a_length = written;
-    }
-    else if (region_b_length > 0) {
-        const size_t expected =
-            region_b_start + region_b_length;
+    } else if (region_b_length > 0) {
+        const size_t expected = region_b_start + region_b_length;
 
         if (write_start != expected) {
             write_acquired = false;
@@ -261,21 +228,15 @@ bool AudioInputBuffer::commitWrite(size_t written)
         }
 
         region_b_length += written;
-    }
-    else {
-        const size_t end_of_a =
-            region_a_start + region_a_length;
+    } else {
+        const size_t end_of_a = region_a_start + region_a_length;
 
         if (write_start == end_of_a) {
             region_a_length += written;
-        }
-        else if (write_start == 0 &&
-                 region_a_start > 0)
-        {
+        } else if (write_start == 0 && region_a_start > 0) {
             region_b_start = 0;
             region_b_length = written;
-        }
-        else {
+        } else {
             write_acquired = false;
             write_start = 0;
             write_length = 0;
@@ -290,8 +251,7 @@ bool AudioInputBuffer::commitWrite(size_t written)
     return validate();
 }
 
-AudioSourceStatus AudioInputBuffer::fill(AudioSource &source)
-{
+AudioSourceStatus AudioInputBuffer::fill(AudioSource &source) {
     /*
      * First decide whether a refill is necessary.
      */
@@ -304,12 +264,9 @@ AudioSourceStatus AudioInputBuffer::fill(AudioSource &source)
 
     size_t available = 0;
 
-    uint8_t *destination =
-        acquireWrite(available);
+    uint8_t *destination = acquireWrite(available);
 
-    if (destination == nullptr ||
-        available == 0)
-    {
+    if (destination == nullptr || available == 0) {
         return AudioSourceStatus::WOULD_BLOCK;
     }
 
@@ -324,8 +281,7 @@ AudioSourceStatus AudioInputBuffer::fill(AudioSource &source)
          *   31744 -> request 1024 -> 32768
          */
         requested = threshold - current;
-    }
-    else {
+    } else {
         /*
          * Filesystem:
          * request one complete refill chunk.
@@ -346,15 +302,9 @@ AudioSourceStatus AudioInputBuffer::fill(AudioSource &source)
     size_t received = 0;
 
     const AudioSourceStatus status =
-        source.read(
-            destination,
-            requested,
-            received
-        );
+        source.read(destination, requested, received);
 
-    if (status == AudioSourceStatus::DATA &&
-        received == 0)
-    {
+    if (status == AudioSourceStatus::DATA && received == 0) {
         commitWrite(0);
         return AudioSourceStatus::ERROR;
     }
@@ -366,79 +316,59 @@ AudioSourceStatus AudioInputBuffer::fill(AudioSource &source)
     return status;
 }
 
-size_t AudioInputBuffer::availableRead() const
-{
-    return region_a_length;
+size_t AudioInputBuffer::availableRead() const {
+    return region_a_length + region_b_length;
+    ;
 }
 
-size_t AudioInputBuffer::availableWrite() const
-{
+size_t AudioInputBuffer::availableWrite() const {
     if (buffer == nullptr) {
         return 0;
     }
 
-    return buffer_size -
-           region_a_length -
-           region_b_length;
+    return buffer_size - region_a_length - region_b_length;
 }
 
-size_t AudioInputBuffer::capacity() const
-{
+size_t AudioInputBuffer::capacity() const {
     return buffer_size;
 }
 
-bool AudioInputBuffer::empty() const
-{
-    return region_a_length == 0 &&
-           region_b_length == 0;
+bool AudioInputBuffer::empty() const {
+    return region_a_length == 0 && region_b_length == 0;
 }
 
-bool AudioInputBuffer::full() const
-{
+bool AudioInputBuffer::full() const {
     return availableWrite() == 0;
 }
 
-bool AudioInputBuffer::usingPSRAM() const
-{
+bool AudioInputBuffer::usingPSRAM() const {
     return psram_allocated;
 }
 
-bool AudioInputBuffer::validate() const
-{
+bool AudioInputBuffer::validate() const {
     if (buffer == nullptr) {
         return true;
     }
 
-    if (region_a_start > buffer_size ||
-        region_b_start > buffer_size)
-    {
+    if (region_a_start > buffer_size || region_b_start > buffer_size) {
         return false;
     }
 
-    if (region_a_length >
-        buffer_size - region_a_start)
-    {
+    if (region_a_length > buffer_size - region_a_start) {
         return false;
     }
 
-    if (region_b_length >
-        buffer_size - region_b_start)
-    {
+    if (region_b_length > buffer_size - region_b_start) {
         return false;
     }
 
-    if (region_a_length > 0 &&
-        region_b_length > 0)
-    {
-        const size_t a_end =
-            region_a_start + region_a_length;
+    if (region_a_length > 0 && region_b_length > 0) {
+        const size_t a_end = region_a_start + region_a_length;
 
-        const size_t b_end =
-            region_b_start + region_b_length;
+        const size_t b_end = region_b_start + region_b_length;
 
         const bool overlap =
-            (region_a_start < b_end) &&
-            (region_b_start < a_end);
+            (region_a_start < b_end) && (region_b_start < a_end);
 
         if (overlap) {
             return false;
@@ -450,9 +380,7 @@ bool AudioInputBuffer::validate() const
             return false;
         }
 
-        if (write_length >
-            buffer_size - write_start)
-        {
+        if (write_length > buffer_size - write_start) {
             return false;
         }
     }
