@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <SD_MMC.h>
 
-#include "AudioStream.h"
+#include "softcodecs/AudioStream.h"
 #include "play_sd_wav.h"
 #include "output_i2s.h"
 #include "control_es8388.h"

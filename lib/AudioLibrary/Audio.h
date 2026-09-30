@@ -1,7 +1,7 @@
 #ifndef Audio_h_
 #define Audio_h_
 
-#include "AudioStream.h"
+#include "softcodecs/AudioStream.h"
 #include <cstring>
 
 #include "control_es8388.h"

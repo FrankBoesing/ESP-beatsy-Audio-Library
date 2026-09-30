@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include "play_sd_wav.h"
-#include "AudioSourceFile.h"
+#include "softcodecs/AudioSourceFile.h"
 
 #if defined(ARDUINO_ARCH_ESP32)
 

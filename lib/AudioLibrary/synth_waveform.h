@@ -28,7 +28,7 @@
 #define synth_waveform_h_
 
 #include <Arduino.h>     // github.com/PaulStoffregen/cores/blob/master/teensy4/Arduino.h
-#include <AudioStream.h> // github.com/PaulStoffregen/cores/blob/master/teensy4/AudioStream.h
+#include "softcodecs/AudioStream.h"
 
 // waveforms.c
 extern "C" {

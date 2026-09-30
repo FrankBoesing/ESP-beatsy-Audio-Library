@@ -7,7 +7,7 @@
 #define mixer_h_
 
 #include <Arduino.h>
-#include <AudioStream.h>
+#include "softcodecs/AudioStream.h"
 
 class AudioMixer4 : public AudioStream
 {

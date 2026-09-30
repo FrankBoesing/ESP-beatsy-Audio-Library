@@ -128,7 +128,7 @@ void setup()
      */
     if (!SD_MMC.begin(
             "/sdcard",
-            true))
+            false))
     {
         Serial.println(
             "ERROR: SD_MMC initialization failed"

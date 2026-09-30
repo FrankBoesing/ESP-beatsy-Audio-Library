@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include <unity.h>
 
-#include "AudioInputBuffer.h"
-#include "AudioSource.h"
+#include "softcodecs/AudioInputBuffer.h"
+#include "softcodecs/AudioSource.h"
 
 static constexpr size_t BUFFER_SIZE = 64 * 1024;
 static constexpr size_t FILE_FILL_SIZE = 2 * 1024;
