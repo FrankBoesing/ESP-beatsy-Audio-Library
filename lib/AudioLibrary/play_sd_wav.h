@@ -2,7 +2,7 @@
 #define play_sd_wav_h_
 
 #include <Arduino.h>
-#include "softcodecs/AudioStream.h"
+#include "AudioStream.h"
 #include "softcodecs/AudioSource.h"
 
 #if defined(ARDUINO_ARCH_ESP32)

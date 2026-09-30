@@ -8,7 +8,7 @@
 #include <driver/i2s_common.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
-#include "softcodecs/AudioStream.h"
+#include "AudioStream.h"
 
 /*
  * ESP32 Audio Core - I2S output
