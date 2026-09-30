@@ -568,9 +568,7 @@ void AudioStream::transmit(audio_block_t *block, unsigned char index) {
         }
 
         if (c->dst->inputQueue[c->dest_index] == nullptr) {
-
             c->dst->inputQueue[c->dest_index] = block;
-
             ++block->ref_count;
         }
     }

@@ -106,9 +106,6 @@ static __inline void RefillBitstreamCache(BitStreamInfo *bsi) {
 
     } else if (nBytes == 2) {
 
-        /*
-         * Special case for exactly 2 remaining bytes.
-         */
         unsigned short *Ptr16;
 
         Ptr16 = (unsigned short *)bsi->bytePtr;
@@ -119,34 +116,25 @@ static __inline void RefillBitstreamCache(BitStreamInfo *bsi) {
         bsi->cachedBits = 16;
         bsi->nBytes -= 2;
 
-    } else {
+    }  else if (nBytes == 3) {
+		uint8_t *p = bsi->bytePtr;
 
-        /*
-         * 1 or 3 remaining bytes.
-         *
-         * The original implementation handles both cases
-         * byte-by-byte. Do NOT treat 3 bytes as a single byte.
-         */
-        bsi->iCache = 0;
+		uint32_t cache =
+			((uint32_t)p[0] << 24) |
+			((uint32_t)p[1] << 16) |
+			((uint32_t)p[2] << 8);
 
-        while (nBytes--) {
-            bsi->iCache |= *bsi->bytePtr++;
-            bsi->iCache <<= 8;
-        }
+		bsi->iCache = cache;
+		bsi->bytePtr = p + 3;
+		bsi->cachedBits = 24;
+		bsi->nBytes = 0;
 
-        /*
-         * Align the remaining bytes to the MSB side of
-         * the 32-bit cache.
-         *
-         * bsi->nBytes still contains the original number
-         * of bytes here because only the local nBytes was
-         * decremented above.
-         */
-        bsi->iCache <<= ((3 - bsi->nBytes) * 8);
-
-        bsi->cachedBits = 8 * bsi->nBytes;
-        bsi->nBytes = 0;
-    }
+	} else {    // nBytes == 1
+		bsi->iCache = (uint32_t)bsi->bytePtr[0] << 24;
+		bsi->bytePtr++;
+		bsi->cachedBits = 8;
+		bsi->nBytes = 0;
+	}
 }
 
 /**************************************************************************************
@@ -165,9 +153,8 @@ static __inline void RefillBitstreamCache(BitStreamInfo *bsi) {
  *              for speed, does not indicate error if you overrun bit buffer
  *              if nBits = 0, returns 0 (useful for scalefactor unpacking)
  *
- * TODO:        optimize for ARM
  **************************************************************************************/
-unsigned int GetBits(BitStreamInfo *bsi, int nBits) {
+inline unsigned int GetBits(BitStreamInfo *bsi, int nBits) {
     unsigned int data, lowBits;
 
     nBits &=

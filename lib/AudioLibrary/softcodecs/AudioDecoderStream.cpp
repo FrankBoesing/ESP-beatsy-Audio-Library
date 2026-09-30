@@ -446,15 +446,6 @@ void AudioDecoderStream::update() {
         return;
     }
 
-    /*
-     * Full block is silence by default. This is the required underrun
-     * behavior and also guarantees that every update produces a complete
-     * audio block.
-     */
-    std::memset(left->data, 0, sizeof(left->data));
-
-    std::memset(right->data, 0, sizeof(right->data));
-
     size_t outputFrames = 0;
 
     while (outputFrames < AUDIO_BLOCK_SAMPLES) {
@@ -493,7 +484,6 @@ void AudioDecoderStream::update() {
 
         for (size_t i = 0; i < frames; ++i) {
             left->data[outputFrames + i] = source[2U * i];
-
             right->data[outputFrames + i] = source[2U * i + 1U];
         }
 
@@ -503,6 +493,21 @@ void AudioDecoderStream::update() {
         if (_readPosition >= totalSamples) {
             releaseReadBuffer(static_cast<uint8_t>(index));
         }
+    }
+
+    /*
+     * Only the part not filled with PCM must be silenced. This preserves the
+     * underrun behavior without clearing samples that are overwritten below.
+     */
+    const size_t remainingFrames =
+        AUDIO_BLOCK_SAMPLES - outputFrames;
+
+    if (remainingFrames > 0) {
+        const size_t remainingBytes =
+            remainingFrames * sizeof(left->data[0]);
+
+        std::memset(left->data + outputFrames, 0, remainingBytes);
+        std::memset(right->data + outputFrames, 0, remainingBytes);
     }
 
     transmit(left, 0);

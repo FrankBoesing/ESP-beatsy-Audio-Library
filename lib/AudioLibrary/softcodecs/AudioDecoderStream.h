@@ -112,7 +112,8 @@ class AudioDecoderStream : public AudioStream {
 
     int16_t *_pcm[PCM_BUFFER_COUNT] = {};
     volatile uint8_t _pcmState[PCM_BUFFER_COUNT] = {PCM_FREE, PCM_FREE};
-    volatile size_t _pcmSamples[PCM_BUFFER_COUNT] = {0, 0};
+//    volatile size_t _pcmSamples[PCM_BUFFER_COUNT] = {0, 0};
+    size_t _pcmSamples[PCM_BUFFER_COUNT] = {0, 0};
 
     /*
      * Only the realtime audio side may hold a buffer as _readBuffer.
