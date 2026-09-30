@@ -567,7 +567,7 @@ AudioSourceStatus AudioInputBuffer::fill(
         /*
          * Kein freier zusammenhängender Bereich.
          */
-        return AudioSourceStatus::DATA;
+        return AudioSourceStatus::WOULD_BLOCK;
     }
 
 
@@ -579,6 +579,14 @@ AudioSourceStatus AudioInputBuffer::fill(
             available,
             received
         );
+
+    if (status == AudioSourceStatus::DATA &&
+        received == 0)
+    {
+        commitWrite(0);
+
+        return AudioSourceStatus::ERROR;
+    }
 
 
     /*
