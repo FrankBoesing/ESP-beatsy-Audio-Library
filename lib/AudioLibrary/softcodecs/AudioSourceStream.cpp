@@ -40,12 +40,6 @@ AudioSourceStatus AudioSourceStream::read(
     int available = _stream->available();
 
     if (available <= 0) {
-        /*
-         * Bei einem Stream bedeutet "keine Daten verfügbar"
-         * NICHT automatisch EOF.
-         *
-         * Genau das brauchen wir später für Webradio.
-         */
         return AudioSourceStatus::WOULD_BLOCK;
     }
 
@@ -77,9 +71,6 @@ uint64_t AudioSourceStream::position() const
 
 uint64_t AudioSourceStream::size() const
 {
-    /*
-     * Bei einem generischen Stream ist die Länge unbekannt.
-     */
     return 0;
 }
 
@@ -91,21 +82,11 @@ bool AudioSourceStream::isSeekable() const
 bool AudioSourceStream::seek(uint64_t position)
 {
     (void)position;
-
-    /*
-     * Ein generischer Arduino Stream ist nicht seekbar.
-     */
     return false;
 }
 
 void AudioSourceStream::close()
 {
-    /*
-     * Die Stream-Lebensdauer gehört dem Aufrufer.
-     *
-     * Deshalb wird der Stream hier NICHT gelöscht
-     * oder anderweitig geschlossen.
-     */
     _stream = nullptr;
     _position = 0;
 }
@@ -113,6 +94,21 @@ void AudioSourceStream::close()
 bool AudioSourceStream::isOpen() const
 {
     return _stream != nullptr;
+}
+
+size_t AudioSourceStream::refillThreshold() const
+{
+    return 32 * 1024;
+}
+
+size_t AudioSourceStream::fillSize() const
+{
+    return 32 * 1024;
+}
+
+bool AudioSourceStream::fillToThreshold() const
+{
+    return true;
 }
 
 Stream *AudioSourceStream::stream()

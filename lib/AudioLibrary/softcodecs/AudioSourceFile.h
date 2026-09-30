@@ -10,21 +10,13 @@ public:
 
     ~AudioSourceFile() override;
 
-    /*
-     * Eine bereits geöffnete Arduino-File übernehmen.
-     */
     bool open(const File &file);
 
-    /*
-     * Datei über ein FS-Objekt öffnen.
-     *
-     * Funktioniert z.B. mit:
-     *
-     *   SD
-     *   SD_MMC
-     *   LittleFS
-     */
-    bool open(fs::FS &fs, const char *path, const char *mode = FILE_READ);
+    bool open(
+        fs::FS &fs,
+        const char *path,
+        const char *mode = FILE_READ
+    );
 
     AudioSourceStatus read(
         uint8_t *buffer,
@@ -42,6 +34,10 @@ public:
     void close() override;
 
     bool isOpen() const override;
+
+    size_t refillThreshold() const override;
+    size_t fillSize() const override;
+    bool fillToThreshold() const override;
 
     File &file();
     const File &file() const;
