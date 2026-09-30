@@ -83,50 +83,75 @@ void SetBitstreamPointer(BitStreamInfo *bsi, int nBytes, unsigned char *buf) {
  * TODO:        optimize for ARM
  *              possibly add little/big-endian modes for doing 32-bit loads
  **************************************************************************************/
-static __inline void RefillBitstreamCache(BitStreamInfo *bsi) {
-    int nBytes = bsi->nBytes;
+static __inline void RefillBitstreamCache(BitStreamInfo *bsi)
+{
+    switch (bsi->nBytes) {
 
-    if (nBytes >= 4) {
+    default: {
         /*
+         * nBytes >= 4
+         *
          * Optimize for 32-bit loads.
          * REV32() converts the native ESP32 byte order
          * to the big-endian representation expected
          * by the bitstream decoder.
          */
-        unsigned int *Ptr32;
-
-        Ptr32 = (unsigned int *)bsi->bytePtr;
+        unsigned int *Ptr32 =
+            (unsigned int *)bsi->bytePtr;
 
         bsi->iCache = REV32(*Ptr32);
 
         bsi->bytePtr += 4;
         bsi->cachedBits = 32;
         bsi->nBytes -= 4;
-    } else if (nBytes == 2) {
-        unsigned short *Ptr16;
+        break;
+    }
 
-        Ptr16 = (unsigned short *)bsi->bytePtr;
-
-        bsi->iCache = REV16(*Ptr16);
-
-        bsi->bytePtr += 2;
-        bsi->cachedBits = 16;
-        bsi->nBytes -= 2;
-    } else if (nBytes == 3) {
+    case 3: {
         uint8_t *p = bsi->bytePtr;
 
-        uint32_t cache = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
-                         ((uint32_t)p[2] << 8);
+        const uint32_t cache =
+            ((uint32_t)p[0] << 24) |
+            ((uint32_t)p[1] << 16) |
+            ((uint32_t)p[2] << 8);
 
         bsi->iCache = cache;
         bsi->bytePtr = p + 3;
         bsi->cachedBits = 24;
         bsi->nBytes = 0;
-    } else { // nBytes == 1
-        bsi->iCache = (uint32_t)bsi->bytePtr[0] << 24;
+        break;
+    }
+
+    case 2: {
+        unsigned short *Ptr16 =
+            (unsigned short *)bsi->bytePtr;
+
+        bsi->iCache = REV16(*Ptr16);
+
+        bsi->bytePtr += 2;
+        bsi->cachedBits = 16;
+        bsi->nBytes = 0;
+        break;
+    }
+
+    case 1:
+        bsi->iCache =
+            (uint32_t)bsi->bytePtr[0] << 24;
+
         bsi->bytePtr++;
         bsi->cachedBits = 8;
         bsi->nBytes = 0;
+        break;
+
+    case 0:
+        /*
+         * No bytes remain. Keep the cache empty.
+         * GetBits() deliberately does not report bitstream overruns;
+         * frame validation is performed by the decoder.
+         */
+        bsi->iCache = 0;
+        bsi->cachedBits = 0;
+        break;
     }
 }
 
