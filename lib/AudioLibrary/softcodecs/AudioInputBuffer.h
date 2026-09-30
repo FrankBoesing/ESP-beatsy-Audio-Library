@@ -7,22 +7,15 @@
 #define AUDIO_INPUT_BUFFER_SIZE (32 * 1024)
 #endif
 
-class AudioInputBuffer
-{
-public:
-    explicit AudioInputBuffer(
-        size_t capacity = AUDIO_INPUT_BUFFER_SIZE
-    );
+class AudioInputBuffer {
+  public:
+    explicit AudioInputBuffer(size_t capacity = AUDIO_INPUT_BUFFER_SIZE);
 
     ~AudioInputBuffer();
 
-    AudioInputBuffer(
-        const AudioInputBuffer&
-    ) = delete;
+    AudioInputBuffer(const AudioInputBuffer &) = delete;
 
-    AudioInputBuffer& operator=(
-        const AudioInputBuffer&
-    ) = delete;
+    AudioInputBuffer &operator=(const AudioInputBuffer &) = delete;
 
     // ------------------------------------------------------------------------
     // Lifetime
@@ -42,33 +35,23 @@ public:
     // Source input
     // ------------------------------------------------------------------------
 
-    AudioSourceStatus fill(
-        AudioSource &source
-    );
+    AudioSourceStatus fill(AudioSource &source);
 
     // ------------------------------------------------------------------------
     // Read side
     // ------------------------------------------------------------------------
 
-    const uint8_t *acquireRead(
-        size_t &length
-    ) const;
+    const uint8_t *acquireRead(size_t &length) const;
 
-    bool releaseRead(
-        size_t consumed
-    );
+    bool releaseRead(size_t consumed);
 
     // ------------------------------------------------------------------------
     // Write side
     // ------------------------------------------------------------------------
 
-    uint8_t *acquireWrite(
-        size_t &length
-    );
+    uint8_t *acquireWrite(size_t &length);
 
-    bool commitWrite(
-        size_t written
-    );
+    bool commitWrite(size_t written);
 
     // ------------------------------------------------------------------------
     // Information
@@ -82,7 +65,7 @@ public:
     bool full() const;
     bool usingPSRAM() const;
 
-private:
+  private:
     uint8_t *buffer;
     size_t buffer_size;
 
@@ -102,9 +85,7 @@ private:
     bool allocateBuffer();
     void freeBuffer();
 
-    uint8_t *getWriteRegion(
-        size_t &length
-    );
+    uint8_t *getWriteRegion(size_t &length);
 
     bool validate() const;
 };

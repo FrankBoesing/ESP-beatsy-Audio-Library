@@ -4,7 +4,7 @@
 #include <FS.h>
 
 class AudioSourceFile : public AudioSource {
-public:
+  public:
     AudioSourceFile();
     explicit AudioSourceFile(const File &file);
 
@@ -12,17 +12,10 @@ public:
 
     bool open(const File &file);
 
-    bool open(
-        fs::FS &fs,
-        const char *path,
-        const char *mode = FILE_READ
-    );
+    bool open(fs::FS &fs, const char *path, const char *mode = FILE_READ);
 
-    AudioSourceStatus read(
-        uint8_t *buffer,
-        size_t requested,
-        size_t &received
-    ) override;
+    AudioSourceStatus read(uint8_t *buffer, size_t requested,
+                           size_t &received) override;
 
     uint64_t position() const override;
     uint64_t size() const override;
@@ -42,6 +35,6 @@ public:
     File &file();
     const File &file() const;
 
-private:
+  private:
     File _file;
 };

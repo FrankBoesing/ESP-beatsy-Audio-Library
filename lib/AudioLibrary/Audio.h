@@ -3,7 +3,6 @@
 
 #include <cstring>
 
-
 #include "AudioStream.h"
 #include "softcodecs/AudioSourceFile.h"
 

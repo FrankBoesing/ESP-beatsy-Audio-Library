@@ -10,14 +10,11 @@ enum class AudioSourceStatus : uint8_t {
 };
 
 class AudioSource {
-public:
+  public:
     virtual ~AudioSource() = default;
 
-    virtual AudioSourceStatus read(
-        uint8_t *buffer,
-        size_t requested,
-        size_t &received
-    ) = 0;
+    virtual AudioSourceStatus read(uint8_t *buffer, size_t requested,
+                                   size_t &received) = 0;
 
     virtual uint64_t position() const = 0;
 

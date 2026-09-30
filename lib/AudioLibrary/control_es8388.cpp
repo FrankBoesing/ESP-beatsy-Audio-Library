@@ -1,6 +1,6 @@
 #include "control_es8388.h"
 
-#pragma GCC optimize ("Os")
+#pragma GCC optimize("Os")
 
 namespace {
 constexpr uint32_t ES8388_I2C_FREQUENCY = 100000;
@@ -9,8 +9,7 @@ constexpr uint32_t ES8388_I2C_FREQUENCY = 100000;
 //   0x00 = 0 dB
 //   0xC0 = approximately -96 dB
 // The scale is therefore inverted.
-uint8_t volumeToRegister(float level)
-{
+uint8_t volumeToRegister(float level) {
     if (level <= 0.0f) {
         return 0xC0;
     }
@@ -21,34 +20,24 @@ uint8_t volumeToRegister(float level)
     const float attenuation = (1.0f - level) * 192.0f;
     return static_cast<uint8_t>(attenuation + 0.5f);
 }
-}
+} // namespace
 
 AudioControlES8388::AudioControlES8388()
-    : pins_{33, 32, 21},
-      wire_(&Wire),
-      i2cAddress_(ES8388_ADDRESS),
-      initialized_(false)
-{
-}
+    : pins_{33, 32, 21}, wire_(&Wire), i2cAddress_(ES8388_ADDRESS),
+      initialized_(false) {}
 
-AudioControlES8388::AudioControlES8388(const Pins& pins)
-    : pins_(pins),
-      wire_(&Wire),
-      i2cAddress_(ES8388_ADDRESS),
-      initialized_(false)
-{
-}
+AudioControlES8388::AudioControlES8388(const Pins &pins)
+    : pins_(pins), wire_(&Wire), i2cAddress_(ES8388_ADDRESS),
+      initialized_(false) {}
 
-bool AudioControlES8388::writeReg(uint8_t reg, uint8_t value)
-{
+bool AudioControlES8388::writeReg(uint8_t reg, uint8_t value) {
     wire_->beginTransmission(i2cAddress_);
     wire_->write(reg);
     wire_->write(value);
     return wire_->endTransmission() == 0;
 }
 
-bool AudioControlES8388::readReg(uint8_t reg, uint8_t& value)
-{
+bool AudioControlES8388::readReg(uint8_t reg, uint8_t &value) {
     wire_->beginTransmission(i2cAddress_);
     wire_->write(reg);
 
@@ -64,14 +53,12 @@ bool AudioControlES8388::readReg(uint8_t reg, uint8_t& value)
     return true;
 }
 
-bool AudioControlES8388::isConnected()
-{
+bool AudioControlES8388::isConnected() {
     wire_->beginTransmission(i2cAddress_);
     return wire_->endTransmission() == 0;
 }
 
-bool AudioControlES8388::enable()
-{
+bool AudioControlES8388::enable() {
     wire_->begin(pins_.sda, pins_.scl, ES8388_I2C_FREQUENCY);
 
     if (!isConnected()) {
@@ -146,8 +133,7 @@ bool AudioControlES8388::enable()
     return true;
 }
 
-bool AudioControlES8388::disable()
-{
+bool AudioControlES8388::disable() {
     bool ok = true;
 
     if (initialized_) {
@@ -165,26 +151,20 @@ bool AudioControlES8388::disable()
     return ok;
 }
 
-bool AudioControlES8388::setDacVolume(uint8_t left, uint8_t right)
-{
-    return writeReg(REG_DACCONTROL4, left) &&
-           writeReg(REG_DACCONTROL5, right);
+bool AudioControlES8388::setDacVolume(uint8_t left, uint8_t right) {
+    return writeReg(REG_DACCONTROL4, left) && writeReg(REG_DACCONTROL5, right);
 }
 
-bool AudioControlES8388::volume(float level)
-{
+bool AudioControlES8388::volume(float level) {
     const uint8_t value = volumeToRegister(level);
     return setDacVolume(value, value);
 }
 
-bool AudioControlES8388::volume(float left, float right)
-{
-    return setDacVolume(volumeToRegister(left),
-                        volumeToRegister(right));
+bool AudioControlES8388::volume(float left, float right) {
+    return setDacVolume(volumeToRegister(left), volumeToRegister(right));
 }
 
-bool AudioControlES8388::mute()
-{
+bool AudioControlES8388::mute() {
     uint8_t reg = 0;
     if (!readReg(REG_DACCONTROL3, reg)) {
         return false;
@@ -194,8 +174,7 @@ bool AudioControlES8388::mute()
     return writeReg(REG_DACCONTROL3, reg);
 }
 
-bool AudioControlES8388::unmute()
-{
+bool AudioControlES8388::unmute() {
     uint8_t reg = 0;
     if (!readReg(REG_DACCONTROL3, reg)) {
         return false;
@@ -205,12 +184,10 @@ bool AudioControlES8388::unmute()
     return writeReg(REG_DACCONTROL3, reg);
 }
 
-bool AudioControlES8388::inputLevel(float)
-{
+bool AudioControlES8388::inputLevel(float) {
     return false;
 }
 
-bool AudioControlES8388::inputSelect(int)
-{
+bool AudioControlES8388::inputSelect(int) {
     return false;
 }

@@ -4,50 +4,39 @@
 #include <cstring>
 #include <esp_err.h>
 
-AudioOutputI2S::AudioOutputI2S()
-    : AudioStream(2, inputQueueArray)
-{
+AudioOutputI2S::AudioOutputI2S() : AudioStream(2, inputQueueArray) {
     // kein Hardware-Init hier
 }
 
 AudioOutputI2S::AudioOutputI2S(const Pins &pins)
-    : AudioStream(2, inputQueueArray),
-      i2sPins(pins)
-{
+    : AudioStream(2, inputQueueArray), i2sPins(pins) {
     // kein Hardware-Init hier
 }
 
-AudioOutputI2S::~AudioOutputI2S()
-{
+AudioOutputI2S::~AudioOutputI2S() {
     end();
 }
 
-bool AudioOutputI2S::begin()
-{
+bool AudioOutputI2S::begin() {
     return beginInternal();
 }
 
-bool AudioOutputI2S::begin(const Pins &pins)
-{
+bool AudioOutputI2S::begin(const Pins &pins) {
     end();
     i2sPins = pins;
     return beginInternal();
 }
 
-bool AudioOutputI2S::beginHardware()
-{
+bool AudioOutputI2S::beginHardware() {
     return beginInternal();
 }
 
-bool AudioOutputI2S::beginInternal()
-{
+bool AudioOutputI2S::beginInternal() {
     if (running) {
         return true;
     }
 
-    if (i2sPins.bclk < 0 ||
-        i2sPins.ws < 0 ||
-        i2sPins.dout < 0) {
+    if (i2sPins.bclk < 0 || i2sPins.ws < 0 || i2sPins.dout < 0) {
         return false;
     }
 
@@ -72,8 +61,7 @@ bool AudioOutputI2S::beginInternal()
     chanConfig.allow_pd = false;
     chanConfig.intr_priority = 2;
 
-    esp_err_t err =
-        i2s_new_channel(&chanConfig, &txHandle, nullptr);
+    esp_err_t err = i2s_new_channel(&chanConfig, &txHandle, nullptr);
 
     if (err != ESP_OK) {
         txHandle = nullptr;
@@ -96,26 +84,18 @@ bool AudioOutputI2S::beginInternal()
     stdConfig.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     stdConfig.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
 
-    stdConfig.slot_cfg =
-        I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
-            I2S_DATA_BIT_WIDTH_32BIT,
-            I2S_SLOT_MODE_STEREO
-        );
+    stdConfig.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
+        I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
 
-    stdConfig.gpio_cfg.bclk =
-        static_cast<gpio_num_t>(i2sPins.bclk);
-    stdConfig.gpio_cfg.ws =
-        static_cast<gpio_num_t>(i2sPins.ws);
-    stdConfig.gpio_cfg.dout =
-        static_cast<gpio_num_t>(i2sPins.dout);
-    stdConfig.gpio_cfg.din =
-        I2S_GPIO_UNUSED;
+    stdConfig.gpio_cfg.bclk = static_cast<gpio_num_t>(i2sPins.bclk);
+    stdConfig.gpio_cfg.ws = static_cast<gpio_num_t>(i2sPins.ws);
+    stdConfig.gpio_cfg.dout = static_cast<gpio_num_t>(i2sPins.dout);
+    stdConfig.gpio_cfg.din = I2S_GPIO_UNUSED;
 
     // MCLK-Pin dynamsich aus i2sPins zuweisen (GPIO 0 bei ESP32)
-    stdConfig.gpio_cfg.mclk =
-        (i2sPins.mclk >= 0)
-            ? static_cast<gpio_num_t>(i2sPins.mclk)
-            : I2S_GPIO_UNUSED;
+    stdConfig.gpio_cfg.mclk = (i2sPins.mclk >= 0)
+                                  ? static_cast<gpio_num_t>(i2sPins.mclk)
+                                  : I2S_GPIO_UNUSED;
 
     stdConfig.gpio_cfg.invert_flags.mclk_inv = false;
     stdConfig.gpio_cfg.invert_flags.bclk_inv = false;
@@ -132,11 +112,7 @@ bool AudioOutputI2S::beginInternal()
 
     i2s_event_callbacks_t callbacks = {};
     callbacks.on_sent = &AudioOutputI2S::onI2STransmit;
-    err = i2s_channel_register_event_callback(
-        txHandle,
-        &callbacks,
-        this
-    );
+    err = i2s_channel_register_event_callback(txHandle, &callbacks, this);
     if (err != ESP_OK) {
         i2s_del_channel(txHandle);
         txHandle = nullptr;
@@ -158,7 +134,9 @@ bool AudioOutputI2S::beginInternal()
     running = true;
     taskExited = false;
 
-    BaseType_t result = xTaskCreatePinnedToCore( txTaskEntry, "AudioI2STx", 4096, this, configMAX_PRIORITIES - 2, &txTask, tskNO_AFFINITY );
+    BaseType_t result = xTaskCreatePinnedToCore(txTaskEntry, "AudioI2STx", 4096,
+                                                this, configMAX_PRIORITIES - 2,
+                                                &txTask, tskNO_AFFINITY);
 
     if (result != pdPASS) {
         running = false;
@@ -181,11 +159,9 @@ bool AudioOutputI2S::beginInternal()
         running = false;
         xTaskNotifyGive(txTask);
 
-        const TickType_t deadline =
-            xTaskGetTickCount() + pdMS_TO_TICKS(200);
+        const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(200);
         while (txTask != nullptr &&
-               static_cast<int32_t>(
-                   deadline - xTaskGetTickCount()) > 0) {
+               static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0) {
             vTaskDelay(1);
         }
 
@@ -201,8 +177,7 @@ bool AudioOutputI2S::beginInternal()
     return true;
 }
 
-void AudioOutputI2S::end()
-{
+void AudioOutputI2S::end() {
     if (!running && txQueue == nullptr && txHandle == nullptr &&
         !externalClockActive) {
         return;
@@ -217,12 +192,10 @@ void AudioOutputI2S::end()
          * Give the TX task enough time to leave i2s_channel_write(),
          * release its current block and delete itself.
          */
-        const TickType_t deadline =
-            xTaskGetTickCount() + pdMS_TO_TICKS(200);
+        const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(200);
 
         while (txTask != nullptr &&
-               static_cast<int32_t>(
-                   deadline - xTaskGetTickCount()) > 0) {
+               static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0) {
             vTaskDelay(1);
         }
     }
@@ -253,8 +226,7 @@ void AudioOutputI2S::end()
 }
 
 OSPEED
-void AudioOutputI2S::update()
-{
+void AudioOutputI2S::update() {
     BlockPair pair;
 
     pair.left = receiveReadOnly(0);
@@ -287,8 +259,7 @@ void AudioOutputI2S::update()
     }
 }
 
-void AudioOutputI2S::releasePair(BlockPair &pair)
-{
+void AudioOutputI2S::releasePair(BlockPair &pair) {
     if (pair.left != nullptr) {
         release(pair.left);
         pair.left = nullptr;
@@ -300,15 +271,13 @@ void AudioOutputI2S::releasePair(BlockPair &pair)
     }
 }
 
-void AudioOutputI2S::txTaskEntry(void *arg)
-{
+void AudioOutputI2S::txTaskEntry(void *arg) {
     static_cast<AudioOutputI2S *>(arg)->txTaskLoop();
 }
 
 bool IRAM_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t,
                                              i2s_event_data_t *,
-                                             void *userContext)
-{
+                                             void *userContext) {
     auto *output = static_cast<AudioOutputI2S *>(userContext);
     if (output == nullptr || !output->running) {
         return false;
@@ -319,8 +288,7 @@ bool IRAM_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t,
 }
 
 OSPEED
-void AudioOutputI2S::txTaskLoop()
-{
+void AudioOutputI2S::txTaskLoop() {
     /*
      * One stereo audio block contains:
      *
@@ -338,25 +306,21 @@ void AudioOutputI2S::txTaskLoop()
     while (running) {
         BlockPair pair;
 
-        if (xQueueReceive(
-                txQueue,
-                &pair,
-                pdMS_TO_TICKS(100)) != pdTRUE) {
+        if (xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(100)) != pdTRUE) {
             continue;
         }
 
         for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            const int32_t left =
-                pair.left != nullptr
-                    ? static_cast<int32_t>(pair.left->data[i])
-                    : 0;
+            const int32_t left = pair.left != nullptr
+                                     ? static_cast<int32_t>(pair.left->data[i])
+                                     : 0;
 
             const int32_t right =
                 pair.right != nullptr
                     ? static_cast<int32_t>(pair.right->data[i])
                     : 0;
 
-            buffer[2 * i]     = left << 16;
+            buffer[2 * i] = left << 16;
             buffer[2 * i + 1] = right << 16;
         }
 
@@ -367,14 +331,8 @@ void AudioOutputI2S::txTaskLoop()
          * A timeout prevents shutdown from becoming permanently stuck
          * if the I2S driver stops accepting data.
          */
-        const esp_err_t err =
-            i2s_channel_write(
-                txHandle,
-                buffer,
-                sizeof(buffer),
-                &bytesWritten,
-                100
-            );
+        const esp_err_t err = i2s_channel_write(
+            txHandle, buffer, sizeof(buffer), &bytesWritten, 100);
 
         if (err != ESP_OK || bytesWritten != sizeof(buffer)) {
             static uint32_t writeErrorCount = 0;
@@ -383,13 +341,11 @@ void AudioOutputI2S::txTaskLoop()
             ++writeErrorCount;
 
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
-                Serial.printf(
-                    "I2S TX error #%lu: %s, bytes=%u/%u\n",
-                    static_cast<unsigned long>(writeErrorCount),
-                    esp_err_to_name(err),
-                    static_cast<unsigned>(bytesWritten),
-                    static_cast<unsigned>(sizeof(buffer))
-                );
+                Serial.printf("I2S TX error #%lu: %s, bytes=%u/%u\n",
+                              static_cast<unsigned long>(writeErrorCount),
+                              esp_err_to_name(err),
+                              static_cast<unsigned>(bytesWritten),
+                              static_cast<unsigned>(sizeof(buffer)));
                 lastErrorLogMs = now;
             }
         }

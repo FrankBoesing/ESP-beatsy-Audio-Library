@@ -10,18 +10,11 @@
 #include <SD_MMC.h>
 #endif
 
-
-class AudioPlaySdWav : public AudioStream
-{
-public:
+class AudioPlaySdWav : public AudioStream {
+  public:
     AudioPlaySdWav()
-        : AudioStream(0, nullptr),
-          state(STOPPED),
-          source(nullptr),
-          own_source(false),
-          block_left(nullptr),
-          block_right(nullptr)
-    {
+        : AudioStream(0, nullptr), state(STOPPED), source(nullptr),
+          own_source(false), block_left(nullptr), block_right(nullptr) {
         begin();
     }
 
@@ -52,13 +45,8 @@ public:
 
     void update() override;
 
-private:
-
-    enum State : uint8_t {
-        STOPPED,
-        PLAYING,
-        PAUSED
-    };
+  private:
+    enum State : uint8_t { STOPPED, PLAYING, PAUSED };
 
     State state;
 
@@ -110,10 +98,7 @@ private:
     /*
      * Gemeinsamer Startpfad für alle Sources.
      */
-    bool startPlayback(
-        AudioSource &source,
-        bool takeOwnership
-    );
+    bool startPlayback(AudioSource &source, bool takeOwnership);
 
     /*
      * Source-Verwaltung.
@@ -140,19 +125,11 @@ private:
     /*
      * PCM decoding.
      */
-    bool readSourceFrame(
-        int32_t &left,
-        int32_t &right
-    );
+    bool readSourceFrame(int32_t &left, int32_t &right);
 
-    int32_t decodeSample(
-        const uint8_t *data
-    ) const;
+    int32_t decodeSample(const uint8_t *data) const;
 
-    bool getOutputSample(
-        int16_t &left,
-        int16_t &right
-    );
+    bool getOutputSample(int16_t &left, int16_t &right);
 
     void releaseBlocks();
     void finishPlayback();
