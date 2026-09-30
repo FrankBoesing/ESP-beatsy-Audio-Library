@@ -1,0 +1,390 @@
+#include <Arduino.h>
+#include <SD_MMC.h>
+#include <unity.h>
+
+#include "AudioInputBuffer.h"
+#include "AudioSourceFile.h"
+
+static constexpr size_t BUFFER_SIZE = 64 * 1024;
+static constexpr size_t FILE_FILL_SIZE = 2 * 1024;
+
+static AudioInputBuffer *inputBuffer = nullptr;
+static AudioSourceFile *source = nullptr;
+static File testFile;
+
+static bool sdReady = false;
+
+
+/*
+ * Real SD-card integration test.
+ *
+ * Expected hardware/configuration:
+ *
+ *   ESP32 Audio Kit V2.2
+ *   SD_MMC in 1-bit mode
+ *   file: /test.mp3
+ *
+ * The test deliberately does NOT decode MP3 yet.
+ * It verifies the complete real data path:
+ *
+ *   SD_MMC -> File -> AudioSourceFile -> AudioInputBuffer
+ *
+ * This keeps failures attributable to the input-buffer/source layer.
+ */
+
+void setUp()
+{
+}
+
+void tearDown()
+{
+}
+
+
+static void test_sd_is_available()
+{
+    TEST_ASSERT_TRUE_MESSAGE(
+        sdReady,
+        "SD_MMC initialization failed"
+    );
+
+    TEST_ASSERT_TRUE_MESSAGE(
+        testFile,
+        "/test.mp3 could not be opened"
+    );
+
+    TEST_ASSERT_GREATER_THAN_UINT32(
+        0,
+        static_cast<uint32_t>(testFile.size())
+    );
+}
+
+
+static void test_source_opens_test_mp3()
+{
+    TEST_ASSERT_TRUE(
+        source->isOpen()
+    );
+
+    TEST_ASSERT_TRUE(
+        source->isSeekable()
+    );
+
+    TEST_ASSERT_GREATER_THAN_UINT32(
+        0,
+        static_cast<uint32_t>(source->size())
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        0,
+        static_cast<uint32_t>(source->position())
+    );
+}
+
+
+static void test_initial_fill_is_2kb()
+{
+    const AudioSourceStatus status =
+        inputBuffer->fill(*source);
+
+    TEST_ASSERT_EQUAL(
+        AudioSourceStatus::DATA,
+        status
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        FILE_FILL_SIZE,
+        inputBuffer->availableRead()
+    );
+
+    // The first fill must have consumed exactly one 2 KiB chunk.
+    TEST_ASSERT_EQUAL_UINT32(
+        FILE_FILL_SIZE,
+        static_cast<uint32_t>(source->position())
+    );
+}
+
+
+static void test_initial_data_is_real_sd_data()
+{
+    size_t length = 0;
+
+    const uint8_t *data =
+        inputBuffer->acquireRead(length);
+
+    TEST_ASSERT_NOT_NULL(data);
+
+    TEST_ASSERT_EQUAL_UINT32(
+        FILE_FILL_SIZE,
+        length
+    );
+
+    bool nonZeroFound = false;
+
+    for (size_t i = 0; i < length; ++i) {
+        if (data[i] != 0) {
+            nonZeroFound = true;
+            break;
+        }
+    }
+
+    TEST_ASSERT_TRUE_MESSAGE(
+        nonZeroFound,
+        "The first 2 KiB contain only zero bytes"
+    );
+
+    /*
+     * test.mp3 should start with either an ID3 tag or an MPEG frame.
+     * We only report the bytes here; we deliberately don't require a
+     * particular MP3 container/header because the test file is user-supplied.
+     */
+    Serial.printf(
+        "test.mp3 first 4 bytes: %02X %02X %02X %02X\n",
+        data[0],
+        data[1],
+        data[2],
+        data[3]
+    );
+}
+
+
+static void test_refill_after_consumption_is_2kb()
+{
+    TEST_ASSERT_TRUE(
+        inputBuffer->releaseRead(512)
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        1536,
+        inputBuffer->availableRead()
+    );
+
+    const size_t positionBefore =
+        static_cast<size_t>(source->position());
+
+    const AudioSourceStatus status =
+        inputBuffer->fill(*source);
+
+    TEST_ASSERT_EQUAL(
+        AudioSourceStatus::DATA,
+        status
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        3584,
+        inputBuffer->availableRead()
+    );
+
+    TEST_ASSERT_LESS_THAN_UINT32(
+        4096,
+        inputBuffer->availableRead()
+    );
+
+    // Exactly one 2 KiB chunk must have been read from the file.
+    TEST_ASSERT_EQUAL_UINT32(
+        FILE_FILL_SIZE,
+        static_cast<uint32_t>(
+            source->position() - positionBefore
+        )
+    );
+
+    // The source position must therefore now be 4 KiB.
+    TEST_ASSERT_EQUAL_UINT32(
+        4 * 1024,
+        static_cast<uint32_t>(source->position())
+    );
+}
+
+
+static void test_no_refill_at_threshold()
+{
+    /*
+     * This is intentionally a separate source/buffer state from the
+     * previous test. Resetting the input buffer must not close the source.
+     */
+    inputBuffer->reset();
+
+    TEST_ASSERT_EQUAL_UINT32(
+        0,
+        inputBuffer->availableRead()
+    );
+
+    const AudioSourceStatus first =
+        inputBuffer->fill(*source);
+
+    TEST_ASSERT_EQUAL(
+        AudioSourceStatus::DATA,
+        first
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        FILE_FILL_SIZE,
+        inputBuffer->availableRead()
+    );
+
+    const uint64_t positionBefore =
+        source->position();
+
+    const AudioSourceStatus second =
+        inputBuffer->fill(*source);
+
+    TEST_ASSERT_EQUAL(
+        AudioSourceStatus::WOULD_BLOCK,
+        second
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        FILE_FILL_SIZE,
+        inputBuffer->availableRead()
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        static_cast<uint32_t>(positionBefore),
+        static_cast<uint32_t>(source->position())
+    );
+}
+
+
+static void test_source_position_matches_real_file()
+{
+    /*
+     * This test runs after test_no_refill_at_threshold().
+     *
+     * test_no_refill_at_threshold() resets only the logical input buffer,
+     * then performs another 2 KiB fill. Therefore the source has consumed:
+     *
+     *   2048 + 2048 + 2048 = 6144 bytes
+     *
+     * The important property here is that the AudioSourceFile position
+     * advances with the actual reads; reset() does not rewind the source.
+     */
+    TEST_ASSERT_EQUAL_UINT32(
+        6 * 1024,
+        static_cast<uint32_t>(source->position())
+    );
+}
+
+
+void setup()
+{
+    delay(200);
+
+    UNITY_BEGIN();
+
+    Serial.println();
+    Serial.println("========================================");
+    Serial.println("AudioInputBuffer SD-card integration test");
+    Serial.println("========================================");
+
+    /*
+     * ESP32 Audio Kit V2.2:
+     * use SD_MMC 1-bit mode.
+     */
+    sdReady = SD_MMC.begin(
+        "/sdcard",
+        true
+    );
+
+    if (!sdReady) {
+        Serial.println(
+            "ERROR: SD_MMC initialization failed"
+        );
+    }
+    else {
+        Serial.println(
+            "SD_MMC initialized"
+        );
+    }
+
+    if (sdReady) {
+        testFile = SD_MMC.open(
+            "/test.mp3",
+            FILE_READ
+        );
+
+        if (testFile) {
+            Serial.printf(
+                "test.mp3 size: %lu bytes\n",
+                static_cast<unsigned long>(
+                    testFile.size()
+                )
+            );
+        }
+        else {
+            Serial.println(
+                "ERROR: /test.mp3 not found"
+            );
+        }
+    }
+
+    if (sdReady && testFile) {
+        source =
+            new AudioSourceFile(testFile);
+
+        inputBuffer =
+            new AudioInputBuffer(BUFFER_SIZE);
+
+        TEST_ASSERT_NOT_NULL(source);
+        TEST_ASSERT_NOT_NULL(inputBuffer);
+
+        TEST_ASSERT_TRUE(
+            inputBuffer->begin()
+        );
+    }
+
+    RUN_TEST(test_sd_is_available);
+
+    /*
+     * Do not continue into source tests when the physical SD card
+     * is unavailable. The first test already reports the real cause.
+     */
+    if (!sdReady || !testFile ||
+        source == nullptr ||
+        inputBuffer == nullptr)
+    {
+        Serial.println(
+            "SD setup failed; skipping dependent tests."
+        );
+
+        if (testFile) {
+            testFile.close();
+        }
+
+        delete inputBuffer;
+        delete source;
+
+        inputBuffer = nullptr;
+        source = nullptr;
+
+        SD_MMC.end();
+
+        UNITY_END();
+        return;
+    }
+
+    RUN_TEST(test_source_opens_test_mp3);
+    RUN_TEST(test_initial_fill_is_2kb);
+    RUN_TEST(test_initial_data_is_real_sd_data);
+    RUN_TEST(test_refill_after_consumption_is_2kb);
+    RUN_TEST(test_no_refill_at_threshold);
+    RUN_TEST(test_source_position_matches_real_file);
+
+    inputBuffer->end();
+
+    delete inputBuffer;
+    delete source;
+
+    inputBuffer = nullptr;
+    source = nullptr;
+
+    testFile.close();
+    SD_MMC.end();
+
+    UNITY_END();
+}
+
+
+void loop()
+{
+    delay(1000);
+}
