@@ -13,40 +13,45 @@ constexpr const char *TAG = "AudioDecoderStream";
 }
 
 AudioDecoderStream::AudioDecoderStream(size_t pcmBufferSamples)
-    : AudioStream(0, nullptr), _pcmBufferSamples(pcmBufferSamples) {
+    : AudioStream(0, nullptr),
+      _pcmBufferSamples(pcmBufferSamples)
+{
     /*
      * No task creation and no decoding here.
      */
 }
 
-AudioDecoderStream::~AudioDecoderStream() {
+AudioDecoderStream::~AudioDecoderStream()
+{
     stopDecoderTask();
 }
 
-bool AudioDecoderStream::allocatePcmBuffers() {
+bool AudioDecoderStream::allocatePcmBuffers()
+{
     if (_pcmBufferSamples == 0) {
         return false;
     }
 
-    const size_t bytes = _pcmBufferSamples * sizeof(int16_t);
+    const size_t bytes =
+        _pcmBufferSamples * sizeof(int16_t);
 
     for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
 
 #if defined(ARDUINO_ARCH_ESP32)
-        /*
-         * The PCM buffers are kept in internal RAM when possible because
-         * update() reads them in the realtime path.
-         */
         _pcm[i] = static_cast<int16_t *>(
-            heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+            heap_caps_malloc(
+                bytes,
+                MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT
+            )
+        );
 
-        /*
-         * Fallback only for configurations where internal RAM is not
-         * sufficient. This is not the preferred realtime placement.
-         */
         if (_pcm[i] == nullptr && psramFound()) {
             _pcm[i] = static_cast<int16_t *>(
-                heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+                heap_caps_malloc(
+                    bytes,
+                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT
+                )
+            );
         }
 #else
         _pcm[i] = static_cast<int16_t *>(malloc(bytes));
@@ -61,7 +66,8 @@ bool AudioDecoderStream::allocatePcmBuffers() {
     return true;
 }
 
-void AudioDecoderStream::freePcmBuffers() {
+void AudioDecoderStream::freePcmBuffers()
+{
     for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
         if (_pcm[i] == nullptr) {
             continue;
@@ -77,7 +83,8 @@ void AudioDecoderStream::freePcmBuffers() {
     }
 }
 
-void AudioDecoderStream::clearDecoderState() {
+void AudioDecoderStream::clearDecoderState()
+{
     portENTER_CRITICAL(&_decoderMux);
 
     _pcmState[0] = PCM_FREE;
@@ -102,8 +109,19 @@ void AudioDecoderStream::clearDecoderState() {
     portEXIT_CRITICAL(&_decoderMux);
 }
 
-bool AudioDecoderStream::startDecoderTask() {
-    if (_decoderTaskRunning) {
+bool AudioDecoderStream::startDecoderTask()
+{
+    /*
+     * startDecoderTask() is only allowed to allocate new PCM storage once
+     * no previous owner is using the old buffers.
+     */
+    portENTER_CRITICAL(&_decoderMux);
+    const bool busy =
+        _decoderTaskRunning ||
+        _updateRunning;
+    portEXIT_CRITICAL(&_decoderMux);
+
+    if (busy) {
         return false;
     }
 
@@ -121,9 +139,15 @@ bool AudioDecoderStream::startDecoderTask() {
     active = true;
     _decoderTaskRunning = true;
 
-    const BaseType_t result = xTaskCreate(
-        &AudioDecoderStream::decoderTaskEntry, "AudioDecoder",
-        DECODER_TASK_STACK, this, DECODER_TASK_PRIORITY, &_decoderTask);
+    const BaseType_t result =
+        xTaskCreate(
+            &AudioDecoderStream::decoderTaskEntry,
+            "AudioDecoder",
+            DECODER_TASK_STACK,
+            this,
+            DECODER_TASK_PRIORITY,
+            &_decoderTask
+        );
 
     if (result != pdPASS) {
         active = false;
@@ -134,64 +158,89 @@ bool AudioDecoderStream::startDecoderTask() {
         return false;
     }
 
-    ESP_LOGI(TAG, "decoder task started: priority=%lu, PCM samples/buffer=%u",
-             static_cast<unsigned long>(DECODER_TASK_PRIORITY),
-             static_cast<unsigned>(_pcmBufferSamples));
+    ESP_LOGI(
+        TAG,
+        "decoder task started: priority=%lu, PCM samples/buffer=%u",
+        static_cast<unsigned long>(DECODER_TASK_PRIORITY),
+        static_cast<unsigned>(_pcmBufferSamples)
+    );
 
     return true;
 }
 
-void AudioDecoderStream::stopDecoderTask() {
+void AudioDecoderStream::stopDecoderTask()
+{
     /*
-     * This is the non-realtime shutdown path.
+     * Non-realtime shutdown path.
+     *
+     * 'active = false' prevents future scheduler iterations from selecting
+     * this stream. A scheduler iteration that has already entered update()
+     * is synchronized separately by _updateRunning.
      */
     active = false;
+
+    TaskHandle_t task = nullptr;
 
     portENTER_CRITICAL(&_decoderMux);
 
     const bool taskRunning = _decoderTaskRunning;
-    TaskHandle_t task = _decoderTask;
+    task = _decoderTask;
 
-    if (taskRunning) {
-        _decoderStopRequested = true;
-    }
+    /*
+     * This flag closes the race with update():
+     *
+     * - update() checks it and refuses to start a new PCM access after stop
+     *   has begun.
+     * - an update() that already set _updateRunning=true is allowed to finish,
+     *   and stopDecoderTask() waits for it.
+     */
+    _decoderStopRequested = true;
 
     portEXIT_CRITICAL(&_decoderMux);
 
-    if (task != nullptr) {
+    if (task != nullptr && taskRunning) {
         xTaskNotifyGive(task);
     }
 
-    if (taskRunning) {
-        /*
-         * A stop is allowed to wait for the decoder task. update() is not
-         * involved and therefore remains non-blocking by construction.
-         */
-        const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(1000);
+    /*
+     * IMPORTANT:
+     * Do not use a timeout here followed by freePcmBuffers().
+     *
+     * If either owner were still alive at the timeout point, freeing the PCM
+     * buffers would recreate the exact use-after-free reported by the review.
+     *
+     * The decoder task itself only performs cooperative waits, and update()
+     * is deliberately non-blocking, so the non-realtime shutdown path waits
+     * until both owners have definitely released the buffers.
+     */
+    for (;;) {
+        bool decoderRunning;
+        bool updateRunning;
 
-        while (true) {
-            portENTER_CRITICAL(&_decoderMux);
-            const bool running = _decoderTaskRunning;
-            portEXIT_CRITICAL(&_decoderMux);
+        portENTER_CRITICAL(&_decoderMux);
 
-            if (!running) {
-                break;
-            }
+        decoderRunning = _decoderTaskRunning;
+        updateRunning = _updateRunning;
 
-            if (static_cast<int32_t>(deadline - xTaskGetTickCount()) <= 0) {
-                ESP_LOGE(TAG, "timeout stopping decoder task");
-                break;
-            }
+        portEXIT_CRITICAL(&_decoderMux);
 
-            vTaskDelay(1);
+        if (!decoderRunning && !updateRunning) {
+            break;
         }
+
+        vTaskDelay(1);
     }
 
+    /*
+     * At this point neither the decoder task nor update() can dereference
+     * _pcm[] anymore.
+     */
     freePcmBuffers();
     clearDecoderState();
 }
 
-int AudioDecoderStream::claimFreeBuffer() {
+int AudioDecoderStream::claimFreeBuffer()
+{
     portENTER_CRITICAL(&_decoderMux);
 
     for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
@@ -208,7 +257,8 @@ int AudioDecoderStream::claimFreeBuffer() {
     return -1;
 }
 
-void AudioDecoderStream::releaseFilledBuffer(uint8_t index) {
+void AudioDecoderStream::releaseFilledBuffer(uint8_t index)
+{
     if (index >= PCM_BUFFER_COUNT) {
         return;
     }
@@ -221,7 +271,11 @@ void AudioDecoderStream::releaseFilledBuffer(uint8_t index) {
     portEXIT_CRITICAL(&_decoderMux);
 }
 
-void AudioDecoderStream::publishReadyBuffer(uint8_t index, size_t samples) {
+void AudioDecoderStream::publishReadyBuffer(
+    uint8_t index,
+    size_t samples
+)
+{
     if (index >= PCM_BUFFER_COUNT) {
         return;
     }
@@ -234,7 +288,8 @@ void AudioDecoderStream::publishReadyBuffer(uint8_t index, size_t samples) {
     portEXIT_CRITICAL(&_decoderMux);
 }
 
-int AudioDecoderStream::acquireReadyBuffer() {
+int AudioDecoderStream::acquireReadyBuffer()
+{
     portENTER_CRITICAL(&_decoderMux);
 
     if (_readBuffer >= 0) {
@@ -244,7 +299,9 @@ int AudioDecoderStream::acquireReadyBuffer() {
     }
 
     for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
-        if (_pcmState[i] == PCM_READY && _pcmSamples[i] > 0) {
+        if (_pcmState[i] == PCM_READY &&
+            _pcmSamples[i] > 0)
+        {
             _readBuffer = static_cast<int8_t>(i);
             _readPosition = 0;
 
@@ -258,7 +315,8 @@ int AudioDecoderStream::acquireReadyBuffer() {
     return -1;
 }
 
-void AudioDecoderStream::releaseReadBuffer(uint8_t index) {
+void AudioDecoderStream::releaseReadBuffer(uint8_t index)
+{
     if (index >= PCM_BUFFER_COUNT) {
         return;
     }
@@ -274,7 +332,8 @@ void AudioDecoderStream::releaseReadBuffer(uint8_t index) {
     portEXIT_CRITICAL(&_decoderMux);
 }
 
-void AudioDecoderStream::setDecoderFinished(int errorCode) {
+void AudioDecoderStream::setDecoderFinished(int errorCode)
+{
     portENTER_CRITICAL(&_decoderMux);
 
     _decoderFinished = true;
@@ -283,23 +342,28 @@ void AudioDecoderStream::setDecoderFinished(int errorCode) {
     portEXIT_CRITICAL(&_decoderMux);
 }
 
-bool AudioDecoderStream::decoderTaskRunning() const {
+bool AudioDecoderStream::decoderTaskRunning() const
+{
     return _decoderTaskRunning;
 }
 
-bool AudioDecoderStream::decoderFinished() const {
+bool AudioDecoderStream::decoderFinished() const
+{
     return _decoderFinished;
 }
 
-int AudioDecoderStream::decoderError() const {
+int AudioDecoderStream::decoderError() const
+{
     return _decoderError;
 }
 
-void AudioDecoderStream::decoderTaskEntry(void *arg) {
+void AudioDecoderStream::decoderTaskEntry(void *arg)
+{
     static_cast<AudioDecoderStream *>(arg)->decoderTaskLoop();
 }
 
-void AudioDecoderStream::decoderTaskLoop() {
+void AudioDecoderStream::decoderTaskLoop()
+{
     for (;;) {
 
         portENTER_CRITICAL(&_decoderMux);
@@ -313,10 +377,6 @@ void AudioDecoderStream::decoderTaskLoop() {
         const int bufferIndex = claimFreeBuffer();
 
         if (bufferIndex < 0) {
-            /*
-             * Both PCM buffers are in use. Never block on a queue and never
-             * wait for update(). Yield one scheduler tick and retry.
-             */
             vTaskDelay(1);
             continue;
         }
@@ -324,12 +384,19 @@ void AudioDecoderStream::decoderTaskLoop() {
         size_t produced = 0;
 
         const DecodeResult result =
-            decodePcmBuffer(_pcm[bufferIndex], _pcmBufferSamples, produced);
+            decodePcmBuffer(
+                _pcm[bufferIndex],
+                _pcmBufferSamples,
+                produced
+            );
 
         if (produced > _pcmBufferSamples) {
-            ESP_LOGE(TAG, "codec returned too many PCM samples: %u > %u",
-                     static_cast<unsigned>(produced),
-                     static_cast<unsigned>(_pcmBufferSamples));
+            ESP_LOGE(
+                TAG,
+                "codec returned too many PCM samples: %u > %u",
+                static_cast<unsigned>(produced),
+                static_cast<unsigned>(_pcmBufferSamples)
+            );
 
             releaseFilledBuffer(static_cast<uint8_t>(bufferIndex));
             setDecoderFinished(-1);
@@ -340,8 +407,11 @@ void AudioDecoderStream::decoderTaskLoop() {
          * All codecs in this layer use interleaved stereo PCM.
          */
         if ((produced & 1U) != 0) {
-            ESP_LOGE(TAG, "codec returned odd interleaved PCM sample count: %u",
-                     static_cast<unsigned>(produced));
+            ESP_LOGE(
+                TAG,
+                "codec returned odd interleaved PCM sample count: %u",
+                static_cast<unsigned>(produced)
+            );
 
             releaseFilledBuffer(static_cast<uint8_t>(bufferIndex));
             setDecoderFinished(-1);
@@ -353,20 +423,25 @@ void AudioDecoderStream::decoderTaskLoop() {
         case DecodeResult::FILLED:
 
             if (produced > 0) {
-                publishReadyBuffer(static_cast<uint8_t>(bufferIndex), produced);
-            } else {
-                releaseFilledBuffer(static_cast<uint8_t>(bufferIndex));
+                publishReadyBuffer(
+                    static_cast<uint8_t>(bufferIndex),
+                    produced
+                );
+            }
+            else {
+                releaseFilledBuffer(
+                    static_cast<uint8_t>(bufferIndex)
+                );
             }
 
-            /*
-             * Explicitly yield after a successful fill.
-             */
             vTaskDelay(1);
             break;
 
         case DecodeResult::RETRY:
 
-            releaseFilledBuffer(static_cast<uint8_t>(bufferIndex));
+            releaseFilledBuffer(
+                static_cast<uint8_t>(bufferIndex)
+            );
 
             vTaskDelay(1);
             break;
@@ -374,26 +449,33 @@ void AudioDecoderStream::decoderTaskLoop() {
         case DecodeResult::END_OF_STREAM:
 
             if (produced > 0) {
-                publishReadyBuffer(static_cast<uint8_t>(bufferIndex), produced);
-            } else {
-                releaseFilledBuffer(static_cast<uint8_t>(bufferIndex));
+                publishReadyBuffer(
+                    static_cast<uint8_t>(bufferIndex),
+                    produced
+                );
+            }
+            else {
+                releaseFilledBuffer(
+                    static_cast<uint8_t>(bufferIndex)
+                );
             }
 
             setDecoderFinished(0);
-
-            /*
-             * The last PCM buffer, if any, remains READY for the realtime
-             * side. The decoder never touches it again.
-             */
             goto decoder_exit;
 
         case DecodeResult::ERROR:
         default:
 
             if (produced > 0) {
-                publishReadyBuffer(static_cast<uint8_t>(bufferIndex), produced);
-            } else {
-                releaseFilledBuffer(static_cast<uint8_t>(bufferIndex));
+                publishReadyBuffer(
+                    static_cast<uint8_t>(bufferIndex),
+                    produced
+                );
+            }
+            else {
+                releaseFilledBuffer(
+                    static_cast<uint8_t>(bufferIndex)
+                );
             }
 
             setDecoderFinished(-1);
@@ -414,16 +496,24 @@ decoder_exit:
 }
 
 OSPEED
-void AudioDecoderStream::update() {
+void AudioDecoderStream::update()
+{
     /*
-     * AudioStream itself decides whether update() is called by checking
-     * 'active'. Therefore every call reaching here is already a running
-     * player.
+     * Synchronize entry against stopDecoderTask().
      *
-     * From this point onward the function contains no waiting operation.
+     * If stop has already started, do not touch _pcm[] at all.
+     * If update wins this critical section first, stopDecoderTask() sees
+     * _updateRunning=true and waits until this invocation has finished.
      */
     portENTER_CRITICAL(&_decoderMux);
+
+    if (_decoderStopRequested) {
+        portEXIT_CRITICAL(&_decoderMux);
+        return;
+    }
+
     _updateRunning = true;
+
     portEXIT_CRITICAL(&_decoderMux);
 
     audio_block_t *left = allocate();
@@ -446,6 +536,18 @@ void AudioDecoderStream::update() {
         return;
     }
 
+    std::memset(
+        left->data,
+        0,
+        sizeof(left->data)
+    );
+
+    std::memset(
+        right->data,
+        0,
+        sizeof(right->data)
+    );
+
     size_t outputFrames = 0;
 
     while (outputFrames < AUDIO_BLOCK_SAMPLES) {
@@ -453,61 +555,59 @@ void AudioDecoderStream::update() {
         const int index = acquireReadyBuffer();
 
         if (index < 0) {
-            /*
-             * No PCM buffer is ready. Do not wait, do not delay, do not
-             * touch the decoder task. Remaining samples stay zero.
-             */
             break;
         }
 
-        const size_t totalSamples = _pcmSamples[index];
+        const size_t totalSamples =
+            _pcmSamples[index];
 
         if (_readPosition >= totalSamples) {
-            releaseReadBuffer(static_cast<uint8_t>(index));
+            releaseReadBuffer(
+                static_cast<uint8_t>(index)
+            );
             continue;
         }
 
-        const size_t availableSamples = totalSamples - _readPosition;
+        const size_t availableSamples =
+            totalSamples - _readPosition;
 
-        const size_t availableFrames = availableSamples / 2U;
+        const size_t availableFrames =
+            availableSamples / 2U;
 
         if (availableFrames == 0) {
-            releaseReadBuffer(static_cast<uint8_t>(index));
+            releaseReadBuffer(
+                static_cast<uint8_t>(index)
+            );
             continue;
         }
 
         const size_t frames =
-            std::min(availableFrames,
-                     static_cast<size_t>(AUDIO_BLOCK_SAMPLES - outputFrames));
+            std::min(
+                availableFrames,
+                static_cast<size_t>(
+                    AUDIO_BLOCK_SAMPLES - outputFrames
+                )
+            );
 
-        const int16_t *source = _pcm[index] + _readPosition;
+        const int16_t *source =
+            _pcm[index] + _readPosition;
 
         for (size_t i = 0; i < frames; ++i) {
-            left->data[outputFrames + i] = source[2U * i];
-            right->data[outputFrames + i] = source[2U * i + 1U];
+            left->data[outputFrames + i] =
+                source[2U * i];
+
+            right->data[outputFrames + i] =
+                source[2U * i + 1U];
         }
 
         _readPosition += frames * 2U;
         outputFrames += frames;
 
         if (_readPosition >= totalSamples) {
-            releaseReadBuffer(static_cast<uint8_t>(index));
+            releaseReadBuffer(
+                static_cast<uint8_t>(index)
+            );
         }
-    }
-
-    /*
-     * Only the part not filled with PCM must be silenced. This preserves the
-     * underrun behavior without clearing samples that are overwritten below.
-     */
-    const size_t remainingFrames =
-        AUDIO_BLOCK_SAMPLES - outputFrames;
-
-    if (remainingFrames > 0) {
-        const size_t remainingBytes =
-            remainingFrames * sizeof(left->data[0]);
-
-        std::memset(left->data + outputFrames, 0, remainingBytes);
-        std::memset(right->data + outputFrames, 0, remainingBytes);
     }
 
     transmit(left, 0);
@@ -522,8 +622,11 @@ void AudioDecoderStream::update() {
 
     portENTER_CRITICAL(&_decoderMux);
 
-    if (_decoderFinished && _readBuffer < 0 && _pcmState[0] != PCM_READY &&
-        _pcmState[1] != PCM_READY) {
+    if (_decoderFinished &&
+        _readBuffer < 0 &&
+        _pcmState[0] != PCM_READY &&
+        _pcmState[1] != PCM_READY)
+    {
         finishNow = true;
     }
 
@@ -537,5 +640,6 @@ void AudioDecoderStream::update() {
          * No more realtime update calls are necessary.
          */
         active = false;
+        onPlaybackFinished();
     }
 }

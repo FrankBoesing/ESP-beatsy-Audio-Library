@@ -16,9 +16,15 @@
  *
  * Codec implementations only provide decodePcmBuffer().
  */
-class AudioDecoderStream : public AudioStream {
-  public:
-    enum class DecodeResult : uint8_t { FILLED, RETRY, END_OF_STREAM, ERROR };
+class AudioDecoderStream : public AudioStream
+{
+public:
+    enum class DecodeResult : uint8_t {
+        FILLED,
+        RETRY,
+        END_OF_STREAM,
+        ERROR
+    };
 
     explicit AudioDecoderStream(size_t pcmBufferSamples);
     ~AudioDecoderStream() override;
@@ -35,7 +41,8 @@ class AudioDecoderStream : public AudioStream {
     bool startDecoderTask();
 
     /*
-     * Stop path may wait for the decoder task. update() never calls this.
+     * Stop path may wait for both the decoder task and an already running
+     * realtime update(). No PCM memory is freed until both owners are gone.
      */
     void stopDecoderTask();
 
@@ -43,16 +50,31 @@ class AudioDecoderStream : public AudioStream {
     bool decoderFinished() const;
     int decoderError() const;
 
-    size_t pcmBufferSamples() const {
+    size_t pcmBufferSamples() const
+    {
         return _pcmBufferSamples;
     }
 
-    uint64_t samplesPlayed() const {
+    uint64_t samplesPlayed() const
+    {
         return _samplesPlayed;
     }
 
-  protected:
-    enum : uint8_t { PCM_FREE = 0, PCM_FILLING, PCM_READY };
+protected:
+    enum : uint8_t {
+        PCM_FREE = 0,
+        PCM_FILLING,
+        PCM_READY
+    };
+
+    /*
+     * Called after normal playback completion, once the final PCM buffer has
+     * been drained by update(). Derived players can use this to update their
+     * public playback state independently of AudioStream::active.
+     */
+    virtual void onPlaybackFinished()
+    {
+    }
 
     /*
      * Fill one of the two PCM buffers.
@@ -69,8 +91,11 @@ class AudioDecoderStream : public AudioStream {
      * PCM data is always expected as stereo-interleaved:
      *   L, R, L, R, ...
      */
-    virtual DecodeResult decodePcmBuffer(int16_t *destination, size_t capacity,
-                                         size_t &outSamples) = 0;
+    virtual DecodeResult decodePcmBuffer(
+        int16_t *destination,
+        size_t capacity,
+        size_t &outSamples
+    ) = 0;
 
     /*
      * Common realtime output implementation.
@@ -82,7 +107,7 @@ class AudioDecoderStream : public AudioStream {
 
     void setDecoderFinished(int errorCode = 0);
 
-  private:
+private:
     /*
      * AudioStream currently creates its realtime audio task at
      * configMAX_PRIORITIES - 2. The decoder therefore gets exactly one
@@ -111,9 +136,14 @@ class AudioDecoderStream : public AudioStream {
     size_t _pcmBufferSamples;
 
     int16_t *_pcm[PCM_BUFFER_COUNT] = {};
-    volatile uint8_t _pcmState[PCM_BUFFER_COUNT] = {PCM_FREE, PCM_FREE};
-//    volatile size_t _pcmSamples[PCM_BUFFER_COUNT] = {0, 0};
-    size_t _pcmSamples[PCM_BUFFER_COUNT] = {0, 0};
+    volatile uint8_t _pcmState[PCM_BUFFER_COUNT] = {
+        PCM_FREE,
+        PCM_FREE
+    };
+    volatile size_t _pcmSamples[PCM_BUFFER_COUNT] = {
+        0,
+        0
+    };
 
     /*
      * Only the realtime audio side may hold a buffer as _readBuffer.
@@ -127,11 +157,17 @@ class AudioDecoderStream : public AudioStream {
     volatile bool _decoderTaskRunning = false;
     volatile bool _decoderFinished = false;
     volatile int _decoderError = 0;
+
+    /*
+     * Protected by _decoderMux. stopDecoderTask() waits for this to become
+     * false before freeing _pcm[].
+     */
     volatile bool _updateRunning = false;
 
     uint64_t _samplesPlayed = 0;
 
-    portMUX_TYPE _decoderMux = portMUX_INITIALIZER_UNLOCKED;
+    portMUX_TYPE _decoderMux =
+        portMUX_INITIALIZER_UNLOCKED;
 
     TaskHandle_t _decoderTask = nullptr;
 };
