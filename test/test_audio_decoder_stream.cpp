@@ -68,11 +68,11 @@ void test_constructor_does_not_start_decoder_task()
         decoder.decoderFinished()
     );
 
-    TEST_ASSERT_EQUAL_UINT64(
-        0,
-        decoder.samplesPlayed()
+    TEST_ASSERT_TRUE(
+        decoder.samplesPlayed() == 0
     );
 }
+
 
 void test_decoder_task_can_be_started_and_stopped()
 {
