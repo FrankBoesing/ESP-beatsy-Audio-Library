@@ -3,13 +3,17 @@
 #pragma GCC optimize("Os")
 
 namespace {
-constexpr uint32_t ES8388_I2C_FREQUENCY = 100000;
+    constexpr uint32_t ES8388_I2C_FREQUENCY = 100000;
+
+    #include "control_es8388_regs.h"
+
+} // namespace
 
 // DAC main volume registers:
 //   0x00 = 0 dB
 //   0xC0 = approximately -96 dB
 // The scale is therefore inverted.
-uint8_t volumeToRegister(float level) {
+static uint8_t volumeToRegister(float level) {
     if (level <= 0.0f) {
         return 0xC0;
     }
@@ -20,7 +24,6 @@ uint8_t volumeToRegister(float level) {
     const float attenuation = (1.0f - level) * 192.0f;
     return static_cast<uint8_t>(attenuation + 0.5f);
 }
-} // namespace
 
 AudioControlES8388::AudioControlES8388()
     : pins_{33, 32, 21}, wire_(&Wire), i2cAddress_(ES8388_ADDRESS),

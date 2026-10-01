@@ -503,13 +503,20 @@ static inline Word64 SAR64(Word64 value, int shift) {
     return value >> shift;
 }
 
-#define CLIP_2N(y, n)                                                          \
-    {                                                                          \
-        int sign = (y) >> 31;                                                  \
-        if (sign != (y) >> (n)) {                                              \
-            (y) = sign ^ ((1 << (n)) - 1);                                     \
-        }                                                                      \
-    }
+static inline int32_t CLIP_2N(int32_t y, unsigned n)
+{
+    int32_t x = (int32_t)1 << n;
+
+    if (y < -x)
+        y = -x;
+
+    --x;
+
+    if (y > x)
+        y = x;
+
+    return y;
+}
 
 #define CLIP_2N_SHIFT(y, n)                                                    \
     {                                                                          \

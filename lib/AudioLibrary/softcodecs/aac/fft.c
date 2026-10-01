@@ -1,38 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****  
- * Source last modified: $Id: fft.c,v 1.1 2005/02/26 01:47:34 jrecker Exp $ 
- *   
- * Portions Copyright (c) 1995-2005 RealNetworks, Inc. All Rights Reserved.  
- *       
- * The contents of this file, and the files included with this file, 
- * are subject to the current version of the RealNetworks Public 
- * Source License (the "RPSL") available at 
- * http://www.helixcommunity.org/content/rpsl unless you have licensed 
- * the file under the current version of the RealNetworks Community 
- * Source License (the "RCSL") available at 
- * http://www.helixcommunity.org/content/rcsl, in which case the RCSL 
- * will apply. You may also obtain the license terms directly from 
- * RealNetworks.  You may not use this file except in compliance with 
- * the RPSL or, if you have a valid RCSL with RealNetworks applicable 
- * to this file, the RCSL.  Please see the applicable RPSL or RCSL for 
- * the rights, obligations and limitations governing use of the 
- * contents of the file. 
- *   
- * This file is part of the Helix DNA Technology. RealNetworks is the 
- * developer of the Original Code and owns the copyrights in the 
- * portions it created. 
- *   
- * This file, and the files included with this file, is distributed 
- * and made available on an 'AS IS' basis, WITHOUT WARRANTY OF ANY 
- * KIND, EITHER EXPRESS OR IMPLIED, AND REALNETWORKS HEREBY DISCLAIMS 
- * ALL SUCH WARRANTIES, INCLUDING WITHOUT LIMITATION, ANY WARRANTIES 
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, QUIET 
- * ENJOYMENT OR NON-INFRINGEMENT. 
- *  
- * Technology Compatibility Kit Test Suite(s) Location:  
- *    http://www.helixcommunity.org/content/tck  
- *  
- * Contributor(s):  
- *   
+/* ***** BEGIN LICENSE BLOCK *****
+ * Source last modified: $Id: fft.c,v 1.1 2005/02/26 01:47:34 jrecker Exp $
+ *
+ * Portions Copyright (c) 1995-2005 RealNetworks, Inc. All Rights Reserved.
+ *
+ * The contents of this file, and the files included with this file,
+ * are subject to the current version of the RealNetworks Public
+ * Source License (the "RPSL") available at
+ * http://www.helixcommunity.org/content/rpsl unless you have licensed
+ * the file under the current version of the RealNetworks Community
+ * Source License (the "RCSL") available at
+ * http://www.helixcommunity.org/content/rcsl, in which case the RCSL
+ * will apply. You may also obtain the license terms directly from
+ * RealNetworks.  You may not use this file except in compliance with
+ * the RPSL or, if you have a valid RCSL with RealNetworks applicable
+ * to this file, the RCSL.  Please see the applicable RPSL or RCSL for
+ * the rights, obligations and limitations governing use of the
+ * contents of the file.
+ *
+ * This file is part of the Helix DNA Technology. RealNetworks is the
+ * developer of the Original Code and owns the copyrights in the
+ * portions it created.
+ *
+ * This file, and the files included with this file, is distributed
+ * and made available on an 'AS IS' basis, WITHOUT WARRANTY OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, AND REALNETWORKS HEREBY DISCLAIMS
+ * ALL SUCH WARRANTIES, INCLUDING WITHOUT LIMITATION, ANY WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, QUIET
+ * ENJOYMENT OR NON-INFRINGEMENT.
+ *
+ * Technology Compatibility Kit Test Suite(s) Location:
+ *    http://www.helixcommunity.org/content/tck
+ *
+ * Contributor(s):
+ *
  * ***** END LICENSE BLOCK ***** */
 
 /**************************************************************************************
@@ -44,12 +44,9 @@
  **************************************************************************************/
 
 #include "coder.h"
-//#include "assembly.h"
 
 #define NUM_FFT_SIZES 2
-static const int nfftTab[NUM_FFT_SIZES] = {64, 512};
 static const int nfftlog2Tab[NUM_FFT_SIZES] = {6, 9};
-
 #define SQRT1_2 0x5a82799a /* sqrt(1/2) in Q31 */
 
 #define swapcplx(p0, p1)                                                       \
@@ -72,15 +69,13 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] = {6, 9};
  *
  * Return:      none
  **************************************************************************************/
-/*__attribute__ ((section (".data"))) */ static void BitReverse(int *inout,
-                                                                int tabidx) {
-    int *part0, *part1;
+static void BitReverse(int * inout, int tabidx) {
     int a, b, t, t1;
     const unsigned char *tab = bitrevtab + bitrevtabOffset[tabidx];
-    int nbits = nfftlog2Tab[tabidx];
+    const int nbits = nfftlog2Tab[tabidx];
 
-    part0 = inout;
-    part1 = inout + (1 << nbits);
+    int *part0 = inout;
+    int *part1 = inout + (1 << nbits);
 
     while ((a = *tab++) != 0) {
         b = *tab++;
@@ -108,11 +103,11 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] = {6, 9};
  *
  * Return:      none
  *
- * Notes:       assumes 2 guard bits, gains no integer bits, 
+ * Notes:       assumes 2 guard bits, gains no integer bits,
  *                guard bits out = guard bits in - 2
  **************************************************************************************/
-/* __attribute__ ((section (".data"))) */ static void R4FirstPass(int *x,
-                                                                  int bg) {
+static void R4FirstPass(int *x, int bg)
+{
     int ar, ai, br, bi, cr, ci, dr, di;
 
     for (; bg != 0; bg--) {
@@ -156,8 +151,7 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] = {6, 9};
  *                or guard bits in - 2 (if inputs bounded to +/- sqrt(2)/2)
  *              see scaling comments in code
  **************************************************************************************/
-/* __attribute__ ((section (".data"))) */ static void R8FirstPass(int *x,
-                                                                  int bg) {
+static void R8FirstPass(int *x, int bg) {
     int ar, ai, br, bi, cr, ci, dr, di;
     int sr, si, tr, ti, ur, ui, vr, vi;
     int wr, wi, xr, xi, yr, yi, zr, zi;
@@ -191,7 +185,7 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] = {6, 9};
         di = x[13] - x[15];
 
         /* max gain of wr/wi/yr/yi vs input = 2
-		 *  (sum of 4 samples >> 1) 
+		 *  (sum of 4 samples >> 1)
 		 */
         wr = (ar + cr) >> 1;
         yr = (ar - cr) >> 1;
@@ -199,7 +193,7 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] = {6, 9};
         yi = (ai - ci) >> 1;
 
         /* max gain of output vs input = 4
-		 *  (sum of 4 samples >> 1 + sum of 4 samples >> 1) 
+		 *  (sum of 4 samples >> 1 + sum of 4 samples >> 1)
 		 */
         x[0] = (sr >> 1) + wr;
         x[8] = (sr >> 1) - wr;
@@ -216,7 +210,7 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] = {6, 9};
         ci = bi - dr;
 
         /* max gain of xr/xi/zr/zi vs input = 4*sqrt(2)/2 = 2*sqrt(2)
-		 *  (sum of 8 samples, multiply by sqrt(2)/2, implicit >> 1 from Q31) 
+		 *  (sum of 8 samples, multiply by sqrt(2)/2, implicit >> 1 from Q31)
 		 */
         xr = MULSHIFT32(SQRT1_2, ar - ai);
         xi = MULSHIFT32(SQRT1_2, ar + ai);
@@ -260,8 +254,8 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] = {6, 9};
  *              gbOut = gbIn - 1 (short block) or gbIn - 2 (long block)
  *              uses 3-mul, 3-add butterflies instead of 4-mul, 2-add
  **************************************************************************************/
-/* __attribute__ ((section (".data"))) */ static void
-R4Core(int *x, int bg, int gp, int *wtab) {
+static void R4Core(int * x, int bg, int gp,
+                                  int * wtab) {
     int ar, ai, br, bi, cr, ci, dr, di, tr, ti;
     int wd, ws, wi;
     int i, j, step;
@@ -370,9 +364,12 @@ R4Core(int *x, int bg, int gp, int *wtab) {
  *              gains log2(nfft) - 2 int bits total
  *                so gain 7 int bits (LONG), 4 int bits (SHORT)
  **************************************************************************************/
+//static const int nfftTab[NUM_FFT_SIZES] = {64, 512};
+
 void R4FFT(int tabidx, int *x) {
-    int order = nfftlog2Tab[tabidx];
-    int nfft = nfftTab[tabidx];
+    const int order = nfftlog2Tab[tabidx];
+    //int nfft = nfftTab[tabidx];
+    const int nfft = (tabidx == 0) ? 64:512;
 
     /* decimation in time */
     BitReverse(x, tabidx);

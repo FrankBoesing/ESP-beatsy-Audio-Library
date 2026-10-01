@@ -1,5 +1,4 @@
 #include "play_aac.h"
-#include "defines.h"
 
 #include <SD_MMC.h>
 #include <algorithm>
@@ -313,7 +312,7 @@ bool AudioPlayAac::prepareAacInput() {
     const size_t tagSize = id3TagSize(header);
 
     if (tagSize > 0) {
-        ESP_LOGI(TAG, "ID3 tag detected: %u bytes",
+        ESP_LOGV(TAG, "ID3 tag detected: %u bytes",
                  static_cast<unsigned>(tagSize));
 
         if (!skipInput(tagSize)) {

@@ -2,4 +2,8 @@ TODOs:
 
 - add aac player
 - use esp32-s3 dsp when possible (..#ifdef...)
+- benchmark ESP32-S3 ESP-DSP FIR (dsps_fird_s16_aes3, decimation 1); add an
+	S3-specific fast path while keeping the portable Q15 fallback
+- measure FIR/BiQuad cycle usage on ESP32 and ESP32-S3 before adding further
+	S3-specific DSP paths
 - optimize for speed and size

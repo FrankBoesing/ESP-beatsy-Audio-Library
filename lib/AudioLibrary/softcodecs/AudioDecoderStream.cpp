@@ -1,10 +1,6 @@
 #include "AudioDecoderStream.h"
-#include "defines.h"
 
-#if defined(ARDUINO_ARCH_ESP32)
 #include <esp_heap_caps.h>
-#endif
-
 #include <algorithm>
 #include <cstring>
 
@@ -34,11 +30,6 @@ bool AudioDecoderStream::allocatePcmBuffers() {
 #if defined(ARDUINO_ARCH_ESP32)
         _pcm[i] = static_cast<int16_t *>(
             heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
-
-        if (_pcm[i] == nullptr && psramFound()) {
-            _pcm[i] = static_cast<int16_t *>(
-                heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-        }
 #else
         _pcm[i] = static_cast<int16_t *>(malloc(bytes));
 #endif

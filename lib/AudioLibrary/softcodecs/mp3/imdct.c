@@ -472,7 +472,7 @@ const int fastWin36[18] = {
  *                inline asm may or may not be helpful)
  **************************************************************************************/
 // barely faster in RAM
-/*__attribute__ ((section (".data")))*/ static int
+/*__attribute__ ((section (".data")))*/ static SOFTCODECS_HOT int
 IMDCT36(int *xCurr, int *xPrev, int *y, int btCurr, int btPrev, int blockIdx,
         int gb) {
     int i, es, xBuf[18], xPrevWin[18];

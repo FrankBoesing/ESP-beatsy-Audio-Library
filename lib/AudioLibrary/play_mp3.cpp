@@ -1,5 +1,4 @@
 #include "play_mp3.h"
-#include "defines.h"
 
 #include <SD_MMC.h>
 #include <algorithm>

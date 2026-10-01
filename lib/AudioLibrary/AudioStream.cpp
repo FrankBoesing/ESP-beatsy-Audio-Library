@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include "AudioStream.h"
 #include <math.h>
-#include "defines.h"
 
 // =============================================================================
 // Static members

@@ -1,38 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****  
- * Source last modified: $Id: sbrqmf.c,v 1.2 2005/05/19 20:45:20 jrecker Exp $ 
- *   
- * Portions Copyright (c) 1995-2005 RealNetworks, Inc. All Rights Reserved.  
- *       
- * The contents of this file, and the files included with this file, 
- * are subject to the current version of the RealNetworks Public 
- * Source License (the "RPSL") available at 
- * http://www.helixcommunity.org/content/rpsl unless you have licensed 
- * the file under the current version of the RealNetworks Community 
- * Source License (the "RCSL") available at 
- * http://www.helixcommunity.org/content/rcsl, in which case the RCSL 
- * will apply. You may also obtain the license terms directly from 
- * RealNetworks.  You may not use this file except in compliance with 
- * the RPSL or, if you have a valid RCSL with RealNetworks applicable 
- * to this file, the RCSL.  Please see the applicable RPSL or RCSL for 
- * the rights, obligations and limitations governing use of the 
- * contents of the file. 
- *   
- * This file is part of the Helix DNA Technology. RealNetworks is the 
- * developer of the Original Code and owns the copyrights in the 
- * portions it created. 
- *   
- * This file, and the files included with this file, is distributed 
- * and made available on an 'AS IS' basis, WITHOUT WARRANTY OF ANY 
- * KIND, EITHER EXPRESS OR IMPLIED, AND REALNETWORKS HEREBY DISCLAIMS 
- * ALL SUCH WARRANTIES, INCLUDING WITHOUT LIMITATION, ANY WARRANTIES 
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, QUIET 
- * ENJOYMENT OR NON-INFRINGEMENT. 
- *  
- * Technology Compatibility Kit Test Suite(s) Location:  
- *    http://www.helixcommunity.org/content/tck  
- *  
- * Contributor(s):  
- *   
+/* ***** BEGIN LICENSE BLOCK *****
+ * Source last modified: $Id: sbrqmf.c,v 1.2 2005/05/19 20:45:20 jrecker Exp $
+ *
+ * Portions Copyright (c) 1995-2005 RealNetworks, Inc. All Rights Reserved.
+ *
+ * The contents of this file, and the files included with this file,
+ * are subject to the current version of the RealNetworks Public
+ * Source License (the "RPSL") available at
+ * http://www.helixcommunity.org/content/rpsl unless you have licensed
+ * the file under the current version of the RealNetworks Community
+ * Source License (the "RCSL") available at
+ * http://www.helixcommunity.org/content/rcsl, in which case the RCSL
+ * will apply. You may also obtain the license terms directly from
+ * RealNetworks.  You may not use this file except in compliance with
+ * the RPSL or, if you have a valid RCSL with RealNetworks applicable
+ * to this file, the RCSL.  Please see the applicable RPSL or RCSL for
+ * the rights, obligations and limitations governing use of the
+ * contents of the file.
+ *
+ * This file is part of the Helix DNA Technology. RealNetworks is the
+ * developer of the Original Code and owns the copyrights in the
+ * portions it created.
+ *
+ * This file, and the files included with this file, is distributed
+ * and made available on an 'AS IS' basis, WITHOUT WARRANTY OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, AND REALNETWORKS HEREBY DISCLAIMS
+ * ALL SUCH WARRANTIES, INCLUDING WITHOUT LIMITATION, ANY WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, QUIET
+ * ENJOYMENT OR NON-INFRINGEMENT.
+ *
+ * Technology Compatibility Kit Test Suite(s) Location:
+ *    http://www.helixcommunity.org/content/tck
+ *
+ * Contributor(s):
+ *
  * ***** END LICENSE BLOCK ***** */
 
 /**************************************************************************************
@@ -54,7 +54,7 @@
  *   angle = (i + 0.25) * M_PI / nmdct;
  *   x = (cos(angle) + sin(angle));
  *   x =  sin(angle);
- * 
+ *
  *   angle = (nmdct/2 - 1 - i + 0.25) * M_PI / nmdct;
  *   x = (cos(angle) + sin(angle));
  *   x =  sin(angle);
@@ -211,7 +211,7 @@ static void PostMultiply64(int *fft1, int nSampsOut) {
 /**************************************************************************************
  * Function:    QMFAnalysisConv
  *
- * Description: convolution kernel for analysis QMF 
+ * Description: convolution kernel for analysis QMF
  *
  * Inputs:      pointer to coefficient table, reordered for sequential access
  *              delay buffer of size 32*10 = 320 real-valued PCM samples
@@ -300,7 +300,7 @@ void QMFAnalysisConv(int *cTab, int *delay, int dIdx, int *uBuf) {
     uBuf++;
     dOff--;
 
-    /* max gain for any sample in uBuf, after scaling by cTab, ~= 0.99 
+    /* max gain for any sample in uBuf, after scaling by cTab, ~= 0.99
 	 * so we can just sum the uBuf values with no overflow problems
 	 */
     for (k = 1; k <= 31; k++) {
@@ -383,11 +383,11 @@ void QMFAnalysisConv(int *cTab, int *delay, int dIdx, int *uBuf) {
  * Return:      guard bit mask
  *
  * Notes:       output stored as RE{X0}, IM{X0}, RE{X1}, IM{X1}, ... RE{X31}, IM{X31}
- *              output stored in int buffer of size 64*2 = 128 
+ *              output stored in int buffer of size 64*2 = 128
  *                (zero-filled from XBuf[2*qmfaBands] to XBuf[127])
  **************************************************************************************/
-int QMFAnalysis(int *inbuf, int *delay, int *XBuf, int fBitsIn, int *delayIdx,
-                int qmfaBands) {
+int QMFAnalysis(int *inbuf, int *delay, int *XBuf, int fBitsIn,
+                               int *delayIdx, int qmfaBands) {
     int n, y, shift, gbMask;
     int *delayPtr, *uBuf, *tBuf;
 
@@ -464,7 +464,7 @@ int QMFAnalysis(int *inbuf, int *delay, int *XBuf, int fBitsIn, int *delayIdx,
 /**************************************************************************************
  * Function:    QMFSynthesisConv
  *
- * Description: final convolution kernel for synthesis QMF 
+ * Description: final convolution kernel for synthesis QMF
  *
  * Inputs:      pointer to coefficient table, reordered for sequential access
  *              delay buffer of size 64*10 = 640 complex samples (1280 ints)
@@ -580,8 +580,8 @@ void QMFSynthesisConv(int *cPtr, int *delay, int dIdx, short *outbuf,
  * Notes:       assumes MIN_GBITS_IN_QMFS guard bits in input, either from
  *                QMFAnalysis (if upsampling only) or from MapHF (if SBR on)
  **************************************************************************************/
-void QMFSynthesis(int *inbuf, int *delay, int *delayIdx, int qmfsBands,
-                  short *outbuf, int nChans) {
+void QMFSynthesis(int *inbuf, int *delay, int *delayIdx,
+                                 int qmfsBands, short *outbuf, int nChans) {
     int n, a0, a1, b0, b1, dOff0, dOff1, dIdx;
     int *tBufLo, *tBufHi;
 
@@ -589,7 +589,7 @@ void QMFSynthesis(int *inbuf, int *delay, int *delayIdx, int qmfsBands,
     tBufLo = delay + dIdx * 128 + 0;
     tBufHi = delay + dIdx * 128 + 127;
 
-    /* reorder inputs to DCT-IV, only use first qmfsBands (complex) samples 
+    /* reorder inputs to DCT-IV, only use first qmfsBands (complex) samples
 	 * TODO - fuse with PreMultiply64 to avoid separate reordering steps
 	 */
     for (n = 0; n < qmfsBands >> 1; n++) {

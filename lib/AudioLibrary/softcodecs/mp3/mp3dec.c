@@ -62,7 +62,7 @@
  *
  * Return:      handle to mp3 decoder instance, 0 if malloc fails
  **************************************************************************************/
-HMP3Decoder MP3InitDecoder(void) {
+SOFTCODECS_COLD HMP3Decoder MP3InitDecoder(void) {
     MP3DecInfo *mp3DecInfo;
 
     mp3DecInfo = AllocateBuffers();
@@ -82,7 +82,7 @@ HMP3Decoder MP3InitDecoder(void) {
  *
  * Return:      none
  **************************************************************************************/
-void MP3FreeDecoder(HMP3Decoder hMP3Decoder) {
+SOFTCODECS_COLD void MP3FreeDecoder(HMP3Decoder hMP3Decoder) {
     MP3DecInfo *mp3DecInfo = (MP3DecInfo *)hMP3Decoder;
 
     if (!mp3DecInfo)
@@ -185,7 +185,8 @@ static int MP3FindFreeSync(unsigned char *buf, unsigned char firstFH[4],
  *
  * Notes:       call this right after calling MP3Decode
  **************************************************************************************/
-void MP3GetLastFrameInfo(HMP3Decoder hMP3Decoder, MP3FrameInfo *mp3FrameInfo) {
+SOFTCODECS_COLD void MP3GetLastFrameInfo(HMP3Decoder hMP3Decoder,
+                                         MP3FrameInfo *mp3FrameInfo) {
     MP3DecInfo *mp3DecInfo = (MP3DecInfo *)hMP3Decoder;
 
     if (!mp3DecInfo || mp3DecInfo->layer != 3) {
@@ -223,8 +224,9 @@ void MP3GetLastFrameInfo(HMP3Decoder hMP3Decoder, MP3FrameInfo *mp3FrameInfo) {
  *
  * Return:      error code, defined in mp3dec.h (0 means no error, < 0 means error)
  **************************************************************************************/
-int MP3GetNextFrameInfo(HMP3Decoder hMP3Decoder, MP3FrameInfo *mp3FrameInfo,
-                        unsigned char *buf) {
+SOFTCODECS_COLD int MP3GetNextFrameInfo(HMP3Decoder hMP3Decoder,
+                                        MP3FrameInfo *mp3FrameInfo,
+                                        unsigned char *buf) {
     MP3DecInfo *mp3DecInfo = (MP3DecInfo *)hMP3Decoder;
 
     if (!mp3DecInfo)
@@ -283,8 +285,8 @@ static void MP3ClearBadFrame(MP3DecInfo *mp3DecInfo, short *outbuf) {
  * Notes:       switching useSize on and off between frames in the same stream 
  *                is not supported (bit reservoir is not maintained if useSize on)
  **************************************************************************************/
-int MP3Decode(HMP3Decoder hMP3Decoder, unsigned char **inbuf, int *bytesLeft,
-              short *outbuf, int useSize) {
+SOFTCODECS_HOT int MP3Decode(HMP3Decoder hMP3Decoder, unsigned char **inbuf,
+                             int *bytesLeft, short *outbuf, int useSize) {
     int offset, bitOffset, mainBits, gr, ch, fhBytes, siBytes, freeFrameBytes;
     int prevBitOffset, sfBlockBits, huffBlockBits;
     unsigned char *mainPtr;
