@@ -7,6 +7,7 @@
 #include "AudioStream.h"
 #include "softcodecs/AudioSourceFile.h"
 
+#include "analyze_peak.h"
 #include "control_es8388.h"
 #include "filter_biquad.h"
 #include "filter_fir.h"
