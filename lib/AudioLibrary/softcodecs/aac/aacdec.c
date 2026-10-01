@@ -1,38 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****  
- * Source last modified: $Id: aacdec.c,v 1.1 2005/02/26 01:47:31 jrecker Exp $ 
- *   
- * Portions Copyright (c) 1995-2005 RealNetworks, Inc. All Rights Reserved.  
- *       
- * The contents of this file, and the files included with this file, 
- * are subject to the current version of the RealNetworks Public 
- * Source License (the "RPSL") available at 
- * http://www.helixcommunity.org/content/rpsl unless you have licensed 
- * the file under the current version of the RealNetworks Community 
- * Source License (the "RCSL") available at 
- * http://www.helixcommunity.org/content/rcsl, in which case the RCSL 
- * will apply. You may also obtain the license terms directly from 
- * RealNetworks.  You may not use this file except in compliance with 
- * the RPSL or, if you have a valid RCSL with RealNetworks applicable 
- * to this file, the RCSL.  Please see the applicable RPSL or RCSL for 
- * the rights, obligations and limitations governing use of the 
- * contents of the file. 
- *   
- * This file is part of the Helix DNA Technology. RealNetworks is the 
- * developer of the Original Code and owns the copyrights in the 
- * portions it created. 
- *   
- * This file, and the files included with this file, is distributed 
- * and made available on an 'AS IS' basis, WITHOUT WARRANTY OF ANY 
- * KIND, EITHER EXPRESS OR IMPLIED, AND REALNETWORKS HEREBY DISCLAIMS 
- * ALL SUCH WARRANTIES, INCLUDING WITHOUT LIMITATION, ANY WARRANTIES 
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, QUIET 
- * ENJOYMENT OR NON-INFRINGEMENT. 
- *  
- * Technology Compatibility Kit Test Suite(s) Location:  
- *    http://www.helixcommunity.org/content/tck  
- *  
- * Contributor(s):  
- *   
+/* ***** BEGIN LICENSE BLOCK *****
+ * Source last modified: $Id: aacdec.c,v 1.1 2005/02/26 01:47:31 jrecker Exp $
+ *
+ * Portions Copyright (c) 1995-2005 RealNetworks, Inc. All Rights Reserved.
+ *
+ * The contents of this file, and the files included with this file,
+ * are subject to the current version of the RealNetworks Public
+ * Source License (the "RPSL") available at
+ * http://www.helixcommunity.org/content/rpsl unless you have licensed
+ * the file under the current version of the RealNetworks Community
+ * Source License (the "RCSL") available at
+ * http://www.helixcommunity.org/content/rcsl, in which case the RCSL
+ * will apply. You may also obtain the license terms directly from
+ * RealNetworks.  You may not use this file except in compliance with
+ * the RPSL or, if you have a valid RCSL with RealNetworks applicable
+ * to this file, the RCSL.  Please see the applicable RPSL or RCSL for
+ * the rights, obligations and limitations governing use of the
+ * contents of the file.
+ *
+ * This file is part of the Helix DNA Technology. RealNetworks is the
+ * developer of the Original Code and owns the copyrights in the
+ * portions it created.
+ *
+ * This file, and the files included with this file, is distributed
+ * and made available on an 'AS IS' basis, WITHOUT WARRANTY OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, AND REALNETWORKS HEREBY DISCLAIMS
+ * ALL SUCH WARRANTIES, INCLUDING WITHOUT LIMITATION, ANY WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, QUIET
+ * ENJOYMENT OR NON-INFRINGEMENT.
+ *
+ * Technology Compatibility Kit Test Suite(s) Location:
+ *    http://www.helixcommunity.org/content/tck
+ *
+ * Contributor(s):
+ *
  * ***** END LICENSE BLOCK ***** */
 
 /**************************************************************************************
@@ -63,7 +63,7 @@
  *
  * Return:      handle to AAC decoder instance, 0 if malloc fails
  **************************************************************************************/
-HAACDecoder AACInitDecoder(void) {
+SOFTCODECS_COLD HAACDecoder AACInitDecoder(void) {
     AACDecInfo *aacDecInfo;
 
     aacDecInfo = AllocateBuffers();
@@ -92,7 +92,7 @@ HAACDecoder AACInitDecoder(void) {
  *
  * Return:      none
  **************************************************************************************/
-void AACFreeDecoder(HAACDecoder hAACDecoder) {
+SOFTCODECS_COLD void AACFreeDecoder(HAACDecoder hAACDecoder) {
     AACDecInfo *aacDecInfo = (AACDecInfo *)hAACDecoder;
 
     if (!aacDecInfo)
@@ -133,7 +133,7 @@ int AACFindSyncWord(unsigned char *buf, int nBytes) {
 /**************************************************************************************
  * Function:    AACGetLastFrameInfo
  *
- * Description: get info about last AAC frame decoded (number of samples decoded, 
+ * Description: get info about last AAC frame decoded (number of samples decoded,
  *                sample rate, bit rate, etc.)
  *
  * Inputs:      valid AAC decoder instance pointer (HAACDecoder)
@@ -145,7 +145,8 @@ int AACFindSyncWord(unsigned char *buf, int nBytes) {
  *
  * Notes:       call this right after calling AACDecode()
  **************************************************************************************/
-void AACGetLastFrameInfo(HAACDecoder hAACDecoder, AACFrameInfo *aacFrameInfo) {
+void AACGetLastFrameInfo(HAACDecoder hAACDecoder,
+                                         AACFrameInfo *aacFrameInfo) {
     AACDecInfo *aacDecInfo = (AACDecInfo *)hAACDecoder;
 
     if (!aacDecInfo) {
@@ -183,11 +184,11 @@ void AACGetLastFrameInfo(HAACDecoder hAACDecoder, AACFrameInfo *aacFrameInfo) {
  *              AACFrameInfo struct, with the members nChans, sampRate, and profile
  *                optionally filled-in
  *
- * Outputs:     updated codec state 
+ * Outputs:     updated codec state
  *
  * Return:      0 if successful, error code (< 0) if error
  *
- * Notes:       if copyLast == 1, then the codec sets up its internal state (for 
+ * Notes:       if copyLast == 1, then the codec sets up its internal state (for
  *                decoding raw blocks) based on previously-decoded ADTS header info
  *              if copyLast == 0, then the codec uses the values passed in
  *                aacFrameInfo to configure its internal state (useful when the
@@ -228,7 +229,7 @@ int AACFlushCodec(HAACDecoder hAACDecoder) {
         return ERR_AAC_NULL_POINTER;
 
     /* reset common state variables which change per-frame
-	 * don't touch state variables which are (usually) constant for entire clip 
+	 * don't touch state variables which are (usually) constant for entire clip
 	 *   (nChans, sampRate, profile, format, sbrEnabled)
 	 */
     aacDecInfo->prevBlockID = AAC_ID_INVALID;
@@ -271,8 +272,8 @@ int AACFlushCodec(HAACDecoder hAACDecoder) {
  *                successfully decoded, so if ERR_AAC_INDATA_UNDERFLOW is returned
  *                just call AACDecode again with more data in inbuf
  **************************************************************************************/
-int AACDecode(HAACDecoder hAACDecoder, unsigned char **inbuf, int *bytesLeft,
-              short *outbuf) {
+int AACDecode(HAACDecoder hAACDecoder, unsigned char **inbuf,
+                              int *bytesLeft, short *outbuf) {
     int err, offset, bitOffset, bitsAvail;
     int ch, baseChan, elementChans;
     unsigned char *inptr;

@@ -83,8 +83,9 @@
  *                necessarily all linBits outputs for x,y > 15)
  **************************************************************************************/
 // no improvement with section=data
-static int DecodeHuffmanPairs(int *xy, int nVals, int tabIdx, int bitsLeft,
-                              unsigned char *buf, int bitOffset) {
+static SOFTCODECS_HOT int DecodeHuffmanPairs(int *xy, int nVals, int tabIdx,
+                                             int bitsLeft, unsigned char *buf,
+                                             int bitOffset) {
     int i, x, y;
     int cachedBits, padBits, len, startBits, linBits, maxBits, minBits;
     HuffTabType tabType;

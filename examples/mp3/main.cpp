@@ -14,7 +14,7 @@
 
 AudioSourceFile source;
 
-AudioPlayAac mp3;
+AudioPlayMp3 mp3;
 
 AudioOutputI2S i2s({
     27, // BCLK
@@ -30,6 +30,7 @@ AudioControlES8388 codec;
 // ============================================================================
 
 AudioConnection patchCord1(mp3, 0, i2s, 0);
+
 AudioConnection patchCord2(mp3, 0, i2s, 1);
 
 // ============================================================================
@@ -50,7 +51,7 @@ void setup() {
     // Audio memory
     // ------------------------------------------------------------------------
 
-    AudioMemory(12);
+    AudioMemory(64);
 
     Serial.println("Audio memory initialized");
 
@@ -111,17 +112,17 @@ void setup() {
     // Open MP3
     // ------------------------------------------------------------------------
 
-    Serial.println("Opening /test.aac...");
+    Serial.println("Opening /test.mp3...");
 
-    if (!source.open(SD_MMC, "/test.aac")) {
-        Serial.println("ERROR: Could not open /test.aac");
+    if (!source.open(SD_MMC, "/test.mp3")) {
+        Serial.println("ERROR: Could not open /test.mp3");
 
         while (true) {
             delay(1000);
         }
     }
 
-    Serial.printf("AAC source opened, size=%llu bytes\n",
+    Serial.printf("MP3 source opened, size=%llu bytes\n",
                   (unsigned long long)source.size());
 
     // ------------------------------------------------------------------------
@@ -131,14 +132,14 @@ void setup() {
     Serial.println("Starting MP3 playback...");
 
     if (!mp3.play(source)) {
-        Serial.println("ERROR: AAC playback could not be started");
+        Serial.println("ERROR: MP3 playback could not be started");
 
         while (true) {
             delay(1000);
         }
     }
 
-    Serial.println("AAC playback started");
+    Serial.println("MP3 playback started");
 }
 
 // ============================================================================

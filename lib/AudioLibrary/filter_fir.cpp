@@ -3,7 +3,8 @@
 #include <cstring>
 
 namespace {
-int16_t q15ToPcm(int64_t value) {
+OSPEED
+static inline int16_t q15ToPcm(int64_t value) {
     constexpr int64_t HALF = int64_t{1} << 14;
 
     if (value >= 0) {
@@ -31,6 +32,7 @@ bool AudioFilterFIR::validCoefficientCount(int coefficientCount) {
            (coefficientCount & 1) == 0;
 }
 
+OSIZE
 void AudioFilterFIR::begin(const short *coefficients, int coefficientCount) {
     portENTER_CRITICAL(&_configMux);
 
@@ -51,6 +53,7 @@ void AudioFilterFIR::begin(const short *coefficients, int coefficientCount) {
     portEXIT_CRITICAL(&_configMux);
 }
 
+OSIZE
 void AudioFilterFIR::end() {
     portENTER_CRITICAL(&_configMux);
     _mode = Mode::OFF;
@@ -60,6 +63,7 @@ void AudioFilterFIR::end() {
     portEXIT_CRITICAL(&_configMux);
 }
 
+OSPEED
 void AudioFilterFIR::update() {
     Mode mode;
     size_t coefficientCount;

@@ -2,11 +2,7 @@
 #define Audio_h_
 #include <cstring>
 
-#define SOFTCODEC_METRICS 1
-
-#ifndef SOFTCODEC_METRICS
-#define SOFTCODEC_METRICS 0
-#endif
+#include "common.h"
 
 #include "AudioStream.h"
 #include "softcodecs/AudioSourceFile.h"

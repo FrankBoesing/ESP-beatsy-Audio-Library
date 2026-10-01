@@ -8,7 +8,7 @@ namespace {
 constexpr double BIQUAD_PI = 3.14159265358979323846;
 constexpr double Q30_SCALE = 1073741824.0;
 
-int32_t toQ30(double value) {
+static inline int32_t toQ30(double value) {
     const double scaled = value * Q30_SCALE;
 
     if (scaled >= static_cast<double>(std::numeric_limits<int32_t>::max())) {
@@ -22,7 +22,7 @@ int32_t toQ30(double value) {
     return static_cast<int32_t>(scaled);
 }
 
-int64_t roundQ30(int64_t value) {
+static inline int64_t roundQ30(int64_t value) {
     constexpr int64_t HALF = int64_t{1} << 29;
 
     if (value >= 0) {
@@ -32,7 +32,7 @@ int64_t roundQ30(int64_t value) {
     return -(((-value) + HALF) >> 30);
 }
 
-int16_t saturatePcm(int64_t value) {
+static inline int16_t saturatePcm(int64_t value) {
     if (value > 32767) {
         return 32767;
     }
@@ -259,6 +259,7 @@ void AudioFilterBiquad::setHighShelf(uint32_t stage, float frequency,
     storeCoefficients(stage, coefficients);
 }
 
+OSPEED
 void AudioFilterBiquad::update() {
     audio_block_t *block = receiveWritable();
 

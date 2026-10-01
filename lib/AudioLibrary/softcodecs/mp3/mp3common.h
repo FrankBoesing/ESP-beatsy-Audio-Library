@@ -46,6 +46,7 @@
 
 #include "mp3dec.h"
 #include "statname.h" /* do name-mangling for static linking */
+#include "../optimize.h"
 
 #define MAX_SCFBD 4 /* max scalefactor bands per channel */
 #define NGRANS_MPEG1 2

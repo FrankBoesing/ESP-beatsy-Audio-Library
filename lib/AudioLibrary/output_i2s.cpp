@@ -1,5 +1,4 @@
 #include "output_i2s.h"
-#include "defines.h"
 
 #include <cstring>
 #include <esp_err.h>

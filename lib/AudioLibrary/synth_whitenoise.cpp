@@ -6,7 +6,7 @@ namespace {
 constexpr uint32_t PARK_MILLER_MULTIPLIER = 16807U;
 constexpr uint32_t PARK_MILLER_MODULUS = 2147483647U;
 
-uint32_t nextNoiseSeed(uint32_t seed) {
+static inline uint32_t nextNoiseSeed(uint32_t seed) {
     const uint32_t high = PARK_MILLER_MULTIPLIER * (seed >> 16);
     uint32_t low = PARK_MILLER_MULTIPLIER * (seed & 0xFFFFU);
 
@@ -35,6 +35,7 @@ void AudioSynthNoiseWhite::amplitude(float level) {
     _level = static_cast<int32_t>(level * 65536.0f + 0.5f);
 }
 
+OSPEED
 void AudioSynthNoiseWhite::update() {
     const int32_t gain = _level;
 

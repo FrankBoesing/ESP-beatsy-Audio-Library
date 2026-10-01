@@ -1,38 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****  
- * Source last modified: $Id: dct4.c,v 1.1 2005/02/26 01:47:34 jrecker Exp $ 
- *   
- * Portions Copyright (c) 1995-2005 RealNetworks, Inc. All Rights Reserved.  
- *       
- * The contents of this file, and the files included with this file, 
- * are subject to the current version of the RealNetworks Public 
- * Source License (the "RPSL") available at 
- * http://www.helixcommunity.org/content/rpsl unless you have licensed 
- * the file under the current version of the RealNetworks Community 
- * Source License (the "RCSL") available at 
- * http://www.helixcommunity.org/content/rcsl, in which case the RCSL 
- * will apply. You may also obtain the license terms directly from 
- * RealNetworks.  You may not use this file except in compliance with 
- * the RPSL or, if you have a valid RCSL with RealNetworks applicable 
- * to this file, the RCSL.  Please see the applicable RPSL or RCSL for 
- * the rights, obligations and limitations governing use of the 
- * contents of the file. 
- *   
- * This file is part of the Helix DNA Technology. RealNetworks is the 
- * developer of the Original Code and owns the copyrights in the 
- * portions it created. 
- *   
- * This file, and the files included with this file, is distributed 
- * and made available on an 'AS IS' basis, WITHOUT WARRANTY OF ANY 
- * KIND, EITHER EXPRESS OR IMPLIED, AND REALNETWORKS HEREBY DISCLAIMS 
- * ALL SUCH WARRANTIES, INCLUDING WITHOUT LIMITATION, ANY WARRANTIES 
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, QUIET 
- * ENJOYMENT OR NON-INFRINGEMENT. 
- *  
- * Technology Compatibility Kit Test Suite(s) Location:  
- *    http://www.helixcommunity.org/content/tck  
- *  
- * Contributor(s):  
- *   
+/* ***** BEGIN LICENSE BLOCK *****
+ * Source last modified: $Id: dct4.c,v 1.1 2005/02/26 01:47:34 jrecker Exp $
+ *
+ * Portions Copyright (c) 1995-2005 RealNetworks, Inc. All Rights Reserved.
+ *
+ * The contents of this file, and the files included with this file,
+ * are subject to the current version of the RealNetworks Public
+ * Source License (the "RPSL") available at
+ * http://www.helixcommunity.org/content/rpsl unless you have licensed
+ * the file under the current version of the RealNetworks Community
+ * Source License (the "RCSL") available at
+ * http://www.helixcommunity.org/content/rcsl, in which case the RCSL
+ * will apply. You may also obtain the license terms directly from
+ * RealNetworks.  You may not use this file except in compliance with
+ * the RPSL or, if you have a valid RCSL with RealNetworks applicable
+ * to this file, the RCSL.  Please see the applicable RPSL or RCSL for
+ * the rights, obligations and limitations governing use of the
+ * contents of the file.
+ *
+ * This file is part of the Helix DNA Technology. RealNetworks is the
+ * developer of the Original Code and owns the copyrights in the
+ * portions it created.
+ *
+ * This file, and the files included with this file, is distributed
+ * and made available on an 'AS IS' basis, WITHOUT WARRANTY OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, AND REALNETWORKS HEREBY DISCLAIMS
+ * ALL SUCH WARRANTIES, INCLUDING WITHOUT LIMITATION, ANY WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, QUIET
+ * ENJOYMENT OR NON-INFRINGEMENT.
+ *
+ * Technology Compatibility Kit Test Suite(s) Location:
+ *    http://www.helixcommunity.org/content/tck
+ *
+ * Contributor(s):
+ *
  * ***** END LICENSE BLOCK ***** */
 
 /**************************************************************************************
@@ -185,8 +185,7 @@ static void PostMultiply(int tabidx, int *fft1) {
  *
  * Notes:       see notes on PreMultiply(), above
  **************************************************************************************/
-/* __attribute__ ((section (".data"))) */ static void
-PreMultiplyRescale(int tabidx, int *zbuf1, int es) {
+static void PreMultiplyRescale(int tabidx, int *zbuf1, int es) {
     int i, nmdct, ar1, ai1, ar2, ai2, z1, z2;
     int t, cms2, cps2a, sin2a, cps2b, sin2b;
     int *zbuf2;
@@ -242,8 +241,7 @@ PreMultiplyRescale(int tabidx, int *zbuf1, int es) {
  * Notes:       clips output to [-2^30, 2^30 - 1], guaranteeing at least 1 guard bit
  *              see notes on PostMultiply(), above
  **************************************************************************************/
-/* __attribute__ ((section (".data"))) */ static void
-PostMultiplyRescale(int tabidx, int *fft1, int es) {
+static void PostMultiplyRescale(int tabidx, int *fft1, int es) {
     int i, nmdct, ar1, ai1, ar2, ai2, skipFactor, z;
     int t, cs2, sin2;
     int *fft2;
@@ -307,7 +305,7 @@ PostMultiplyRescale(int tabidx, int *fft1, int es) {
  * Return:      none
  *
  * Notes:       operates in-place
- *              if number of guard bits in input is < GBITS_IN_DCT4, the input is 
+ *              if number of guard bits in input is < GBITS_IN_DCT4, the input is
  *                scaled (>>) before the DCT4 and rescaled (<<, with clipping) after
  *                the DCT4 (rare)
  *              the output has FBITS_LOST_DCT4 fewer fraction bits than the input

@@ -1,38 +1,38 @@
-/* ***** BEGIN LICENSE BLOCK *****  
- * Source last modified: $Id: huffman.c,v 1.2 2005/05/24 16:01:55 albertofloyd Exp $ 
- *   
- * Portions Copyright (c) 1995-2005 RealNetworks, Inc. All Rights Reserved.  
- *       
- * The contents of this file, and the files included with this file, 
- * are subject to the current version of the RealNetworks Public 
- * Source License (the "RPSL") available at 
- * http://www.helixcommunity.org/content/rpsl unless you have licensed 
- * the file under the current version of the RealNetworks Community 
- * Source License (the "RCSL") available at 
- * http://www.helixcommunity.org/content/rcsl, in which case the RCSL 
- * will apply. You may also obtain the license terms directly from 
- * RealNetworks.  You may not use this file except in compliance with 
- * the RPSL or, if you have a valid RCSL with RealNetworks applicable 
- * to this file, the RCSL.  Please see the applicable RPSL or RCSL for 
- * the rights, obligations and limitations governing use of the 
- * contents of the file. 
- *   
- * This file is part of the Helix DNA Technology. RealNetworks is the 
- * developer of the Original Code and owns the copyrights in the 
- * portions it created. 
- *   
- * This file, and the files included with this file, is distributed 
- * and made available on an 'AS IS' basis, WITHOUT WARRANTY OF ANY 
- * KIND, EITHER EXPRESS OR IMPLIED, AND REALNETWORKS HEREBY DISCLAIMS 
- * ALL SUCH WARRANTIES, INCLUDING WITHOUT LIMITATION, ANY WARRANTIES 
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, QUIET 
- * ENJOYMENT OR NON-INFRINGEMENT. 
- *  
- * Technology Compatibility Kit Test Suite(s) Location:  
- *    http://www.helixcommunity.org/content/tck  
- *  
- * Contributor(s):  
- *   
+/* ***** BEGIN LICENSE BLOCK *****
+ * Source last modified: $Id: huffman.c,v 1.2 2005/05/24 16:01:55 albertofloyd Exp $
+ *
+ * Portions Copyright (c) 1995-2005 RealNetworks, Inc. All Rights Reserved.
+ *
+ * The contents of this file, and the files included with this file,
+ * are subject to the current version of the RealNetworks Public
+ * Source License (the "RPSL") available at
+ * http://www.helixcommunity.org/content/rpsl unless you have licensed
+ * the file under the current version of the RealNetworks Community
+ * Source License (the "RCSL") available at
+ * http://www.helixcommunity.org/content/rcsl, in which case the RCSL
+ * will apply. You may also obtain the license terms directly from
+ * RealNetworks.  You may not use this file except in compliance with
+ * the RPSL or, if you have a valid RCSL with RealNetworks applicable
+ * to this file, the RCSL.  Please see the applicable RPSL or RCSL for
+ * the rights, obligations and limitations governing use of the
+ * contents of the file.
+ *
+ * This file is part of the Helix DNA Technology. RealNetworks is the
+ * developer of the Original Code and owns the copyrights in the
+ * portions it created.
+ *
+ * This file, and the files included with this file, is distributed
+ * and made available on an 'AS IS' basis, WITHOUT WARRANTY OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, AND REALNETWORKS HEREBY DISCLAIMS
+ * ALL SUCH WARRANTIES, INCLUDING WITHOUT LIMITATION, ANY WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, QUIET
+ * ENJOYMENT OR NON-INFRINGEMENT.
+ *
+ * Technology Compatibility Kit Test Suite(s) Location:
+ *    http://www.helixcommunity.org/content/tck
+ *
+ * Contributor(s):
+ *
  * ***** END LICENSE BLOCK ***** */
 
 /**************************************************************************************
@@ -59,14 +59,14 @@
  *
  * Notes:       assumes canonical Huffman codes:
  *                first CW always 0, we have "count" CW's of length "nBits" bits
- *                starting CW for codes of length nBits+1 = 
+ *                starting CW for codes of length nBits+1 =
  *                  (startCW[nBits] + count[nBits]) << 1
- *                if there are no codes at nBits, then we just keep << 1 each time 
+ *                if there are no codes at nBits, then we just keep << 1 each time
  *                  (since count[nBits] = 0)
  **************************************************************************************/
-/* __attribute__ ((section (".data"))) */ int
-DecodeHuffmanScalar(const signed short *huffTab, const HuffInfo *huffTabInfo,
-                    unsigned int bitBuf, signed int *val) {
+int DecodeHuffmanScalar(const signed short *huffTab,
+                                       const HuffInfo *huffTabInfo,
+                                       unsigned int bitBuf, signed int *val) {
     unsigned int count, start, shift, t;
     const unsigned char *countPtr;
     const signed short *map;
@@ -135,13 +135,13 @@ DecodeHuffmanScalar(const signed short *huffTab, const HuffInfo *huffTabInfo,
  * Notes:       assumes nVals is always a multiple of 4 because all scalefactor bands
  *                are a multiple of 4 coefficients long
  **************************************************************************************/
-static void UnpackZeros(int nVals, int *coef) {
-    while (nVals > 0) {
-        *coef++ = 0;
-        *coef++ = 0;
-        *coef++ = 0;
-        *coef++ = 0;
-        nVals -= 4;
+static inline void UnpackZeros(int nVals, int *coef) {
+
+    for (int i = 0; i < nVals; i += 4) {
+        coef[i + 0] = 0;
+        coef[i + 1] = 0;
+        coef[i + 2] = 0;
+        coef[i + 3] = 0;
     }
 }
 
@@ -161,8 +161,7 @@ static void UnpackZeros(int nVals, int *coef) {
  * Notes:       assumes nVals is always a multiple of 4 because all scalefactor bands
  *                are a multiple of 4 coefficients long
  **************************************************************************************/
-/* __attribute__ ((section (".data"))) */ static void
-UnpackQuads(BitStreamInfo *bsi, int cb, int nVals, int *coef) {
+static void UnpackQuads(BitStreamInfo *bsi, int cb, int nVals, int *coef) {
     int w, x, y, z, maxBits, nCodeBits, nSignBits, val;
     unsigned int bitBuf;
 
@@ -225,8 +224,7 @@ UnpackQuads(BitStreamInfo *bsi, int cb, int nVals, int *coef) {
  * Notes:       assumes nVals is always a multiple of 2 because all scalefactor bands
  *                are a multiple of 4 coefficients long
  **************************************************************************************/
-/* __attribute__ ((section (".data"))) */ static void
-UnpackPairsNoEsc(BitStreamInfo *bsi, int cb, int nVals, int *coef) {
+static void UnpackPairsNoEsc(BitStreamInfo *bsi, int cb, int nVals, int *coef) {
     int y, z, maxBits, nCodeBits, nSignBits, val;
     unsigned int bitBuf;
 
@@ -277,8 +275,7 @@ UnpackPairsNoEsc(BitStreamInfo *bsi, int cb, int nVals, int *coef) {
  * Notes:       assumes nVals is always a multiple of 2 because all scalefactor bands
  *                are a multiple of 4 coefficients long
  **************************************************************************************/
-/* __attribute__ ((section (".data"))) */ static void
-UnpackPairsEsc(BitStreamInfo *bsi, int cb, int nVals, int *coef) {
+static void UnpackPairsEsc(BitStreamInfo *bsi, int cb, int nVals, int *coef) {
     int y, z, maxBits, nCodeBits, nSignBits, n, val;
     unsigned int bitBuf;
 
@@ -334,7 +331,7 @@ UnpackPairsEsc(BitStreamInfo *bsi, int cb, int nVals, int *coef) {
  *
  * Inputs:      platform specific info struct
  *              BitStreamInfo struct pointing to start of spectral data
- *                (14496-3, table 4.4.29) 
+ *                (14496-3, table 4.4.29)
  *              index of current channel
  *
  * Outputs:     decoded, quantized coefficients for this channel
@@ -345,8 +342,7 @@ UnpackPairsEsc(BitStreamInfo *bsi, int cb, int nVals, int *coef) {
  *              fills coefficient buffer with zeros in any region not coded with
  *                codebook in range [1, 11] (including sfb's above sfbMax)
  **************************************************************************************/
-/* __attribute__ ((section (".data"))) */ void
-DecodeSpectrumLong(PSInfoBase *psi, BitStreamInfo *bsi, int ch) {
+void DecodeSpectrumLong(PSInfoBase *psi, BitStreamInfo *bsi, int ch) {
     int i, sfb, cb, nVals, offset;
     const short *sfbTab;
     unsigned char *sfbCodeBook;
@@ -406,7 +402,7 @@ DecodeSpectrumLong(PSInfoBase *psi, BitStreamInfo *bsi, int ch) {
  *
  * Inputs:      platform specific info struct
  *              BitStreamInfo struct pointing to start of spectral data
- *                (14496-3, table 4.4.29) 
+ *                (14496-3, table 4.4.29)
  *              index of current channel
  *
  * Outputs:     decoded, quantized coefficients for this channel
@@ -417,8 +413,7 @@ DecodeSpectrumLong(PSInfoBase *psi, BitStreamInfo *bsi, int ch) {
  *                codebook in range [1, 11] (including sfb's above sfbMax)
  *              deinterleaves window groups into 8 windows
  **************************************************************************************/
-/* __attribute__ ((section (".data"))) */ void
-DecodeSpectrumShort(PSInfoBase *psi, BitStreamInfo *bsi, int ch) {
+void DecodeSpectrumShort(PSInfoBase *psi, BitStreamInfo *bsi, int ch) {
     int gp, cb, nVals = 0, win, offset, sfb;
     const short *sfbTab;
     unsigned char *sfbCodeBook;
