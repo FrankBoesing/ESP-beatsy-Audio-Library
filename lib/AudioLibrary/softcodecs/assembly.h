@@ -54,6 +54,8 @@
 #ifndef _ASSEMBLY_H
 #define _ASSEMBLY_H
 
+#include <stdint.h>
+
 /* toolchain:           MSFT Visual C++
  * target architecture: x86
  */
@@ -414,19 +416,22 @@ clip to [-2^n, 2^n-1], valid range of n = [1, 30]
         }                                                                      \
     }
 
-#define FASTABS(x) abs(x)       //FB
-#define CLZ(x) __builtin_clz(x) //FB
+static inline int FASTABS(int x) {
+    return __builtin_abs(x);
+}
+
+static inline int CLZ(int x) {
+    return x == 0 ? 32 : __builtin_clz((unsigned int)x);
+}
 
 //Reverse byte order (16 bit) //FB
 static inline unsigned int REV16(unsigned int value) {
-    asm("rev16 %0, %1" : "=r"(value) : "r"(value));
-    return (value);
+    return (unsigned int)__builtin_bswap16((unsigned short)value);
 }
 
 //Reverse byte order (32 bit) //FB
 static inline unsigned int REV32(unsigned int value) {
-    asm("rev %0, %1" : "=r"(value) : "r"(value));
-    return (value);
+    return __builtin_bswap32(value);
 }
 
 typedef long long Word64;
@@ -454,6 +459,14 @@ static inline Word64 MADD64(Word64 sum64, int x, int y) {
 
 typedef int64_t Word64;
 
+typedef union _U64 {
+    Word64 w64;
+    struct {
+        uint32_t lo32;
+        int32_t hi32;
+    } r;
+} U64;
+
 static inline int MULSHIFT32(int x, int y) {
     return (int)(((int64_t)x * (int64_t)y) >> 32);
 }
@@ -467,7 +480,7 @@ static inline short CLIPTOSHORT(int x) {
 }
 
 static inline int FASTABS(int x) {
-    return x < 0 ? -x : x;
+    return __builtin_abs(x);
 }
 
 static inline int CLZ(unsigned int x) {
@@ -475,7 +488,7 @@ static inline int CLZ(unsigned int x) {
 }
 
 static inline unsigned int REV16(unsigned int value) {
-    return ((value & 0x00ffU) << 8) | ((value & 0xff00U) >> 8);
+    return (unsigned int)__builtin_bswap16((unsigned short)value);
 }
 
 static inline unsigned int REV32(unsigned int value) {
@@ -495,6 +508,16 @@ static inline Word64 SAR64(Word64 value, int shift) {
         int sign = (y) >> 31;                                                  \
         if (sign != (y) >> (n)) {                                              \
             (y) = sign ^ ((1 << (n)) - 1);                                     \
+        }                                                                      \
+    }
+
+#define CLIP_2N_SHIFT(y, n)                                                    \
+    {                                                                          \
+        int sign = (y) >> 31;                                                  \
+        if (sign != (y) >> (30 - (n))) {                                       \
+            (y) = sign ^ (0x3fffffff);                                         \
+        } else {                                                               \
+            (y) = (y) << (n);                                                  \
         }                                                                      \
     }
 
@@ -526,6 +549,9 @@ static __inline short CLIPTOSHORT(int x) {
 }
 
 static __inline int FASTABS(int x) {
+#if defined(__GNUC__)
+    return __builtin_abs(x);
+#else
     int sign;
 
     sign = x >> (sizeof(int) * 8 - 1);
@@ -533,9 +559,13 @@ static __inline int FASTABS(int x) {
     x -= sign;
 
     return x;
+#endif
 }
 
 static __inline int CLZ(int x) {
+#if defined(__GNUC__)
+    return x == 0 ? 32 : __builtin_clz((unsigned int)x);
+#else
     int numZeros;
 
     if (!x)
@@ -563,6 +593,7 @@ static __inline int CLZ(int x) {
     numZeros -= ((unsigned int)x >> 31);
 
     return numZeros;
+#endif
 }
 
 typedef union _U64 {
@@ -605,6 +636,9 @@ static __inline short CLIPTOSHORT(int x) {
 }
 
 static __inline int FASTABS(int x) {
+#if defined(__GNUC__)
+    return __builtin_abs(x);
+#else
     int sign;
 
     sign = x >> (sizeof(int) * 8 - 1);
@@ -612,9 +646,13 @@ static __inline int FASTABS(int x) {
     x -= sign;
 
     return x;
+#endif
 }
 
 static __inline int CLZ(int x) {
+#if defined(__GNUC__)
+    return x == 0 ? 32 : __builtin_clz((unsigned int)x);
+#else
     int numZeros;
 
     if (!x)
@@ -642,6 +680,7 @@ static __inline int CLZ(int x) {
     numZeros -= ((unsigned int)x >> 31);
 
     return numZeros;
+#endif
 }
 
 typedef union _U64 {

@@ -17,15 +17,10 @@ class AudioSource {
                                    size_t &received) = 0;
 
     virtual uint64_t position() const = 0;
-
     virtual uint64_t size() const = 0;
-
     virtual bool isSeekable() const = 0;
-
     virtual bool seek(uint64_t position) = 0;
-
     virtual void close() {}
-
     virtual bool isOpen() const = 0;
 
     /*

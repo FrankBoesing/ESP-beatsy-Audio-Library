@@ -2,6 +2,8 @@
 #define Audio_h_
 #include <cstring>
 
+#define SOFTCODEC_METRICS 1
+
 #ifndef SOFTCODEC_METRICS
 #define SOFTCODEC_METRICS 0
 #endif
@@ -12,6 +14,7 @@
 #include "control_es8388.h"
 #include "mixer.h"
 #include "output_i2s.h"
+#include "play_aac.h"
 #include "play_mp3.h"
 #include "play_sd_wav.h"
 #include "synth_waveform.h"

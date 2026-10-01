@@ -83,10 +83,8 @@ void SetBitstreamPointer(BitStreamInfo *bsi, int nBytes, unsigned char *buf) {
  * TODO:        optimize for ARM
  *              possibly add little/big-endian modes for doing 32-bit loads
  **************************************************************************************/
-static __inline void RefillBitstreamCache(BitStreamInfo *bsi)
-{
+static __inline void RefillBitstreamCache(BitStreamInfo *bsi) {
     switch (bsi->nBytes) {
-
     default: {
         /*
          * nBytes >= 4
@@ -96,8 +94,7 @@ static __inline void RefillBitstreamCache(BitStreamInfo *bsi)
          * to the big-endian representation expected
          * by the bitstream decoder.
          */
-        unsigned int *Ptr32 =
-            (unsigned int *)bsi->bytePtr;
+        unsigned int *Ptr32 = (unsigned int *)bsi->bytePtr;
 
         bsi->iCache = REV32(*Ptr32);
 
@@ -110,10 +107,8 @@ static __inline void RefillBitstreamCache(BitStreamInfo *bsi)
     case 3: {
         uint8_t *p = bsi->bytePtr;
 
-        const uint32_t cache =
-            ((uint32_t)p[0] << 24) |
-            ((uint32_t)p[1] << 16) |
-            ((uint32_t)p[2] << 8);
+        const uint32_t cache = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+                               ((uint32_t)p[2] << 8);
 
         bsi->iCache = cache;
         bsi->bytePtr = p + 3;
@@ -123,8 +118,7 @@ static __inline void RefillBitstreamCache(BitStreamInfo *bsi)
     }
 
     case 2: {
-        unsigned short *Ptr16 =
-            (unsigned short *)bsi->bytePtr;
+        unsigned short *Ptr16 = (unsigned short *)bsi->bytePtr;
 
         bsi->iCache = REV16(*Ptr16);
 
@@ -135,8 +129,7 @@ static __inline void RefillBitstreamCache(BitStreamInfo *bsi)
     }
 
     case 1:
-        bsi->iCache =
-            (uint32_t)bsi->bytePtr[0] << 24;
+        bsi->iCache = (uint32_t)bsi->bytePtr[0] << 24;
 
         bsi->bytePtr++;
         bsi->cachedBits = 8;

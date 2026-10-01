@@ -35,6 +35,7 @@ static void applyGain(int16_t *data, int32_t mult) {
         return;
     }
 
+#pragma GCC unroll 4
     do {
         int32_t value = applyGain32(*data, mult);
         *data++ = saturate16(value);
@@ -49,6 +50,7 @@ static void applyGainThenAdd(int16_t *dst, const int16_t *src, int32_t mult) {
     const int16_t *end = dst + AUDIO_BLOCK_SAMPLES;
 
     if (mult == MULTI_UNITYGAIN) {
+#pragma GCC unroll 4
         do {
             int32_t value = (int32_t)*dst + (int32_t)*src++;
             *dst++ = saturate16(value);
@@ -56,6 +58,7 @@ static void applyGainThenAdd(int16_t *dst, const int16_t *src, int32_t mult) {
         return;
     }
 
+#pragma GCC unroll 4
     do {
         int32_t value = (int32_t)*dst + applyGain32(*src++, mult);
         *dst++ = saturate16(value);
@@ -67,13 +70,22 @@ void AudioMixer4::update(void) {
     audio_block_t *out = nullptr;
 
     for (unsigned int channel = 0; channel < 4; channel++) {
+        const int32_t mult = multiplier[channel];
+
+        // NEU: Wenn der Kanal stumm ist, Eingang verwerfen und CPU sparen
+        if (mult == 0) {
+            in = receiveReadOnly(channel);
+            if (in) {
+                release(in);
+            }
+            continue;
+        }
+
         if (!out) {
             // The first available input becomes the destination block.
             out = receiveWritable(channel);
 
             if (out) {
-                const int32_t mult = multiplier[channel];
-
                 if (mult != MULTI_UNITYGAIN) {
                     applyGain(out->data, mult);
                 }
@@ -83,7 +95,8 @@ void AudioMixer4::update(void) {
             in = receiveReadOnly(channel);
 
             if (in) {
-                applyGainThenAdd(out->data, in->data, multiplier[channel]);
+                applyGainThenAdd(out->data, in->data,
+                                 mult); // mult wird direkt genutzt
                 release(in);
             }
         }
