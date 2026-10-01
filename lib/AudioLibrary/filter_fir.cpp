@@ -110,10 +110,7 @@ void AudioFilterFIR::update() {
     }
 
     const size_t historySize = coefficientCount - 1U;
-
-    for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        _history[historySize + i] = block->data[i];
-    }
+    std::memcpy(_history + historySize, block->data, AUDIO_BLOCK_SAMPLES * sizeof(_history[0]));
 
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         int64_t accumulator = 0;
@@ -121,16 +118,15 @@ void AudioFilterFIR::update() {
 
         for (size_t tap = 0; tap < coefficientCount; ++tap) {
             accumulator += static_cast<int32_t>(
-                               coefficients[coefficientCount - tap - 1U]) *
-                           static_cast<int32_t>(_history[newest - tap]);
+                        coefficients[coefficientCount - tap - 1U]) *
+                        static_cast<int32_t>(_history[newest - tap]);
         }
 
         block->data[i] = q15ToPcm(accumulator);
     }
 
     if (historySize > 0) {
-        std::memmove(_history, _history + AUDIO_BLOCK_SAMPLES,
-                     historySize * sizeof(int16_t));
+        std::memmove(_history, _history + AUDIO_BLOCK_SAMPLES, historySize * sizeof(int16_t));
     }
 
     transmit(block);

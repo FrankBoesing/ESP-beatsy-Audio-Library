@@ -287,8 +287,7 @@ void AudioFilterBiquad::update() {
             State &state = _state[stage];
             const int16_t stageInput = value;
 
-            const int64_t outputQ30 =
-                static_cast<int64_t>(c.b0) * stageInput + state.s1;
+            const int64_t outputQ30 = static_cast<int64_t>(c.b0) * stageInput + state.s1;
             value = saturatePcm(roundQ30(outputQ30));
 
             state.s1 = static_cast<int64_t>(c.b1) * stageInput + state.s2 -
