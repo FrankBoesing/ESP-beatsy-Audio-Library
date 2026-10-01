@@ -78,3 +78,25 @@ AudioInputBuffer       Standardmaessig 32 KiB pro Quellpuffer; Kapazitaet ist
 Die Quellen fuellen diesen letzten Puffer unterschiedlich: Dateien in
 2-KiB-Schritten, Streams bis zum 32-KiB-Ziel. Das sind Fuellmengen, keine
 zusaetzlichen Puffer.
+
+DSP: Noise und Filter
+---------------------
+AudioSynthNoiseWhite erzeugt weisses Rauschen. amplitude() erwartet 0.0 bis
+1.0. Die Verarbeitung nutzt einen 31-Bit-Park-Miller-Generator und skaliert
+Samples mit 32-Bit-Arithmetik.
+
+AudioFilterBiquad bietet bis zu vier kaskadierte Stufen: setLowpass(),
+setHighpass(), setBandpass(), setNotch(), setLowShelf() und setHighShelf().
+setCoefficients(stage, int*) akzeptiert Q2.30-Koeffizienten im Format
+b0, b1, b2, a1, a2; die double*-Variante erwartet bereits normalisierte
+Koeffizienten. Die Laufzeit nutzt Q30-Koeffizienten und 64-Bit-Zustaende bzw.
+Akkumulatoren; das Ergebnis wird auf 16-Bit-PCM begrenzt.
+
+AudioFilterFIR akzeptiert mit begin(short*, count) die Teensy-kompatiblen
+Q15-Koeffizienten und akkumuliert Produkte in 64 Bit. Die Koeffizienten stehen
+in der zeitlich rueckwaerts gespeicherten CMSIS-Reihenfolge bN-1 bis b0; die
+Anzahl muss gerade und zwischen 4 und 200 liegen.
+FIR_PASSTHRU reicht Audio ohne Filterung weiter; end() deaktiviert den Filter.
+
+Die AudioStream-Schnittstelle bleibt 16-Bit-PCM. FIR-Filter mit vielen
+Koeffizienten koennen deutlich CPU-Zeit beanspruchen.

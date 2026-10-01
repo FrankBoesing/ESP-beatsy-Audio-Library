@@ -1,20 +1,20 @@
 
 #include <Arduino.h>
-#include <SD_MMC.h>
 #include <Audio.h>
-#include "play_mp3.h"
-#include "output_i2s.h"
-#include "control_es8388.h"
 
-#define SOFTCODEC_METRICS 1
+namespace {
+constexpr short FIR_COEFFICIENTS[] = {
+    1024, 2048, 4096, 9216, 9216, 4096, 2048, 1024,
+};
 
-// ============================================================================
-// Audio objects
-// ============================================================================
+constexpr uint32_t AUDIO_MEMORY_BLOCKS = 16;
+constexpr float NOISE_AMPLITUDE = 0.25f;
+constexpr float BIQUAD_CUTOFF_HZ = 500.0f;
+} // namespace
 
-AudioSourceFile source;
-
-AudioPlayAac mp3;
+AudioSynthNoiseWhite noise;
+AudioFilterFIR fir;
+AudioFilterBiquad biquad;
 
 AudioOutputI2S i2s({
     27, // BCLK
@@ -25,12 +25,10 @@ AudioOutputI2S i2s({
 
 AudioControlES8388 codec;
 
-// ============================================================================
-// Connections
-// ============================================================================
-
-AudioConnection patchCord1(mp3, 0, i2s, 0);
-AudioConnection patchCord2(mp3, 0, i2s, 1);
+AudioConnection noiseToFir(noise, 0, fir, 0);
+AudioConnection noiseToBiquad(noise, 0, biquad, 0);
+AudioConnection firToLeft(fir, 0, i2s, 0);
+AudioConnection biquadToRight(biquad, 0, i2s, 1);
 
 // ============================================================================
 // Setup
@@ -38,107 +36,33 @@ AudioConnection patchCord2(mp3, 0, i2s, 1);
 
 void setup() {
     Serial.begin(115200);
-
     delay(1000);
 
     Serial.println();
     Serial.println("======================================");
-    Serial.println(" AudioPlayMp3 SD_MMC TEST");
+    Serial.println(" White noise: FIR left / BiQuad right");
     Serial.println("======================================");
-
-    // ------------------------------------------------------------------------
-    // Audio memory
-    // ------------------------------------------------------------------------
-
-    AudioMemory(12);
-
-    Serial.println("Audio memory initialized");
-
-    // ------------------------------------------------------------------------
-    // ES8388
-    // ------------------------------------------------------------------------
-
-    Serial.println("Initializing ES8388...");
 
     if (!codec.enable()) {
         Serial.println("ERROR: ES8388 initialization failed");
-
-        while (true) {
+        while (true)
             delay(1000);
-        }
     }
 
-    Serial.println("ES8388 initialized");
+    fir.begin(FIR_COEFFICIENTS,
+              sizeof(FIR_COEFFICIENTS) / sizeof(FIR_COEFFICIENTS[0]));
+    biquad.setLowpass(0, BIQUAD_CUTOFF_HZ);
 
-    // ------------------------------------------------------------------------
-    // I2S
-    // ------------------------------------------------------------------------
+    AudioMemory(AUDIO_MEMORY_BLOCKS);
 
-    /*
-     * Optional.
-     *
-     * Wie beim vorherigen funktionierenden Test:
-     *
-     * i2s.begin();
-     *
-     * kann derzeit aktiviert oder weggelassen werden.
-     */
-
-    // i2s.begin();
-
-    // ------------------------------------------------------------------------
-    // SD_MMC
-    // ------------------------------------------------------------------------
-
-    Serial.println("Initializing SD_MMC...");
-
-    /*
-     * ESP32 Audio Kit V2.2
-     *
-     * 1-bit mode.
-     */
-    if (!SD_MMC.begin("/sdcard", false)) {
-        Serial.println("ERROR: SD_MMC initialization failed");
-
-        while (true) {
+    if (!i2s.begin()) {
+        Serial.println("ERROR: I2S initialization failed");
+        while (true)
             delay(1000);
-        }
     }
 
-    Serial.println("SD_MMC initialized");
-
-    // ------------------------------------------------------------------------
-    // Open MP3
-    // ------------------------------------------------------------------------
-
-    Serial.println("Opening /test.aac...");
-
-    if (!source.open(SD_MMC, "/test.aac")) {
-        Serial.println("ERROR: Could not open /test.aac");
-
-        while (true) {
-            delay(1000);
-        }
-    }
-
-    Serial.printf("AAC source opened, size=%llu bytes\n",
-                  (unsigned long long)source.size());
-
-    // ------------------------------------------------------------------------
-    // Start playback
-    // ------------------------------------------------------------------------
-
-    Serial.println("Starting MP3 playback...");
-
-    if (!mp3.play(source)) {
-        Serial.println("ERROR: AAC playback could not be started");
-
-        while (true) {
-            delay(1000);
-        }
-    }
-
-    Serial.println("AAC playback started");
+    noise.amplitude(NOISE_AMPLITUDE);
+    Serial.println("Test started: FIR output left, BiQuad output right.");
 }
 
 // ============================================================================
@@ -151,40 +75,11 @@ void loop() {
     if (millis() - lastStatus >= 1000) {
         lastStatus = millis();
 
-        Serial.println();
-        Serial.println("--------------------------------------");
-
-        Serial.printf("Playing: %s\n", mp3.isPlaying() ? "yes" : "no");
-
-        /*
-         * AudioStream statistics:
-         *   processorUsage()    = most recent update() execution
-         *   processorUsageMax() = maximum update() execution since start
-         */
-        Serial.printf("Audio CPU: MP3 %.2f%% (max %.2f%%), "
-                      "I2S %.2f%% (max %.2f%%)\n",
-                      mp3.processorUsage(), mp3.processorUsageMax(),
-                      i2s.processorUsage(), i2s.processorUsageMax());
-
-        Serial.printf("Audio memory: %u / %u blocks "
-                      "(current / max)\n",
+        Serial.printf("Noise %.0f%% | FIR %.2f%% | BiQuad %.2f%% | "
+                      "I2S %.2f%% | Audio blocks %u/%u\n",
+                      NOISE_AMPLITUDE * 100.0f, fir.processorUsage(),
+                      biquad.processorUsage(), i2s.processorUsage(),
                       AudioStream::memoryUsage(),
                       AudioStream::memoryUsageMax());
-
-        /*
-         * MP3-specific decoder load:
-         * total time inside MP3Decode(), relative to the audio time generated.
-         * Source/SD waiting and vTaskDelay() are deliberately excluded.
-         */
-#if SOFTCODEC_METRICS
-        Serial.printf("MP3 decode: avg %.2f%%, frame max %.2f%%, "
-                      "frames %lu, decode %.3f s\n",
-                      mp3.decodeProcessorUsage(), mp3.decodeProcessorUsageMax(),
-                      (unsigned long)mp3.decodeFrames(),
-                      (double)mp3.decodeTimeUsTotal() / 1000000.0);
-#endif
-        Serial.printf("Position: %lu ms / %lu ms\n",
-                      (unsigned long)mp3.positionMillis(),
-                      (unsigned long)mp3.lengthMillis());
     }
 }
