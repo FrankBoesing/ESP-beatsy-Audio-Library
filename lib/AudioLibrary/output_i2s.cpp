@@ -315,26 +315,28 @@ void AudioOutputI2S::txTaskLoop() {
         }
 
         if (pair.left != nullptr && pair.right != nullptr) {
-            #pragma GCC unroll 4
+#pragma GCC unroll 4
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
                 buffer[2 * i] = static_cast<int32_t>(pair.left->data[i]) << 16;
-                buffer[2 * i + 1] = static_cast<int32_t>(pair.right->data[i]) << 16;
+                buffer[2 * i + 1] = static_cast<int32_t>(pair.right->data[i])
+                                    << 16;
             }
         } else if (pair.left != nullptr) {
-            #pragma GCC unroll 4
+#pragma GCC unroll 4
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
                 buffer[2 * i] = static_cast<int32_t>(pair.left->data[i]) << 16;
                 buffer[2 * i + 1] = 0;
             }
         } else if (pair.right != nullptr) {
-            #pragma GCC unroll 4
+#pragma GCC unroll 4
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
                 buffer[2 * i] = 0;
-                buffer[2 * i + 1] = static_cast<int32_t>(pair.right->data[i]) << 16;
+                buffer[2 * i + 1] = static_cast<int32_t>(pair.right->data[i])
+                                    << 16;
             }
         } else {
-                // Beide nullptr: Direkter Speicher-Block-Reset statt Schleife
-                memset(buffer, 0, AUDIO_BLOCK_SAMPLES * 2 * sizeof(buffer[0]));
+            // Beide nullptr: Direkter Speicher-Block-Reset statt Schleife
+            memset(buffer, 0, AUDIO_BLOCK_SAMPLES * 2 * sizeof(buffer[0]));
         }
 
         size_t bytesWritten = 0;
@@ -348,16 +350,15 @@ void AudioOutputI2S::txTaskLoop() {
             txHandle, buffer, sizeof(buffer), &bytesWritten, 100);
 
         if (err != ESP_OK || bytesWritten != sizeof(buffer)) {
-
             const uint32_t now = millis();
             ++writeErrorCount;
 
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
-                ESP_LOGE("I2S","TX error #%lu: %s, bytes=%u/%u\n",
-                              static_cast<unsigned long>(writeErrorCount),
-                              esp_err_to_name(err),
-                              static_cast<unsigned>(bytesWritten),
-                              static_cast<unsigned>(sizeof(buffer)));
+                ESP_LOGE("I2S", "TX error #%lu: %s, bytes=%u/%u\n",
+                         static_cast<unsigned long>(writeErrorCount),
+                         esp_err_to_name(err),
+                         static_cast<unsigned>(bytesWritten),
+                         static_cast<unsigned>(sizeof(buffer)));
                 lastErrorLogMs = now;
             }
         }

@@ -33,7 +33,7 @@
  *  
  * Contributor(s):  
  *   
- * ***** END LICENSE BLOCK ***** */  
+ * ***** END LICENSE BLOCK ***** */
 
 /**************************************************************************************
  * Fixed-point HE-AAC decoder
@@ -62,9 +62,8 @@
  * Notes:       slow, platform-independent equivalent to memset(buf, 0, nBytes)
  **************************************************************************************/
 #include <string.h>
- void ClearBuffer(void *buf, int nBytes)
-{
-/*	int i;
+void ClearBuffer(void *buf, int nBytes) {
+    /*	int i;
 	unsigned char *cbuf = (unsigned char *)buf;
 
 	for (i = 0; i < nBytes; i++)
@@ -72,7 +71,7 @@
 
 	return;
 	*/
-	memset(buf, 0, nBytes);
+    memset(buf, 0, nBytes);
 }
 
 /**************************************************************************************
@@ -90,27 +89,31 @@
  * Notes:       if one or more mallocs fail, function frees any buffers already
  *                allocated before returning
  **************************************************************************************/
-AACDecInfo *AllocateBuffers(void)
-{
-	AACDecInfo *aacDecInfo;
+AACDecInfo *AllocateBuffers(void) {
+    AACDecInfo *aacDecInfo;
 
-	aacDecInfo = (AACDecInfo *)malloc(sizeof(AACDecInfo));
-	if (!aacDecInfo)
-		return 0;
-	ClearBuffer(aacDecInfo, sizeof(AACDecInfo));
+    aacDecInfo = (AACDecInfo *)malloc(sizeof(AACDecInfo));
+    if (!aacDecInfo)
+        return 0;
+    ClearBuffer(aacDecInfo, sizeof(AACDecInfo));
 
-	aacDecInfo->psInfoBase = malloc(sizeof(PSInfoBase));
-	if (!aacDecInfo->psInfoBase) {
-		FreeBuffers(aacDecInfo);
-		return 0;
-	}
-	ClearBuffer(aacDecInfo->psInfoBase, sizeof(PSInfoBase));
+    aacDecInfo->psInfoBase = malloc(sizeof(PSInfoBase));
+    if (!aacDecInfo->psInfoBase) {
+        FreeBuffers(aacDecInfo);
+        return 0;
+    }
+    ClearBuffer(aacDecInfo->psInfoBase, sizeof(PSInfoBase));
 
-	return aacDecInfo;
+    return aacDecInfo;
 }
 
 #ifndef SAFE_FREE
-#define SAFE_FREE(x)	{if (x)	free(x);	(x) = 0;}	/* helper macro */
+#define SAFE_FREE(x)                                                           \
+    {                                                                          \
+        if (x)                                                                 \
+            free(x);                                                           \
+        (x) = 0;                                                               \
+    } /* helper macro */
 #endif
 
 /**************************************************************************************
@@ -126,11 +129,10 @@ AACDecInfo *AllocateBuffers(void)
  *
  * Notes:       safe to call even if some buffers were not allocated (uses SAFE_FREE)
  **************************************************************************************/
-void FreeBuffers(AACDecInfo *aacDecInfo)
-{
-	if (!aacDecInfo)
-		return;
+void FreeBuffers(AACDecInfo *aacDecInfo) {
+    if (!aacDecInfo)
+        return;
 
-	SAFE_FREE(aacDecInfo->psInfoBase);
-	SAFE_FREE(aacDecInfo);
+    SAFE_FREE(aacDecInfo->psInfoBase);
+    SAFE_FREE(aacDecInfo);
 }

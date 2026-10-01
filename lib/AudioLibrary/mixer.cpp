@@ -35,7 +35,7 @@ static void applyGain(int16_t *data, int32_t mult) {
         return;
     }
 
-    #pragma GCC unroll 4
+#pragma GCC unroll 4
     do {
         int32_t value = applyGain32(*data, mult);
         *data++ = saturate16(value);
@@ -50,7 +50,7 @@ static void applyGainThenAdd(int16_t *dst, const int16_t *src, int32_t mult) {
     const int16_t *end = dst + AUDIO_BLOCK_SAMPLES;
 
     if (mult == MULTI_UNITYGAIN) {
-        #pragma GCC unroll 4
+#pragma GCC unroll 4
         do {
             int32_t value = (int32_t)*dst + (int32_t)*src++;
             *dst++ = saturate16(value);
@@ -58,7 +58,7 @@ static void applyGainThenAdd(int16_t *dst, const int16_t *src, int32_t mult) {
         return;
     }
 
-    #pragma GCC unroll 4
+#pragma GCC unroll 4
     do {
         int32_t value = (int32_t)*dst + applyGain32(*src++, mult);
         *dst++ = saturate16(value);
@@ -95,7 +95,8 @@ void AudioMixer4::update(void) {
             in = receiveReadOnly(channel);
 
             if (in) {
-                applyGainThenAdd(out->data, in->data, mult); // mult wird direkt genutzt
+                applyGainThenAdd(out->data, in->data,
+                                 mult); // mult wird direkt genutzt
                 release(in);
             }
         }

@@ -33,7 +33,7 @@
  *  
  * Contributor(s):  
  *   
- * ***** END LICENSE BLOCK ***** */  
+ * ***** END LICENSE BLOCK ***** */
 
 /**************************************************************************************
  * Fixed-point HE-AAC decoder
@@ -46,14 +46,19 @@
 #include "coder.h"
 //#include "assembly.h"
 
-#define NUM_FFT_SIZES	2
-static const int nfftTab[NUM_FFT_SIZES] =		{64, 512};
-static const int nfftlog2Tab[NUM_FFT_SIZES] =	{6, 9};
+#define NUM_FFT_SIZES 2
+static const int nfftTab[NUM_FFT_SIZES] = {64, 512};
+static const int nfftlog2Tab[NUM_FFT_SIZES] = {6, 9};
 
-#define SQRT1_2 0x5a82799a	/* sqrt(1/2) in Q31 */
+#define SQRT1_2 0x5a82799a /* sqrt(1/2) in Q31 */
 
-#define swapcplx(p0,p1) \
-	t = p0; t1 = *(&(p0)+1); p0 = p1; *(&(p0)+1) = *(&(p1)+1); p1 = t; *(&(p1)+1) = t1
+#define swapcplx(p0, p1)                                                       \
+    t = p0;                                                                    \
+    t1 = *(&(p0) + 1);                                                         \
+    p0 = p1;                                                                   \
+    *(&(p0) + 1) = *(&(p1) + 1);                                               \
+    p1 = t;                                                                    \
+    *(&(p1) + 1) = t1
 
 /**************************************************************************************
  * Function:    BitReverse
@@ -67,30 +72,28 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] =	{6, 9};
  *
  * Return:      none
  **************************************************************************************/
- /*__attribute__ ((section (".data"))) */ static void BitReverse(int *inout, int tabidx)
-{
+/*__attribute__ ((section (".data"))) */ static void BitReverse(int *inout,
+                                                                int tabidx) {
     int *part0, *part1;
-	int a,b, t,t1;
-	const unsigned char* tab = bitrevtab + bitrevtabOffset[tabidx];
-	int nbits = nfftlog2Tab[tabidx];
+    int a, b, t, t1;
+    const unsigned char *tab = bitrevtab + bitrevtabOffset[tabidx];
+    int nbits = nfftlog2Tab[tabidx];
 
-	part0 = inout;
+    part0 = inout;
     part1 = inout + (1 << nbits);
-	
-	while ((a = *tab++) != 0) {
+
+    while ((a = *tab++) != 0) {
         b = *tab++;
 
-        swapcplx(part0[4*a+0], part0[4*b+0]);	/* 0xxx0 <-> 0yyy0 */
-        swapcplx(part0[4*a+2], part1[4*b+0]);	/* 0xxx1 <-> 1yyy0 */
-        swapcplx(part1[4*a+0], part0[4*b+2]);	/* 1xxx0 <-> 0yyy1 */
-        swapcplx(part1[4*a+2], part1[4*b+2]);	/* 1xxx1 <-> 1yyy1 */
+        swapcplx(part0[4 * a + 0], part0[4 * b + 0]); /* 0xxx0 <-> 0yyy0 */
+        swapcplx(part0[4 * a + 2], part1[4 * b + 0]); /* 0xxx1 <-> 1yyy0 */
+        swapcplx(part1[4 * a + 0], part0[4 * b + 2]); /* 1xxx0 <-> 0yyy1 */
+        swapcplx(part1[4 * a + 2], part1[4 * b + 2]); /* 1xxx1 <-> 1yyy1 */
     }
 
     do {
-        swapcplx(part0[4*a+2], part1[4*a+0]);	/* 0xxx1 <-> 1xxx0 */
+        swapcplx(part0[4 * a + 2], part1[4 * a + 0]); /* 0xxx1 <-> 1xxx0 */
     } while ((a = *tab++) != 0);
-	
-	
 }
 
 /**************************************************************************************
@@ -108,33 +111,32 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] =	{6, 9};
  * Notes:       assumes 2 guard bits, gains no integer bits, 
  *                guard bits out = guard bits in - 2
  **************************************************************************************/
- /* __attribute__ ((section (".data"))) */ static void R4FirstPass(int *x, int bg)
-{
+/* __attribute__ ((section (".data"))) */ static void R4FirstPass(int *x,
+                                                                  int bg) {
     int ar, ai, br, bi, cr, ci, dr, di;
-	
-	for (; bg != 0; bg--) {
 
-		ar = x[0] + x[2];
-		br = x[0] - x[2];
-		ai = x[1] + x[3];
-		bi = x[1] - x[3];
-		cr = x[4] + x[6];
-		dr = x[4] - x[6];
-		ci = x[5] + x[7];
-		di = x[5] - x[7];
+    for (; bg != 0; bg--) {
+        ar = x[0] + x[2];
+        br = x[0] - x[2];
+        ai = x[1] + x[3];
+        bi = x[1] - x[3];
+        cr = x[4] + x[6];
+        dr = x[4] - x[6];
+        ci = x[5] + x[7];
+        di = x[5] - x[7];
 
-		/* max per-sample gain = 4.0 (adding 4 inputs together) */
-		x[0] = ar + cr;
-		x[4] = ar - cr;
-		x[1] = ai + ci;
-		x[5] = ai - ci;
-		x[2] = br + di;
-		x[6] = br - di;
-		x[3] = bi - dr;
-		x[7] = bi + dr;
+        /* max per-sample gain = 4.0 (adding 4 inputs together) */
+        x[0] = ar + cr;
+        x[4] = ar - cr;
+        x[1] = ai + ci;
+        x[5] = ai - ci;
+        x[2] = br + di;
+        x[6] = br - di;
+        x[3] = bi - dr;
+        x[7] = bi + dr;
 
-		x += 8;
-	}
+        x += 8;
+    }
 }
 
 /**************************************************************************************
@@ -154,90 +156,89 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] =	{6, 9};
  *                or guard bits in - 2 (if inputs bounded to +/- sqrt(2)/2)
  *              see scaling comments in code
  **************************************************************************************/
- /* __attribute__ ((section (".data"))) */ static void R8FirstPass(int *x, int bg)
-{
+/* __attribute__ ((section (".data"))) */ static void R8FirstPass(int *x,
+                                                                  int bg) {
     int ar, ai, br, bi, cr, ci, dr, di;
-	int sr, si, tr, ti, ur, ui, vr, vi;
-	int wr, wi, xr, xi, yr, yi, zr, zi;
+    int sr, si, tr, ti, ur, ui, vr, vi;
+    int wr, wi, xr, xi, yr, yi, zr, zi;
 
-	for (; bg != 0; bg--) {
+    for (; bg != 0; bg--) {
+        ar = x[0] + x[2];
+        br = x[0] - x[2];
+        ai = x[1] + x[3];
+        bi = x[1] - x[3];
+        cr = x[4] + x[6];
+        dr = x[4] - x[6];
+        ci = x[5] + x[7];
+        di = x[5] - x[7];
 
-		ar = x[0] + x[2];
-		br = x[0] - x[2];
-		ai = x[1] + x[3];
-		bi = x[1] - x[3];
-		cr = x[4] + x[6];
-		dr = x[4] - x[6];
-		ci = x[5] + x[7];
-		di = x[5] - x[7];
+        sr = ar + cr;
+        ur = ar - cr;
+        si = ai + ci;
+        ui = ai - ci;
+        tr = br - di;
+        vr = br + di;
+        ti = bi + dr;
+        vi = bi - dr;
 
-		sr = ar + cr;
-		ur = ar - cr;
-		si = ai + ci;
-		ui = ai - ci;
-		tr = br - di;
-		vr = br + di;
-		ti = bi + dr;
-		vi = bi - dr;
+        ar = x[8] + x[10];
+        br = x[8] - x[10];
+        ai = x[9] + x[11];
+        bi = x[9] - x[11];
+        cr = x[12] + x[14];
+        dr = x[12] - x[14];
+        ci = x[13] + x[15];
+        di = x[13] - x[15];
 
-		ar = x[ 8] + x[10];
-		br = x[ 8] - x[10];
-		ai = x[ 9] + x[11];
-		bi = x[ 9] - x[11];
-		cr = x[12] + x[14];
-		dr = x[12] - x[14];
-		ci = x[13] + x[15];
-		di = x[13] - x[15];
-
-		/* max gain of wr/wi/yr/yi vs input = 2
+        /* max gain of wr/wi/yr/yi vs input = 2
 		 *  (sum of 4 samples >> 1) 
 		 */
-		wr = (ar + cr) >> 1;
-		yr = (ar - cr) >> 1;
-		wi = (ai + ci) >> 1;
-		yi = (ai - ci) >> 1;
+        wr = (ar + cr) >> 1;
+        yr = (ar - cr) >> 1;
+        wi = (ai + ci) >> 1;
+        yi = (ai - ci) >> 1;
 
-		/* max gain of output vs input = 4
+        /* max gain of output vs input = 4
 		 *  (sum of 4 samples >> 1 + sum of 4 samples >> 1) 
 		 */
-		x[ 0] = (sr >> 1) + wr;
-		x[ 8] = (sr >> 1) - wr;
-		x[ 1] = (si >> 1) + wi;
-		x[ 9] = (si >> 1) - wi;
-		x[ 4] = (ur >> 1) + yi;
-		x[12] = (ur >> 1) - yi;
-		x[ 5] = (ui >> 1) - yr;
-		x[13] = (ui >> 1) + yr;
+        x[0] = (sr >> 1) + wr;
+        x[8] = (sr >> 1) - wr;
+        x[1] = (si >> 1) + wi;
+        x[9] = (si >> 1) - wi;
+        x[4] = (ur >> 1) + yi;
+        x[12] = (ur >> 1) - yi;
+        x[5] = (ui >> 1) - yr;
+        x[13] = (ui >> 1) + yr;
 
-		ar = br - di;
-		cr = br + di;
-		ai = bi + dr;
-		ci = bi - dr;
+        ar = br - di;
+        cr = br + di;
+        ai = bi + dr;
+        ci = bi - dr;
 
-		/* max gain of xr/xi/zr/zi vs input = 4*sqrt(2)/2 = 2*sqrt(2)
+        /* max gain of xr/xi/zr/zi vs input = 4*sqrt(2)/2 = 2*sqrt(2)
 		 *  (sum of 8 samples, multiply by sqrt(2)/2, implicit >> 1 from Q31) 
 		 */
-		xr = MULSHIFT32(SQRT1_2, ar - ai);
-		xi = MULSHIFT32(SQRT1_2, ar + ai);
-		zr = MULSHIFT32(SQRT1_2, cr - ci);
-		zi = MULSHIFT32(SQRT1_2, cr + ci);
+        xr = MULSHIFT32(SQRT1_2, ar - ai);
+        xi = MULSHIFT32(SQRT1_2, ar + ai);
+        zr = MULSHIFT32(SQRT1_2, cr - ci);
+        zi = MULSHIFT32(SQRT1_2, cr + ci);
 
-		/* max gain of output vs input = (2 + 2*sqrt(2) ~= 4.83)
+        /* max gain of output vs input = (2 + 2*sqrt(2) ~= 4.83)
 		 *  (sum of 4 samples >> 1, plus xr/xi/zr/zi with gain of 2*sqrt(2))
 		 * in absolute terms, we have max gain of appx 9.656 (4 + 0.707*8)
 		 *  but we also gain 1 int bit (from MULSHIFT32 or from explicit >> 1)
 		 */
-		x[ 6] = (tr >> 1) - xr;
-		x[14] = (tr >> 1) + xr;
-		x[ 7] = (ti >> 1) - xi;
-		x[15] = (ti >> 1) + xi;
-		x[ 2] = (vr >> 1) + zi;
-		x[10] = (vr >> 1) - zi;
-		x[ 3] = (vi >> 1) - zr;
-		x[11] = (vi >> 1) + zr;
+        x[6] = (tr >> 1) - xr;
+        x[14] = (tr >> 1) + xr;
+        x[7] = (ti >> 1) - xi;
+        x[15] = (ti >> 1) + xi;
+        x[2] = (vr >> 1) + zi;
+        x[10] = (vr >> 1) - zi;
+        x[3] = (vi >> 1) - zr;
+        x[11] = (vi >> 1) + zr;
 
-		x += 16;
-	}
+        x += 16;
+    }
 }
 
 /**************************************************************************************
@@ -259,19 +260,18 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] =	{6, 9};
  *              gbOut = gbIn - 1 (short block) or gbIn - 2 (long block)
  *              uses 3-mul, 3-add butterflies instead of 4-mul, 2-add
  **************************************************************************************/
- /* __attribute__ ((section (".data"))) */ static void R4Core(int *x, int bg, int gp, int *wtab)
-{
-	int ar, ai, br, bi, cr, ci, dr, di, tr, ti;
-	int wd, ws, wi;
-	int i, j, step;
-	int *xptr, *wptr;
+/* __attribute__ ((section (".data"))) */ static void
+R4Core(int *x, int bg, int gp, int *wtab) {
+    int ar, ai, br, bi, cr, ci, dr, di, tr, ti;
+    int wd, ws, wi;
+    int i, j, step;
+    int *xptr, *wptr;
 
-	for (; bg != 0; gp <<= 2, bg >>= 2) {
+    for (; bg != 0; gp <<= 2, bg >>= 2) {
+        step = 2 * gp;
+        xptr = x;
 
-		step = 2*gp;
-		xptr = x;
-
-		/* max per-sample gain, per group < 1 + 3*sqrt(2) ~= 5.25 if inputs x are full-scale
+        /* max per-sample gain, per group < 1 + 3*sqrt(2) ~= 5.25 if inputs x are full-scale
 		 * do 3 groups for long block, 2 groups for short block (gain 2 int bits per group)
 		 *
 		 * very conservative scaling:
@@ -279,82 +279,79 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] =	{6, 9};
 		 *   group 2: max gain = 5.25^2 = 27.6,  int bits gained = 4, gb used = 1 (2^5 = 32)
 		 *   group 3: max gain = 5.25^3 = 144.7, int bits gained = 6, gb used = 2 (2^8 = 256)
 		 */
-		for (i = bg; i != 0; i--) {
+        for (i = bg; i != 0; i--) {
+            wptr = wtab;
 
-			wptr = wtab;
+            for (j = gp; j != 0; j--) {
+                ar = xptr[0];
+                ai = xptr[1];
+                xptr += step;
 
-			for (j = gp; j != 0; j--) {
-
-				ar = xptr[0];
-				ai = xptr[1];
-				xptr += step;
-				
-				/* gain 2 int bits for br/bi, cr/ci, dr/di (MULSHIFT32 by Q30)
+                /* gain 2 int bits for br/bi, cr/ci, dr/di (MULSHIFT32 by Q30)
 				 * gain 1 net GB
 				 */
-				ws = wptr[0];
-				wi = wptr[1];
-				br = xptr[0];
-				bi = xptr[1];
-				wd = ws + 2*wi;
-				tr = MULSHIFT32(wi, br + bi);
-				br = MULSHIFT32(wd, br) - tr;	/* cos*br + sin*bi */
-				bi = MULSHIFT32(ws, bi) + tr;	/* cos*bi - sin*br */
-				xptr += step;
-				
-				ws = wptr[2];
-				wi = wptr[3];
-				cr = xptr[0];
-				ci = xptr[1];
-				wd = ws + 2*wi;
-				tr = MULSHIFT32(wi, cr + ci);
-				cr = MULSHIFT32(wd, cr) - tr;
-				ci = MULSHIFT32(ws, ci) + tr;
-				xptr += step;
-				
-				ws = wptr[4];
-				wi = wptr[5];
-				dr = xptr[0];
-				di = xptr[1];
-				wd = ws + 2*wi;
-				tr = MULSHIFT32(wi, dr + di);
-				dr = MULSHIFT32(wd, dr) - tr;
-				di = MULSHIFT32(ws, di) + tr;
-				wptr += 6;
+                ws = wptr[0];
+                wi = wptr[1];
+                br = xptr[0];
+                bi = xptr[1];
+                wd = ws + 2 * wi;
+                tr = MULSHIFT32(wi, br + bi);
+                br = MULSHIFT32(wd, br) - tr; /* cos*br + sin*bi */
+                bi = MULSHIFT32(ws, bi) + tr; /* cos*bi - sin*br */
+                xptr += step;
 
-				tr = ar;
-				ti = ai;
-				ar = (tr >> 2) - br;
-				ai = (ti >> 2) - bi;
-				br = (tr >> 2) + br;
-				bi = (ti >> 2) + bi;
+                ws = wptr[2];
+                wi = wptr[3];
+                cr = xptr[0];
+                ci = xptr[1];
+                wd = ws + 2 * wi;
+                tr = MULSHIFT32(wi, cr + ci);
+                cr = MULSHIFT32(wd, cr) - tr;
+                ci = MULSHIFT32(ws, ci) + tr;
+                xptr += step;
 
-				tr = cr;
-				ti = ci;
-				cr = tr + dr;
-				ci = di - ti;
-				dr = tr - dr;
-				di = di + ti;
+                ws = wptr[4];
+                wi = wptr[5];
+                dr = xptr[0];
+                di = xptr[1];
+                wd = ws + 2 * wi;
+                tr = MULSHIFT32(wi, dr + di);
+                dr = MULSHIFT32(wd, dr) - tr;
+                di = MULSHIFT32(ws, di) + tr;
+                wptr += 6;
 
-				xptr[0] = ar + ci;
-				xptr[1] = ai + dr;
-				xptr -= step;
-				xptr[0] = br - cr;
-				xptr[1] = bi - di;
-				xptr -= step;
-				xptr[0] = ar - ci;
-				xptr[1] = ai - dr;
-				xptr -= step;
-				xptr[0] = br + cr;
-				xptr[1] = bi + di;
-				xptr += 2;
-			}
-			xptr += 3*step;
-		}
-		wtab += 3*step;
-	}
+                tr = ar;
+                ti = ai;
+                ar = (tr >> 2) - br;
+                ai = (ti >> 2) - bi;
+                br = (tr >> 2) + br;
+                bi = (ti >> 2) + bi;
+
+                tr = cr;
+                ti = ci;
+                cr = tr + dr;
+                ci = di - ti;
+                dr = tr - dr;
+                di = di + ti;
+
+                xptr[0] = ar + ci;
+                xptr[1] = ai + dr;
+                xptr -= step;
+                xptr[0] = br - cr;
+                xptr[1] = bi - di;
+                xptr -= step;
+                xptr[0] = ar - ci;
+                xptr[1] = ai - dr;
+                xptr -= step;
+                xptr[0] = br + cr;
+                xptr[1] = bi + di;
+                xptr += 2;
+            }
+            xptr += 3 * step;
+        }
+        wtab += 3 * step;
+    }
 }
-
 
 /**************************************************************************************
  * Function:    R4FFT
@@ -373,21 +370,22 @@ static const int nfftlog2Tab[NUM_FFT_SIZES] =	{6, 9};
  *              gains log2(nfft) - 2 int bits total
  *                so gain 7 int bits (LONG), 4 int bits (SHORT)
  **************************************************************************************/
-void R4FFT(int tabidx, int *x)
-{
-	int order = nfftlog2Tab[tabidx];
-	int nfft = nfftTab[tabidx];
+void R4FFT(int tabidx, int *x) {
+    int order = nfftlog2Tab[tabidx];
+    int nfft = nfftTab[tabidx];
 
-	/* decimation in time */
-	BitReverse(x, tabidx);
+    /* decimation in time */
+    BitReverse(x, tabidx);
 
-	if (order & 0x1) {
-		/* long block: order = 9, nfft = 512 */
-		R8FirstPass(x, nfft >> 3);						/* gain 1 int bit,  lose 2 GB */
-		R4Core(x, nfft >> 5, 8, (int *)twidTabOdd);		/* gain 6 int bits, lose 2 GB */
-	} else {
-		/* short block: order = 6, nfft = 64 */
-		R4FirstPass(x, nfft >> 2);						/* gain 0 int bits, lose 2 GB */
-		R4Core(x, nfft >> 4, 4, (int *)twidTabEven);	/* gain 4 int bits, lose 1 GB */
-	}
+    if (order & 0x1) {
+        /* long block: order = 9, nfft = 512 */
+        R8FirstPass(x, nfft >> 3); /* gain 1 int bit,  lose 2 GB */
+        R4Core(x, nfft >> 5, 8,
+               (int *)twidTabOdd); /* gain 6 int bits, lose 2 GB */
+    } else {
+        /* short block: order = 6, nfft = 64 */
+        R4FirstPass(x, nfft >> 2); /* gain 0 int bits, lose 2 GB */
+        R4Core(x, nfft >> 4, 4,
+               (int *)twidTabEven); /* gain 4 int bits, lose 1 GB */
+    }
 }

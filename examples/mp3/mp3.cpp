@@ -6,7 +6,6 @@
 #include "output_i2s.h"
 #include "control_es8388.h"
 
-
 #define SOFTCODEC_METRICS 1
 
 // ============================================================================

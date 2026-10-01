@@ -33,7 +33,7 @@
  *  
  * Contributor(s):  
  *   
- * ***** END LICENSE BLOCK ***** */  
+ * ***** END LICENSE BLOCK ***** */
 
 /**************************************************************************************
  * Fixed-point HE-AAC decoder
@@ -63,22 +63,21 @@
  *
  * Return:      handle to AAC decoder instance, 0 if malloc fails
  **************************************************************************************/
-HAACDecoder AACInitDecoder(void)
-{
-	AACDecInfo *aacDecInfo;
+HAACDecoder AACInitDecoder(void) {
+    AACDecInfo *aacDecInfo;
 
-	aacDecInfo = AllocateBuffers();
-	if (!aacDecInfo)
-		return 0;
+    aacDecInfo = AllocateBuffers();
+    if (!aacDecInfo)
+        return 0;
 
 #ifdef AAC_ENABLE_SBR
-	if (InitSBR(aacDecInfo)) {
-		AACFreeDecoder(aacDecInfo);
-		return 0;
-	}
+    if (InitSBR(aacDecInfo)) {
+        AACFreeDecoder(aacDecInfo);
+        return 0;
+    }
 #endif
 
-	return (HAACDecoder)aacDecInfo;
+    return (HAACDecoder)aacDecInfo;
 }
 
 /**************************************************************************************
@@ -93,17 +92,16 @@ HAACDecoder AACInitDecoder(void)
  *
  * Return:      none
  **************************************************************************************/
-void AACFreeDecoder(HAACDecoder hAACDecoder)
-{
-	AACDecInfo *aacDecInfo = (AACDecInfo *)hAACDecoder;
+void AACFreeDecoder(HAACDecoder hAACDecoder) {
+    AACDecInfo *aacDecInfo = (AACDecInfo *)hAACDecoder;
 
-	if (!aacDecInfo)
-		return;
+    if (!aacDecInfo)
+        return;
 
 #ifdef AAC_ENABLE_SBR
-	FreeSBR(aacDecInfo);
+    FreeSBR(aacDecInfo);
 #endif
-	FreeBuffers(aacDecInfo);
+    FreeBuffers(aacDecInfo);
 }
 
 /**************************************************************************************
@@ -119,17 +117,17 @@ void AACFreeDecoder(HAACDecoder hAACDecoder)
  * Return:      offset to first sync word (bytes from start of buf)
  *              -1 if sync not found after searching nBytes
  **************************************************************************************/
-int AACFindSyncWord(unsigned char *buf, int nBytes)
-{
-	int i;
+int AACFindSyncWord(unsigned char *buf, int nBytes) {
+    int i;
 
-	/* find byte-aligned syncword (12 bits = 0xFFF) */
-	for (i = 0; i < nBytes - 1; i++) {
-		if ( (buf[i+0] & SYNCWORDH) == SYNCWORDH && (buf[i+1] & SYNCWORDL) == SYNCWORDL )
-			return i;
-	}
-	
-	return -1;
+    /* find byte-aligned syncword (12 bits = 0xFFF) */
+    for (i = 0; i < nBytes - 1; i++) {
+        if ((buf[i + 0] & SYNCWORDH) == SYNCWORDH &&
+            (buf[i + 1] & SYNCWORDL) == SYNCWORDL)
+            return i;
+    }
+
+    return -1;
 }
 
 /**************************************************************************************
@@ -147,31 +145,32 @@ int AACFindSyncWord(unsigned char *buf, int nBytes)
  *
  * Notes:       call this right after calling AACDecode()
  **************************************************************************************/
-void AACGetLastFrameInfo(HAACDecoder hAACDecoder, AACFrameInfo *aacFrameInfo)
-{
-	AACDecInfo *aacDecInfo = (AACDecInfo *)hAACDecoder;
+void AACGetLastFrameInfo(HAACDecoder hAACDecoder, AACFrameInfo *aacFrameInfo) {
+    AACDecInfo *aacDecInfo = (AACDecInfo *)hAACDecoder;
 
-	if (!aacDecInfo) {
-		aacFrameInfo->bitRate =       0;
-		aacFrameInfo->nChans =        0;
-		aacFrameInfo->sampRateCore =  0;
-		aacFrameInfo->sampRateOut =   0;
-		aacFrameInfo->bitsPerSample = 0;
-		aacFrameInfo->outputSamps =   0;
-		aacFrameInfo->profile =       0;
-		aacFrameInfo->tnsUsed =       0;
-		aacFrameInfo->pnsUsed =       0;
-	} else {
-		aacFrameInfo->bitRate =       aacDecInfo->bitRate;
-		aacFrameInfo->nChans =        aacDecInfo->nChans;
-		aacFrameInfo->sampRateCore =  aacDecInfo->sampRate;
-		aacFrameInfo->sampRateOut =   aacDecInfo->sampRate * (aacDecInfo->sbrEnabled ? 2 : 1);
-		aacFrameInfo->bitsPerSample = 16;
-		aacFrameInfo->outputSamps =   aacDecInfo->nChans * AAC_MAX_NSAMPS * (aacDecInfo->sbrEnabled ? 2 : 1);
-		aacFrameInfo->profile =       aacDecInfo->profile;
-		aacFrameInfo->tnsUsed =       aacDecInfo->tnsUsed;
-		aacFrameInfo->pnsUsed =       aacDecInfo->pnsUsed;
-	}
+    if (!aacDecInfo) {
+        aacFrameInfo->bitRate = 0;
+        aacFrameInfo->nChans = 0;
+        aacFrameInfo->sampRateCore = 0;
+        aacFrameInfo->sampRateOut = 0;
+        aacFrameInfo->bitsPerSample = 0;
+        aacFrameInfo->outputSamps = 0;
+        aacFrameInfo->profile = 0;
+        aacFrameInfo->tnsUsed = 0;
+        aacFrameInfo->pnsUsed = 0;
+    } else {
+        aacFrameInfo->bitRate = aacDecInfo->bitRate;
+        aacFrameInfo->nChans = aacDecInfo->nChans;
+        aacFrameInfo->sampRateCore = aacDecInfo->sampRate;
+        aacFrameInfo->sampRateOut =
+            aacDecInfo->sampRate * (aacDecInfo->sbrEnabled ? 2 : 1);
+        aacFrameInfo->bitsPerSample = 16;
+        aacFrameInfo->outputSamps = aacDecInfo->nChans * AAC_MAX_NSAMPS *
+                                    (aacDecInfo->sbrEnabled ? 2 : 1);
+        aacFrameInfo->profile = aacDecInfo->profile;
+        aacFrameInfo->tnsUsed = aacDecInfo->tnsUsed;
+        aacFrameInfo->pnsUsed = aacDecInfo->pnsUsed;
+    }
 }
 
 /**************************************************************************************
@@ -194,18 +193,20 @@ void AACGetLastFrameInfo(HAACDecoder hAACDecoder, AACFrameInfo *aacFrameInfo)
  *                aacFrameInfo to configure its internal state (useful when the
  *                source is MP4 format, for example)
  **************************************************************************************/
-int AACSetRawBlockParams(HAACDecoder hAACDecoder, int copyLast, AACFrameInfo *aacFrameInfo)
-{
-	AACDecInfo *aacDecInfo = (AACDecInfo *)hAACDecoder;
+int AACSetRawBlockParams(HAACDecoder hAACDecoder, int copyLast,
+                         AACFrameInfo *aacFrameInfo) {
+    AACDecInfo *aacDecInfo = (AACDecInfo *)hAACDecoder;
 
-	if (!aacDecInfo)
-		return ERR_AAC_NULL_POINTER;
+    if (!aacDecInfo)
+        return ERR_AAC_NULL_POINTER;
 
-	aacDecInfo->format = AAC_FF_RAW;
-	if (copyLast)
-		return SetRawBlockParams(aacDecInfo, 1, 0, 0, 0);
-	else
-		return SetRawBlockParams(aacDecInfo, 0, aacFrameInfo->nChans, aacFrameInfo->sampRateCore, aacFrameInfo->profile);
+    aacDecInfo->format = AAC_FF_RAW;
+    if (copyLast)
+        return SetRawBlockParams(aacDecInfo, 1, 0, 0, 0);
+    else
+        return SetRawBlockParams(aacDecInfo, 0, aacFrameInfo->nChans,
+                                 aacFrameInfo->sampRateCore,
+                                 aacFrameInfo->profile);
 }
 
 /**************************************************************************************
@@ -219,34 +220,33 @@ int AACSetRawBlockParams(HAACDecoder hAACDecoder, int copyLast, AACFrameInfo *aa
  *
  * Return:      0 if successful, error code (< 0) if error
  **************************************************************************************/
-int AACFlushCodec(HAACDecoder hAACDecoder)
-{
-	int ch;
-	AACDecInfo *aacDecInfo = (AACDecInfo *)hAACDecoder;
+int AACFlushCodec(HAACDecoder hAACDecoder) {
+    int ch;
+    AACDecInfo *aacDecInfo = (AACDecInfo *)hAACDecoder;
 
-	if (!aacDecInfo)
-		return ERR_AAC_NULL_POINTER;
+    if (!aacDecInfo)
+        return ERR_AAC_NULL_POINTER;
 
-	/* reset common state variables which change per-frame
+    /* reset common state variables which change per-frame
 	 * don't touch state variables which are (usually) constant for entire clip 
 	 *   (nChans, sampRate, profile, format, sbrEnabled)
 	 */
-	aacDecInfo->prevBlockID = AAC_ID_INVALID;
-	aacDecInfo->currBlockID = AAC_ID_INVALID;
-	aacDecInfo->currInstTag = -1;
-	for (ch = 0; ch < MAX_NCHANS_ELEM; ch++)
-		aacDecInfo->sbDeinterleaveReqd[ch] = 0;
-	aacDecInfo->adtsBlocksLeft = 0;
-	aacDecInfo->tnsUsed = 0;
-	aacDecInfo->pnsUsed = 0;
+    aacDecInfo->prevBlockID = AAC_ID_INVALID;
+    aacDecInfo->currBlockID = AAC_ID_INVALID;
+    aacDecInfo->currInstTag = -1;
+    for (ch = 0; ch < MAX_NCHANS_ELEM; ch++)
+        aacDecInfo->sbDeinterleaveReqd[ch] = 0;
+    aacDecInfo->adtsBlocksLeft = 0;
+    aacDecInfo->tnsUsed = 0;
+    aacDecInfo->pnsUsed = 0;
 
-	/* reset internal codec state (flush overlap buffers, etc.) */
-	FlushCodec(aacDecInfo);
+    /* reset internal codec state (flush overlap buffers, etc.) */
+    FlushCodec(aacDecInfo);
 #ifdef AAC_ENABLE_SBR
-	FlushCodecSBR(aacDecInfo);
+    FlushCodecSBR(aacDecInfo);
 #endif
 
-	return ERR_AAC_NONE;
+    return ERR_AAC_NONE;
 }
 
 /**************************************************************************************
@@ -271,189 +271,185 @@ int AACFlushCodec(HAACDecoder hAACDecoder)
  *                successfully decoded, so if ERR_AAC_INDATA_UNDERFLOW is returned
  *                just call AACDecode again with more data in inbuf
  **************************************************************************************/
-int AACDecode(HAACDecoder hAACDecoder, unsigned char **inbuf, int *bytesLeft, short *outbuf)
-{
-	int err, offset, bitOffset, bitsAvail;
-	int ch, baseChan, elementChans;
-	unsigned char *inptr;
-	AACDecInfo *aacDecInfo = (AACDecInfo *)hAACDecoder;
+int AACDecode(HAACDecoder hAACDecoder, unsigned char **inbuf, int *bytesLeft,
+              short *outbuf) {
+    int err, offset, bitOffset, bitsAvail;
+    int ch, baseChan, elementChans;
+    unsigned char *inptr;
+    AACDecInfo *aacDecInfo = (AACDecInfo *)hAACDecoder;
 #ifdef AAC_ENABLE_SBR
-	int baseChanSBR, elementChansSBR;
+    int baseChanSBR, elementChansSBR;
 #endif
 
-	if (!aacDecInfo)
-		return ERR_AAC_NULL_POINTER;
+    if (!aacDecInfo)
+        return ERR_AAC_NULL_POINTER;
 
-	/* make local copies (see "Notes" above) */
-	inptr = *inbuf;
-	bitOffset = 0;
-	bitsAvail = (*bytesLeft) << 3;
+    /* make local copies (see "Notes" above) */
+    inptr = *inbuf;
+    bitOffset = 0;
+    bitsAvail = (*bytesLeft) << 3;
 
-	/* first time through figure out what the file format is */
-	if (aacDecInfo->format == AAC_FF_Unknown) {
-		if (bitsAvail < 32)
-			return ERR_AAC_INDATA_UNDERFLOW;
-		
-		if (IS_ADIF(inptr)) {
-			/* unpack ADIF header */
-			aacDecInfo->format = AAC_FF_ADIF;
-			err = UnpackADIFHeader(aacDecInfo, &inptr, &bitOffset, &bitsAvail);
-			if (err)
-				return err;
-		} else {
-			/* assume ADTS by default */
-			aacDecInfo->format = AAC_FF_ADTS;
-		}
-	} 
-	
+    /* first time through figure out what the file format is */
+    if (aacDecInfo->format == AAC_FF_Unknown) {
+        if (bitsAvail < 32)
+            return ERR_AAC_INDATA_UNDERFLOW;
 
-	
-	/* if ADTS, search for start of next frame */
-	if (aacDecInfo->format == AAC_FF_ADTS) {
-		/* can have 1-4 raw data blocks per ADTS frame (header only present for first one) */
-		if (aacDecInfo->adtsBlocksLeft == 0) {
-			offset = AACFindSyncWord(inptr, bitsAvail >> 3);
-			if (offset < 0)
-				return ERR_AAC_INDATA_UNDERFLOW;
-			inptr += offset;
-			bitsAvail -= (offset << 3);
+        if (IS_ADIF(inptr)) {
+            /* unpack ADIF header */
+            aacDecInfo->format = AAC_FF_ADIF;
+            err = UnpackADIFHeader(aacDecInfo, &inptr, &bitOffset, &bitsAvail);
+            if (err)
+                return err;
+        } else {
+            /* assume ADTS by default */
+            aacDecInfo->format = AAC_FF_ADTS;
+        }
+    }
 
-			err = UnpackADTSHeader(aacDecInfo, &inptr, &bitOffset, &bitsAvail);
-			if (err)
-				return err;
+    /* if ADTS, search for start of next frame */
+    if (aacDecInfo->format == AAC_FF_ADTS) {
+        /* can have 1-4 raw data blocks per ADTS frame (header only present for first one) */
+        if (aacDecInfo->adtsBlocksLeft == 0) {
+            offset = AACFindSyncWord(inptr, bitsAvail >> 3);
+            if (offset < 0)
+                return ERR_AAC_INDATA_UNDERFLOW;
+            inptr += offset;
+            bitsAvail -= (offset << 3);
 
-			if (aacDecInfo->nChans == -1) {
-				/* figure out implicit channel mapping if necessary */
-				err = GetADTSChannelMapping(aacDecInfo, inptr, bitOffset, bitsAvail);
-				if (err)
-					return err;
-			}
-		}
-		aacDecInfo->adtsBlocksLeft--;
-	} else if (aacDecInfo->format == AAC_FF_RAW) {
-		err = PrepareRawBlock(aacDecInfo);
-		if (err)
-			return err;
-	}
+            err = UnpackADTSHeader(aacDecInfo, &inptr, &bitOffset, &bitsAvail);
+            if (err)
+                return err;
 
+            if (aacDecInfo->nChans == -1) {
+                /* figure out implicit channel mapping if necessary */
+                err = GetADTSChannelMapping(aacDecInfo, inptr, bitOffset,
+                                            bitsAvail);
+                if (err)
+                    return err;
+            }
+        }
+        aacDecInfo->adtsBlocksLeft--;
+    } else if (aacDecInfo->format == AAC_FF_RAW) {
+        err = PrepareRawBlock(aacDecInfo);
+        if (err)
+            return err;
+    }
 
+    /* check for valid number of channels */
+    if (aacDecInfo->nChans > AAC_MAX_NCHANS || aacDecInfo->nChans <= 0)
+        return ERR_AAC_NCHANS_TOO_HIGH;
 
-	/* check for valid number of channels */
-	if (aacDecInfo->nChans > AAC_MAX_NCHANS || aacDecInfo->nChans <= 0)
-		return ERR_AAC_NCHANS_TOO_HIGH;
+    /* will be set later if active in this frame */
+    aacDecInfo->tnsUsed = 0;
+    aacDecInfo->pnsUsed = 0;
 
-	/* will be set later if active in this frame */
-	aacDecInfo->tnsUsed = 0;
-	aacDecInfo->pnsUsed = 0;
+    bitOffset = 0;
+    baseChan = 0;
+#ifdef AAC_ENABLE_SBR
+    baseChanSBR = 0;
+#endif
+    do {
+        /* parse next syntactic element */
+        err = DecodeNextElement(aacDecInfo, &inptr, &bitOffset, &bitsAvail);
+        if (err)
+            return err;
 
-	bitOffset = 0;
-	baseChan = 0;
-#ifdef AAC_ENABLE_SBR	
-	baseChanSBR = 0;
-#endif	
-	do {
-	
+        elementChans = elementNumChans[aacDecInfo->currBlockID];
+        if (baseChan + elementChans > AAC_MAX_NCHANS)
+            return ERR_AAC_NCHANS_TOO_HIGH;
 
-	
-		/* parse next syntactic element */
-		err = DecodeNextElement(aacDecInfo, &inptr, &bitOffset, &bitsAvail);
-		if (err)
-			return err;
-		
-		elementChans = elementNumChans[aacDecInfo->currBlockID];
-		if (baseChan + elementChans > AAC_MAX_NCHANS)
-			return ERR_AAC_NCHANS_TOO_HIGH;
+        /* noiseless decoder and dequantizer */
+        for (ch = 0; ch < elementChans; ch++) {
+            PROFILE_START("noiseless decoder");
+            err = DecodeNoiselessData(aacDecInfo, &inptr, &bitOffset,
+                                      &bitsAvail, ch);
+            PROFILE_END();
 
-		/* noiseless decoder and dequantizer */
-		for (ch = 0; ch < elementChans; ch++) {
-      PROFILE_START("noiseless decoder");
-			err = DecodeNoiselessData(aacDecInfo, &inptr, &bitOffset, &bitsAvail, ch);
-      PROFILE_END();
-      			
-			if (err)
-				return err;
+            if (err)
+                return err;
 
-			PROFILE_START("dequant");
-			if (Dequantize(aacDecInfo, ch))
-				return ERR_AAC_DEQUANT;
-      PROFILE_END();
-		}
+            PROFILE_START("dequant");
+            if (Dequantize(aacDecInfo, ch))
+                return ERR_AAC_DEQUANT;
+            PROFILE_END();
+        }
 
-    PROFILE_START("mid-side and intensity stereo");
-		/* mid-side and intensity stereo */
-		if (aacDecInfo->currBlockID == AAC_ID_CPE) {
-			if (StereoProcess(aacDecInfo))
-				return ERR_AAC_STEREO_PROCESS;
-		}
-    PROFILE_END();
+        PROFILE_START("mid-side and intensity stereo");
+        /* mid-side and intensity stereo */
+        if (aacDecInfo->currBlockID == AAC_ID_CPE) {
+            if (StereoProcess(aacDecInfo))
+                return ERR_AAC_STEREO_PROCESS;
+        }
+        PROFILE_END();
 
+        /* PNS, TNS, inverse transform */
+        for (ch = 0; ch < elementChans; ch++) {
+            PROFILE_START("PNS");
+            if (PNS(aacDecInfo, ch))
+                return ERR_AAC_PNS;
+            PROFILE_END();
 
-		/* PNS, TNS, inverse transform */
-		for (ch = 0; ch < elementChans; ch++) {
-      PROFILE_START("PNS");
-			if (PNS(aacDecInfo, ch))
-				return ERR_AAC_PNS;
-      PROFILE_END();
+            if (aacDecInfo->sbDeinterleaveReqd[ch]) {
+                /* deinterleave short blocks, if required */
+                if (DeinterleaveShortBlocks(aacDecInfo, ch))
+                    return ERR_AAC_SHORT_BLOCK_DEINT;
+                aacDecInfo->sbDeinterleaveReqd[ch] = 0;
+            }
 
-			if (aacDecInfo->sbDeinterleaveReqd[ch]) {
-				/* deinterleave short blocks, if required */
-				if (DeinterleaveShortBlocks(aacDecInfo, ch))
-					return ERR_AAC_SHORT_BLOCK_DEINT;
-				aacDecInfo->sbDeinterleaveReqd[ch] = 0;
-			}
+            PROFILE_START("TNS");
+            if (TNSFilter(aacDecInfo, ch))
+                return ERR_AAC_TNS;
+            PROFILE_END();
 
-      PROFILE_START("TNS");
-			if (TNSFilter(aacDecInfo, ch))
-				return ERR_AAC_TNS;
-      PROFILE_END();
-	
-      PROFILE_START("IMDCT");
-			if (IMDCT(aacDecInfo, ch, baseChan + ch, outbuf))
-				return ERR_AAC_IMDCT;
-      PROFILE_END();
-		}
+            PROFILE_START("IMDCT");
+            if (IMDCT(aacDecInfo, ch, baseChan + ch, outbuf))
+                return ERR_AAC_IMDCT;
+            PROFILE_END();
+        }
 
 #ifdef AAC_ENABLE_SBR
-		if (aacDecInfo->sbrEnabled && (aacDecInfo->currBlockID == AAC_ID_FIL || aacDecInfo->currBlockID == AAC_ID_LFE)) {
-			if (aacDecInfo->currBlockID == AAC_ID_LFE)
-				elementChansSBR = elementNumChans[AAC_ID_LFE];
-			else if (aacDecInfo->currBlockID == AAC_ID_FIL && (aacDecInfo->prevBlockID == AAC_ID_SCE || aacDecInfo->prevBlockID == AAC_ID_CPE))
-				elementChansSBR = elementNumChans[aacDecInfo->prevBlockID];
-			else 
-				elementChansSBR = 0;
-			
-			if (baseChanSBR + elementChansSBR > AAC_MAX_NCHANS)
-				return ERR_AAC_SBR_NCHANS_TOO_HIGH;
+        if (aacDecInfo->sbrEnabled && (aacDecInfo->currBlockID == AAC_ID_FIL ||
+                                       aacDecInfo->currBlockID == AAC_ID_LFE)) {
+            if (aacDecInfo->currBlockID == AAC_ID_LFE)
+                elementChansSBR = elementNumChans[AAC_ID_LFE];
+            else if (aacDecInfo->currBlockID == AAC_ID_FIL &&
+                     (aacDecInfo->prevBlockID == AAC_ID_SCE ||
+                      aacDecInfo->prevBlockID == AAC_ID_CPE))
+                elementChansSBR = elementNumChans[aacDecInfo->prevBlockID];
+            else
+                elementChansSBR = 0;
 
-			/* parse SBR extension data if present (contained in a fill element) */
-			if (DecodeSBRBitstream(aacDecInfo, baseChanSBR))
-				return ERR_AAC_SBR_BITSTREAM;
+            if (baseChanSBR + elementChansSBR > AAC_MAX_NCHANS)
+                return ERR_AAC_SBR_NCHANS_TOO_HIGH;
 
-			/* apply SBR */
-			if (DecodeSBRData(aacDecInfo, baseChanSBR, outbuf))
-				return ERR_AAC_SBR_DATA;
+            /* parse SBR extension data if present (contained in a fill element) */
+            if (DecodeSBRBitstream(aacDecInfo, baseChanSBR))
+                return ERR_AAC_SBR_BITSTREAM;
 
-			baseChanSBR += elementChansSBR;
-		}
+            /* apply SBR */
+            if (DecodeSBRData(aacDecInfo, baseChanSBR, outbuf))
+                return ERR_AAC_SBR_DATA;
+
+            baseChanSBR += elementChansSBR;
+        }
 #endif
-		
-		baseChan += elementChans;
-	} while (aacDecInfo->currBlockID != AAC_ID_END);
 
-	/* byte align after each raw_data_block */
-	if (bitOffset) {
-		inptr++;
-		bitsAvail -= (8-bitOffset);
-		bitOffset = 0;
-		if (bitsAvail < 0)
-			return ERR_AAC_INDATA_UNDERFLOW;
-	}
+        baseChan += elementChans;
+    } while (aacDecInfo->currBlockID != AAC_ID_END);
 
-	/* update pointers */
-	aacDecInfo->frameCount++;
-	*bytesLeft -= (inptr - *inbuf);
-	*inbuf = inptr;
+    /* byte align after each raw_data_block */
+    if (bitOffset) {
+        inptr++;
+        bitsAvail -= (8 - bitOffset);
+        bitOffset = 0;
+        if (bitsAvail < 0)
+            return ERR_AAC_INDATA_UNDERFLOW;
+    }
 
-	return ERR_AAC_NONE;
+    /* update pointers */
+    aacDecInfo->frameCount++;
+    *bytesLeft -= (inptr - *inbuf);
+    *inbuf = inptr;
+
+    return ERR_AAC_NONE;
 }
-
