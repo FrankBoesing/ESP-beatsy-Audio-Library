@@ -54,6 +54,8 @@
 #ifndef _ASSEMBLY_H
 #define _ASSEMBLY_H
 
+#include <stdint.h>
+
 /* toolchain:           MSFT Visual C++
  * target architecture: x86
  */
@@ -454,6 +456,14 @@ static inline Word64 MADD64(Word64 sum64, int x, int y) {
 
 typedef int64_t Word64;
 
+typedef union _U64 {
+    Word64 w64;
+    struct {
+        uint32_t lo32;
+        int32_t hi32;
+    } r;
+} U64;
+
 static inline int MULSHIFT32(int x, int y) {
     return (int)(((int64_t)x * (int64_t)y) >> 32);
 }
@@ -495,6 +505,16 @@ static inline Word64 SAR64(Word64 value, int shift) {
         int sign = (y) >> 31;                                                  \
         if (sign != (y) >> (n)) {                                              \
             (y) = sign ^ ((1 << (n)) - 1);                                     \
+        }                                                                      \
+    }
+
+#define CLIP_2N_SHIFT(y, n)                                                    \
+    {                                                                          \
+        int sign = (y) >> 31;                                                  \
+        if (sign != (y) >> (30 - (n))) {                                       \
+            (y) = sign ^ (0x3fffffff);                                         \
+        } else {                                                               \
+            (y) = (y) << (n);                                                  \
         }                                                                      \
     }
 
