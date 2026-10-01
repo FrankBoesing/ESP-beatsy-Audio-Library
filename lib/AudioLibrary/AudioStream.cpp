@@ -24,6 +24,10 @@ uint32_t AudioStream::cpu_time_total_max_us = 0;
 
 AudioStream *AudioStream::first_update = nullptr;
 
+#if AUDIO_STREAM_SORT_IO
+bool AudioStream::update_list_dirty = false;
+#endif
+
 portMUX_TYPE AudioStream::audio_mux = portMUX_INITIALIZER_UNLOCKED;
 
 TaskHandle_t AudioStream::audio_task_handle = nullptr;
@@ -66,6 +70,48 @@ AudioStream::AudioStream(unsigned char ninput, audio_block_t **iqueue)
 
     portEXIT_CRITICAL(&audio_mux);
 }
+
+#if AUDIO_STREAM_SORT_IO
+void AudioStream::sort_update_list_for_io(void) {
+    AudioStream *heads[3] = {};
+    AudioStream *tails[3] = {};
+
+    AudioStream *stream = first_update;
+    first_update = nullptr;
+
+    while (stream != nullptr) {
+        AudioStream *next = stream->next_update;
+        stream->next_update = nullptr;
+
+        const unsigned int group =
+            stream->num_inputs == 0 ? 0U
+                                    : (stream->destination_list == nullptr ? 2U
+                                                                           : 1U);
+
+        if (heads[group] == nullptr) {
+            heads[group] = stream;
+        } else {
+            tails[group]->next_update = stream;
+        }
+
+        tails[group] = stream;
+        stream = next;
+    }
+
+    AudioStream **tail = &first_update;
+
+    for (unsigned int group = 0; group < 3; ++group) {
+        if (heads[group] == nullptr) {
+            continue;
+        }
+
+        *tail = heads[group];
+        tail = &tails[group]->next_update;
+    }
+
+    *tail = nullptr;
+}
+#endif
 
 // =============================================================================
 // Audio timing / scheduler
@@ -278,6 +324,12 @@ void AudioStream::process_all_now(void) {
 
     AudioStream *stream;
     portENTER_CRITICAL(&audio_mux);
+#if AUDIO_STREAM_SORT_IO
+    if (update_list_dirty) {
+        sort_update_list_for_io();
+        update_list_dirty = false;
+    }
+#endif
     stream = first_update;
     portEXIT_CRITICAL(&audio_mux);
 
@@ -353,6 +405,13 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num,
         data[i].ref_count = 0;
         data[i].reserved1 = 0;
     }
+
+#if AUDIO_STREAM_SORT_IO
+    if (!update_scheduled) {
+        sort_update_list_for_io();
+        update_list_dirty = false;
+    }
+#endif
 
     portEXIT_CRITICAL(&audio_mux);
 
@@ -779,6 +838,9 @@ int AudioConnection::connect(void) {
     dst->active = true;
 
     isConnected = true;
+#if AUDIO_STREAM_SORT_IO
+    AudioStream::update_list_dirty = true;
+#endif
 
     portEXIT_CRITICAL(&AudioStream::audio_mux);
 
@@ -874,6 +936,9 @@ int AudioConnection::disconnect(void) {
 
     isConnected = false;
     next_dest = nullptr;
+#if AUDIO_STREAM_SORT_IO
+    AudioStream::update_list_dirty = true;
+#endif
 
     portEXIT_CRITICAL(&AudioStream::audio_mux);
 

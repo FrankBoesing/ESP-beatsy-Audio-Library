@@ -34,6 +34,30 @@ einem gesendeten DMA-Block. AudioI2STx wartet bis zu 100 ms auf Queue-Daten;
 der I2S-Schreibaufruf hat ebenfalls ein 100-ms-Timeout. Diese Timeouts sind
 Fehler-/Leerlaufgrenzen, nicht die Audio-Blockperiode.
 
+Update-Reihenfolge
+------------------
+Standardmaessig sortiert die Library die AudioStream-Update-Liste bei der
+AudioMemory()-Initialisierung in drei stabile Gruppen:
+
+1. Streams ohne Audio-Eingaenge (Quellen, z. B. Player und Synthesizer)
+2. Streams mit Ein- und Ausgaengen (Mixer und Effekte; untereinander bleibt
+   die Konstruktionsreihenfolge erhalten)
+3. Streams ohne nachgelagerte Connections (typischerweise Ausgaenge wie I2S)
+
+Dadurch koennen Quellen Daten im selben Scheduler-Zyklus bis zu spaeter
+aktualisierten Zielen weiterreichen und eine sonst entstehende Blocklatenz
+vermeiden. Dynamische connect()/disconnect()-Aenderungen werden am Anfang des
+naechsten Audio-Zyklus neu sortiert.
+
+Die Gruppensortierung ist keine vollstaendige topologische Sortierung:
+Mehrere hintereinanderliegende Effekte behalten ihre Konstruktionsreihenfolge.
+Rueckkopplungen koennen nicht vollstaendig geordnet werden.
+
+Die Sortierung laesst sich fuer einen Build abschalten, um die urspruengliche
+Konstruktionsreihenfolge beizubehalten:
+
+    -DAUDIO_STREAM_SORT_IO=0
+
 Puffer
 ------
 Audio-Blockpool       AudioMemory(n) stellt n Bloecke bereit. Jeder Block

@@ -18,6 +18,10 @@
 #define AUDIO_SAMPLE_RATE_EXACT 44100.0f
 #endif
 
+#ifndef AUDIO_STREAM_SORT_IO
+#define AUDIO_STREAM_SORT_IO 1
+#endif
+
 #define AUDIO_SAMPLE_RATE AUDIO_SAMPLE_RATE_EXACT
 
 // -----------------------------------------------------------------------------
@@ -227,6 +231,11 @@ class AudioStream {
     static AudioStream *first_update;
 
     AudioStream *next_update;
+
+  #if AUDIO_STREAM_SORT_IO
+    static bool update_list_dirty;
+    static void sort_update_list_for_io(void);
+  #endif
 
     // -------------------------------------------------------------------------
     // Internal helpers
