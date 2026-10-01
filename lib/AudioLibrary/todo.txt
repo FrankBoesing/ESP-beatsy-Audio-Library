@@ -1,3 +1,5 @@
 TODOs:
 
+- add aac player
 - use esp32-s3 dsp when possible (..#ifdef...)
+- optimize for speed and size

@@ -1,9 +1,13 @@
+
 #include <Arduino.h>
 #include <SD_MMC.h>
 #include <Audio.h>
 #include "play_mp3.h"
 #include "output_i2s.h"
 #include "control_es8388.h"
+
+
+#define SOFTCODEC_METRICS 1
 
 // ============================================================================
 // Audio objects

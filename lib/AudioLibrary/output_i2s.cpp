@@ -31,6 +31,7 @@ bool AudioOutputI2S::beginHardware() {
     return beginInternal();
 }
 
+OSIZE
 bool AudioOutputI2S::beginInternal() {
     if (running) {
         return true;
@@ -52,7 +53,7 @@ bool AudioOutputI2S::beginInternal() {
      * master controller, explicit DMA sizing, automatic zero output
      * when no data is available.
      */
-    std::memset(&chanConfig, 0, sizeof(chanConfig));
+    memset(&chanConfig, 0, sizeof(chanConfig));
     chanConfig.id = I2S_NUM_AUTO;
     chanConfig.role = I2S_ROLE_MASTER;
     chanConfig.dma_desc_num = DMA_DESC_NUM;
@@ -77,7 +78,7 @@ bool AudioOutputI2S::beginInternal() {
      * The ES8388 reference implementation uses 32-bit slots here,
      * even though our AudioStream blocks contain 16-bit PCM.
      */
-    std::memset(&stdConfig, 0, sizeof(stdConfig));
+    memset(&stdConfig, 0, sizeof(stdConfig));
 
     stdConfig.clk_cfg.sample_rate_hz =
         static_cast<uint32_t>(AudioStream::sampleRate());
@@ -177,6 +178,7 @@ bool AudioOutputI2S::beginInternal() {
     return true;
 }
 
+OSIZE
 void AudioOutputI2S::end() {
     if (!running && txQueue == nullptr && txHandle == nullptr &&
         !externalClockActive) {
@@ -289,6 +291,8 @@ bool IRAM_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t,
 
 OSPEED
 void AudioOutputI2S::txTaskLoop() {
+    static uint32_t writeErrorCount = 0;
+    static uint32_t lastErrorLogMs = 0;
     /*
      * One stereo audio block contains:
      *
@@ -310,18 +314,27 @@ void AudioOutputI2S::txTaskLoop() {
             continue;
         }
 
-        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            const int32_t left = pair.left != nullptr
-                                     ? static_cast<int32_t>(pair.left->data[i])
-                                     : 0;
-
-            const int32_t right =
-                pair.right != nullptr
-                    ? static_cast<int32_t>(pair.right->data[i])
-                    : 0;
-
-            buffer[2 * i] = left << 16;
-            buffer[2 * i + 1] = right << 16;
+        if (pair.left != nullptr && pair.right != nullptr) {
+            #pragma GCC unroll 4
+            for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                buffer[2 * i] = static_cast<int32_t>(pair.left->data[i]) << 16;
+                buffer[2 * i + 1] = static_cast<int32_t>(pair.right->data[i]) << 16;
+            }
+        } else if (pair.left != nullptr) {
+            #pragma GCC unroll 4
+            for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                buffer[2 * i] = static_cast<int32_t>(pair.left->data[i]) << 16;
+                buffer[2 * i + 1] = 0;
+            }
+        } else if (pair.right != nullptr) {
+            #pragma GCC unroll 4
+            for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                buffer[2 * i] = 0;
+                buffer[2 * i + 1] = static_cast<int32_t>(pair.right->data[i]) << 16;
+            }
+        } else {
+                // Beide nullptr: Direkter Speicher-Block-Reset statt Schleife
+                memset(buffer, 0, AUDIO_BLOCK_SAMPLES * 2 * sizeof(buffer[0]));
         }
 
         size_t bytesWritten = 0;
@@ -335,13 +348,12 @@ void AudioOutputI2S::txTaskLoop() {
             txHandle, buffer, sizeof(buffer), &bytesWritten, 100);
 
         if (err != ESP_OK || bytesWritten != sizeof(buffer)) {
-            static uint32_t writeErrorCount = 0;
-            static uint32_t lastErrorLogMs = 0;
+
             const uint32_t now = millis();
             ++writeErrorCount;
 
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
-                Serial.printf("I2S TX error #%lu: %s, bytes=%u/%u\n",
+                ESP_LOGE("I2S","TX error #%lu: %s, bytes=%u/%u\n",
                               static_cast<unsigned long>(writeErrorCount),
                               esp_err_to_name(err),
                               static_cast<unsigned>(bytesWritten),

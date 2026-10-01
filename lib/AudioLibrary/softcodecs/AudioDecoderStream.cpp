@@ -427,15 +427,13 @@ void AudioDecoderStream::update() {
      * If update wins this critical section first, stopDecoderTask() sees
      * _updateRunning=true and waits until this invocation has finished.
      */
-    portENTER_CRITICAL(&_decoderMux);
 
     if (_decoderStopRequested) {
-        portEXIT_CRITICAL(&_decoderMux);
         return;
     }
 
+    portENTER_CRITICAL(&_decoderMux);
     _updateRunning = true;
-
     portEXIT_CRITICAL(&_decoderMux);
 
     audio_block_t *left = allocate();
@@ -458,10 +456,6 @@ void AudioDecoderStream::update() {
         return;
     }
 
-    std::memset(left->data, 0, sizeof(left->data));
-
-    std::memset(right->data, 0, sizeof(right->data));
-
     size_t outputFrames = 0;
 
     while (outputFrames < AUDIO_BLOCK_SAMPLES) {
@@ -479,7 +473,6 @@ void AudioDecoderStream::update() {
         }
 
         const size_t availableSamples = totalSamples - _readPosition;
-
         const size_t availableFrames = availableSamples / 2U;
 
         if (availableFrames == 0) {
@@ -493,9 +486,9 @@ void AudioDecoderStream::update() {
 
         const int16_t *source = _pcm[index] + _readPosition;
 
+        #pragma GCC unroll 2
         for (size_t i = 0; i < frames; ++i) {
             left->data[outputFrames + i] = source[2U * i];
-
             right->data[outputFrames + i] = source[2U * i + 1U];
         }
 
@@ -505,6 +498,14 @@ void AudioDecoderStream::update() {
         if (_readPosition >= totalSamples) {
             releaseReadBuffer(static_cast<uint8_t>(index));
         }
+    }
+
+    // Nullen nur noch gezielt am Ende auffüllen, falls nicht genug PCM-Daten
+    // für einen ganzen Block da waren.
+    if (outputFrames < AUDIO_BLOCK_SAMPLES) {
+        const size_t remainingBytes = (AUDIO_BLOCK_SAMPLES - outputFrames) * sizeof(int16_t);
+        memset(&left->data[outputFrames], 0, remainingBytes);
+        memset(&right->data[outputFrames], 0, remainingBytes);
     }
 
     transmit(left, 0);

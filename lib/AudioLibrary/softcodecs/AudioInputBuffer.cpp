@@ -147,9 +147,7 @@ uint8_t *AudioInputBuffer::getWriteRegion(size_t &length) {
     }
 
     const size_t end_of_a = region_a_start + region_a_length;
-
     const size_t free_after_a = buffer_size - end_of_a;
-
     const size_t free_before_a = region_a_start;
 
     if (region_a_length == 0) {
@@ -187,9 +185,7 @@ uint8_t *AudioInputBuffer::acquireWrite(size_t &length) {
     }
 
     write_acquired = true;
-
     write_start = static_cast<size_t>(ptr - buffer);
-
     write_length = length;
 
     return ptr;
