@@ -84,7 +84,6 @@ void AudioMixer4::update(void) {
         if (!out) {
             // The first available input becomes the destination block.
             out = receiveWritable(channel);
-
             if (out) {
                 if (mult != MULTI_UNITYGAIN) {
                     applyGain(out->data, mult);
@@ -93,10 +92,8 @@ void AudioMixer4::update(void) {
         } else {
             // Further inputs are mixed into the existing destination.
             in = receiveReadOnly(channel);
-
             if (in) {
-                applyGainThenAdd(out->data, in->data,
-                                 mult); // mult wird direkt genutzt
+                applyGainThenAdd(out->data, in->data, mult); // mult wird direkt genutzt
                 release(in);
             }
         }
