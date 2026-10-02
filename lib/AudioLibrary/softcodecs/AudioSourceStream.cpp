@@ -41,6 +41,8 @@ bool AudioSourceStream::open(Stream &stream) {
     _receivedBytes = 0;
     _wouldBlockCount = 0;
     _networkWaitMs = 0;
+    _lastDataMs = millis();
+    _streamError = false;
     _readIndex = 0;
     _writeIndex = 0;
     _bufferedBytes = 0;
@@ -79,8 +81,10 @@ AudioSourceStatus AudioSourceStream::read(uint8_t *buffer, size_t requested,
     readIndex = _readIndex;
     if (bytesToRead == 0) {
         ++_wouldBlockCount;
+        const bool streamError = _streamError;
         portEXIT_CRITICAL(&_bufferMux);
-        return AudioSourceStatus::WOULD_BLOCK;
+        return streamError ? AudioSourceStatus::ERROR
+                           : AudioSourceStatus::WOULD_BLOCK;
     }
     portEXIT_CRITICAL(&_bufferMux);
 
@@ -141,6 +145,8 @@ void AudioSourceStream::close() {
     _readIndex = 0;
     _writeIndex = 0;
     _bufferedBytes = 0;
+    _lastDataMs = 0;
+    _streamError = false;
     portEXIT_CRITICAL(&_bufferMux);
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -169,6 +175,20 @@ bool AudioSourceStream::fillToThreshold() const {
 
 Stream *AudioSourceStream::stream() {
     return _stream;
+}
+
+bool AudioSourceStream::recordNetworkWait() {
+    const uint32_t now = millis();
+
+    portENTER_CRITICAL(&_bufferMux);
+    _networkWaitMs += 2;
+    const bool timedOut = now - _lastDataMs >= NETWORK_IDLE_TIMEOUT_MS;
+    if (timedOut) {
+        _streamError = true;
+    }
+    portEXIT_CRITICAL(&_bufferMux);
+
+    return timedOut;
 }
 
 uint32_t AudioSourceStream::wouldBlockCount() const {
@@ -229,9 +249,10 @@ void AudioSourceStream::producerTaskLoop() {
 
         const int available = _stream->available();
         if (available <= 0) {
-            portENTER_CRITICAL(&_bufferMux);
-            _networkWaitMs += 2;
-            portEXIT_CRITICAL(&_bufferMux);
+            if (recordNetworkWait()) {
+                break;
+            }
+
             vTaskDelay(pdMS_TO_TICKS(2));
             continue;
         }
@@ -243,9 +264,10 @@ void AudioSourceStream::producerTaskLoop() {
             reinterpret_cast<char *>(chunk), requested);
 
         if (received == 0) {
-            portENTER_CRITICAL(&_bufferMux);
-            _networkWaitMs += 2;
-            portEXIT_CRITICAL(&_bufferMux);
+            if (recordNetworkWait()) {
+                break;
+            }
+
             vTaskDelay(pdMS_TO_TICKS(2));
             continue;
         }
@@ -256,6 +278,7 @@ void AudioSourceStream::producerTaskLoop() {
         _writeIndex = (_writeIndex + received) % BUFFER_SIZE;
         _bufferedBytes += received;
         _receivedBytes += received;
+        _lastDataMs = millis();
         portEXIT_CRITICAL(&_bufferMux);
     }
 

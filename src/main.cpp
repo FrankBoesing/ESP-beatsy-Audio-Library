@@ -9,7 +9,7 @@
 
 constexpr char WIFI_SSID[] = "Abschirmdienst";
 constexpr char WIFI_PASSWORD[] = "frank123";
-constexpr char STREAM_URL[] = "http://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
+constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
 
 AudioControlES8388 codec;
 AudioPlayMp3 mp3;
@@ -120,9 +120,11 @@ void loop() {
         const float core1Usage = AudioStream::processorUsage(1);
         const double inputKbps = elapsed > 0 ? (bytes - lastBytes) * 8.0f / elapsed : 0.0;
 
-        Serial.printf("Wi-Fi: %s (RSSI %d dBm), MP3: %s, input: %.1f kbit/s\n",
+        Serial.printf("Wi-Fi: %s (RSSI %d dBm), MP3: %s (error %d), "
+                  "input: %.1f kbit/s\n",
                       WiFi.status() == WL_CONNECTED ? "connected" : "disconnected",
                       WiFi.RSSI(), mp3.isPlaying() ? "playing" : "waiting",
+                  mp3.lastError(),
                       inputKbps);
         Serial.printf("5s deltas: input empty=%lu, network wait=%lu"
                   " ms, PCM silence=%lu frames, received=%llu"
@@ -150,5 +152,5 @@ void loop() {
         lastNetworkWaitMs = networkWaitMs;
     }
 
-    vTaskDelay(100);
+    vTaskDelay(200);
 }

@@ -18,6 +18,7 @@ class AudioPlayMp3 : public AudioDecoderStream {
     static constexpr int ERR_OUT_OF_MEMORY = 2;
     static constexpr int ERR_FORMAT = 3;
     static constexpr int ERR_DECODER = 4;
+    static constexpr int ERR_SOURCE = 5;
 
     AudioPlayMp3();
     ~AudioPlayMp3() override;
