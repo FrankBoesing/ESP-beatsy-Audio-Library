@@ -78,6 +78,7 @@ void AudioDecoderStream::clearDecoderState() {
     _updateRunning = false;
 
     _samplesPlayed = 0;
+    _pcmUnderrunFrames = 0;
 
     _decoderTask = nullptr;
 
@@ -111,9 +112,10 @@ bool AudioDecoderStream::startDecoderTask() {
     active = true;
     _decoderTaskRunning = true;
 
-    const BaseType_t result = xTaskCreate(
+    const BaseType_t result = xTaskCreatePinnedToCore(
         &AudioDecoderStream::decoderTaskEntry, "AudioDecoder",
-        DECODER_TASK_STACK, this, DECODER_TASK_PRIORITY, &_decoderTask);
+        DECODER_TASK_STACK, this, DECODER_TASK_PRIORITY, &_decoderTask,
+        DECODER_TASK_CORE);
 
     if (result != pdPASS) {
         active = false;
@@ -124,7 +126,9 @@ bool AudioDecoderStream::startDecoderTask() {
         return false;
     }
 
-    ESP_LOGI(TAG, "decoder task started: priority=%lu, PCM samples/buffer=%u",
+    ESP_LOGI(TAG, "decoder task started: core=%d, priority=%lu, "
+                  "PCM samples/buffer=%u",
+             static_cast<int>(DECODER_TASK_CORE),
              static_cast<unsigned long>(DECODER_TASK_PRIORITY),
              static_cast<unsigned>(_pcmBufferSamples));
 
@@ -494,6 +498,9 @@ void AudioDecoderStream::update() {
     // Nullen nur noch gezielt am Ende auffüllen, falls nicht genug PCM-Daten
     // für einen ganzen Block da waren.
     if (outputFrames < AUDIO_BLOCK_SAMPLES) {
+        _pcmUnderrunFrames +=
+            static_cast<uint32_t>(AUDIO_BLOCK_SAMPLES - outputFrames);
+
         const size_t remainingBytes =
             (AUDIO_BLOCK_SAMPLES - outputFrames) * sizeof(int16_t);
         memset(&left->data[outputFrames], 0, remainingBytes);

@@ -26,13 +26,9 @@ class AudioPlayMp3 : public AudioDecoderStream {
     AudioPlayMp3 &operator=(const AudioPlayMp3 &) = delete;
 
     bool play(const char *filename);
-
     bool play(fs::FS &fs, const char *filename);
-
     bool play(AudioSource &source);
-
     void stop();
-
     bool isPlaying() const;
 
     uint32_t positionMillis() const;
@@ -70,7 +66,8 @@ class AudioPlayMp3 : public AudioDecoderStream {
     static constexpr size_t MP3_PCM_BUFFER_SAMPLES =
         MAX_NCHAN * MAX_NGRAN * MAX_NSAMP;
 
-    static constexpr size_t MP3_INPUT_BUFFER_SIZE = 2048;
+    static constexpr size_t MP3_INPUT_BUFFER_SIZE = 2U * 1024U;
+    static constexpr size_t MP3_STREAM_REFILL_TARGET = 1U * 1024U;
 
     bool startPlayback(AudioSource &source, bool takeOwnership);
 

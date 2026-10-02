@@ -4,11 +4,18 @@ AudioLibrary: Tasks und Timing
 Tasks
 -----
 AudioTask       Verarbeitet alle aktiven AudioStream-Updates. Wartet auf eine
-                Benachrichtigung und blockiert nicht fuer Audio-I/O.
+                Benachrichtigung und blockiert nicht fuer Audio-I/O. Laeuft
+                auf AUDIO_PROCESSING_CORE (Standard: Core 1); dort laufen auch
+                Mixer und Effekte.
 AudioI2STx      Nimmt Stereo-Bloecke aus der Queue, wandelt sie in I2S-Daten um
-                und schreibt sie zum I2S-Treiber. Ist nur bei I2S-Ausgabe aktiv.
+                und schreibt sie zum I2S-Treiber. Ist nur bei I2S-Ausgabe aktiv
+                und laeuft auf AUDIO_PROCESSING_CORE (Standard: Core 1).
 AudioDecoder    Dekodiert MP3-Daten in PCM-Puffer. Laeuft bei Wiedergabestart
-                separat und mit niedrigerer Prioritaet als AudioTask.
+                separat auf AUDIO_DECODER_CORE (Standard: Core 0) und mit
+                niedrigerer Prioritaet als AudioTask; gilt fuer MP3 und AAC.
+AudioStreamRx   Liest bei Netzwerk-Streaming Daten vom HTTP-Stream und fuellt
+                den AudioSourceStream-Ringpuffer. Laeuft nur bei Streams und
+                ohne feste Core-Zuordnung.
 
                  +-------------------+
                  | AudioDecoder      |  (bei MP3)
@@ -72,12 +79,28 @@ I2S-DMA                16 Deskriptoren mit je 128 Stereo-Frames; konfiguriert
 MP3-Eingabe            2 KiB komprimierte Daten pro AudioPlayMp3-Objekt.
 MP3-PCM                2 wechselnde Decoderpuffer mit je 2.304 int16-Samples
                       (4.608 Byte), zusammen 9.216 Byte pro MP3-Objekt.
-AudioInputBuffer       Standardmaessig 32 KiB pro Quellpuffer; Kapazitaet ist
-                      konfigurierbar und kann in PSRAM liegen.
+AudioInputBuffer       Eigenstaendige, generische Buffer-Klasse; Standard sind
+                      32 KiB, konfigurierbar ueber Konstruktor oder
+                      AUDIO_INPUT_BUFFER_SIZE. Nutzt auf ESP32 bevorzugt
+                      PSRAM. Sie wird derzeit nicht vom AudioPlayMp3-Pfad
+                      verwendet.
+AudioSourceStream      Separater Ringpuffer mit 128 KiB im PSRAM fuer
+                      Netzwerk-Streams. Er wird von AudioStreamRx gefuellt und
+                      ist unabhaengig vom AudioInputBuffer.
 
-Die Quellen fuellen diesen letzten Puffer unterschiedlich: Dateien in
-2-KiB-Schritten, Streams bis zum 32-KiB-Ziel. Das sind Fuellmengen, keine
-zusaetzlichen Puffer.
+Netzwerk-Datenweg
+-----------------
+AudioStreamRx liest verfuegbare HTTP-Daten in einen lokalen 2-KiB-Chunk und
+kopiert sie in den 128-KiB-AudioSourceStream-Ringpuffer im PSRAM. Der
+MP3-Decoder liest jeweils verfuegbare Daten aus diesem Ring und kopiert sie in
+seinen 2-KiB-Eingabepuffer im internen RAM. MP3Decode() verarbeitet diesen
+Eingabepuffer und schreibt PCM in die beiden internen MP3-PCM-Puffer.
+
+Dateien umgehen den AudioSourceStream-Ringpuffer und verwenden weiterhin den
+2-KiB-MP3-Eingabepuffer. AudioInputBuffer ist eine separate, derzeit nicht in
+diesen MP3-Pfaden eingesetzte Komponente. Seine Fuellregeln (Datei: 2-KiB-
+Schritte, Stream: bis zum 32-KiB-Ziel) gelten nur, wenn AudioInputBuffer::fill()
+explizit verwendet wird; diese Fuellziele sind keine zusaetzlichen Puffer.
 
 DSP: Noise und Filter
 ---------------------

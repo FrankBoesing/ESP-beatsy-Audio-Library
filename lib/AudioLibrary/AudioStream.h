@@ -119,6 +119,7 @@ class AudioStream {
     float processorUsage(void) const;
     float processorUsageMax(void) const;
     void processorUsageMaxReset(void);
+    static float processorUsage(uint8_t core);
 
     static uint16_t memoryUsage(void);
     static uint16_t memoryUsageMax(void);

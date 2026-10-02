@@ -52,6 +52,10 @@ class AudioDecoderStream : public AudioStream {
         return _samplesPlayed;
     }
 
+    uint32_t pcmUnderrunFrames() const {
+      return _pcmUnderrunFrames;
+    }
+
   protected:
     enum : uint8_t { PCM_FREE = 0, PCM_FILLING, PCM_READY };
 
@@ -99,6 +103,7 @@ class AudioDecoderStream : public AudioStream {
     static constexpr UBaseType_t DECODER_TASK_PRIORITY =
         configMAX_PRIORITIES - 3;
 
+    static constexpr BaseType_t DECODER_TASK_CORE = AUDIO_DECODER_CORE;
     static constexpr uint16_t DECODER_TASK_STACK = 8192;
     static constexpr uint8_t PCM_BUFFER_COUNT = 2;
 
@@ -142,6 +147,7 @@ class AudioDecoderStream : public AudioStream {
     volatile bool _updateRunning = false;
 
     uint64_t _samplesPlayed = 0;
+    volatile uint32_t _pcmUnderrunFrames = 0;
 
     portMUX_TYPE _decoderMux = portMUX_INITIALIZER_UNLOCKED;
 
