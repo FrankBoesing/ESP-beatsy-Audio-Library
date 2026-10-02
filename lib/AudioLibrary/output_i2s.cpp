@@ -134,7 +134,7 @@ bool AudioOutputI2S::beginInternal() {
     running = true;
     taskExited = false;
 
-    BaseType_t result = xTaskCreatePinnedToCore(txTaskEntry, "AudioI2STx", 4096,
+    BaseType_t result = xTaskCreatePinnedToCore(txTaskEntry, "AudioI2STx", 2048,
                                                 this, configMAX_PRIORITIES - 2,
                                                 &txTask, AUDIO_PROCESSING_CORE);
 

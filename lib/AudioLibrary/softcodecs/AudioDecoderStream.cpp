@@ -126,7 +126,7 @@ bool AudioDecoderStream::startDecoderTask() {
         return false;
     }
 
-    ESP_LOGI(TAG, "decoder task started: core=%d, priority=%lu, "
+    ESP_LOGV(TAG, "decoder task started: core=%d, priority=%lu, "
                   "PCM samples/buffer=%u",
              static_cast<int>(DECODER_TASK_CORE),
              static_cast<unsigned long>(DECODER_TASK_PRIORITY),
@@ -184,10 +184,8 @@ void AudioDecoderStream::stopDecoderTask() {
         bool updateRunning;
 
         portENTER_CRITICAL(&_decoderMux);
-
         decoderRunning = _decoderTaskRunning;
         updateRunning = _updateRunning;
-
         portEXIT_CRITICAL(&_decoderMux);
 
         if (!decoderRunning && !updateRunning) {
@@ -228,10 +226,8 @@ void AudioDecoderStream::releaseFilledBuffer(uint8_t index) {
     }
 
     portENTER_CRITICAL(&_decoderMux);
-
     _pcmSamples[index] = 0;
     _pcmState[index] = PCM_FREE;
-
     portEXIT_CRITICAL(&_decoderMux);
 }
 
@@ -241,10 +237,8 @@ void AudioDecoderStream::publishReadyBuffer(uint8_t index, size_t samples) {
     }
 
     portENTER_CRITICAL(&_decoderMux);
-
     _pcmSamples[index] = samples;
     _pcmState[index] = PCM_READY;
-
     portEXIT_CRITICAL(&_decoderMux);
 }
 
@@ -278,22 +272,17 @@ void AudioDecoderStream::releaseReadBuffer(uint8_t index) {
     }
 
     portENTER_CRITICAL(&_decoderMux);
-
     _pcmSamples[index] = 0;
     _pcmState[index] = PCM_FREE;
-
     _readBuffer = -1;
     _readPosition = 0;
-
     portEXIT_CRITICAL(&_decoderMux);
 }
 
 void AudioDecoderStream::setDecoderFinished(int errorCode) {
     portENTER_CRITICAL(&_decoderMux);
-
     _decoderFinished = true;
     _decoderError = errorCode;
-
     portEXIT_CRITICAL(&_decoderMux);
 }
 
@@ -408,7 +397,7 @@ decoder_exit:
     _decoderTask = nullptr;
     portEXIT_CRITICAL(&_decoderMux);
 
-    ESP_LOGI(TAG, "decoder task stopped");
+    ESP_LOGV(TAG, "decoder task stopped");
 
     vTaskDelete(nullptr);
 }
@@ -481,7 +470,7 @@ void AudioDecoderStream::update() {
 
         const int16_t *source = _pcm[index] + _readPosition;
 
-#pragma GCC unroll 2
+#pragma GCC unroll 4
         for (size_t i = 0; i < frames; ++i) {
             left->data[outputFrames + i] = source[2U * i];
             right->data[outputFrames + i] = source[2U * i + 1U];
@@ -495,14 +484,11 @@ void AudioDecoderStream::update() {
         }
     }
 
-    // Nullen nur noch gezielt am Ende auffüllen, falls nicht genug PCM-Daten
+    // Nullen gezielt am Ende auffüllen, falls nicht genug PCM-Daten
     // für einen ganzen Block da waren.
     if (outputFrames < AUDIO_BLOCK_SAMPLES) {
-        _pcmUnderrunFrames +=
-            static_cast<uint32_t>(AUDIO_BLOCK_SAMPLES - outputFrames);
-
-        const size_t remainingBytes =
-            (AUDIO_BLOCK_SAMPLES - outputFrames) * sizeof(int16_t);
+        _pcmUnderrunFrames += static_cast<uint32_t>(AUDIO_BLOCK_SAMPLES - outputFrames);
+        const size_t remainingBytes = (AUDIO_BLOCK_SAMPLES - outputFrames) * sizeof(int16_t);
         memset(&left->data[outputFrames], 0, remainingBytes);
         memset(&right->data[outputFrames], 0, remainingBytes);
     }
@@ -518,14 +504,11 @@ void AudioDecoderStream::update() {
     bool finishNow = false;
 
     portENTER_CRITICAL(&_decoderMux);
-
     if (_decoderFinished && _readBuffer < 0 && _pcmState[0] != PCM_READY &&
         _pcmState[1] != PCM_READY) {
         finishNow = true;
     }
-
     _updateRunning = false;
-
     portEXIT_CRITICAL(&_decoderMux);
 
     if (finishNow) {

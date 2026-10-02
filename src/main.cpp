@@ -58,6 +58,7 @@ void setup() {
     // The stream endpoint uses HTTPS; certificate validation is disabled here.
     tlsClient.setInsecure();
     http.useHTTP10(true);
+
     http.setTimeout(15000);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     http.setRedirectLimit(5);
