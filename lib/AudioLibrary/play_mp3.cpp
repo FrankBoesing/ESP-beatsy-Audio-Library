@@ -595,7 +595,11 @@ AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination,
                 return DecodeResult::END_OF_STREAM;
             }
 
-            if (!fillInput(MP3_INPUT_BUFFER_SIZE)) {
+            const size_t refillTarget =
+                _source->fillToThreshold() ? MP3_STREAM_REFILL_TARGET
+                                           : MP3_INPUT_BUFFER_SIZE;
+
+            if (!fillInput(refillTarget)) {
                 return _inputEof ? DecodeResult::END_OF_STREAM
                                  : DecodeResult::RETRY;
             }

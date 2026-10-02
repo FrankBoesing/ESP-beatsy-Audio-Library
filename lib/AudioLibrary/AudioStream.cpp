@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "AudioStream.h"
 #include <math.h>
+#include <freertos/idf_additions.h>
 
 // =============================================================================
 // Static members
@@ -34,6 +35,58 @@ esp_timer_handle_t AudioStream::software_timer = nullptr;
 bool AudioStream::update_scheduled = false;
 bool AudioStream::external_update_clock = false;
 float AudioStream::audio_sample_rate = AUDIO_SAMPLE_RATE_EXACT;
+
+float AudioStream::processorUsage(uint8_t core) {
+#if defined(CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS) && \
+    (!defined(CONFIG_FREERTOS_SMP) || !CONFIG_FREERTOS_SMP)
+    if (core >= portNUM_PROCESSORS) {
+        return -1.0f;
+    }
+
+    static configRUN_TIME_COUNTER_TYPE previousIdleRuntime[portNUM_PROCESSORS] = {};
+    static uint64_t previousSampleUs[portNUM_PROCESSORS] = {};
+    static bool initialized[portNUM_PROCESSORS] = {};
+
+    TaskHandle_t idleTask = xTaskGetIdleTaskHandleForCore(core);
+    if (idleTask == nullptr) {
+        return -1.0f;
+    }
+
+    TaskStatus_t idleTaskStatus = {};
+    vTaskGetInfo(idleTask, &idleTaskStatus, pdFALSE, eInvalid);
+
+    const uint64_t nowUs = esp_timer_get_time();
+    const configRUN_TIME_COUNTER_TYPE idleRuntime =
+        idleTaskStatus.ulRunTimeCounter;
+
+    if (!initialized[core]) {
+        previousIdleRuntime[core] = idleRuntime;
+        previousSampleUs[core] = nowUs;
+        initialized[core] = true;
+        return -1.0f;
+    }
+
+    const configRUN_TIME_COUNTER_TYPE idleDelta =
+        idleRuntime - previousIdleRuntime[core];
+    const uint64_t elapsedUs = nowUs - previousSampleUs[core];
+
+    previousIdleRuntime[core] = idleRuntime;
+    previousSampleUs[core] = nowUs;
+
+    if (elapsedUs == 0) {
+        return -1.0f;
+    }
+
+    const float idlePercent =
+        static_cast<float>(idleDelta) * 100.0f /
+        static_cast<float>(elapsedUs);
+
+    return 100.0f - fminf(idlePercent, 100.0f);
+#else
+    (void)core;
+    return -1.0f;
+#endif
+}
 
 // =============================================================================
 // AudioStream constructor
@@ -211,9 +264,10 @@ bool AudioStream::update_setup(void) {
     portEXIT_CRITICAL(&audio_mux);
 
     if (audio_task_handle == nullptr) {
-        BaseType_t result =
-            xTaskCreate(scheduler_task, "AudioTask", 4096, nullptr,
-                        configMAX_PRIORITIES - 2, &audio_task_handle);
+        BaseType_t result = xTaskCreatePinnedToCore(
+            scheduler_task, "AudioTask", 4096, nullptr,
+            configMAX_PRIORITIES - 2, &audio_task_handle,
+            AUDIO_PROCESSING_CORE);
 
         if (result != pdPASS) {
             audio_task_handle = nullptr;

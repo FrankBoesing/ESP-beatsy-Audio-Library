@@ -6,15 +6,14 @@
 #include "output_i2s.h"
 #include "control_es8388.h"
 
-#define SOFTCODEC_METRICS 1
 
 // ============================================================================
 // Audio objects
 // ============================================================================
 
+AudioControlES8388 codec;
 AudioSourceFile source;
-
-AudioPlayAac mp3;
+AudioPlayAac aac;
 
 AudioOutputI2S i2s({
     27, // BCLK
@@ -23,14 +22,14 @@ AudioOutputI2S i2s({
     0   // MCLK
 });
 
-AudioControlES8388 codec;
+
 
 // ============================================================================
 // Connections
 // ============================================================================
 
-AudioConnection patchCord1(mp3, 0, i2s, 0);
-AudioConnection patchCord2(mp3, 0, i2s, 1);
+AudioConnection patchCord1(aac, 0, i2s, 0);
+AudioConnection patchCord2(aac, 1, i2s, 1);
 
 // ============================================================================
 // Setup
@@ -43,7 +42,7 @@ void setup() {
 
     Serial.println();
     Serial.println("======================================");
-    Serial.println(" AudioPlayMp3 SD_MMC TEST");
+    Serial.println(" AudioPlayAac SD_MMC TEST");
     Serial.println("======================================");
 
     // ------------------------------------------------------------------------
@@ -70,21 +69,10 @@ void setup() {
 
     Serial.println("ES8388 initialized");
 
-    // ------------------------------------------------------------------------
-    // I2S
-    // ------------------------------------------------------------------------
-
-    /*
-     * Optional.
-     *
-     * Wie beim vorherigen funktionierenden Test:
-     *
-     * i2s.begin();
-     *
-     * kann derzeit aktiviert oder weggelassen werden.
-     */
-
-    // i2s.begin();
+    float volume = 0.7f;
+    codec.volume(volume);
+    Serial.print("Volume:");
+    Serial.println(volume, 2);
 
     // ------------------------------------------------------------------------
     // SD_MMC
@@ -128,9 +116,9 @@ void setup() {
     // Start playback
     // ------------------------------------------------------------------------
 
-    Serial.println("Starting MP3 playback...");
+    Serial.println("Starting AAC playback...");
 
-    if (!mp3.play(source)) {
+    if (!aac.play(source)) {
         Serial.println("ERROR: AAC playback could not be started");
 
         while (true) {
@@ -154,16 +142,16 @@ void loop() {
         Serial.println();
         Serial.println("--------------------------------------");
 
-        Serial.printf("Playing: %s\n", mp3.isPlaying() ? "yes" : "no");
+        Serial.printf("Playing: %s\n", aac.isPlaying() ? "yes" : "no");
 
         /*
          * AudioStream statistics:
          *   processorUsage()    = most recent update() execution
          *   processorUsageMax() = maximum update() execution since start
          */
-        Serial.printf("Audio CPU: MP3 %.2f%% (max %.2f%%), "
+        Serial.printf("Audio CPU: AAC %.2f%% (max %.2f%%), "
                       "I2S %.2f%% (max %.2f%%)\n",
-                      mp3.processorUsage(), mp3.processorUsageMax(),
+                      aac.processorUsage(), aac.processorUsageMax(),
                       i2s.processorUsage(), i2s.processorUsageMax());
 
         Serial.printf("Audio memory: %u / %u blocks "
@@ -172,19 +160,19 @@ void loop() {
                       AudioStream::memoryUsageMax());
 
         /*
-         * MP3-specific decoder load:
+         * AAC-specific decoder load:
          * total time inside MP3Decode(), relative to the audio time generated.
          * Source/SD waiting and vTaskDelay() are deliberately excluded.
          */
 #if SOFTCODEC_METRICS
-        Serial.printf("MP3 decode: avg %.2f%%, frame max %.2f%%, "
+        Serial.printf("AAC decode: avg %.2f%%, frame max %.2f%%, "
                       "frames %lu, decode %.3f s\n",
-                      mp3.decodeProcessorUsage(), mp3.decodeProcessorUsageMax(),
-                      (unsigned long)mp3.decodeFrames(),
-                      (double)mp3.decodeTimeUsTotal() / 1000000.0);
+                      aac.decodeProcessorUsage(), aac.decodeProcessorUsageMax(),
+                      (unsigned long)aac.decodeFrames(),
+                      (double)aac.decodeTimeUsTotal() / 1000000.0);
 #endif
         Serial.printf("Position: %lu ms / %lu ms\n",
-                      (unsigned long)mp3.positionMillis(),
-                      (unsigned long)mp3.lengthMillis());
+                      (unsigned long)aac.positionMillis(),
+                      (unsigned long)aac.lengthMillis());
     }
 }
