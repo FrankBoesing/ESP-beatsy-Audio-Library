@@ -34,8 +34,7 @@ bool AudioSourceFile::open(fs::FS &fs, const char *path, const char *mode) {
     return static_cast<bool>(_file);
 }
 
-AudioSourceStatus AudioSourceFile::read(uint8_t *buffer, size_t requested,
-                                        size_t &received) {
+AudioSourceStatus AudioSourceFile::read(uint8_t *buffer, size_t requested, size_t &received) {
     received = 0;
 
     if (!_file) {

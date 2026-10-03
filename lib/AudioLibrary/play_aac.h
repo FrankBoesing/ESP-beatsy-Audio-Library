@@ -1,6 +1,6 @@
 #pragma once
-#ifndef AUDIO_PLAY_MP3_H
-#define AUDIO_PLAY_MP3_H
+#ifndef AUDIO_PLAY_AAC_H
+#define AUDIO_PLAY_AAC_H
 
 #include <Arduino.h>
 #include <FS.h>
@@ -9,33 +9,32 @@
 #include "softcodecs/AudioDecoderStream.h"
 #include "softcodecs/AudioSource.h"
 #include "softcodecs/AudioSourceFile.h"
-#include "softcodecs/mp3_decoder/mp3_decoder.h"
+#include "softcodecs/aac_decoder/aac_decoder.h"
 
-class AudioPlayMp3 : public AudioDecoderStream {
+class AudioPlayAac : public AudioDecoderStream {
   public:
     static constexpr int ERR_NONE = 0;
     static constexpr int ERR_FILE_NOT_FOUND = 1;
     static constexpr int ERR_OUT_OF_MEMORY = 2;
     static constexpr int ERR_FORMAT = 3;
     static constexpr int ERR_DECODER = 4;
-    static constexpr int ERR_SOURCE = 5;
 
-    AudioPlayMp3();
-    ~AudioPlayMp3() override;
+    AudioPlayAac();
+    ~AudioPlayAac() override;
 
-    AudioPlayMp3(const AudioPlayMp3 &) = delete;
-    AudioPlayMp3 &operator=(const AudioPlayMp3 &) = delete;
+    AudioPlayAac(const AudioPlayAac &) = delete;
+    AudioPlayAac &operator=(const AudioPlayAac &) = delete;
 
     bool play(const char *filename);
     bool play(fs::FS &fs, const char *filename);
     bool play(AudioSource &source);
+
     void stop();
     bool isPlaying() const;
 
     uint32_t positionMillis() const;
     uint32_t lengthMillis() const;
 
-// Decoder diagnostics used by the example/test application.
 #if SOFTCODEC_METRICS
     float decodeProcessorUsage() const;
     float decodeProcessorUsageMax() const;
@@ -64,40 +63,39 @@ class AudioPlayMp3 : public AudioDecoderStream {
                                  size_t &outSamples) override;
 
   private:
-    static constexpr size_t MP3_PCM_BUFFER_SAMPLES = m_MAX_NCHAN * m_MAX_NGRAN * m_MAX_NSAMP;
-    static constexpr size_t MP3_INPUT_BUFFER_SIZE = 2U * 1024U;
-    static constexpr size_t MP3_STREAM_REFILL_TARGET = 1U * 1024U;
+    static constexpr size_t AAC_PCM_BUFFER_SAMPLES = AAC_MAX_NCHANS * AAC_MAX_NSAMPS * 2U;
+    static constexpr size_t AAC_INPUT_BUFFER_SIZE = 3072;
+    static constexpr size_t AAC_MIN_FRAME_BYTES = AAC_MAINBUF_SIZE + 8U;
+    static_assert(AAC_INPUT_BUFFER_SIZE > AAC_MIN_FRAME_BYTES, "AAC input buffer too small for one frame");
+
 
     bool startPlayback(AudioSource &source, bool takeOwnership);
-
     void closeSource();
 
     bool fillInput(size_t minimumBytes);
     bool skipInput(size_t bytes);
-    bool prepareMp3Input();
-
-    bool validateFrameInfo(const MP3FrameInfo &info);
+    bool prepareAacInput();
+    bool validateFrameInfo(const AACFrameInfo &info);
 
     static size_t id3TagSize(const uint8_t header[10]);
 
     AudioSource *_source = nullptr;
     bool _ownSource = false;
 
-    uint8_t _input[MP3_INPUT_BUFFER_SIZE] = {};
+    uint8_t _input[AAC_INPUT_BUFFER_SIZE] = {};
     size_t _inputPos = 0;
     size_t _inputLeft = 0;
     bool _inputEof = false;
     bool _inputPrepared = false;
 
-    MP3Decoder _decoder;
-    MP3FrameInfo _frameInfo = {};
+    AACDecoder _decoder;
+    AACFrameInfo _frameInfo = {};
 
     uint32_t _sampleRate = 0;
     uint16_t _channels = 0;
     uint32_t _bitrate = 0;
 
 #if SOFTCODEC_METRICS
-    // Decoder timing statistics. Updated only by the decoder task.
     volatile uint32_t _decodeFrames = 0;
     volatile uint64_t _decodeTimeUsTotal = 0;
     volatile uint64_t _decodeAudioTimeUsTotal = 0;

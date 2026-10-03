@@ -124,6 +124,9 @@ class AudioDecoderStream : public AudioStream {
     int16_t *_pcm[PCM_BUFFER_COUNT] = {};
     volatile uint8_t _pcmState[PCM_BUFFER_COUNT] = {PCM_FREE, PCM_FREE};
     volatile size_t _pcmSamples[PCM_BUFFER_COUNT] = {0, 0};
+    // Publish order, so buffers are played back in decode order (FIFO).
+    uint32_t _pcmSeq[PCM_BUFFER_COUNT] = {0, 0};
+    uint32_t _publishCounter = 0;
 
     /*
      * Only the realtime audio side may hold a buffer as _readBuffer.

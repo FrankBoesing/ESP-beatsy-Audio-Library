@@ -67,6 +67,9 @@ void AudioDecoderStream::clearDecoderState() {
 
     _pcmSamples[0] = 0;
     _pcmSamples[1] = 0;
+    _pcmSeq[0] = 0;
+    _pcmSeq[1] = 0;
+    _publishCounter = 0;
 
     _readBuffer = -1;
     _readPosition = 0;
@@ -235,6 +238,7 @@ void AudioDecoderStream::publishReadyBuffer(uint8_t index, size_t samples) {
 
     portENTER_CRITICAL(&_decoderMux);
     _pcmSamples[index] = samples;
+    _pcmSeq[index] = ++_publishCounter;
     _pcmState[index] = PCM_READY;
     portEXIT_CRITICAL(&_decoderMux);
 }
@@ -248,19 +252,23 @@ int AudioDecoderStream::acquireReadyBuffer() {
         return result;
     }
 
-    for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
-        if (_pcmState[i] == PCM_READY && _pcmSamples[i] > 0) {
-            _readBuffer = static_cast<int8_t>(i);
-            _readPosition = 0;
+    int best = -1;
 
-            const int result = i;
-            portEXIT_CRITICAL(&_decoderMux);
-            return result;
+    for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
+        if (_pcmState[i] == PCM_READY && _pcmSamples[i] > 0 &&
+            (best < 0 ||
+             static_cast<int32_t>(_pcmSeq[i] - _pcmSeq[best]) < 0)) {
+            best = i;
         }
     }
 
+    if (best >= 0) {
+        _readBuffer = static_cast<int8_t>(best);
+        _readPosition = 0;
+    }
+
     portEXIT_CRITICAL(&_decoderMux);
-    return -1;
+    return best;
 }
 
 void AudioDecoderStream::releaseReadBuffer(uint8_t index) {
