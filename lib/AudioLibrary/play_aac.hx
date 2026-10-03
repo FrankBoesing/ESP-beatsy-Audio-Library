@@ -9,7 +9,7 @@
 #include "softcodecs/AudioDecoderStream.h"
 #include "softcodecs/AudioSource.h"
 #include "softcodecs/AudioSourceFile.h"
-#include "softcodecs/aac_decoder/aac_decoder.h"
+#include "softcodecs/aac/aacdec.h"
 
 class AudioPlayAac : public AudioDecoderStream {
   public:
@@ -63,18 +63,10 @@ class AudioPlayAac : public AudioDecoderStream {
                                  size_t &outSamples) override;
 
   private:
-    // Worst case: 2 channels x 1024 samples, doubled by SBR upsampling.
-    static constexpr size_t AAC_PCM_BUFFER_SAMPLES = 4096U;
+    static constexpr size_t AAC_PCM_BUFFER_SAMPLES =
+        AAC_MAX_NCHANS * AAC_MAX_NSAMPS * 2U;
     static constexpr size_t AAC_INPUT_BUFFER_SIZE = 2048;
-    static constexpr size_t AAC_MIN_FRAME_BYTES = 1536U + 8U;
-
-    struct FrameInfo {
-        int bitRate;
-        int nChans;
-        int sampRateOut;
-        int bitsPerSample;
-        int outputSamps;
-    };
+    static constexpr size_t AAC_MIN_FRAME_BYTES = AAC_MAINBUF_SIZE + 8U;
 
     bool startPlayback(AudioSource &source, bool takeOwnership);
     void closeSource();
@@ -82,7 +74,7 @@ class AudioPlayAac : public AudioDecoderStream {
     bool fillInput(size_t minimumBytes);
     bool skipInput(size_t bytes);
     bool prepareAacInput();
-    bool validateFrameInfo(const FrameInfo &info);
+    bool validateFrameInfo(const AACFrameInfo &info);
 
     static size_t id3TagSize(const uint8_t header[10]);
 
@@ -95,7 +87,8 @@ class AudioPlayAac : public AudioDecoderStream {
     bool _inputEof = false;
     bool _inputPrepared = false;
 
-    AACDecoder _decoder;
+    HAACDecoder _decoder = nullptr;
+    AACFrameInfo _frameInfo = {};
 
     uint32_t _sampleRate = 0;
     uint16_t _channels = 0;
