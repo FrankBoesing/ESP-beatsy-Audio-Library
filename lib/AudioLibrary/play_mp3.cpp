@@ -190,7 +190,8 @@ bool AudioPlayMp3::isPlaying() const {
      * stop() and by AudioDecoderStream::onPlaybackFinished() after the final
      * READY PCM buffer has drained.
      */
-    return _playing && !_paused;
+        return _playing && !_paused &&
+            !(decoderFinished() && decoderError() != 0);
 }
 
 // ============================================================================
@@ -344,6 +345,7 @@ bool AudioPlayMp3::fillInput(size_t minimumBytes) {
 
         case AudioSourceStatus::ERROR:
         default:
+            _lastError = ERR_SOURCE;
             return false;
         }
     }
@@ -372,7 +374,9 @@ bool AudioPlayMp3::skipInput(size_t bytes) {
 
 bool AudioPlayMp3::prepareMp3Input() {
     if (!fillInput(10)) {
-        _lastError = ERR_FILE_NOT_FOUND;
+        if (_lastError != ERR_SOURCE) {
+            _lastError = ERR_FILE_NOT_FOUND;
+        }
         return false;
     }
 
@@ -388,7 +392,9 @@ bool AudioPlayMp3::prepareMp3Input() {
     ESP_LOGI(TAG, "ID3 tag detected: %u bytes", static_cast<unsigned>(tagSize));
 
     if (!skipInput(tagSize)) {
-        _lastError = ERR_FILE_NOT_FOUND;
+        if (_lastError != ERR_SOURCE) {
+            _lastError = ERR_FILE_NOT_FOUND;
+        }
         return false;
     }
 
@@ -463,6 +469,10 @@ AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination,
 
     for (;;) {
         if (!fillInput(4)) {
+            if (_lastError == ERR_SOURCE) {
+                return DecodeResult::ERROR;
+            }
+
             return _inputEof ? DecodeResult::END_OF_STREAM
                              : DecodeResult::RETRY;
         }
@@ -481,6 +491,10 @@ AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination,
             }
 
             if (!fillInput(4)) {
+                if (_lastError == ERR_SOURCE) {
+                    return DecodeResult::ERROR;
+                }
+
                 return _inputEof ? DecodeResult::END_OF_STREAM
                                  : DecodeResult::RETRY;
             }
@@ -600,6 +614,10 @@ AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination,
                                            : MP3_INPUT_BUFFER_SIZE;
 
             if (!fillInput(refillTarget)) {
+                if (_lastError == ERR_SOURCE) {
+                    return DecodeResult::ERROR;
+                }
+
                 return _inputEof ? DecodeResult::END_OF_STREAM
                                  : DecodeResult::RETRY;
             }

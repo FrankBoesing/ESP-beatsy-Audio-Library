@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include "optimize.h"
 
 class AudioSourceStream : public AudioSource {
   public:
@@ -41,15 +42,20 @@ class AudioSourceStream : public AudioSource {
 
   private:
     static constexpr size_t PRODUCER_CHUNK_SIZE = 2048;
+    static constexpr uint32_t NETWORK_IDLE_TIMEOUT_MS = 15000;
+    static constexpr uint32_t STREAM_READ_TIMEOUT_MS = 500;
 
     static void producerTaskEntry(void *arg);
     void producerTaskLoop();
+    bool recordNetworkWait();
 
     Stream *_stream;
     uint64_t _position;
     uint64_t _receivedBytes = 0;
     uint32_t _wouldBlockCount = 0;
     uint32_t _networkWaitMs = 0;
+    uint32_t _lastDataMs = 0;
+    bool _streamError = false;
     uint8_t *_buffer = nullptr;
     size_t _readIndex = 0;
     size_t _writeIndex = 0;

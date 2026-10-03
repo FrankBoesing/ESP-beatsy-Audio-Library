@@ -47,7 +47,6 @@ AudioSourceStatus AudioSourceFile::read(uint8_t *buffer, size_t requested,
     }
 
     size_t n = _file.read(buffer, requested);
-
     received = n;
 
     if (n > 0) {

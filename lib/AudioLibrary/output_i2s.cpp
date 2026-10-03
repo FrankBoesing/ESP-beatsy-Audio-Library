@@ -85,7 +85,7 @@ bool AudioOutputI2S::beginInternal() {
     stdConfig.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
 
     stdConfig.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
-        I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+        I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
 
     stdConfig.gpio_cfg.bclk = static_cast<gpio_num_t>(i2sPins.bclk);
     stdConfig.gpio_cfg.ws = static_cast<gpio_num_t>(i2sPins.ws);
@@ -134,7 +134,7 @@ bool AudioOutputI2S::beginInternal() {
     running = true;
     taskExited = false;
 
-    BaseType_t result = xTaskCreatePinnedToCore(txTaskEntry, "AudioI2STx", 4096,
+    BaseType_t result = xTaskCreatePinnedToCore(txTaskEntry, "AudioI2STx", 2048,
                                                 this, configMAX_PRIORITIES - 2,
                                                 &txTask, AUDIO_PROCESSING_CORE);
 
@@ -304,7 +304,7 @@ void AudioOutputI2S::txTaskLoop() {
      * Left-justification in the 32-bit slot is achieved by shifting
      * the signed 16-bit sample by 16 bits.
      */
-    int32_t buffer[AUDIO_BLOCK_SAMPLES * 2];
+    int16_t buffer[AUDIO_BLOCK_SAMPLES * 2];
 
     while (running) {
         BlockPair pair;
@@ -316,22 +316,20 @@ void AudioOutputI2S::txTaskLoop() {
         if (pair.left != nullptr && pair.right != nullptr) {
 #pragma GCC unroll 4
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                buffer[2 * i] = static_cast<int32_t>(pair.left->data[i]) << 16;
-                buffer[2 * i + 1] = static_cast<int32_t>(pair.right->data[i])
-                                    << 16;
+                buffer[2 * i] = pair.left->data[i];
+                buffer[2 * i + 1] = pair.right->data[i];
             }
         } else if (pair.left != nullptr) {
 #pragma GCC unroll 4
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                buffer[2 * i] = static_cast<int32_t>(pair.left->data[i]) << 16;
+                buffer[2 * i] = pair.left->data[i];
                 buffer[2 * i + 1] = 0;
             }
         } else if (pair.right != nullptr) {
 #pragma GCC unroll 4
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
                 buffer[2 * i] = 0;
-                buffer[2 * i + 1] = static_cast<int32_t>(pair.right->data[i])
-                                    << 16;
+                buffer[2 * i + 1] = pair.right->data[i];
             }
         } else {
             // Beide nullptr: Direkter Speicher-Block-Reset statt Schleife
@@ -353,11 +351,9 @@ void AudioOutputI2S::txTaskLoop() {
             ++writeErrorCount;
 
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
-                ESP_LOGE("I2S", "TX error #%lu: %s, bytes=%u/%u\n",
-                         static_cast<unsigned long>(writeErrorCount),
-                         esp_err_to_name(err),
-                         static_cast<unsigned>(bytesWritten),
-                         static_cast<unsigned>(sizeof(buffer)));
+                ESP_LOGE("I2S", "TX error #%lu: %s, bytes=%lu/%lu\n",
+                         writeErrorCount, esp_err_to_name(err),
+                         bytesWritten, sizeof(buffer) );
                 lastErrorLogMs = now;
             }
         }

@@ -452,9 +452,7 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num,
     // Mark all blocks as available.
     for (unsigned int i = 0; i < num; ++i) {
         available_mask[i >> 5] |= (uint32_t(1) << (i & 0x1F));
-
         data[i].memory_pool_index = static_cast<uint16_t>(i);
-
         data[i].ref_count = 0;
         data[i].reserved1 = 0;
     }
@@ -493,11 +491,8 @@ bool AudioStream::is_block_from_pool(const audio_block_t *block) {
     }
 
     uintptr_t block_address = reinterpret_cast<uintptr_t>(block);
-
     uintptr_t pool_address = reinterpret_cast<uintptr_t>(memory_pool);
-
-    uintptr_t pool_end =
-        pool_address + sizeof(audio_block_t) * memory_pool_size;
+    uintptr_t pool_end = pool_address + sizeof(audio_block_t) * memory_pool_size;
 
     if (block_address < pool_address || block_address >= pool_end) {
         return false;
@@ -580,9 +575,7 @@ audio_block_t *AudioStream::allocate_locked(void) {
 
 audio_block_t *AudioStream::allocate(void) {
     portENTER_CRITICAL(&audio_mux);
-
     audio_block_t *block = allocate_locked();
-
     portEXIT_CRITICAL(&audio_mux);
 
     return block;
@@ -617,17 +610,14 @@ void AudioStream::release_locked(audio_block_t *block) {
     // The block is now returned to the pool.
 
     uint16_t block_index = block->memory_pool_index;
-
     if (block_index >= memory_pool_size) {
         return;
     }
 
     uint16_t mask_index = block_index >> 5;
-
     uint32_t bit = uint32_t(1) << (block_index & 0x1F);
 
     memory_pool_available_mask[mask_index] |= bit;
-
     if (mask_index < memory_pool_first_mask) {
         memory_pool_first_mask = mask_index;
     }
@@ -645,9 +635,7 @@ void AudioStream::release_locked(audio_block_t *block) {
 
 void AudioStream::release(audio_block_t *block) {
     portENTER_CRITICAL(&audio_mux);
-
     release_locked(block);
-
     portEXIT_CRITICAL(&audio_mux);
 }
 
@@ -695,11 +683,8 @@ audio_block_t *AudioStream::receiveReadOnly(unsigned int index) {
     }
 
     portENTER_CRITICAL(&audio_mux);
-
     audio_block_t *block = inputQueue[index];
-
     inputQueue[index] = nullptr;
-
     portEXIT_CRITICAL(&audio_mux);
 
     return block;
@@ -742,7 +727,6 @@ audio_block_t *AudioStream::receiveWritable(unsigned int index) {
 
         // We no longer own the input block.
         release_locked(input);
-
         portEXIT_CRITICAL(&audio_mux);
 
         return copy;
@@ -756,7 +740,6 @@ audio_block_t *AudioStream::receiveWritable(unsigned int index) {
     // Give up our reference and report failure.
 
     release_locked(input);
-
     portEXIT_CRITICAL(&audio_mux);
 
     return nullptr;
@@ -794,9 +777,7 @@ void AudioStream::processorUsageMaxReset(void) {
 
 uint16_t AudioStream::memoryUsage(void) {
     portENTER_CRITICAL(&audio_mux);
-
     uint16_t value = memory_used;
-
     portEXIT_CRITICAL(&audio_mux);
 
     return value;
@@ -804,9 +785,7 @@ uint16_t AudioStream::memoryUsage(void) {
 
 uint16_t AudioStream::memoryUsageMax(void) {
     portENTER_CRITICAL(&audio_mux);
-
     uint16_t value = memory_used_max;
-
     portEXIT_CRITICAL(&audio_mux);
 
     return value;
@@ -814,9 +793,7 @@ uint16_t AudioStream::memoryUsageMax(void) {
 
 void AudioStream::memoryUsageMaxReset(void) {
     portENTER_CRITICAL(&audio_mux);
-
     memory_used_max = memory_used;
-
     portEXIT_CRITICAL(&audio_mux);
 }
 
@@ -940,7 +917,6 @@ int AudioConnection::disconnect(void) {
     portENTER_CRITICAL(&AudioStream::audio_mux);
 
     // Remove this connection from the source list.
-
     AudioConnection *p = src->destination_list;
 
     if (p == nullptr) {
@@ -965,7 +941,6 @@ int AudioConnection::disconnect(void) {
 
     if (pending != nullptr) {
         dst->inputQueue[dest_index] = nullptr;
-
         AudioStream::release_locked(pending);
     }
 

@@ -26,7 +26,6 @@ bool AudioInputBuffer::begin() {
     }
 
     reset();
-
     return true;
 }
 
@@ -213,7 +212,8 @@ bool AudioInputBuffer::commitWrite(size_t written) {
     if (region_a_length == 0 && region_b_length == 0) {
         region_a_start = write_start;
         region_a_length = written;
-    } else if (region_b_length > 0) {
+    } else
+    if (region_b_length > 0) {
         const size_t expected = region_b_start + region_b_length;
 
         if (write_start != expected) {
@@ -360,11 +360,8 @@ bool AudioInputBuffer::validate() const {
 
     if (region_a_length > 0 && region_b_length > 0) {
         const size_t a_end = region_a_start + region_a_length;
-
         const size_t b_end = region_b_start + region_b_length;
-
-        const bool overlap =
-            (region_a_start < b_end) && (region_b_start < a_end);
+        const bool overlap = (region_a_start < b_end) && (region_b_start < a_end);
 
         if (overlap) {
             return false;
