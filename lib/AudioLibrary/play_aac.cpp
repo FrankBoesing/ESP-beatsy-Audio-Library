@@ -90,7 +90,6 @@ bool AudioPlayAac::startPlayback(AudioSource &source, bool takeOwnership) {
     _inputEof = false;
     _inputPrepared = false;
     std::memset(_input, 0, sizeof(_input));
-    std::memset(&_frameInfo, 0, sizeof(_frameInfo));
 
     _sampleRate = 0;
     _channels = 0;
@@ -112,9 +111,7 @@ bool AudioPlayAac::startPlayback(AudioSource &source, bool takeOwnership) {
         return false;
     }
 
-    _decoder = AACInitDecoder();
-
-    if (_decoder == nullptr) {
+    if (!_decoder.AllocateBuffers()) {
         _lastError = ERR_OUT_OF_MEMORY;
         closeSource();
         return false;
@@ -122,8 +119,7 @@ bool AudioPlayAac::startPlayback(AudioSource &source, bool takeOwnership) {
 
     if (!startDecoderTask()) {
         _lastError = ERR_OUT_OF_MEMORY;
-        AACFreeDecoder(_decoder);
-        _decoder = nullptr;
+        _decoder.FreeBuffers();
         closeSource();
         return false;
     }
@@ -137,10 +133,7 @@ void AudioPlayAac::stop() {
 
     stopDecoderTask();
 
-    if (_decoder != nullptr) {
-        AACFreeDecoder(_decoder);
-        _decoder = nullptr;
-    }
+    _decoder.FreeBuffers();
 
     _inputPos = 0;
     _inputLeft = 0;
@@ -327,7 +320,7 @@ bool AudioPlayAac::prepareAacInput() {
     return true;
 }
 
-bool AudioPlayAac::validateFrameInfo(const AACFrameInfo &info) {
+bool AudioPlayAac::validateFrameInfo(const FrameInfo &info) {
     if (info.bitsPerSample != 16 || info.nChans < 1 || info.nChans > 2) {
         _lastError = ERR_FORMAT;
         ESP_LOGE(TAG, "unsupported AAC format: channels=%d bits=%d",
@@ -357,7 +350,6 @@ bool AudioPlayAac::validateFrameInfo(const AACFrameInfo &info) {
     _sampleRate = static_cast<uint32_t>(info.sampRateOut);
     _channels = static_cast<uint16_t>(info.nChans);
     _bitrate = static_cast<uint32_t>(info.bitRate > 0 ? info.bitRate : 0);
-    _frameInfo = info;
     return true;
 }
 
@@ -366,7 +358,7 @@ AudioPlayAac::decodePcmBuffer(int16_t *destination, size_t capacity,
                               size_t &outSamples) {
     outSamples = 0;
 
-    if (_decoder == nullptr || destination == nullptr ||
+    if (!_decoder.IsInit() || destination == nullptr ||
         capacity < AAC_PCM_BUFFER_SAMPLES) {
         _lastError = ERR_DECODER;
         return DecodeResult::ERROR;
@@ -389,13 +381,12 @@ AudioPlayAac::decodePcmBuffer(int16_t *destination, size_t capacity,
                              : DecodeResult::RETRY;
         }
 
-        unsigned char *input = _input + _inputPos;
-        int bytesLeft = static_cast<int>(_inputLeft);
-        const int bytesBefore = bytesLeft;
+        int32_t bytesLeft = static_cast<int32_t>(_inputLeft);
+        const int32_t bytesBefore = bytesLeft;
         const uint32_t decodeStartUs = micros();
         const int decodeResult =
-            AACDecode(_decoder, &input, &bytesLeft,
-                      reinterpret_cast<short *>(destination));
+            _decoder.AACDecode(_input + _inputPos, &bytesLeft,
+                               reinterpret_cast<short *>(destination));
 
 #if SOFTCODEC_METRICS
         const uint32_t decodeElapsedUs = micros() - decodeStartUs;
@@ -408,7 +399,7 @@ AudioPlayAac::decodePcmBuffer(int16_t *destination, size_t capacity,
             return DecodeResult::ERROR;
         }
 
-        if (decodeResult == ERR_AAC_NONE) {
+        if (decodeResult == 0) {
             if (consumed == 0) {
                 _lastError = ERR_DECODER;
                 ESP_LOGE(TAG, "AAC decoder consumed no input bytes");
@@ -418,8 +409,18 @@ AudioPlayAac::decodePcmBuffer(int16_t *destination, size_t capacity,
             _inputPos += static_cast<size_t>(consumed);
             _inputLeft -= static_cast<size_t>(consumed);
 
-            AACFrameInfo info = {};
-            AACGetLastFrameInfo(_decoder, &info);
+            FrameInfo info = {};
+            info.outputSamps = _decoder.AACGetOutputSamps();
+
+            // faad can consume a frame without producing PCM (e.g. first frame).
+            if (info.outputSamps <= 0) {
+                continue;
+            }
+
+            info.bitRate = _decoder.AACGetBitrate();
+            info.nChans = _decoder.AACGetChannels();
+            info.sampRateOut = _decoder.AACGetSampRate();
+            info.bitsPerSample = _decoder.AACGetBitsPerSample();
 
             if (!validateFrameInfo(info)) {
                 return DecodeResult::ERROR;
@@ -473,7 +474,8 @@ AudioPlayAac::decodePcmBuffer(int16_t *destination, size_t capacity,
             return outSamples > 0 ? DecodeResult::FILLED : DecodeResult::ERROR;
         }
 
-        if (decodeResult == ERR_AAC_INDATA_UNDERFLOW) {
+        // faad error 14: "Input data buffer too small"
+        if (decodeResult == -14) {
             if (_inputEof) {
                 return DecodeResult::END_OF_STREAM;
             }

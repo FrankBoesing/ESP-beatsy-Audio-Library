@@ -1,21 +1,19 @@
 
 #include <Arduino.h>
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <HTTPClient.h>
+#include <SD_MMC.h>
+#include <Audio.h>
+#include "play_mp3.h"
+#include "output_i2s.h"
+#include "control_es8388.h"
 
-#include "Audio.h"
-#include "softcodecs/AudioSourceStream.h"
 
-constexpr char WIFI_SSID[] = "Abschirmdienst";
-constexpr char WIFI_PASSWORD[] = "frank123";
-constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
+// ============================================================================
+// Audio objects
+// ============================================================================
 
 AudioControlES8388 codec;
-AudioPlayMp3 mp3;
-AudioSourceStream audioSource;
-WiFiClientSecure tlsClient;
-HTTPClient http;
+AudioSourceFile source;
+AudioPlayAac aac;
 
 AudioOutputI2S i2s({
     27, // BCLK
@@ -24,134 +22,164 @@ AudioOutputI2S i2s({
     0   // MCLK
 });
 
-AudioConnection patchCordLeft(mp3, 0, i2s, 0);
-AudioConnection patchCordRight(mp3, 1, i2s, 1);
 
-[[noreturn]] void stopWithError(const char *message) {
-    Serial.println(message);
-    while (true) {
-        delay(1000);
-    }
-}
+
+// ============================================================================
+// Connections
+// ============================================================================
+
+AudioConnection patchCord1(aac, 0, i2s, 0);
+AudioConnection patchCord2(aac, 1, i2s, 1);
+
+// ============================================================================
+// Setup
+// ============================================================================
 
 void setup() {
     Serial.begin(115200);
+
     delay(1000);
 
-    AudioMemory(10);
+    Serial.println();
+    Serial.println("======================================");
+    Serial.println(" AudioPlayAac SD_MMC TEST");
+    Serial.println("======================================");
+
+    // ------------------------------------------------------------------------
+    // Audio memory
+    // ------------------------------------------------------------------------
+
+    AudioMemory(12);
+
+    Serial.println("Audio memory initialized");
+
+    // ------------------------------------------------------------------------
+    // ES8388
+    // ------------------------------------------------------------------------
 
     Serial.println("Initializing ES8388...");
+
     if (!codec.enable()) {
-        stopWithError("ERROR: ES8388 initialization failed");
-    }
-    codec.volume(0.7f);
+        Serial.println("ERROR: ES8388 initialization failed");
 
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    Serial.print("Connecting to Wi-Fi");
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print('.');
-    }
-    Serial.printf("\nConnected, IP: %s\n", WiFi.localIP().toString().c_str());
-
-    // The stream endpoint uses HTTPS; certificate validation is disabled here.
-    tlsClient.setInsecure();
-    http.useHTTP10(true);
-
-    http.setTimeout(15000);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.setRedirectLimit(5);
-
-    Serial.println("Connecting to Deutschlandfunk stream...");
-    if (!http.begin(tlsClient, STREAM_URL)) {
-        stopWithError("ERROR: Could not initialize HTTP connection");
+        while (true) {
+            delay(1000);
+        }
     }
 
-    const int responseCode = http.GET();
-    if (responseCode != HTTP_CODE_OK) {
-        Serial.printf("HTTP error: %d\n", responseCode);
-        http.end();
-        stopWithError("ERROR: MP3 stream request failed");
+    Serial.println("ES8388 initialized");
+
+    float volume = 0.7f;
+    codec.volume(volume);
+    Serial.print("Volume:");
+    Serial.println(volume, 2);
+
+    // ------------------------------------------------------------------------
+    // SD_MMC
+    // ------------------------------------------------------------------------
+
+    Serial.println("Initializing SD_MMC...");
+
+    /*
+     * ESP32 Audio Kit V2.2
+     *
+     * 1-bit mode.
+     */
+    if (!SD_MMC.begin("/sdcard", false)) {
+        Serial.println("ERROR: SD_MMC initialization failed");
+
+        while (true) {
+            delay(1000);
+        }
     }
 
-    if (!audioSource.open(http.getStream())) {
-        http.end();
-        stopWithError("ERROR: Could not start stream buffer");
+    Serial.println("SD_MMC initialized");
+
+    // ------------------------------------------------------------------------
+    // Open MP3
+    // ------------------------------------------------------------------------
+
+    Serial.println("Opening /test.aac...");
+
+    if (!source.open(SD_MMC, "/test.aac")) {
+        Serial.println("ERROR: Could not open /test.aac");
+
+        while (true) {
+            delay(1000);
+        }
     }
 
-    Serial.println("Buffering stream...");
-    const uint32_t bufferDeadline = millis() + 30000;
-    while (audioSource.bufferedBytes() < 32U * 1024U &&
-           static_cast<int32_t>(bufferDeadline - millis()) > 0) {
-        delay(10);
-    }
-    if (audioSource.bufferedBytes() < 32U * 1024U) {
-        audioSource.close();
-        http.end();
-        stopWithError("ERROR: Stream prebuffer timed out");
+    Serial.printf("AAC source opened, size=%llu bytes\n",
+                  (unsigned long long)source.size());
+
+    // ------------------------------------------------------------------------
+    // Start playback
+    // ------------------------------------------------------------------------
+
+    Serial.println("Starting AAC playback...");
+
+    if (!aac.play(source)) {
+        Serial.println("ERROR: AAC playback could not be started");
+
+        while (true) {
+            delay(1000);
+        }
     }
 
-    if (!mp3.play(audioSource)) {
-        audioSource.close();
-        http.end();
-        stopWithError("ERROR: MP3 playback could not be started");
-    }
-
-    Serial.println("Deutschlandfunk stream playback started");
+    Serial.println("AAC playback started");
 }
+
+// ============================================================================
+// Loop
+// ============================================================================
 
 void loop() {
     static uint32_t lastStatus = 0;
-    static uint64_t lastBytes = 0;
-    static uint32_t lastWouldBlockCount = 0;
-    static uint32_t lastPcmUnderrunFrames = 0;
-    static uint32_t lastNetworkWaitMs = 0;
 
-    if (millis() - lastStatus >= 5000) {
-        const uint32_t now = millis();
-        const uint32_t elapsed = now - lastStatus;
-        lastStatus = now;
+    if (millis() - lastStatus >= 1000) {
+        lastStatus = millis();
 
-        const uint64_t bytes = audioSource.receivedBytes();
-        const uint32_t wouldBlockCount = audioSource.wouldBlockCount();
-        const uint32_t pcmUnderrunFrames = mp3.pcmUnderrunFrames();
-        const uint32_t networkWaitMs = audioSource.networkWaitMs();
-        const float core0Usage = AudioStream::processorUsage(0);
-        const float core1Usage = AudioStream::processorUsage(1);
-        const double inputKbps = elapsed > 0 ? (bytes - lastBytes) * 8.0f / elapsed : 0.0;
+        Serial.println();
+        Serial.println("--------------------------------------");
 
-        Serial.printf("Wi-Fi: %s (RSSI %d dBm), MP3: %s (error %d), "
-                  "input: %.1f kbit/s\n",
-                      WiFi.status() == WL_CONNECTED ? "connected" : "disconnected",
-                      WiFi.RSSI(), mp3.isPlaying() ? "playing" : "waiting",
-                  mp3.lastError(),
-                      inputKbps);
-        Serial.printf("5s deltas: input empty=%lu, network wait=%lu"
-                  " ms, PCM silence=%lu frames, received=%llu"
-                  " bytes, buffer=%u/%u KiB\n",
-                      wouldBlockCount - lastWouldBlockCount,
-                      networkWaitMs - lastNetworkWaitMs,
-                      pcmUnderrunFrames - lastPcmUnderrunFrames, bytes,
-                      audioSource.bufferedBytes() / 1024,
-                      AudioSourceStream::BUFFER_SIZE / 1024);
-#if SOFTCODEC_METRICS
-        Serial.printf("Decoder load: avg %.2f%%, max %.2f%%\n",
-                      mp3.decodeProcessorUsage(),
-                      mp3.decodeProcessorUsageMax());
-#endif
-        if (core0Usage < 0.0f || core1Usage < 0.0f) {
-            Serial.println("CPU cores: sampling...");
-        } else {
-            Serial.printf("CPU cores: core 0 %.1f%%, core 1 %.1f%%\n",
-                          core0Usage, core1Usage);
+        Serial.printf("Playing: %s\n", aac.isPlaying() ? "yes" : "no");
+
+        /*
+         * AudioStream statistics:
+         *   processorUsage()    = most recent update() execution
+         *   processorUsageMax() = maximum update() execution since start
+         */
+        Serial.printf("Audio CPU: AAC %.2f%% (max %.2f%%), "
+                      "I2S %.2f%% (max %.2f%%)\n",
+                      aac.processorUsage(), aac.processorUsageMax(),
+                      i2s.processorUsage(), i2s.processorUsageMax());
+
+        Serial.printf("Audio memory: %u / %u blocks "
+                      "(current / max)\n",
+                      AudioStream::memoryUsage(),
+                      AudioStream::memoryUsageMax());
+
+        const float cpu0 = AudioStream::processorUsage(0);
+        const float cpu1 = AudioStream::processorUsage(1);
+        if (cpu0 >= 0.0f && cpu1 >= 0.0f) {
+            Serial.printf("CPU load: core0 %.1f%%, core1 %.1f%%\n", cpu0, cpu1);
         }
 
-        lastBytes = bytes;
-        lastWouldBlockCount = wouldBlockCount;
-        lastPcmUnderrunFrames = pcmUnderrunFrames;
-        lastNetworkWaitMs = networkWaitMs;
+        /*
+         * AAC-specific decoder load:
+         * total time inside MP3Decode(), relative to the audio time generated.
+         * Source/SD waiting and vTaskDelay() are deliberately excluded.
+         */
+#if SOFTCODEC_METRICS
+        Serial.printf("AAC decode: avg %.2f%%, frame max %.2f%%, "
+                      "frames %lu, decode %.3f s\n",
+                      aac.decodeProcessorUsage(), aac.decodeProcessorUsageMax(),
+                      (unsigned long)aac.decodeFrames(),
+                      (double)aac.decodeTimeUsTotal() / 1000000.0);
+#endif
+        Serial.printf("Position: %lu ms / %lu ms\n",
+                      (unsigned long)aac.positionMillis(),
+                      (unsigned long)aac.lengthMillis());
     }
-
-    vTaskDelay(200);
+    delay(500);
 }

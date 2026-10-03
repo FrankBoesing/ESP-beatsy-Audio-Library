@@ -14,7 +14,7 @@
 #include "filter_fir.h"
 #include "mixer.h"
 #include "output_i2s.h"
-//#include "play_aac.h"
+#include "play_aac.h"
 #include "play_mp3.h"
 #include "play_sd_wav.h"
 #include "synth_whitenoise.h"
