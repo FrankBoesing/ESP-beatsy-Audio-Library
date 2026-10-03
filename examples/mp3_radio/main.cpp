@@ -9,12 +9,10 @@
 
 constexpr char WIFI_SSID[] = "Abschirmdienst";
 constexpr char WIFI_PASSWORD[] = "frank123";
-//constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
-//constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/mid/aac/stream.aac";
-constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac";
+constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
 
 AudioControlES8388 codec;
-AudioPlayAac mp3;
+AudioPlayMp3 mp3;
 AudioSourceStream audioSource;
 WiFiClientSecure tlsClient;
 HTTPClient http;

@@ -8,7 +8,7 @@
 
 class AudioSourceStream : public AudioSource {
   public:
-    static constexpr size_t BUFFER_SIZE = 128U * 1024U;
+    static constexpr size_t BUFFER_SIZE = 256U * 1024U;
 
     AudioSourceStream();
     explicit AudioSourceStream(Stream &stream);
@@ -62,5 +62,5 @@ class AudioSourceStream : public AudioSource {
     size_t _bufferedBytes = 0;
     bool _stopRequested = false;
     TaskHandle_t _producerTask = nullptr;
-    portMUX_TYPE _bufferMux = portMUX_INITIALIZER_UNLOCKED;
+    mutable portMUX_TYPE _bufferMux = portMUX_INITIALIZER_UNLOCKED;
 };

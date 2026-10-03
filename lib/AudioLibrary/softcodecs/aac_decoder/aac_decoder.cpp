@@ -94,6 +94,15 @@ static inline int32_t CLIP_2N_SHIFT30(int32_t y, int32_t n) {
     return y;
 }
 
+static inline int32_t CLIP_2N_SHIFT30_4(int32_t y) {
+    int32_t sign = y >> 31;
+    if (sign != (y >> (30 - 4)))
+        y = sign ^ (0x3fffffff);
+    else
+        y = (y << 4);
+    return y;
+}
+
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -7124,9 +7133,9 @@ void AACDecoder::GenerateHighFreq(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *s
                     XBufLo += (64 * 2);
 
                     /* lost 4 fbits when scaling by a0re/im, a1re/im (Q28) */
-                    ACCre = CLIP_2N_SHIFT30(ACCre, 4);
+                    ACCre = CLIP_2N_SHIFT30_4(ACCre);
                     ACCre += x1re;
-                    ACCim = CLIP_2N_SHIFT30(ACCim, 4);
+                    ACCim = CLIP_2N_SHIFT30_4(ACCim);
                     ACCim += x1im;
 
                     XBufHi[0] = ACCre;

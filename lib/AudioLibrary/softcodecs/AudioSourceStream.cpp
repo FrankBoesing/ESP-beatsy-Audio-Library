@@ -1,5 +1,4 @@
 #include "AudioSourceStream.h"
-
 #include <algorithm>
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -53,6 +52,8 @@ bool AudioSourceStream::open(Stream &stream) {
     _stopRequested = false;
     portEXIT_CRITICAL(&_bufferMux);
 
+    stream.setTimeout(STREAM_READ_TIMEOUT_MS);
+
     const BaseType_t result = xTaskCreate(
         &AudioSourceStream::producerTaskEntry, "AudioStreamRx",
         3072, // Stack
@@ -63,7 +64,6 @@ bool AudioSourceStream::open(Stream &stream) {
         return false;
     }
 
-    stream.setTimeout(STREAM_READ_TIMEOUT_MS);
     return true;
 }
 
@@ -97,7 +97,6 @@ AudioSourceStatus AudioSourceStream::read(uint8_t *buffer,
     portEXIT_CRITICAL(&_bufferMux);
 
     const size_t firstChunk = std::min(bytesToRead, BUFFER_SIZE - readIndex);
-
     memcpy(buffer, _buffer + readIndex, firstChunk);
     if (bytesToRead > firstChunk) {
         memcpy(buffer + firstChunk,
@@ -106,7 +105,9 @@ AudioSourceStatus AudioSourceStream::read(uint8_t *buffer,
     }
 
     portENTER_CRITICAL(&_bufferMux);
-    _readIndex = (_readIndex + bytesToRead) % BUFFER_SIZE;
+    _readIndex += bytesToRead;
+    if (_readIndex >= BUFFER_SIZE)
+        _readIndex -= BUFFER_SIZE;
     _bufferedBytes -= bytesToRead;
     _position += bytesToRead;
     portEXIT_CRITICAL(&_bufferMux);
@@ -117,9 +118,9 @@ AudioSourceStatus AudioSourceStream::read(uint8_t *buffer,
 }
 
 uint64_t AudioSourceStream::position() const {
-    portENTER_CRITICAL(const_cast<portMUX_TYPE *>(&_bufferMux));
+    portENTER_CRITICAL(&_bufferMux);
     const uint64_t currentPosition = _position;
-    portEXIT_CRITICAL(const_cast<portMUX_TYPE *>(&_bufferMux));
+    portEXIT_CRITICAL(&_bufferMux);
 
     return currentPosition;
 }
@@ -211,25 +212,25 @@ bool AudioSourceStream::recordNetworkWait() {
 }
 
 uint32_t AudioSourceStream::wouldBlockCount() const {
-    portENTER_CRITICAL(const_cast<portMUX_TYPE *>(&_bufferMux));
+    portENTER_CRITICAL(&_bufferMux);
     const uint32_t count = _wouldBlockCount;
-    portEXIT_CRITICAL(const_cast<portMUX_TYPE *>(&_bufferMux));
+    portEXIT_CRITICAL(&_bufferMux);
 
     return count;
 }
 
 uint32_t AudioSourceStream::networkWaitMs() const {
-    portENTER_CRITICAL(const_cast<portMUX_TYPE *>(&_bufferMux));
+    portENTER_CRITICAL(&_bufferMux);
     const uint32_t waitMs = _networkWaitMs;
-    portEXIT_CRITICAL(const_cast<portMUX_TYPE *>(&_bufferMux));
+    portEXIT_CRITICAL(&_bufferMux);
 
     return waitMs;
 }
 
 size_t AudioSourceStream::bufferedBytes() const {
-    portENTER_CRITICAL(const_cast<portMUX_TYPE *>(&_bufferMux));
+    portENTER_CRITICAL(&_bufferMux);
     const size_t buffered = _bufferedBytes;
-    portEXIT_CRITICAL(const_cast<portMUX_TYPE *>(&_bufferMux));
+    portEXIT_CRITICAL(&_bufferMux);
 
     return buffered;
 }
@@ -261,21 +262,17 @@ void AudioSourceStream::producerTaskLoop() {
          * ring buffer without crossing the wrap boundary.
          */
         portENTER_CRITICAL(&_bufferMux);
-
         stopRequested = _stopRequested;
         writeIndex = _writeIndex;
-
-        freeBytes = BUFFER_SIZE - _bufferedBytes;
-        freeBytes = std::min(freeBytes, BUFFER_SIZE - writeIndex);
-
+        freeBytes = std::min(BUFFER_SIZE - _bufferedBytes, BUFFER_SIZE - writeIndex);
         portEXIT_CRITICAL(&_bufferMux);
 
         if (stopRequested) {
             break;
         }
 
-        if (freeBytes == 0) {
-            vTaskDelay(1);
+        if (freeBytes == 0) { //Puffer ist voll
+            vTaskDelay(5);
             continue;
         }
 
@@ -287,12 +284,12 @@ void AudioSourceStream::producerTaskLoop() {
 
         const int available = stream->available();
 
-        if (available <= 0) {
+        if (available <= 0) { //No Data
             if (recordNetworkWait()) {
                 break;
             }
 
-            vTaskDelay(pdMS_TO_TICKS(2));
+            vTaskDelay(pdMS_TO_TICKS(5));
             continue;
         }
 
@@ -305,27 +302,24 @@ void AudioSourceStream::producerTaskLoop() {
          * Because freeBytes is already limited to the contiguous
          * region up to BUFFER_SIZE, no wrap-around write can occur here.
          */
-        const size_t requested = std::min(
-            freeBytes,
-            static_cast<size_t>(available));
-
-        const size_t received = stream->readBytes(
-            reinterpret_cast<char *>(_buffer + writeIndex),
-            requested);
+        const size_t requested = std::min(freeBytes, static_cast<size_t>(available));
+        const size_t received = stream->readBytes(reinterpret_cast<char *>(_buffer + writeIndex),requested);
 
         if (received == 0) {
             if (recordNetworkWait()) {
                 break;
             }
 
-            vTaskDelay(pdMS_TO_TICKS(2));
+            vTaskDelay(pdMS_TO_TICKS(5));
             continue;
         }
 
         uint32_t now = millis();
         portENTER_CRITICAL(&_bufferMux);
         _lastDataMs = now;
-        _writeIndex = (_writeIndex + received) % BUFFER_SIZE;
+        _writeIndex += received;
+        if (_writeIndex == BUFFER_SIZE)
+            _writeIndex = 0;
         _bufferedBytes += received;
         _receivedBytes += received;
         portEXIT_CRITICAL(&_bufferMux);
