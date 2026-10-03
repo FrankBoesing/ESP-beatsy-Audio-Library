@@ -118,10 +118,9 @@ SOFTCODECS_COLD void AACFreeDecoder(HAACDecoder hAACDecoder) {
  *              -1 if sync not found after searching nBytes
  **************************************************************************************/
 int AACFindSyncWord(unsigned char *buf, int nBytes) {
-    int i;
 
     /* find byte-aligned syncword (12 bits = 0xFFF) */
-    for (i = 0; i < nBytes - 1; i++) {
+    for (int i = 0; i < nBytes - 1; i++) {
         if ((buf[i + 0] & SYNCWORDH) == SYNCWORDH &&
             (buf[i + 1] & SYNCWORDL) == SYNCWORDL)
             return i;

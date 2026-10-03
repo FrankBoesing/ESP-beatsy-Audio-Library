@@ -126,11 +126,8 @@ bool AudioDecoderStream::startDecoderTask() {
         return false;
     }
 
-    ESP_LOGV(TAG, "decoder task started: core=%d, priority=%lu, "
-                  "PCM samples/buffer=%u",
-             static_cast<int>(DECODER_TASK_CORE),
-             static_cast<unsigned long>(DECODER_TASK_PRIORITY),
-             static_cast<unsigned>(_pcmBufferSamples));
+    ESP_LOGV(TAG, "decoder task started: core=%d, priority=%u, PCM samples/buffer=%u",
+             DECODER_TASK_CORE, DECODER_TASK_PRIORITY, _pcmBufferSamples);
 
     return true;
 }
