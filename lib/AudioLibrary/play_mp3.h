@@ -9,7 +9,8 @@
 #include "softcodecs/AudioDecoderStream.h"
 #include "softcodecs/AudioSource.h"
 #include "softcodecs/AudioSourceFile.h"
-#include "softcodecs/mp3/mp3dec.h"
+//#include "softcodecs/mp3/mp3dec.h"
+#include "softcodecs/mp3_decoder/mp3_decoder.h"
 
 class AudioPlayMp3 : public AudioDecoderStream {
   public:
@@ -65,7 +66,7 @@ class AudioPlayMp3 : public AudioDecoderStream {
 
   private:
     static constexpr size_t MP3_PCM_BUFFER_SAMPLES =
-        MAX_NCHAN * MAX_NGRAN * MAX_NSAMP;
+        m_MAX_NCHAN * m_MAX_NGRAN * m_MAX_NSAMP;
 
     static constexpr size_t MP3_INPUT_BUFFER_SIZE = 2U * 1024U;
     static constexpr size_t MP3_STREAM_REFILL_TARGET = 1U * 1024U;
@@ -91,7 +92,7 @@ class AudioPlayMp3 : public AudioDecoderStream {
     bool _inputEof = false;
     bool _inputPrepared = false;
 
-    HMP3Decoder _decoder = nullptr;
+    MP3Decoder _decoder;
     MP3FrameInfo _frameInfo = {};
 
     uint32_t _sampleRate = 0;

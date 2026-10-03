@@ -134,9 +134,7 @@ bool AudioPlayMp3::startPlayback(AudioSource &source, bool takeOwnership) {
         return false;
     }
 
-    _decoder = MP3InitDecoder();
-
-    if (_decoder == nullptr) {
+    if (!_decoder.AllocateBuffers()) {
         _lastError = ERR_OUT_OF_MEMORY;
 
         closeSource();
@@ -146,8 +144,7 @@ bool AudioPlayMp3::startPlayback(AudioSource &source, bool takeOwnership) {
     if (!startDecoderTask()) {
         _lastError = ERR_OUT_OF_MEMORY;
 
-        MP3FreeDecoder(_decoder);
-        _decoder = nullptr;
+        _decoder.FreeBuffers();
 
         closeSource();
         return false;
@@ -168,10 +165,7 @@ void AudioPlayMp3::stop() {
 
     stopDecoderTask();
 
-    if (_decoder != nullptr) {
-        MP3FreeDecoder(_decoder);
-        _decoder = nullptr;
-    }
+    _decoder.FreeBuffers();
 
     _inputPos = 0;
     _inputLeft = 0;
@@ -455,7 +449,7 @@ AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination,
                                                          size_t &outSamples) {
     outSamples = 0;
 
-    if (_decoder == nullptr || destination == nullptr ||
+    if (!_decoder.IsInit() || destination == nullptr ||
         capacity < MP3_PCM_BUFFER_SAMPLES) {
         _lastError = ERR_DECODER;
         return DecodeResult::ERROR;
@@ -478,7 +472,7 @@ AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination,
         }
 
         int offset =
-            MP3FindSyncWord(_input + _inputPos, static_cast<int>(_inputLeft));
+            _decoder.MP3FindSyncWord(_input + _inputPos, static_cast<int>(_inputLeft));
 
         if (offset < 0) {
             if (_inputLeft > 3) {
@@ -507,13 +501,11 @@ AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination,
             _inputLeft -= static_cast<size_t>(offset);
         }
 
-        unsigned char *input = _input + _inputPos;
-
-        int bytesLeft = static_cast<int>(_inputLeft);
-        const int bytesBefore = bytesLeft;
+        int32_t bytesLeft = static_cast<int32_t>(_inputLeft);
+        const int32_t bytesBefore = bytesLeft;
         const uint32_t decodeStartUs = micros();
         const int decodeResult =
-            MP3Decode(_decoder, &input, &bytesLeft, destination, 0);
+            _decoder.MP3Decode(_input + _inputPos, &bytesLeft, destination, 0);
 
 #if SOFTCODEC_METRICS
         const uint32_t decodeElapsedUs = micros() - decodeStartUs;
@@ -534,7 +526,19 @@ AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination,
 
             MP3FrameInfo info = {};
 
-            MP3GetLastFrameInfo(_decoder, &info);
+            info.outputSamps = _decoder.MP3GetOutputSamps();
+
+            // Decoder skips output while the bit reservoir fills.
+            if (info.outputSamps <= 0) {
+                continue;
+            }
+
+            info.bitrate = _decoder.MP3GetBitrate();
+            info.nChans = _decoder.MP3GetChannels();
+            info.samprate = _decoder.MP3GetSampRate();
+            info.bitsPerSample = _decoder.MP3GetBitsPerSample();
+            info.layer = _decoder.MP3GetLayer();
+            info.version = _decoder.MP3GetVersion();
 
             if (!validateFrameInfo(info)) {
                 return DecodeResult::ERROR;
