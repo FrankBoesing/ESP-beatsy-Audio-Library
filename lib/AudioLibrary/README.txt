@@ -108,6 +108,24 @@ AudioSynthNoiseWhite erzeugt weisses Rauschen. amplitude() erwartet 0.0 bis
 1.0. Die Verarbeitung nutzt einen 31-Bit-Park-Miller-Generator und skaliert
 Samples mit 32-Bit-Arithmetik.
 
+AudioSynthWaveformDc erzeugt einen konstanten Gleichspannungspegel von -1.0
+bis 1.0. amplitude(level) setzt ihn sofort; amplitude(level, milliseconds)
+fuehrt mit der aktuellen Sample-Rate weich zum neuen Pegel ueber. read() liefert
+den zuletzt verarbeiteten Pegel normiert von -1.0 bis 1.0.
+
+AudioEffectMultiply multipliziert zwei Audio-Eingangsbloecke sampleweise mit
+Q15-Skalierung. Das Produkt wird in 32 Bit berechnet und vor der Rueckgabe auf
+16-Bit-PCM begrenzt. Fehlt einer der beiden Bloecke, wird fuer diesen Zyklus
+kein Ausgangsblock erzeugt.
+
+AudioEffectGranular benoetigt fuer begin(sampleBank, maxLength) einen vom
+Aufrufer bereitgestellten Sample-Puffer. beginFreeze() nimmt einen Grain an
+einem Nulldurchgang auf und wiederholt ihn; beginPitchShift() nimmt Grains auf
+und wiederholt sie mit weicher Ausblendung. setSpeed() begrenzt die
+Wiedergabegeschwindigkeit auf 0.125 bis 8.0. Fuer Pitch-Shift muss der Puffer
+mindestens dreimal so gross wie die maximale Grain-Laenge sein. stop() schaltet
+den Effekt aus und reicht das Eingangssignal durch.
+
 AudioFilterBiquad bietet bis zu vier kaskadierte Stufen: setLowpass(),
 setHighpass(), setBandpass(), setNotch(), setLowShelf() und setHighShelf().
 setCoefficients(stage, int*) akzeptiert Q2.30-Koeffizienten im Format
