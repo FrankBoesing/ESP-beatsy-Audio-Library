@@ -247,7 +247,6 @@ class MP3Decoder {
     int32_t  MP3GetVersion();
 
   private:
-#include "mp3_decoder_consts.h"
 
     void ClearBuffer(void);
     void PolyphaseMono(int16_t *pcm, int32_t *vbuf, const uint32_t* coefBase);

@@ -18,3 +18,5 @@ PointerAlignment: Right
 ReferenceAlignment: Right
 SortIncludes: Never
 ReflowComments: false
+BinPackLongBracedList: true
+Cpp11BracedListStyle: true

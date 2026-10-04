@@ -4,6 +4,7 @@
  *
  *  Created on: 26.10.2018
  *  Updated on: 22.05.2024
+ *  Updated on: 03.10.2026 //FB
  ************************************************************************************/
 
 #include "aac_decoder.h"
@@ -16,41 +17,15 @@ static inline int32_t MULSHIFT32(int32_t x, int32_t y) {
     return z;
 }
 static inline int32_t CLZ(int32_t x) {
-#ifdef __XTENSA__
     return x == 0 ? 32 : __builtin_clz(x);
-    //return __builtin_clz(x);
-#else
-    int32_t numZeros;
-    if (!x)
-        return 32; /* count leading zeros with binary search (function should be 17 ARM instructions total) */
-    numZeros = 1;
-    if (!((uint32_t)x >> 16)) {
-        numZeros += 16;
-        x <<= 16;
-    }
-    if (!((uint32_t)x >> 24)) {
-        numZeros += 8;
-        x <<= 8;
-    }
-    if (!((uint32_t)x >> 28)) {
-        numZeros += 4;
-        x <<= 4;
-    }
-    if (!((uint32_t)x >> 30)) {
-        numZeros += 2;
-        x <<= 2;
-    }
-    numZeros -= ((uint32_t)x >> 31);
-    return numZeros;
-#endif
-}
+} // calls(0) exist.
 static inline int32_t FASTABS(int32_t x) {
     return __builtin_abs(x);
 } //FB
-static inline unsigned int REV16(unsigned int value) {
-    return (unsigned int)__builtin_bswap16((unsigned short)value);
-}; //FB
-static inline unsigned int REV32(unsigned int value) {
+static inline uint16_t REV16(uint16_t value) {
+    return __builtin_bswap16(value);
+} //FB
+static inline uint32_t REV32(uint32_t value) {
     return __builtin_bswap32(value);
 }; //FB
 static inline int64_t MADD64(int64_t sum64, int32_t x, int32_t y) {
@@ -58,17 +33,13 @@ static inline int64_t MADD64(int64_t sum64, int32_t x, int32_t y) {
     return sum64;
 }
 static inline int16_t CLIPTOSHORT(int32_t x) {
-#ifdef __XTENSA__ //fb
-    asm volatile("clamps %0, %0, 15" : "+a"(x));
-    return x;
-#else
-    int32_t sign; /* clip to [-32768, 32767] */
-    sign = x >> 31;
-    if (sign != (x >> 15))
-        x = sign ^ ((1 << 15) - 1);
+    if (x > 32767)
+        return 32767;
+    if (x < -32768)
+        return -32768;
     return (int16_t)x;
-#endif
-}
+} // Heutige compiler erkennen das und nutzen den Saturierungs-Assembler-Befehl // fb
+
 static inline int32_t CLIP_2N(int32_t y, int32_t n) {
 #ifdef __XTENSA__ //fb
     int32_t x = 1 << n;
@@ -102,7 +73,6 @@ static inline int32_t CLIP_2N_SHIFT30_4(int32_t y) {
         y = (y << 4);
     return y;
 }
-
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -4923,26 +4893,25 @@ inline void AACDecoder::RefillBitstreamCache() {
     uint32_t iCache = 0;
 
     switch (nBytes) {
-        case 3:
-            iCache = *ptr++;
-            iCache <<= 8;
-            [[fallthrough]];
+    case 3:
+        iCache = *ptr++;
+        iCache <<= 8;
+        [[fallthrough]];
 
-        case 2:
-            iCache |= *ptr++;
-            iCache <<= 8;
-            [[fallthrough]];
+    case 2:
+        iCache |= *ptr++;
+        iCache <<= 8;
+        [[fallthrough]];
 
-        case 1:
-            iCache |= *ptr++;
-            break;
+    case 1:
+        iCache |= *ptr++;
+        break;
 
-        case 0:
-            m_aac_BitStreamInfo.iCache = 0;
-            m_aac_BitStreamInfo.cachedBits = 0;
-            m_aac_BitStreamInfo.nBytes = 0;
-            return;
-
+    case 0:
+        m_aac_BitStreamInfo.iCache = 0;
+        m_aac_BitStreamInfo.cachedBits = 0;
+        m_aac_BitStreamInfo.nBytes = 0;
+        return;
     }
 
     m_aac_BitStreamInfo.iCache = iCache << ((3 - nBytes) * 8);
@@ -5319,8 +5288,7 @@ int32_t AACDecoder::DecodeSBRData(int32_t chBase, int16_t *outbuf) {
                 m_PSInfoSBR->XBuf[l][k][1] = m_PSInfoSBR->XBufDelay[chBase + ch][l][k][1];
             }
         }
-        */
-       for (l = HF_ADJ; l < endL; l++) { //fb
+        */ for (l = HF_ADJ; l < endL; l++) { //fb
             memcpy(&XBuf[l][kStartPrev][0], &XBufDelay[chBase + ch][l][kStartPrev][0],
                    (kStart - kStartPrev) * 2 * sizeof(int32_t));
         }
@@ -7840,9 +7808,9 @@ void AACDecoder::DecWindowOverlapShortNoClip(int32_t *buf0, int32_t *over0, int3
     } while (i);
     */
     { //fb
-    memcpy(out0, over0, 448 * sizeof(int32_t));
-    out0  += 448;
-    over0 += 448;
+        memcpy(out0, over0, 448 * sizeof(int32_t));
+        out0 += 448;
+        over0 += 448;
     }
 
     /* pcm[448-575] = Wp[0-127] * block0[0-127] + overlap[448-575] */
