@@ -22,7 +22,7 @@
  *   - I2S Philips standard
  *   - master
  *   - stereo
- *   - 32-bit I2S slots
+ *   - 16-bit I2S slots
  *   - MCLK = 256 * sample rate
  *
  * The AudioStream blocks remain 16-bit. Conversion to the 32-bit
@@ -88,8 +88,8 @@ class AudioOutputI2S : public AudioStream {
 
     static constexpr size_t QUEUE_LENGTH = 4;
 
-    // Same DMA sizing as the reference ESP32-audioI2S configuration.
-    static constexpr uint16_t DMA_DESC_NUM = 16;
+    // 6 descriptors x 128 frames x 4 bytes = 2 KiB (about 18 ms at 44.1 kHz).
+    static constexpr uint16_t DMA_DESC_NUM = 6;
     static constexpr uint16_t DMA_FRAME_NUM = AUDIO_BLOCK_SAMPLES;
 
     Pins i2sPins = defaultPins();

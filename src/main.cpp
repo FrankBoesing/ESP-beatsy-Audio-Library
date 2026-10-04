@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include <esp_heap_caps.h>
 
 #include "Audio.h"
 #include "softcodecs/AudioSourceStream.h"
@@ -28,6 +29,14 @@ AudioOutputI2S i2s({
 
 AudioConnection patchCordLeft(mp3, 0, i2s, 0);
 AudioConnection patchCordRight(mp3, 1, i2s, 1);
+
+void printFreeRam() {
+    Serial.printf("Free heap: internal %u B (largest block %u B, min ever %u B), PSRAM %u B\n",
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                  (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+}
 
 [[noreturn]] void stopWithError(const char *message) {
     Serial.println(message);
@@ -101,6 +110,7 @@ void setup() {
     }
 
     Serial.println("Deutschlandfunk stream playback started");
+    printFreeRam();
 }
 
 void loop() {

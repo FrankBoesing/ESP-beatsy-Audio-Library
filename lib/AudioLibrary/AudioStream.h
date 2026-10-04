@@ -214,17 +214,10 @@ class AudioStream {
     // -------------------------------------------------------------------------
 
     AudioConnection *destination_list;
-
     audio_block_t **inputQueue;
-
     static AudioStream *first_update;
-
     AudioStream *next_update;
 
-  #if AUDIO_STREAM_SORT_IO
-    static bool update_list_dirty;
-    static void sort_update_list_for_io(void);
-  #endif
 
     // -------------------------------------------------------------------------
     // Internal helpers

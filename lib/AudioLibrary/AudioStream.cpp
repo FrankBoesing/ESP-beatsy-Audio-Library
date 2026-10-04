@@ -23,11 +23,6 @@ uint32_t AudioStream::cpu_time_total_us = 0;
 uint32_t AudioStream::cpu_time_total_max_us = 0;
 
 AudioStream *AudioStream::first_update = nullptr;
-
-#if AUDIO_STREAM_SORT_IO
-bool AudioStream::update_list_dirty = false;
-#endif
-
 portMUX_TYPE AudioStream::audio_mux = portMUX_INITIALIZER_UNLOCKED;
 
 TaskHandle_t AudioStream::audio_task_handle = nullptr;
@@ -35,6 +30,10 @@ esp_timer_handle_t AudioStream::software_timer = nullptr;
 bool AudioStream::update_scheduled = false;
 bool AudioStream::external_update_clock = false;
 float AudioStream::audio_sample_rate = AUDIO_SAMPLE_RATE_EXACT;
+
+// True while the realtime audio task is traversing the static graph.
+// Used only to make update_stop() safe before deleting the task.
+static bool audio_processing = false;
 
 float AudioStream::processorUsage(uint8_t core) {
 #if defined(CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS) && \
@@ -123,47 +122,6 @@ AudioStream::AudioStream(unsigned char ninput, audio_block_t **iqueue)
     portEXIT_CRITICAL(&audio_mux);
 }
 
-#if AUDIO_STREAM_SORT_IO
-void AudioStream::sort_update_list_for_io(void) {
-    AudioStream *heads[3] = {};
-    AudioStream *tails[3] = {};
-
-    AudioStream *stream = first_update;
-    first_update = nullptr;
-
-    while (stream != nullptr) {
-        AudioStream *next = stream->next_update;
-        stream->next_update = nullptr;
-
-        const unsigned int group =
-            stream->num_inputs == 0 ? 0U
-                                    : (stream->destination_list == nullptr ? 2U
-                                                                           : 1U);
-
-        if (heads[group] == nullptr) {
-            heads[group] = stream;
-        } else {
-            tails[group]->next_update = stream;
-        }
-
-        tails[group] = stream;
-        stream = next;
-    }
-
-    AudioStream **tail = &first_update;
-
-    for (unsigned int group = 0; group < 3; ++group) {
-        if (heads[group] == nullptr) {
-            continue;
-        }
-
-        *tail = heads[group];
-        tail = &tails[group]->next_update;
-    }
-
-    *tail = nullptr;
-}
-#endif
 
 // =============================================================================
 // Audio timing / scheduler
@@ -312,17 +270,37 @@ void AudioStream::update_stop(void) {
     portENTER_CRITICAL(&audio_mux);
     update_scheduled = false;
     external_update_clock = false;
+    TaskHandle_t task = audio_task_handle;
     portEXIT_CRITICAL(&audio_mux);
 
     if (software_timer != nullptr) {
         esp_timer_stop(software_timer);
     }
 
-    if (audio_task_handle != nullptr) {
-        xTaskNotifyGive(audio_task_handle);
-        vTaskDelay(1);
-        vTaskDelete(audio_task_handle);
-        audio_task_handle = nullptr;
+    if (task != nullptr) {
+        // Wake the task in case it is blocked in ulTaskNotifyTake().
+        xTaskNotifyGive(task);
+
+        // A running process_all_now() must finish before the task is deleted.
+        // The graph itself is never locked here.
+        bool processing;
+
+        do {
+            portENTER_CRITICAL(&audio_mux);
+            processing = audio_processing;
+            portEXIT_CRITICAL(&audio_mux);
+            if (processing) {
+                taskYIELD();
+            }
+        } while (processing);
+
+        vTaskDelete(task);
+
+        portENTER_CRITICAL(&audio_mux);
+        if (audio_task_handle == task) {
+            audio_task_handle = nullptr;
+        }
+        portEXIT_CRITICAL(&audio_mux);
     }
 
     if (software_timer != nullptr) {
@@ -359,41 +337,32 @@ OSPEED
 void AudioStream::scheduler_task(void *) {
     for (;;) {
         ulTaskNotifyTake(pdFALSE, portMAX_DELAY);
-
-        bool running;
-        portENTER_CRITICAL(&audio_mux);
-        running = update_scheduled;
-        portEXIT_CRITICAL(&audio_mux);
-
-        if (running) {
-            process_all_now();
-        }
+        process_all_now();
     }
 }
 
 OSPEED
 void AudioStream::process_all_now(void) {
-    const uint32_t total_start = micros();
-
-    AudioStream *stream;
+    // The graph is immutable while the audio task exists.
+    // Take scheduler state and graph head atomically, then traverse
+    // the realtime graph without further critical sections.
     portENTER_CRITICAL(&audio_mux);
-#if AUDIO_STREAM_SORT_IO
-    if (update_list_dirty) {
-        sort_update_list_for_io();
-        update_list_dirty = false;
+
+    if (!update_scheduled) {
+        portEXIT_CRITICAL(&audio_mux);
+        return;
     }
-#endif
-    stream = first_update;
+
+    audio_processing = true;
+    AudioStream *stream = first_update;
+
     portEXIT_CRITICAL(&audio_mux);
 
+    const uint32_t total_start = micros();
+
     while (stream != nullptr) {
-        bool run_update;
-
-        portENTER_CRITICAL(&audio_mux);
-        run_update = stream->active;
-        portEXIT_CRITICAL(&audio_mux);
-
-        if (run_update) {
+        // Der komplette Audio-Graph muss nach update_setup() unveränderlich sein.
+        if (stream->active) {
             const uint32_t start = micros();
             stream->update();
             const uint32_t elapsed = micros() - start;
@@ -404,18 +373,20 @@ void AudioStream::process_all_now(void) {
             }
         }
 
-        portENTER_CRITICAL(&audio_mux);
         stream = stream->next_update;
-        portEXIT_CRITICAL(&audio_mux);
     }
 
     const uint32_t total_elapsed = micros() - total_start;
 
     portENTER_CRITICAL(&audio_mux);
+
     cpu_time_total_us = total_elapsed;
     if (total_elapsed > cpu_time_total_max_us) {
         cpu_time_total_max_us = total_elapsed;
     }
+
+    audio_processing = false;
+
     portEXIT_CRITICAL(&audio_mux);
 }
 
@@ -444,25 +415,22 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num,
     memory_used = 0;
     memory_used_max = 0;
 
-    // Clear all mask words first.
+    // Mark all valid blocks as available.
+    // Unused bits in the last mask word remain cleared.
     for (unsigned int i = 0; i < mask_words; ++i) {
-        available_mask[i] = 0;
+        available_mask[i] = 0xFFFFFFFFu;
     }
 
-    // Mark all blocks as available.
+    const uint32_t remaining = num & 31;
+    if (remaining != 0) {
+        available_mask[mask_words - 1] = (uint32_t(1) << remaining) - 1u;
+    }
+
     for (unsigned int i = 0; i < num; ++i) {
-        available_mask[i >> 5] |= (uint32_t(1) << (i & 0x1F));
         data[i].memory_pool_index = static_cast<uint16_t>(i);
         data[i].ref_count = 0;
         data[i].reserved1 = 0;
     }
-
-#if AUDIO_STREAM_SORT_IO
-    if (!update_scheduled) {
-        sort_update_list_for_io();
-        update_list_dirty = false;
-    }
-#endif
 
     portEXIT_CRITICAL(&audio_mux);
 
@@ -522,12 +490,9 @@ audio_block_t *AudioStream::allocate_locked(void) {
 
         if (available != 0) {
             // Find the lowest available bit.
-            uint32_t bit = available & (~available + 1U);
 
-            uint32_t bit_index =
-                static_cast<uint32_t>(__builtin_ctz(available));
-
-            available &= ~bit;
+            const uint32_t bit_index = __builtin_ctz(available);
+            available &= available - 1u;
 
             memory_pool_available_mask[index] = available;
 
@@ -537,22 +502,9 @@ audio_block_t *AudioStream::allocate_locked(void) {
                 memory_pool_first_mask = index;
             }
 
-            uint32_t block_index =
-                (static_cast<uint32_t>(index) << 5) + bit_index;
-
-            if (block_index >= memory_pool_size) {
-                // This can only happen for unused bits in the final mask.
-                // Put the bit back and continue searching.
-                memory_pool_available_mask[index] |= bit;
-                ++index;
-                memory_pool_first_mask = index;
-                continue;
-            }
-
+            uint32_t block_index = (static_cast<uint32_t>(index) << 5) + bit_index;
             audio_block_t *block = &memory_pool[block_index];
-
             block->ref_count = 1;
-
             ++memory_used;
 
             if (memory_used > memory_used_max) {
@@ -832,6 +784,13 @@ int AudioConnection::connect(void) {
 
     portENTER_CRITICAL(&AudioStream::audio_mux);
 
+    // The realtime path traverses the graph without locks.
+    // Therefore connections cannot be changed while the audio task exists.
+    if (AudioStream::audio_task_handle != nullptr) {
+        portEXIT_CRITICAL(&AudioStream::audio_mux);
+        return 5;  // Graph is locked while the audio task is active.
+    }
+
     // Check whether the destination input is already used.
 
     for (AudioStream *s = AudioStream::first_update; s != nullptr;
@@ -868,9 +827,6 @@ int AudioConnection::connect(void) {
     dst->active = true;
 
     isConnected = true;
-#if AUDIO_STREAM_SORT_IO
-    AudioStream::update_list_dirty = true;
-#endif
 
     portEXIT_CRITICAL(&AudioStream::audio_mux);
 
@@ -915,6 +871,13 @@ int AudioConnection::disconnect(void) {
     }
 
     portENTER_CRITICAL(&AudioStream::audio_mux);
+
+    // The realtime path traverses the graph without locks.
+    // Therefore connections cannot be changed while the audio task exists.
+    if (AudioStream::audio_task_handle != nullptr) {
+        portEXIT_CRITICAL(&AudioStream::audio_mux);
+        return 5;  // Graph is locked while the audio task is active.
+    }
 
     // Remove this connection from the source list.
     AudioConnection *p = src->destination_list;
@@ -964,9 +927,6 @@ int AudioConnection::disconnect(void) {
 
     isConnected = false;
     next_dest = nullptr;
-#if AUDIO_STREAM_SORT_IO
-    AudioStream::update_list_dirty = true;
-#endif
 
     portEXIT_CRITICAL(&AudioStream::audio_mux);
 

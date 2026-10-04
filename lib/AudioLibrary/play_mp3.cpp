@@ -110,7 +110,6 @@ bool AudioPlayMp3::startPlayback(AudioSource &source, bool takeOwnership) {
     _inputPrepared = false;
 
     std::memset(_input, 0, sizeof(_input));
-
     std::memset(&_frameInfo, 0, sizeof(_frameInfo));
 
     _sampleRate = 0;
