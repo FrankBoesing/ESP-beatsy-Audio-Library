@@ -55,7 +55,7 @@ void AudioEffectGranular::setSpeed(float ratio) {
         ratio = 8.0f;
     }
 
-    const uint32_t rate = static_cast<uint32_t>(ratio * FIXED_POINT_ONE + 0.5f);
+    const uint32_t rate = (uint32_t)(ratio * FIXED_POINT_ONE + 0.5f);
     portENTER_CRITICAL(&_configMux);
     _playbackRate = rate;
     portEXIT_CRITICAL(&_configMux);
@@ -67,7 +67,7 @@ void AudioEffectGranular::beginFreeze(float grainLengthMs) {
     }
 
     const float samples = grainLengthMs * (sampleRate() * 0.001f) + 0.5f;
-    beginFreezeSamples(samples >= static_cast<float>(UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(samples));
+    beginFreezeSamples(samples >= (float)(UINT32_MAX) ? UINT32_MAX : (uint32_t)(samples));
 }
 
 void AudioEffectGranular::beginPitchShift(float grainLengthMs) {
@@ -76,7 +76,7 @@ void AudioEffectGranular::beginPitchShift(float grainLengthMs) {
     }
 
     const float samples = grainLengthMs * (sampleRate() * 0.001f) + 0.5f;
-    beginPitchShiftSamples(samples >= static_cast<float>(UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(samples));
+    beginPitchShiftSamples(samples >= (float)(UINT32_MAX) ? UINT32_MAX : (uint32_t)(samples));
 }
 
 void AudioEffectGranular::beginFreezeSamples(uint32_t grainSamples) {
@@ -232,8 +232,8 @@ void AudioEffectGranular::update() {
                         } else if (sample >= 2) {
                             const uint32_t gain = ((_activeGlitchLength - sample) << 15) / fadeLength;
                             const int32_t scaled =
-                                static_cast<int32_t>(sampleBank[sample]) * static_cast<int32_t>(gain);
-                            value = static_cast<int16_t>(signed_saturate_rshift(scaled, 16, 15));
+                                (int32_t)(sampleBank[sample]) * (int32_t)(gain);
+                            value = (int16_t)(signed_saturate_rshift(scaled, 16, 15));
                         }
                         sampleBank[sample + _activeGlitchLength] = value;
                         sampleBank[sample + 2 * _activeGlitchLength] = value;

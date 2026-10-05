@@ -18,7 +18,7 @@ AudioSourceStream::~AudioSourceStream() {
 }
 
 OSIZE
-bool AudioSourceStream::open(Stream &stream) {
+bool AudioSourceStream::open(Stream &stream, uint32_t icyMetaInt) {
     close();
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -26,14 +26,31 @@ bool AudioSourceStream::open(Stream &stream) {
         return false;
     }
 
-    _buffer = static_cast<uint8_t *>(
-        heap_caps_malloc(BUFFER_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    _buffer = (uint8_t *)heap_caps_malloc(BUFFER_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 #else
-    _buffer = static_cast<uint8_t *>(malloc(BUFFER_SIZE));
+    _buffer = (uint8_t *)malloc(BUFFER_SIZE);
 #endif
 
     if (_buffer == nullptr) {
         return false;
+    }
+
+    if (icyMetaInt > 0) {
+#if defined(ARDUINO_ARCH_ESP32)
+        _icyMetadataWriteBuffer =
+            (uint8_t *)heap_caps_malloc(ICY_METADATA_MAX_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        _icyMetadataReadyBuffer =
+            (uint8_t *)heap_caps_malloc(ICY_METADATA_MAX_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+#else
+        _icyMetadataWriteBuffer = (uint8_t *)malloc(ICY_METADATA_MAX_SIZE);
+        _icyMetadataReadyBuffer = (uint8_t *)malloc(ICY_METADATA_MAX_SIZE);
+#endif
+        _icyMetadataMutex = xSemaphoreCreateMutex();
+        if (_icyMetadataWriteBuffer == nullptr || _icyMetadataReadyBuffer == nullptr ||
+            _icyMetadataMutex == nullptr) {
+            close();
+            return false;
+        }
     }
 
     uint32_t now = millis();
@@ -41,9 +58,6 @@ bool AudioSourceStream::open(Stream &stream) {
     portENTER_CRITICAL(&_bufferMux);
     _stream = &stream;
     _position = 0;
-    _receivedBytes = 0;
-    _wouldBlockCount = 0;
-    _networkWaitMs = 0;
     _lastDataMs = now;
     _streamError = false;
     _readIndex = 0;
@@ -51,6 +65,13 @@ bool AudioSourceStream::open(Stream &stream) {
     _bufferedBytes = 0;
     _stopRequested = false;
     portEXIT_CRITICAL(&_bufferMux);
+
+    _icyMetaInt = icyMetaInt;
+    _icyAudioRemaining = icyMetaInt;
+    _icyMetadataExpected = 0;
+    _icyMetadataReceived = 0;
+    _icyNeedLength = true;
+    _icyMetadataReadySize = 0;
 
     stream.setTimeout(STREAM_READ_TIMEOUT_MS);
 
@@ -64,6 +85,34 @@ bool AudioSourceStream::open(Stream &stream) {
         return false;
     }
 
+    return true;
+}
+
+bool AudioSourceStream::takeIcyMetadata(uint8_t *buffer, size_t capacity, size_t &size) {
+    size = 0;
+    if (_icyMetadataMutex == nullptr || (buffer == nullptr && capacity > 0)) {
+        return false;
+    }
+
+    if (xSemaphoreTake(_icyMetadataMutex, portMAX_DELAY) != pdTRUE) {
+        return false;
+    }
+
+    const size_t pendingSize = _icyMetadataReadySize;
+    if (pendingSize == 0) {
+        xSemaphoreGive(_icyMetadataMutex);
+        return false;
+    }
+
+    size = pendingSize;
+    if (buffer == nullptr || capacity < pendingSize) {
+        xSemaphoreGive(_icyMetadataMutex);
+        return false;
+    }
+
+    memcpy(buffer, _icyMetadataReadyBuffer, pendingSize);
+    _icyMetadataReadySize = 0;
+    xSemaphoreGive(_icyMetadataMutex);
     return true;
 }
 
@@ -87,7 +136,6 @@ AudioSourceStatus AudioSourceStream::read(uint8_t *buffer,
 
     bytesToRead = std::min(requested, _bufferedBytes);
     if (bytesToRead == 0) {
-        ++_wouldBlockCount;
         const bool streamError = _streamError;
         portEXIT_CRITICAL(&_bufferMux);
         return streamError ? AudioSourceStatus::ERROR
@@ -156,7 +204,6 @@ void AudioSourceStream::close() {
 
     _stream = nullptr;
     _position = 0;
-    _receivedBytes = 0;
     _readIndex = 0;
     _writeIndex = 0;
     _bufferedBytes = 0;
@@ -165,13 +212,30 @@ void AudioSourceStream::close() {
 
     portEXIT_CRITICAL(&_bufferMux);
 
+    if (_icyMetadataMutex != nullptr) {
+        vSemaphoreDelete(_icyMetadataMutex);
+        _icyMetadataMutex = nullptr;
+    }
+
 #if defined(ARDUINO_ARCH_ESP32)
     heap_caps_free(_buffer);
+    heap_caps_free(_icyMetadataWriteBuffer);
+    heap_caps_free(_icyMetadataReadyBuffer);
 #else
     free(_buffer);
+    free(_icyMetadataWriteBuffer);
+    free(_icyMetadataReadyBuffer);
 #endif
 
     _buffer = nullptr;
+    _icyMetadataWriteBuffer = nullptr;
+    _icyMetadataReadyBuffer = nullptr;
+    _icyMetadataReadySize = 0;
+    _icyMetaInt = 0;
+    _icyAudioRemaining = 0;
+    _icyMetadataExpected = 0;
+    _icyMetadataReceived = 0;
+    _icyNeedLength = true;
 }
 
 bool AudioSourceStream::isOpen() const {
@@ -194,12 +258,10 @@ Stream *AudioSourceStream::stream() {
     return _stream;
 }
 
-bool AudioSourceStream::recordNetworkWait() {
+bool AudioSourceStream::checkNetworkTimeout() {
     const uint32_t now = millis();
 
     portENTER_CRITICAL(&_bufferMux);
-    _networkWaitMs += 2;
-
     const bool timedOut = now - _lastDataMs >= NETWORK_IDLE_TIMEOUT_MS;
 
     if (timedOut) {
@@ -211,22 +273,6 @@ bool AudioSourceStream::recordNetworkWait() {
     return timedOut;
 }
 
-uint32_t AudioSourceStream::wouldBlockCount() const {
-    portENTER_CRITICAL(&_bufferMux);
-    const uint32_t count = _wouldBlockCount;
-    portEXIT_CRITICAL(&_bufferMux);
-
-    return count;
-}
-
-uint32_t AudioSourceStream::networkWaitMs() const {
-    portENTER_CRITICAL(&_bufferMux);
-    const uint32_t waitMs = _networkWaitMs;
-    portEXIT_CRITICAL(&_bufferMux);
-
-    return waitMs;
-}
-
 size_t AudioSourceStream::bufferedBytes() const {
     portENTER_CRITICAL(&_bufferMux);
     const size_t buffered = _bufferedBytes;
@@ -235,16 +281,8 @@ size_t AudioSourceStream::bufferedBytes() const {
     return buffered;
 }
 
-uint64_t AudioSourceStream::receivedBytes() const {
-    portENTER_CRITICAL(const_cast<portMUX_TYPE *>(&_bufferMux));
-    const uint64_t received = _receivedBytes;
-    portEXIT_CRITICAL(const_cast<portMUX_TYPE *>(&_bufferMux));
-
-    return received;
-}
-
 void AudioSourceStream::producerTaskEntry(void *arg) {
-    static_cast<AudioSourceStream *>(arg)->producerTaskLoop();
+    ((AudioSourceStream *)arg)->producerTaskLoop();
 }
 
 void AudioSourceStream::producerTaskLoop() {
@@ -285,11 +323,80 @@ void AudioSourceStream::producerTaskLoop() {
         const int available = stream->available();
 
         if (available <= 0) { //No Data
-            if (recordNetworkWait()) {
+            if (checkNetworkTimeout()) {
                 break;
             }
 
             vTaskDelay(pdMS_TO_TICKS(5));
+            continue;
+        }
+
+        if (_icyMetaInt > 0 && _icyAudioRemaining == 0) {
+            if (_icyNeedLength) {
+                uint8_t lengthUnits = 0;
+                const size_t received = stream->readBytes(
+                    (char *)&lengthUnits, sizeof(lengthUnits));
+                if (received == 0) {
+                    if (checkNetworkTimeout()) {
+                        break;
+                    }
+
+                    vTaskDelay(pdMS_TO_TICKS(5));
+                    continue;
+                }
+
+                const uint32_t now = millis();
+                portENTER_CRITICAL(&_bufferMux);
+                _lastDataMs = now;
+                portEXIT_CRITICAL(&_bufferMux);
+
+                _icyMetadataExpected = lengthUnits * 16U;
+                _icyMetadataReceived = 0;
+                _icyNeedLength = false;
+                if (_icyMetadataExpected == 0) {
+                    _icyAudioRemaining = _icyMetaInt;
+                    _icyNeedLength = true;
+                }
+                continue;
+            }
+
+            const size_t metadataRemaining =
+                _icyMetadataExpected - _icyMetadataReceived;
+            const size_t availableBytes = available;
+            const size_t metadataChunk = std::min(
+                metadataRemaining, std::min(availableBytes, PRODUCER_CHUNK_SIZE));
+            const size_t received = stream->readBytes(
+                (char *)(_icyMetadataWriteBuffer + _icyMetadataReceived),
+                metadataChunk);
+
+            if (received == 0) {
+                if (checkNetworkTimeout()) {
+                    break;
+                }
+
+                vTaskDelay(pdMS_TO_TICKS(5));
+                continue;
+            }
+
+            const uint32_t now = millis();
+            portENTER_CRITICAL(&_bufferMux);
+            _lastDataMs = now;
+            portEXIT_CRITICAL(&_bufferMux);
+
+            _icyMetadataReceived += received;
+            if (_icyMetadataReceived == _icyMetadataExpected) {
+                if (xSemaphoreTake(_icyMetadataMutex, portMAX_DELAY) != pdTRUE) {
+                    break;
+                }
+                std::swap(_icyMetadataWriteBuffer, _icyMetadataReadyBuffer);
+                _icyMetadataReadySize = _icyMetadataExpected;
+                xSemaphoreGive(_icyMetadataMutex);
+
+                _icyMetadataExpected = 0;
+                _icyMetadataReceived = 0;
+                _icyAudioRemaining = _icyMetaInt;
+                _icyNeedLength = true;
+            }
             continue;
         }
 
@@ -302,11 +409,16 @@ void AudioSourceStream::producerTaskLoop() {
          * Because freeBytes is already limited to the contiguous
          * region up to BUFFER_SIZE, no wrap-around write can occur here.
          */
-        const size_t requested = std::min(freeBytes, static_cast<size_t>(available));
-        const size_t received = stream->readBytes(reinterpret_cast<char *>(_buffer + writeIndex),requested);
+        const size_t availableBytes = available;
+        size_t requested = std::min(freeBytes, availableBytes);
+        if (_icyMetaInt > 0) {
+            const size_t icyAudioRemaining = _icyAudioRemaining;
+            requested = std::min(requested, icyAudioRemaining);
+        }
+        const size_t received = stream->readBytes((char *)(_buffer + writeIndex), requested);
 
         if (received == 0) {
-            if (recordNetworkWait()) {
+            if (checkNetworkTimeout()) {
                 break;
             }
 
@@ -321,7 +433,9 @@ void AudioSourceStream::producerTaskLoop() {
         if (_writeIndex == BUFFER_SIZE)
             _writeIndex = 0;
         _bufferedBytes += received;
-        _receivedBytes += received;
+        if (_icyMetaInt > 0) {
+            _icyAudioRemaining -= received;
+        }
         portEXIT_CRITICAL(&_bufferMux);
     }
 

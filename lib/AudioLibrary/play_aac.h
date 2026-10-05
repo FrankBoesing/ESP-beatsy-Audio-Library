@@ -47,7 +47,7 @@ class AudioPlayAac : public AudioDecoderStream {
     }
 
     int bitRate() const {
-        return static_cast<int>(_bitrate);
+        return _bitrate;
     }
 
     int lastError() const {
@@ -59,15 +59,13 @@ class AudioPlayAac : public AudioDecoderStream {
         _playing = false;
     }
 
-    DecodeResult decodePcmBuffer(int16_t *destination, size_t capacity,
-                                 size_t &outSamples) override;
+    DecodeResult decodePcmBuffer(int16_t *destination, size_t capacity, size_t &outSamples) override;
 
   private:
     static constexpr size_t AAC_PCM_BUFFER_SAMPLES = AAC_MAX_NCHANS * AAC_MAX_NSAMPS * 2U;
     static constexpr size_t AAC_INPUT_BUFFER_SIZE = 3072;
     static constexpr size_t AAC_MIN_FRAME_BYTES = AAC_MAINBUF_SIZE + 8U;
     static_assert(AAC_INPUT_BUFFER_SIZE > AAC_MIN_FRAME_BYTES, "AAC input buffer too small for one frame");
-
 
     bool startPlayback(AudioSource &source, bool takeOwnership);
     void closeSource();
@@ -91,8 +89,8 @@ class AudioPlayAac : public AudioDecoderStream {
     AACDecoder _decoder;
     AACFrameInfo _frameInfo = {};
 
-    uint32_t _sampleRate = 0;
-    uint16_t _channels = 0;
+    int32_t _sampleRate = 0;
+    int32_t _channels = 0;
     uint32_t _bitrate = 0;
 
 #if SOFTCODEC_METRICS

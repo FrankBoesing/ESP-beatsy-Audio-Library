@@ -177,8 +177,6 @@ void loop() {
                       (unsigned long)aac.decodeFrames(),
                       (double)aac.decodeTimeUsTotal() / 1000000.0);
 #endif
-        Serial.printf("PCM underrun frames: %lu\n",
-                      (unsigned long)aac.pcmUnderrunFrames());
         Serial.printf("Position: %lu ms / %lu ms\n",
                       (unsigned long)aac.positionMillis(),
                       (unsigned long)aac.lengthMillis());

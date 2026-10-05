@@ -83,7 +83,7 @@ void setup() {
     Serial.println("Buffering stream...");
     const uint32_t bufferDeadline = millis() + 30000;
     while (audioSource.bufferedBytes() < 32U * 1024U &&
-           static_cast<int32_t>(bufferDeadline - millis()) > 0) {
+           (int32_t)(bufferDeadline - millis()) > 0) {
         delay(10);
     }
     if (audioSource.bufferedBytes() < 32U * 1024U) {
@@ -103,38 +103,16 @@ void setup() {
 
 void loop() {
     static uint32_t lastStatus = 0;
-    static uint64_t lastBytes = 0;
-    static uint32_t lastWouldBlockCount = 0;
-    static uint32_t lastPcmUnderrunFrames = 0;
-    static uint32_t lastNetworkWaitMs = 0;
 
     if (millis() - lastStatus >= 5000) {
-        const uint32_t now = millis();
-        const uint32_t elapsed = now - lastStatus;
-        lastStatus = now;
-
-        const uint64_t bytes = audioSource.receivedBytes();
-        const uint32_t wouldBlockCount = audioSource.wouldBlockCount();
-        const uint32_t pcmUnderrunFrames = mp3.pcmUnderrunFrames();
-        const uint32_t networkWaitMs = audioSource.networkWaitMs();
+        lastStatus = millis();
         const float core0Usage = AudioStream::processorUsage(0);
         const float core1Usage = AudioStream::processorUsage(1);
-        const double inputKbps = elapsed > 0 ? (bytes - lastBytes) * 8.0f / elapsed : 0.0;
 
-        Serial.printf("Wi-Fi: %s (RSSI %d dBm), MP3: %s (error %d), "
-                  "input: %.1f kbit/s\n",
+        Serial.printf("Wi-Fi: %s (RSSI %d dBm), MP3: %s (error %d)\n",
                       WiFi.status() == WL_CONNECTED ? "connected" : "disconnected",
                       WiFi.RSSI(), mp3.isPlaying() ? "playing" : "waiting",
-                  mp3.lastError(),
-                      inputKbps);
-        Serial.printf("5s deltas: input empty=%lu, network wait=%lu"
-                  " ms, PCM silence=%lu frames, received=%llu"
-                  " bytes, buffer=%u/%u KiB\n",
-                      wouldBlockCount - lastWouldBlockCount,
-                      networkWaitMs - lastNetworkWaitMs,
-                      pcmUnderrunFrames - lastPcmUnderrunFrames, bytes,
-                      audioSource.bufferedBytes() / 1024,
-                      AudioSourceStream::BUFFER_SIZE / 1024);
+                      mp3.lastError());
 #if SOFTCODEC_METRICS
         Serial.printf("Decoder load: avg %.2f%%, max %.2f%%\n",
                       mp3.decodeProcessorUsage(),
@@ -146,11 +124,6 @@ void loop() {
             Serial.printf("CPU cores: core 0 %.1f%%, core 1 %.1f%%\n",
                           core0Usage, core1Usage);
         }
-
-        lastBytes = bytes;
-        lastWouldBlockCount = wouldBlockCount;
-        lastPcmUnderrunFrames = pcmUnderrunFrames;
-        lastNetworkWaitMs = networkWaitMs;
     }
 
     vTaskDelay(200);

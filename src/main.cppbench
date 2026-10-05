@@ -82,12 +82,12 @@ void interleave_pragma4(
     const int16_t* __restrict left  = leftInput;
     const int16_t* __restrict right = rightInput;
     uint32_t* __restrict dst =
-        reinterpret_cast<uint32_t*>(bufferInput);
+        (uint32_t*)(bufferInput);
 
 #pragma GCC unroll 4
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        const uint32_t l = static_cast<uint16_t>(left[i]);
-        const uint32_t r = static_cast<uint16_t>(right[i]);
+        const uint32_t l = (uint16_t)(left[i]);
+        const uint32_t r = (uint16_t)(right[i]);
         dst[i] = l | (r << 16);
     }
 }
@@ -106,23 +106,23 @@ void interleave_manual4(
     const int16_t* __restrict left  = leftInput;
     const int16_t* __restrict right = rightInput;
     uint32_t* __restrict dst =
-        reinterpret_cast<uint32_t*>(bufferInput);
+        (uint32_t*)(bufferInput);
 
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; i += 4) {
-        const uint32_t l0 = static_cast<uint16_t>(left[i + 0]);
-        const uint32_t r0 = static_cast<uint16_t>(right[i + 0]);
+        const uint32_t l0 = (uint16_t)(left[i + 0]);
+        const uint32_t r0 = (uint16_t)(right[i + 0]);
         dst[i + 0] = l0 | (r0 << 16);
 
-        const uint32_t l1 = static_cast<uint16_t>(left[i + 1]);
-        const uint32_t r1 = static_cast<uint16_t>(right[i + 1]);
+        const uint32_t l1 = (uint16_t)(left[i + 1]);
+        const uint32_t r1 = (uint16_t)(right[i + 1]);
         dst[i + 1] = l1 | (r1 << 16);
 
-        const uint32_t l2 = static_cast<uint16_t>(left[i + 2]);
-        const uint32_t r2 = static_cast<uint16_t>(right[i + 2]);
+        const uint32_t l2 = (uint16_t)(left[i + 2]);
+        const uint32_t r2 = (uint16_t)(right[i + 2]);
         dst[i + 2] = l2 | (r2 << 16);
 
-        const uint32_t l3 = static_cast<uint16_t>(left[i + 3]);
-        const uint32_t r3 = static_cast<uint16_t>(right[i + 3]);
+        const uint32_t l3 = (uint16_t)(left[i + 3]);
+        const uint32_t r3 = (uint16_t)(right[i + 3]);
         dst[i + 3] = l3 | (r3 << 16);
     }
 }
@@ -142,11 +142,11 @@ void interleave_no_unroll(
     const int16_t* __restrict left  = leftInput;
     const int16_t* __restrict right = rightInput;
     uint32_t* __restrict dst =
-        reinterpret_cast<uint32_t*>(bufferInput);
+        (uint32_t*)(bufferInput);
 
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        const uint32_t l = static_cast<uint16_t>(left[i]);
-        const uint32_t r = static_cast<uint16_t>(right[i]);
+        const uint32_t l = (uint16_t)(left[i]);
+        const uint32_t r = (uint16_t)(right[i]);
         dst[i] = l | (r << 16);
     }
 }
@@ -255,7 +255,7 @@ static Stats benchmark(
     Stats s;
     s.min = minimum;
     s.median = medianOf(timings, MEASUREMENTS);
-    s.average = static_cast<uint32_t>(
+    s.average = (uint32_t)(
         total / MEASUREMENTS);
 
     return s;
@@ -266,22 +266,22 @@ static void printStats(
 {
     Serial.printf(
         "  min=%10lu  median=%10lu  avg=%10lu cycles / %lu calls\n",
-        static_cast<unsigned long>(s.min),
-        static_cast<unsigned long>(s.median),
-        static_cast<unsigned long>(s.average),
-        static_cast<unsigned long>(INNER_LOOPS));
+        (unsigned long)(s.min),
+        (unsigned long)(s.median),
+        (unsigned long)(s.average),
+        (unsigned long)(INNER_LOOPS));
 
     const double divisor =
-        static_cast<double>(INNER_LOOPS) *
-        static_cast<double>(AUDIO_BLOCK_SAMPLES);
+        (double)(INNER_LOOPS) *
+        (double)(AUDIO_BLOCK_SAMPLES);
 
     Serial.printf(
         "  min/sample = %.4f cycles\n",
-        static_cast<double>(s.min) / divisor);
+        (double)(s.min) / divisor);
 
     Serial.printf(
         "  median/sample = %.4f cycles\n",
-        static_cast<double>(s.median) / divisor);
+        (double)(s.median) / divisor);
 }
 
 
@@ -294,10 +294,10 @@ static void initData()
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         // Deterministic, non-trivial data.
         left[i] =
-            static_cast<int16_t>(i * 73 - 3000);
+            (int16_t)(i * 73 - 3000);
 
         right[i] =
-            static_cast<int16_t>(2500 - i * 41);
+            (int16_t)(2500 - i * 41);
     }
 
     memset(reference, 0, sizeof(reference));
@@ -338,19 +338,19 @@ static void runBenchmark()
 
     Serial.printf(
         "CPU: %lu MHz\n",
-        static_cast<unsigned long>(ESP.getCpuFreqMHz()));
+        (unsigned long)(ESP.getCpuFreqMHz()));
 
     Serial.printf(
         "AUDIO_BLOCK_SAMPLES: %lu\n",
-        static_cast<unsigned long>(AUDIO_BLOCK_SAMPLES));
+        (unsigned long)(AUDIO_BLOCK_SAMPLES));
 
     Serial.printf(
         "INNER_LOOPS: %lu\n",
-        static_cast<unsigned long>(INNER_LOOPS));
+        (unsigned long)(INNER_LOOPS));
 
     Serial.printf(
         "MEASUREMENTS: %lu\n",
-        static_cast<unsigned long>(MEASUREMENTS));
+        (unsigned long)(MEASUREMENTS));
 
     initData();
 
@@ -404,13 +404,13 @@ static void runBenchmark()
     Serial.println("Comparison:");
 
     const double a =
-        static_cast<double>(sA.min);
+        (double)(sA.min);
 
     const double b =
-        static_cast<double>(sB.min);
+        (double)(sB.min);
 
     const double control =
-        static_cast<double>(s0.min);
+        (double)(s0.min);
 
     Serial.printf(
         "A vs B: %.3f %%\n",

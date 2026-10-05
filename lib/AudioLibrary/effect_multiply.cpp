@@ -44,8 +44,8 @@ void AudioEffectMultiply::update() {
     }
 
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        const int32_t product = static_cast<int32_t>(output->data[i]) * static_cast<int32_t>(modulator->data[i]);
-        output->data[i] = static_cast<int16_t>(signed_saturate_rshift(product, 16, 15));
+        const int32_t product = (int32_t)(output->data[i]) * (int32_t)(modulator->data[i]);
+        output->data[i] = (int16_t)(signed_saturate_rshift(product, 16, 15));
     }
 
     transmit(output);

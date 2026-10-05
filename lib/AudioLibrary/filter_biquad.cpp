@@ -11,15 +11,15 @@ constexpr double Q30_SCALE = 1073741824.0;
 static inline int32_t toQ30(double value) {
     const double scaled = value * Q30_SCALE;
 
-    if (scaled >= static_cast<double>(std::numeric_limits<int32_t>::max())) {
+    if (scaled >= (double)(std::numeric_limits<int32_t>::max())) {
         return std::numeric_limits<int32_t>::max();
     }
 
-    if (scaled <= static_cast<double>(std::numeric_limits<int32_t>::min())) {
+    if (scaled <= (double)(std::numeric_limits<int32_t>::min())) {
         return std::numeric_limits<int32_t>::min();
     }
 
-    return static_cast<int32_t>(scaled);
+    return (int32_t)(scaled);
 }
 
 static inline int64_t roundQ30(int64_t value) {
@@ -41,7 +41,7 @@ static inline int16_t saturatePcm(int64_t value) {
         return -32768;
     }
 
-    return static_cast<int16_t>(value);
+    return (int16_t)(value);
 }
 
 bool validFrequencyAndQ(float frequency, float q) {
@@ -80,7 +80,7 @@ void AudioFilterBiquad::storeCoefficients(uint32_t stage,
     portENTER_CRITICAL(&_configMux);
     _coefficients[stage] = converted;
     if (_stageCount <= stage) {
-        _stageCount = static_cast<uint8_t>(stage + 1U);
+        _stageCount = (uint8_t)(stage + 1U);
     }
     portEXIT_CRITICAL(&_configMux);
 }
@@ -93,11 +93,11 @@ void AudioFilterBiquad::setCoefficients(uint32_t stage,
 
     constexpr double Q30_INVERSE = 1.0 / Q30_SCALE;
     const double converted[5] = {
-        static_cast<double>(coefficients[0]) * Q30_INVERSE,
-        static_cast<double>(coefficients[1]) * Q30_INVERSE,
-        static_cast<double>(coefficients[2]) * Q30_INVERSE,
-        static_cast<double>(coefficients[3]) * Q30_INVERSE,
-        static_cast<double>(coefficients[4]) * Q30_INVERSE,
+        (double)(coefficients[0]) * Q30_INVERSE,
+        (double)(coefficients[1]) * Q30_INVERSE,
+        (double)(coefficients[2]) * Q30_INVERSE,
+        (double)(coefficients[3]) * Q30_INVERSE,
+        (double)(coefficients[4]) * Q30_INVERSE,
     };
 
     storeCoefficients(stage, converted);
@@ -189,12 +189,12 @@ void AudioFilterBiquad::setLowShelf(uint32_t stage, float frequency, float gain,
         return;
     }
 
-    const double a = std::pow(10.0, static_cast<double>(gain) / 40.0);
+    const double a = std::pow(10.0, (double)(gain) / 40.0);
     const double w0 = 2.0 * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
     const double sine = std::sin(w0);
     const double cosine = std::cos(w0);
     const double radicand =
-        (a + 1.0 / a) * (1.0 / static_cast<double>(slope) - 1.0) + 2.0;
+        (a + 1.0 / a) * (1.0 / (double)(slope) - 1.0) + 2.0;
 
     if (radicand < 0.0) {
         return;
@@ -228,12 +228,12 @@ void AudioFilterBiquad::setHighShelf(uint32_t stage, float frequency,
         return;
     }
 
-    const double a = std::pow(10.0, static_cast<double>(gain) / 40.0);
+    const double a = std::pow(10.0, (double)(gain) / 40.0);
     const double w0 = 2.0 * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
     const double sine = std::sin(w0);
     const double cosine = std::cos(w0);
     const double radicand =
-        (a + 1.0 / a) * (1.0 / static_cast<double>(slope) - 1.0) + 2.0;
+        (a + 1.0 / a) * (1.0 / (double)(slope) - 1.0) + 2.0;
 
     if (radicand < 0.0) {
         return;
@@ -272,7 +272,7 @@ void AudioFilterBiquad::update() {
 
     portENTER_CRITICAL(&_configMux);
     stageCount = _stageCount;
-    std::memcpy(coefficients, _coefficients, stageCount * sizeof(Coefficients));
+    memcpy(coefficients, _coefficients, stageCount * sizeof(Coefficients));
     portEXIT_CRITICAL(&_configMux);
 
     if (stageCount == 0) {
@@ -288,13 +288,13 @@ void AudioFilterBiquad::update() {
             State &state = _state[stage];
             const int16_t stageInput = value;
 
-            const int64_t outputQ30 = static_cast<int64_t>(c.b0) * stageInput + state.s1;
+            const int64_t outputQ30 = (int64_t)(c.b0) * stageInput + state.s1;
             value = saturatePcm(roundQ30(outputQ30));
 
-            state.s1 = static_cast<int64_t>(c.b1) * stageInput + state.s2 -
-                       static_cast<int64_t>(c.a1) * value;
-            state.s2 = static_cast<int64_t>(c.b2) * stageInput -
-                       static_cast<int64_t>(c.a2) * value;
+            state.s1 = (int64_t)(c.b1) * stageInput + state.s2 -
+                       (int64_t)(c.a1) * value;
+            state.s2 = (int64_t)(c.b2) * stageInput -
+                       (int64_t)(c.a2) * value;
         }
 
         block->data[i] = value;

@@ -52,10 +52,6 @@ class AudioDecoderStream : public AudioStream {
         return _samplesPlayed;
     }
 
-    uint32_t pcmUnderrunFrames() const {
-      return _pcmUnderrunFrames;
-    }
-
   protected:
     enum : uint8_t { PCM_FREE = 0, PCM_FILLING, PCM_READY };
 
@@ -148,7 +144,6 @@ class AudioDecoderStream : public AudioStream {
     volatile bool _updateRunning = false;
 
     uint64_t _samplesPlayed = 0;
-    volatile uint32_t _pcmUnderrunFrames = 0;
 
     portMUX_TYPE _decoderMux = portMUX_INITIALIZER_UNLOCKED;
 

@@ -55,10 +55,10 @@ float AudioAnalyzePeak::read() {
         return 0.0f;
     }
 
-    const int32_t minimumMagnitude = minimum < 0 ? -static_cast<int32_t>(minimum) : minimum;
-    const int32_t maximumMagnitude = maximum < 0 ? -static_cast<int32_t>(maximum) : maximum;
+    const int32_t minimumMagnitude = minimum < 0 ? -(int32_t)(minimum) : minimum;
+    const int32_t maximumMagnitude = maximum < 0 ? -(int32_t)(maximum) : maximum;
     const int32_t peak = minimumMagnitude > maximumMagnitude ? minimumMagnitude : maximumMagnitude;
-    return static_cast<float>(peak) / 32767.0f;
+    return (float)(peak) / 32767.0f;
 }
 
 float AudioAnalyzePeak::readPeakToPeak() {
@@ -68,7 +68,7 @@ float AudioAnalyzePeak::readPeakToPeak() {
         return 0.0f;
     }
 
-    return static_cast<float>(static_cast<int32_t>(maximum) - minimum) / 32767.0f;
+    return (float)((int32_t)(maximum) - minimum) / 32767.0f;
 }
 
 OSPEED

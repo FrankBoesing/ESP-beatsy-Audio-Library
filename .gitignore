@@ -8,3 +8,5 @@
 compile_commands.json
 /docs/
 secrets.h
+.github/*
+copilot-instructions.md

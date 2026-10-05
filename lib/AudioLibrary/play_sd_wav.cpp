@@ -351,7 +351,7 @@ uint32_t AudioPlaySdWav::lengthMillis() {
 // ============================================================================
 
 bool AudioPlaySdWav::readExact(void *buffer, size_t length) {
-    uint8_t *p = static_cast<uint8_t *>(buffer);
+    uint8_t *p = (uint8_t *)(buffer);
 
     while (length > 0) {
         size_t received = 0;

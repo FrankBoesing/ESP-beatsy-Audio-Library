@@ -74,7 +74,7 @@ bool AudioSourceMemory::seek(uint64_t position) {
         return false;
     }
 
-    _position = static_cast<size_t>(position);
+    _position = (size_t)(position);
 
     return true;
 }

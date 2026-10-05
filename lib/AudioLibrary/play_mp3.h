@@ -48,7 +48,7 @@ class AudioPlayMp3 : public AudioDecoderStream {
     }
 
     int bitRate() const {
-        return static_cast<int>(_bitrate);
+        return (int)(_bitrate);
     }
 
     int lastError() const {
@@ -60,8 +60,7 @@ class AudioPlayMp3 : public AudioDecoderStream {
         _playing = false;
     }
 
-    DecodeResult decodePcmBuffer(int16_t *destination, size_t capacity,
-                                 size_t &outSamples) override;
+    DecodeResult decodePcmBuffer(int16_t *destination, size_t capacity, size_t &outSamples) override;
 
   private:
     static constexpr size_t MP3_PCM_BUFFER_SAMPLES = m_MAX_NCHAN * m_MAX_NGRAN * m_MAX_NSAMP;

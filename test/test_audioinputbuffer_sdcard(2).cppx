@@ -55,7 +55,7 @@ static void test_sd_is_available()
 
     TEST_ASSERT_GREATER_THAN_UINT32(
         0,
-        static_cast<uint32_t>(testFile.size())
+        (uint32_t)(testFile.size())
     );
 }
 
@@ -72,12 +72,12 @@ static void test_source_opens_test_mp3()
 
     TEST_ASSERT_GREATER_THAN_UINT32(
         0,
-        static_cast<uint32_t>(source->size())
+        (uint32_t)(source->size())
     );
 
     TEST_ASSERT_EQUAL_UINT32(
         0,
-        static_cast<uint32_t>(source->position())
+        (uint32_t)(source->position())
     );
 }
 
@@ -100,7 +100,7 @@ static void test_initial_fill_is_2kb()
     // The first fill must have consumed exactly one 2 KiB chunk.
     TEST_ASSERT_EQUAL_UINT32(
         FILE_FILL_SIZE,
-        static_cast<uint32_t>(source->position())
+        (uint32_t)(source->position())
     );
 }
 
@@ -160,7 +160,7 @@ static void test_refill_after_consumption_is_2kb()
     );
 
     const size_t positionBefore =
-        static_cast<size_t>(source->position());
+        (size_t)(source->position());
 
     const AudioSourceStatus status =
         inputBuffer->fill(*source);
@@ -183,7 +183,7 @@ static void test_refill_after_consumption_is_2kb()
     // Exactly one 2 KiB chunk must have been read from the file.
     TEST_ASSERT_EQUAL_UINT32(
         FILE_FILL_SIZE,
-        static_cast<uint32_t>(
+        (uint32_t)(
             source->position() - positionBefore
         )
     );
@@ -191,7 +191,7 @@ static void test_refill_after_consumption_is_2kb()
     // The source position must therefore now be 4 KiB.
     TEST_ASSERT_EQUAL_UINT32(
         4 * 1024,
-        static_cast<uint32_t>(source->position())
+        (uint32_t)(source->position())
     );
 }
 
@@ -239,8 +239,8 @@ static void test_no_refill_at_threshold()
     );
 
     TEST_ASSERT_EQUAL_UINT32(
-        static_cast<uint32_t>(positionBefore),
-        static_cast<uint32_t>(source->position())
+        (uint32_t)(positionBefore),
+        (uint32_t)(source->position())
     );
 }
 
@@ -260,7 +260,7 @@ static void test_source_position_matches_real_file()
      */
     TEST_ASSERT_EQUAL_UINT32(
         6 * 1024,
-        static_cast<uint32_t>(source->position())
+        (uint32_t)(source->position())
     );
 }
 
@@ -305,7 +305,7 @@ void setup()
         if (testFile) {
             Serial.printf(
                 "test.mp3 size: %lu bytes\n",
-                static_cast<unsigned long>(
+                (unsigned long)(
                     testFile.size()
                 )
             );

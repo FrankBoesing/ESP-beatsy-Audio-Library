@@ -49,7 +49,7 @@ void AudioInputBuffer::reset() {
 bool AudioInputBuffer::allocateBuffer() {
 #if defined(ARDUINO_ARCH_ESP32)
     if (psramFound()) {
-        buffer = static_cast<uint8_t *>(
+        buffer = (uint8_t *)(
             heap_caps_malloc(buffer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
 
         if (buffer != nullptr) {
@@ -59,7 +59,7 @@ bool AudioInputBuffer::allocateBuffer() {
     }
 #endif
 
-    buffer = static_cast<uint8_t *>(malloc(buffer_size));
+    buffer = (uint8_t *)(malloc(buffer_size));
 
     if (buffer == nullptr) {
         psram_allocated = false;
@@ -184,7 +184,7 @@ uint8_t *AudioInputBuffer::acquireWrite(size_t &length) {
     }
 
     write_acquired = true;
-    write_start = static_cast<size_t>(ptr - buffer);
+    write_start = (size_t)(ptr - buffer);
     write_length = length;
 
     return ptr;
@@ -209,7 +209,7 @@ bool AudioInputBuffer::commitWrite(size_t written) {
         return true;
     }
 
-    if (region_a_length == 0 && region_b_length == 0) {
+    if (region_a_length + region_b_length == 0) {
         region_a_start = write_start;
         region_a_length = written;
     } else

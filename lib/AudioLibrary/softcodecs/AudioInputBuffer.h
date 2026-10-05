@@ -10,11 +10,8 @@
 class AudioInputBuffer {
   public:
     explicit AudioInputBuffer(size_t capacity = AUDIO_INPUT_BUFFER_SIZE);
-
     ~AudioInputBuffer();
-
     AudioInputBuffer(const AudioInputBuffer &) = delete;
-
     AudioInputBuffer &operator=(const AudioInputBuffer &) = delete;
 
     // ------------------------------------------------------------------------

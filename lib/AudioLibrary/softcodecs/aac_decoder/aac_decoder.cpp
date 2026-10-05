@@ -4,7 +4,7 @@
  *
  *  Created on: 26.10.2018
  *  Updated on: 22.05.2024
- *  Updated on: 05.10.2026 //FB
+ *  Updated on: 03.10.2026 //FB
  ************************************************************************************/
 
 #define OUTPUT_INTERLEAVED 1 // 1 selects planar stereo PCM: left samples, then right samples. 0: LRLR interleaved output
@@ -125,7 +125,8 @@ bool AACDecoder::AACDecoder_AllocateBuffers(void) {
         m_PSInfoBase = (PSInfoBase_t *)__malloc_heap_psram(sizeof(PSInfoBase_t));
     }
     if (!m_pce[0]) {
-        m_pce[0] = (ProgConfigElement_t *)__malloc_heap_psram(sizeof(ProgConfigElement_t) * 16);
+        //m_pce[0] = (ProgConfigElement_t *)__malloc_heap_psram(sizeof(ProgConfigElement_t) * 16);
+        m_pce[0] = (ProgConfigElement_t *)heap_caps_malloc_prefer(sizeof(ProgConfigElement_t) * 16, 2, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
     }
 
     if (!m_AACDecInfo || !m_PSInfoBase || !m_pce[0]) {

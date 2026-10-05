@@ -78,19 +78,19 @@ bool AudioOutputI2S::beginInternal() {
      */
     memset(&stdConfig, 0, sizeof(stdConfig));
 
-    stdConfig.clk_cfg.sample_rate_hz = static_cast<uint32_t>(AudioStream::sampleRate());
+    stdConfig.clk_cfg.sample_rate_hz = (uint32_t)(AudioStream::sampleRate());
     stdConfig.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     stdConfig.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
 
     stdConfig.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
 
-    stdConfig.gpio_cfg.bclk = static_cast<gpio_num_t>(i2sPins.bclk);
-    stdConfig.gpio_cfg.ws = static_cast<gpio_num_t>(i2sPins.ws);
-    stdConfig.gpio_cfg.dout = static_cast<gpio_num_t>(i2sPins.dout);
+    stdConfig.gpio_cfg.bclk = (gpio_num_t)(i2sPins.bclk);
+    stdConfig.gpio_cfg.ws = (gpio_num_t)(i2sPins.ws);
+    stdConfig.gpio_cfg.dout = (gpio_num_t)(i2sPins.dout);
     stdConfig.gpio_cfg.din = I2S_GPIO_UNUSED;
 
     // MCLK-Pin dynamsich aus i2sPins zuweisen (GPIO 0 bei ESP32)
-    stdConfig.gpio_cfg.mclk = (i2sPins.mclk >= 0) ? static_cast<gpio_num_t>(i2sPins.mclk) : I2S_GPIO_UNUSED;
+    stdConfig.gpio_cfg.mclk = (i2sPins.mclk >= 0) ? (gpio_num_t)(i2sPins.mclk) : I2S_GPIO_UNUSED;
 
     stdConfig.gpio_cfg.invert_flags.mclk_inv = false;
     stdConfig.gpio_cfg.invert_flags.bclk_inv = false;
@@ -154,7 +154,7 @@ bool AudioOutputI2S::beginInternal() {
         xTaskNotifyGive(txTask);
 
         const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(200);
-        while (txTask != nullptr && static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0) {
+        while (txTask != nullptr && (int32_t)(deadline - xTaskGetTickCount()) > 0) {
             vTaskDelay(1);
         }
 
@@ -187,7 +187,7 @@ void AudioOutputI2S::end() {
          */
         const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(200);
 
-        while (txTask != nullptr && static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0) {
+        while (txTask != nullptr && (int32_t)(deadline - xTaskGetTickCount()) > 0) {
             vTaskDelay(1);
         }
     }
@@ -264,11 +264,11 @@ void AudioOutputI2S::releasePair(BlockPair &pair) {
 }
 
 void AudioOutputI2S::txTaskEntry(void *arg) {
-    static_cast<AudioOutputI2S *>(arg)->txTaskLoop();
+    ((AudioOutputI2S *)arg)->txTaskLoop();
 }
 
 bool IRAM_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
-    auto *output = static_cast<AudioOutputI2S *>(userContext);
+    auto *output = (AudioOutputI2S *)(userContext);
     if (output == nullptr || !output->running) {
         return false;
     }
@@ -417,12 +417,12 @@ void AudioOutputI2S::txTaskLoop() {
              */
             const int16_t *__restrict left = pair.left->data;
             const int16_t *__restrict right = pair.right->data;
-            uint32_t *__restrict dst = reinterpret_cast<uint32_t *>(buffer);
+            uint32_t *__restrict dst = (uint32_t *)(buffer);
 
 #pragma GCC unroll 4
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                const uint32_t l = static_cast<uint16_t>(left[i]);
-                const uint32_t r = static_cast<uint16_t>(right[i]);
+                const uint32_t l = (uint16_t)(left[i]);
+                const uint32_t r = (uint16_t)(right[i]);
 
                 dst[i] = l | (r << 16);
             }

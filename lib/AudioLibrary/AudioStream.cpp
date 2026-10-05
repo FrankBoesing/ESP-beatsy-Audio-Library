@@ -79,8 +79,8 @@ float AudioStream::processorUsage(uint8_t core) {
     }
 
     const float idlePercent =
-        static_cast<float>(idleDelta) * 100.0f /
-        static_cast<float>(elapsedUs);
+        (float)(idleDelta) * 100.0f /
+        (float)(elapsedUs);
 
     return 100.0f - fminf(idlePercent, 100.0f);
 #else
@@ -172,14 +172,14 @@ uint32_t AudioStream::blockPeriodUs(void) {
     }
 
     const double period =
-        (1000000.0 * static_cast<double>(AUDIO_BLOCK_SAMPLES)) /
-        static_cast<double>(rate);
+        (1000000.0 * (double)(AUDIO_BLOCK_SAMPLES)) /
+        (double)(rate);
 
     if (period < 1.0 || period > 0xFFFFFFFFu) {
         return 0;
     }
 
-    return static_cast<uint32_t>(period + 0.5);
+    return (uint32_t)(period + 0.5);
 }
 
 OSIZE
@@ -411,10 +411,10 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num,
     portENTER_CRITICAL(&audio_mux);
 
     memory_pool = data;
-    memory_pool_size = static_cast<uint16_t>(num);
+    memory_pool_size = (uint16_t)(num);
 
     memory_pool_available_mask = available_mask;
-    memory_pool_mask_words = static_cast<uint16_t>(mask_words);
+    memory_pool_mask_words = (uint16_t)(mask_words);
 
     memory_pool_first_mask = 0;
 
@@ -433,7 +433,7 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num,
     }
 
     for (unsigned int i = 0; i < num; ++i) {
-        data[i].memory_pool_index = static_cast<uint16_t>(i);
+        data[i].memory_pool_index = (uint16_t)(i);
         data[i].ref_count = 0;
         data[i].reserved1 = 0;
     }
@@ -464,8 +464,8 @@ bool AudioStream::is_block_from_pool(const audio_block_t *block) {
         return false;
     }
 
-    uintptr_t block_address = reinterpret_cast<uintptr_t>(block);
-    uintptr_t pool_address = reinterpret_cast<uintptr_t>(memory_pool);
+    uintptr_t block_address = (uintptr_t)(block);
+    uintptr_t pool_address = (uintptr_t)(memory_pool);
     uintptr_t pool_end = pool_address + sizeof(audio_block_t) * memory_pool_size;
 
     if (block_address < pool_address || block_address >= pool_end) {
@@ -508,7 +508,7 @@ audio_block_t *AudioStream::allocate_locked(void) {
                 memory_pool_first_mask = index;
             }
 
-            uint32_t block_index = (static_cast<uint32_t>(index) << 5) + bit_index;
+            uint32_t block_index = ((uint32_t)(index) << 5) + bit_index;
             audio_block_t *block = &memory_pool[block_index];
             block->ref_count = 1;
             ++memory_used;
@@ -708,18 +708,18 @@ audio_block_t *AudioStream::receiveWritable(unsigned int index) {
 // =============================================================================
 OSPEED
 float AudioStream::processorUsage(void) const {
-    const float period = static_cast<float>(blockPeriodUs());
+    const float period = (float)(blockPeriodUs());
     if (period <= 0.0f)
         return 0.0f;
-    return (static_cast<float>(cpu_time_us) * 100.0f) / period;
+    return ((float)(cpu_time_us) * 100.0f) / period;
 }
 
 OSPEED
 float AudioStream::processorUsageMax(void) const {
-    const float period = static_cast<float>(blockPeriodUs());
+    const float period = (float)(blockPeriodUs());
     if (period <= 0.0f)
         return 0.0f;
-    return (static_cast<float>(cpu_time_max_us) * 100.0f) / period;
+    return ((float)(cpu_time_max_us) * 100.0f) / period;
 }
 
 OSIZE

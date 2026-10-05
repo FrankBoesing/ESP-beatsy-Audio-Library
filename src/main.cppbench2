@@ -162,11 +162,11 @@ void duplicate_32store_indexed(
     size_t decoderSamples)
 {
     uint32_t* out =
-        reinterpret_cast<uint32_t*>(destination);
+        (uint32_t*)(destination);
 
     for (size_t i = decoderSamples; i > 0; --i) {
         const uint32_t sample =
-            static_cast<uint16_t>(destination[i - 1U]);
+            (uint16_t)(destination[i - 1U]);
 
         out[i - 1U] =
             sample | (sample << 16);
@@ -187,12 +187,12 @@ void duplicate_32store_pointer(
         destination + decoderSamples;
 
     uint32_t* out =
-        reinterpret_cast<uint32_t*>(
+        (uint32_t*)(
             destination + (2U * decoderSamples));
 
     for (size_t i = decoderSamples; i > 0; --i) {
         const uint32_t sample =
-            static_cast<uint16_t>(*--src);
+            (uint16_t)(*--src);
 
         *--out =
             sample | (sample << 16);
@@ -213,13 +213,13 @@ void duplicate_32store_unroll4(
         destination + decoderSamples;
 
     uint32_t* out =
-        reinterpret_cast<uint32_t*>(
+        (uint32_t*)(
             destination + (2U * decoderSamples));
 
 #pragma GCC unroll 4
     for (size_t i = decoderSamples; i > 0; --i) {
         const uint32_t sample =
-            static_cast<uint16_t>(*--src);
+            (uint16_t)(*--src);
 
         *--out =
             sample | (sample << 16);
@@ -240,13 +240,13 @@ void duplicate_32store_unroll8(
         destination + decoderSamples;
 
     uint32_t* out =
-        reinterpret_cast<uint32_t*>(
+        (uint32_t*)(
             destination + (2U * decoderSamples));
 
 #pragma GCC unroll 8
     for (size_t i = decoderSamples; i > 0; --i) {
         const uint32_t sample =
-            static_cast<uint16_t>(*--src);
+            (uint16_t)(*--src);
 
         *--out =
             sample | (sample << 16);
@@ -340,13 +340,13 @@ void duplicate_32source_unroll4(
     size_t decoderSamples)
 {
     uint32_t* out =
-        reinterpret_cast<uint32_t*>(
+        (uint32_t*)(
             destination + (2U * decoderSamples));
 
 #pragma GCC unroll 4
     for (size_t i = decoderSamples; i > 0; i -= 2) {
         const uint32_t source =
-            *reinterpret_cast<const uint32_t*>(
+            *(const uint32_t*)(
                 destination + i - 2);
 
         const uint32_t a =
@@ -379,13 +379,13 @@ void duplicate_32source_unroll8(
     size_t decoderSamples)
 {
     uint32_t* out =
-        reinterpret_cast<uint32_t*>(
+        (uint32_t*)(
             destination + (2U * decoderSamples));
 
 #pragma GCC unroll 8
     for (size_t i = decoderSamples; i > 0; i -= 2) {
         const uint32_t source =
-            *reinterpret_cast<const uint32_t*>(
+            *(const uint32_t*)(
                 destination + i - 2);
 
         const uint32_t a =
@@ -421,13 +421,13 @@ void duplicate_32store_memcpy(
         destination + decoderSamples;
 
     uint32_t* out =
-        reinterpret_cast<uint32_t*>(
+        (uint32_t*)(
             destination + (2U * decoderSamples));
 
 #pragma GCC unroll 4
     for (size_t i = decoderSamples; i > 0; --i) {
         const uint32_t sample =
-            static_cast<uint16_t>(*--src);
+            (uint16_t)(*--src);
 
         const uint32_t packed =
             sample | (sample << 16);
@@ -447,7 +447,7 @@ static void initInput()
 {
     for (size_t i = 0; i < DECODER_SAMPLES; ++i) {
         inputSamples[i] =
-            static_cast<int16_t>(
+            (int16_t)(
                 (i * 73U + 1234U) & 0xFFFFU);
     }
 }
@@ -553,7 +553,7 @@ static uint32_t calculateChecksum()
         for (size_t i = 0; i < BLOCK_SAMPLES; ++i) {
             sum =
                 (sum * 33U) ^
-                static_cast<uint16_t>(work[b][i]);
+                (uint16_t)(work[b][i]);
         }
     }
 
@@ -654,7 +654,7 @@ static BenchmarkResult benchmark(
             MEASUREMENTS);
 
     result.averageCycles =
-        static_cast<uint32_t>(
+        (uint32_t)(
             total / MEASUREMENTS);
 
     return result;
@@ -665,23 +665,23 @@ static void printResult(
     const BenchmarkResult& result)
 {
     const double samples =
-        static_cast<double>(BENCH_BLOCKS) *
-        static_cast<double>(DECODER_SAMPLES);
+        (double)(BENCH_BLOCKS) *
+        (double)(DECODER_SAMPLES);
 
     Serial.printf(
         "  min=%10lu  median=%10lu  avg=%10lu cycles / %lu calls\n",
-        static_cast<unsigned long>(result.minCycles),
-        static_cast<unsigned long>(result.medianCycles),
-        static_cast<unsigned long>(result.averageCycles),
-        static_cast<unsigned long>(BENCH_BLOCKS));
+        (unsigned long)(result.minCycles),
+        (unsigned long)(result.medianCycles),
+        (unsigned long)(result.averageCycles),
+        (unsigned long)(BENCH_BLOCKS));
 
     Serial.printf(
         "  min/sample    = %.4f cycles\n",
-        static_cast<double>(result.minCycles) / samples);
+        (double)(result.minCycles) / samples);
 
     Serial.printf(
         "  median/sample = %.4f cycles\n",
-        static_cast<double>(result.medianCycles) / samples);
+        (double)(result.medianCycles) / samples);
 }
 
 
@@ -708,19 +708,19 @@ static void runBenchmark()
 
     Serial.printf(
         "CPU: %lu MHz\n",
-        static_cast<unsigned long>(ESP.getCpuFreqMHz()));
+        (unsigned long)(ESP.getCpuFreqMHz()));
 
     Serial.printf(
         "decoderSamples: %lu\n",
-        static_cast<unsigned long>(DECODER_SAMPLES));
+        (unsigned long)(DECODER_SAMPLES));
 
     Serial.printf(
         "BENCH_BLOCKS: %lu\n",
-        static_cast<unsigned long>(BENCH_BLOCKS));
+        (unsigned long)(BENCH_BLOCKS));
 
     Serial.printf(
         "MEASUREMENTS: %lu\n",
-        static_cast<unsigned long>(MEASUREMENTS));
+        (unsigned long)(MEASUREMENTS));
 
     if ((DECODER_SAMPLES & 1U) != 0U) {
         Serial.println(
@@ -850,7 +850,7 @@ static void runBenchmark()
     Serial.println();
     Serial.printf(
         "checksumSink = 0x%08lX\n",
-        static_cast<unsigned long>(checksumSink));
+        (unsigned long)(checksumSink));
 
     Serial.println("Done.");
 }

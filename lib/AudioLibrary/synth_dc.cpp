@@ -20,7 +20,7 @@ int32_t AudioSynthWaveformDc::levelToFixedPoint(float level) {
         level = -1.0f;
     }
 
-    return static_cast<int32_t>(level * static_cast<float>(DC_LEVEL_SCALE));
+    return (int32_t)(level * (float)(DC_LEVEL_SCALE));
 }
 
 void AudioSynthWaveformDc::amplitude(float level) {
@@ -42,9 +42,9 @@ void AudioSynthWaveformDc::amplitude(float level, float milliseconds) {
 
     const float transitionSamples = milliseconds * (sampleRate() / 1000.0f);
     const uint32_t sampleCount = !std::isfinite(transitionSamples) ||
-                                         transitionSamples >= static_cast<float>(std::numeric_limits<uint32_t>::max())
+                                         transitionSamples >= (float)(std::numeric_limits<uint32_t>::max())
                                      ? std::numeric_limits<uint32_t>::max()
-                                     : static_cast<uint32_t>(transitionSamples);
+                                     : (uint32_t)(transitionSamples);
     if (sampleCount == 0) {
         amplitude(level);
         return;
@@ -52,7 +52,7 @@ void AudioSynthWaveformDc::amplitude(float level, float milliseconds) {
 
     const int32_t target = levelToFixedPoint(level);
     portENTER_CRITICAL(&_configMux);
-    const int64_t difference = static_cast<int64_t>(target) - _magnitude;
+    const int64_t difference = (int64_t)(target) - _magnitude;
 
     if (difference == 0) {
         _target = target;
@@ -63,7 +63,7 @@ void AudioSynthWaveformDc::amplitude(float level, float milliseconds) {
             increment = difference > 0 ? 1 : -1;
         }
         _target = target;
-        _increment = static_cast<int32_t>(increment);
+        _increment = (int32_t)(increment);
     }
 
     ++_configurationGeneration;
@@ -75,7 +75,7 @@ float AudioSynthWaveformDc::read() const {
     const int32_t magnitude = _magnitude;
     portEXIT_CRITICAL(&_configMux);
 
-    return static_cast<float>(magnitude) / static_cast<float>(DC_LEVEL_SCALE);
+    return (float)(magnitude) / (float)(DC_LEVEL_SCALE);
 }
 
 OSPEED
@@ -110,16 +110,16 @@ void AudioSynthWaveformDc::update() {
 
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         if (transitioning) {
-            const int64_t next = static_cast<int64_t>(current) + _activeIncrement;
+            const int64_t next = (int64_t)(current) + _activeIncrement;
             if ((_activeIncrement > 0 && next >= _activeTarget) || (_activeIncrement < 0 && next <= _activeTarget)) {
                 current = _activeTarget;
                 transitioning = false;
             } else {
-                current = static_cast<int32_t>(next);
+                current = (int32_t)(next);
             }
         }
 
-        block->data[i] = static_cast<int16_t>(signed_saturate_rshift(current, 16, 16));
+        block->data[i] = (int16_t)(signed_saturate_rshift(current, 16, 16));
     }
 
     _activeMagnitude = current;

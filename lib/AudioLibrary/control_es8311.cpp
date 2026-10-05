@@ -48,7 +48,7 @@ bool AudioControlES8311::readReg(uint8_t reg, uint8_t &value) {
         return false;
     }
 
-    if (wire_->requestFrom(static_cast<int>(i2cAddress_), 1) != 1) {
+    if (wire_->requestFrom((int)(i2cAddress_), 1) != 1) {
         return false;
     }
 
@@ -202,7 +202,7 @@ bool AudioControlES8311::volume(float level) {
     }
 
     // DAC volume register: 0x00 = mute, 0xFF = 0 dB (linear 256-step scale).
-    const uint8_t reg32 = (level <= 0.0f) ? 0x00 : static_cast<uint8_t>(level * 256.0f - 1.0f + 0.5f);
+    const uint8_t reg32 = (level <= 0.0f) ? 0x00 : (uint8_t)(level * 256.0f - 1.0f + 0.5f);
     return writeReg(REG_DAC32, reg32);
 }
 
@@ -214,7 +214,7 @@ bool AudioControlES8311::inputLevel(float level) {
     }
 
     // Analog mic PGA gain: 0 (0 dB) .. 8 (42 dB) in 6 dB steps.
-    const uint8_t gain = static_cast<uint8_t>(level * 8.0f + 0.5f);
+    const uint8_t gain = (uint8_t)(level * 8.0f + 0.5f);
     return writeReg(REG_ADC16, gain);
 }
 
@@ -239,6 +239,6 @@ bool AudioControlES8311::unmute() {
         return false;
     }
 
-    reg &= static_cast<uint8_t>(~0x60);
+    reg &= (uint8_t)(~0x60);
     return writeReg(REG_DAC31, reg);
 }

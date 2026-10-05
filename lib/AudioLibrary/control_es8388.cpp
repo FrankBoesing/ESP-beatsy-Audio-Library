@@ -14,7 +14,7 @@ static uint8_t volumeToRegister(float level) {
     }
 
     const float attenuation = (1.0f - level) * 192.0f;
-    return static_cast<uint8_t>(attenuation + 0.5f);
+    return (uint8_t)(attenuation + 0.5f);
 }
 
 AudioControlES8388::AudioControlES8388()
@@ -38,7 +38,7 @@ bool AudioControlES8388::readReg(uint8_t reg, uint8_t &value) {
         return false;
     }
 
-    if (wire_->requestFrom(static_cast<int>(i2cAddress_), 1) != 1) {
+    if (wire_->requestFrom((int)(i2cAddress_), 1) != 1) {
         return false;
     }
 
@@ -185,7 +185,7 @@ bool AudioControlES8388::unmute() {
         return false;
     }
 
-    reg &= static_cast<uint8_t>(~0x04);
+    reg &= (uint8_t)(~0x04);
     return writeReg(REG_DACCONTROL3, reg);
 }
 

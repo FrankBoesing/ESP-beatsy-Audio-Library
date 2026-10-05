@@ -3,21 +3,27 @@
 #include "AudioSource.h"
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <freertos/task.h>
 #include "optimize.h"
 
 class AudioSourceStream : public AudioSource {
   public:
-    static constexpr size_t BUFFER_SIZE = 256U * 1024U;
+    static constexpr size_t BUFFER_SIZE = 128U * 1024U;
+    static constexpr size_t ICY_METADATA_MAX_SIZE = 255U * 16U;
 
     AudioSourceStream();
     explicit AudioSourceStream(Stream &stream);
     ~AudioSourceStream() override;
 
-    bool open(Stream &stream);
+    bool open(Stream &stream, uint32_t icyMetaInt = 0);
 
-    AudioSourceStatus read(uint8_t *buffer, size_t requested,
-                           size_t &received) override;
+    // Copies the latest raw ICY metadata block, without a trailing NUL.
+    // If capacity is too small, size receives the required size and the
+    // pending block remains available for a later call.
+    bool takeIcyMetadata(uint8_t *buffer, size_t capacity, size_t &size);
+
+    AudioSourceStatus read(uint8_t *buffer, size_t requested, size_t &received) override;
 
     uint64_t position() const override;
     uint64_t size() const override;
@@ -35,10 +41,7 @@ class AudioSourceStream : public AudioSource {
     bool fillToThreshold() const override;
 
     Stream *stream();
-    uint32_t wouldBlockCount() const;
-    uint32_t networkWaitMs() const;
     size_t bufferedBytes() const;
-    uint64_t receivedBytes() const;
 
   private:
     static constexpr size_t PRODUCER_CHUNK_SIZE = 2048;
@@ -47,13 +50,10 @@ class AudioSourceStream : public AudioSource {
 
     static void producerTaskEntry(void *arg);
     void producerTaskLoop();
-    bool recordNetworkWait();
+    bool checkNetworkTimeout();
 
     Stream *_stream;
     uint64_t _position;
-    uint64_t _receivedBytes = 0;
-    uint32_t _wouldBlockCount = 0;
-    uint32_t _networkWaitMs = 0;
     uint32_t _lastDataMs = 0;
     bool _streamError = false;
     uint8_t *_buffer = nullptr;
@@ -63,4 +63,14 @@ class AudioSourceStream : public AudioSource {
     bool _stopRequested = false;
     TaskHandle_t _producerTask = nullptr;
     mutable portMUX_TYPE _bufferMux = portMUX_INITIALIZER_UNLOCKED;
+
+    uint32_t _icyMetaInt = 0;
+    uint32_t _icyAudioRemaining = 0;
+    size_t _icyMetadataExpected = 0;
+    size_t _icyMetadataReceived = 0;
+    bool _icyNeedLength = true;
+    uint8_t *_icyMetadataWriteBuffer = nullptr;
+    uint8_t *_icyMetadataReadyBuffer = nullptr;
+    size_t _icyMetadataReadySize = 0;
+    SemaphoreHandle_t _icyMetadataMutex = nullptr;
 };

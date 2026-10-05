@@ -21,7 +21,7 @@ static inline int16_t q15ToPcm(int64_t value) {
         return -32768;
     }
 
-    return static_cast<int16_t>(value);
+    return (int16_t)(value);
 }
 } // namespace
 
@@ -45,8 +45,8 @@ void AudioFilterFIR::begin(const short *coefficients, int coefficientCount) {
         _mode = Mode::BYPASS;
     } else
     if (coefficients != nullptr && validCoefficientCount(coefficientCount)) {
-        std::memcpy(_coefficients, coefficients, static_cast<size_t>(coefficientCount) * sizeof(short));
-        _coefficientCount = static_cast<size_t>(coefficientCount);
+        memcpy(_coefficients, coefficients, (size_t)(coefficientCount) * sizeof(short));
+        _coefficientCount = (size_t)(coefficientCount);
         _mode = Mode::ACTIVE;
     }
 
@@ -94,7 +94,7 @@ void AudioFilterFIR::update() {
     _resetHistory = false;
 
     if (mode == Mode::ACTIVE) {
-        std::memcpy(coefficients, _coefficients, coefficientCount * sizeof(short));
+        memcpy(coefficients, _coefficients, coefficientCount * sizeof(short));
     }
     portEXIT_CRITICAL(&_configMux);
 
@@ -110,27 +110,27 @@ void AudioFilterFIR::update() {
     }
 
     if (resetHistory) {
-        std::memset(_history, 0, sizeof(_history));
+        memset(_history, 0, sizeof(_history));
     }
 
     const size_t historySize = coefficientCount - 1U;
-    std::memcpy(_history + historySize, block->data, AUDIO_BLOCK_SAMPLES * sizeof(_history[0]));
+    memcpy(_history + historySize, block->data, AUDIO_BLOCK_SAMPLES * sizeof(_history[0]));
 
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         int64_t accumulator = 0;
         const size_t newest = historySize + i;
 
         for (size_t tap = 0; tap < coefficientCount; ++tap) {
-            accumulator += static_cast<int32_t>(
+            accumulator += (int32_t)(
                         coefficients[coefficientCount - tap - 1U]) *
-                        static_cast<int32_t>(_history[newest - tap]);
+                        (int32_t)(_history[newest - tap]);
         }
 
         block->data[i] = q15ToPcm(accumulator);
     }
 
     if (historySize > 0) {
-        std::memmove(_history, _history + AUDIO_BLOCK_SAMPLES, historySize * sizeof(int16_t));
+        memmove(_history, _history + AUDIO_BLOCK_SAMPLES, historySize * sizeof(int16_t));
     }
 
     transmit(block);

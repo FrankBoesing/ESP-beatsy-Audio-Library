@@ -28,9 +28,11 @@ bool AudioDecoderStream::allocatePcmBuffers() {
 
     for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
 #if defined(ARDUINO_ARCH_ESP32)
-        _pcm[i] = static_cast<int16_t *>(heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+      //  _pcm[i] = (int16_t *)(heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+        _pcm[i] = (int16_t *)(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+
 #else
-        _pcm[i] = static_cast<int16_t *>(malloc(bytes));
+        _pcm[i] = (int16_t *)(malloc(bytes));
 #endif
 
         if (_pcm[i] == nullptr) {
@@ -80,7 +82,6 @@ void AudioDecoderStream::clearDecoderState() {
     _updateRunning = false;
 
     _samplesPlayed = 0;
-    _pcmUnderrunFrames = 0;
 
     _decoderTask = nullptr;
 
@@ -257,7 +258,7 @@ int AudioDecoderStream::acquireReadyBuffer() {
 
     for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
         if (_pcmState[i] == PCM_READY && _pcmSamples[i] > 0 &&
-            (best < 0 || static_cast<int32_t>(_pcmSeq[i] - _pcmSeq[best]) < 0)) {
+            (best < 0 || (int32_t)(_pcmSeq[i] - _pcmSeq[best]) < 0)) {
             best = i;
         }
     }
@@ -304,7 +305,7 @@ int AudioDecoderStream::decoderError() const {
 }
 
 void AudioDecoderStream::decoderTaskEntry(void *arg) {
-    static_cast<AudioDecoderStream *>(arg)->decoderTaskLoop();
+    ((AudioDecoderStream *)arg)->decoderTaskLoop();
 }
 
 void AudioDecoderStream::decoderTaskLoop() {
@@ -413,7 +414,6 @@ void AudioDecoderStream::update() {
     portEXIT_CRITICAL(&_decoderMux);
 
     audio_block_t *left = allocate();
-
     if (left == nullptr) {
         portENTER_CRITICAL(&_decoderMux);
         _updateRunning = false;
@@ -422,7 +422,6 @@ void AudioDecoderStream::update() {
     }
 
     audio_block_t *right = allocate();
-
     if (right == nullptr) {
         release(left);
 
@@ -443,29 +442,21 @@ void AudioDecoderStream::update() {
 
         const size_t totalSamples = _pcmSamples[index];
         const size_t totalFrames = totalSamples / 2U;
-
         if (_readPosition >= totalFrames) {
             releaseReadBuffer(index);
             continue;
         }
 
         const size_t availableFrames = totalFrames - _readPosition;
-
         if (availableFrames == 0) {
             releaseReadBuffer(index);
             continue;
         }
 
         const size_t frames = std::min(availableFrames, AUDIO_BLOCK_SAMPLES - outputFrames);
-
-        const int16_t *__restrict sourceLeft = _pcm[index] + _readPosition;
-        const int16_t *__restrict sourceRight = _pcm[index] + totalFrames + _readPosition;
-        int16_t *__restrict dstLeft = left->data + outputFrames;
-        int16_t *__restrict dstRight = right->data + outputFrames;
-
         const size_t bytes = frames * sizeof(int16_t);
-        std::memcpy(dstLeft, sourceLeft, bytes);
-        std::memcpy(dstRight, sourceRight, bytes);
+        memcpy(left->data + outputFrames, _pcm[index] + _readPosition, bytes);
+        memcpy(right->data, _pcm[index] + _readPosition + totalFrames, bytes);
 
         _readPosition += frames;
         outputFrames += frames;
@@ -478,7 +469,6 @@ void AudioDecoderStream::update() {
     // Nullen gezielt am Ende auffüllen, falls nicht genug PCM-Daten
     // für einen ganzen Block da waren.
     if (outputFrames < AUDIO_BLOCK_SAMPLES) {
-        _pcmUnderrunFrames += AUDIO_BLOCK_SAMPLES - outputFrames;
         const size_t remainingBytes = (AUDIO_BLOCK_SAMPLES - outputFrames) * sizeof(int16_t);
         memset(&left->data[outputFrames], 0, remainingBytes);
         memset(&right->data[outputFrames], 0, remainingBytes);

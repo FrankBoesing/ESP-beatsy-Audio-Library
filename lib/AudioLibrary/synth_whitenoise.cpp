@@ -32,7 +32,7 @@ void AudioSynthNoiseWhite::amplitude(float level) {
         level = 1.0f;
     }
 
-    _level = static_cast<int32_t>(level * 65536.0f + 0.5f);
+    _level = (int32_t)(level * 65536.0f + 0.5f);
 }
 
 OSPEED
@@ -54,10 +54,10 @@ void AudioSynthNoiseWhite::update() {
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         seed = nextNoiseSeed(seed);
 
-        const int32_t noise = static_cast<int32_t>(seed >> 15) - 32768;
+        const int32_t noise = (int32_t)(seed >> 15) - 32768;
         const int32_t scaled = (noise * gain) >> 16;
 
-        block->data[i] = static_cast<int16_t>(scaled);
+        block->data[i] = (int16_t)(scaled);
     }
 
     _seed = seed;
