@@ -33,6 +33,7 @@
 // waveforms.c
 extern "C" {
 extern const int16_t AudioWaveformSine[257];
+extern const int16_t sinTable_q15[513];
 }
 
 #define WAVEFORM_SINE 0

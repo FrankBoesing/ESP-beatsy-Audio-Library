@@ -54,7 +54,7 @@ bool AudioControlES8388::isConnected() {
 bool AudioControlES8388::enable() {
     initialized_ = false;
 
-    if (pins_.pa_enable != 255) {
+    if (pins_.pa_enable >= 0) {
         pinMode(pins_.pa_enable, OUTPUT);
         digitalWrite(pins_.pa_enable, LOW);
     }
@@ -126,7 +126,7 @@ bool AudioControlES8388::enable() {
     }
 
     // Power Amplifier des Audio-Kit-Boards einschalten
-    if (pins_.pa_enable != 255) {
+    if (pins_.pa_enable >= 0) {
         // The I2S stream is already running with silence; let the DAC ramp before enabling the PA.
         delay(50);
         digitalWrite(pins_.pa_enable, HIGH);
@@ -147,7 +147,7 @@ bool AudioControlES8388::disable() {
         ok &= !writeReg(REG_CHIPPOWER, 0xFF);
     }
 
-    if (pins_.pa_enable != 255) {
+    if (pins_.pa_enable >= 0) {
         pinMode(pins_.pa_enable, OUTPUT);
         digitalWrite(pins_.pa_enable, LOW);
     }

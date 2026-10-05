@@ -101,10 +101,10 @@ void AudioSynthWaveform::update(void) {
     switch (tone_type) {
     case WAVEFORM_SINE:
         for (i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
-            index = ph >> 24;
-            val1 = AudioWaveformSine[index];
-            val2 = AudioWaveformSine[index + 1];
-            scale = (ph >> 8) & 0xFFFF;
+            index = ph >> 23;
+            val1 = sinTable_q15[index];
+            val2 = sinTable_q15[index + 1];
+            scale = (ph >> 7) & 0xFFFF;
             val2 *= scale;
             val1 *= 0x10000 - scale;
             *bp++ = multiply_32x32_rshift32(val1 + val2, magnitude);
@@ -356,10 +356,10 @@ void AudioSynthWaveformModulated::update(void) {
     case WAVEFORM_SINE:
         for (i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
             ph = phasedata[i];
-            index = ph >> 24;
-            val1 = AudioWaveformSine[index];
-            val2 = AudioWaveformSine[index + 1];
-            scale = (ph >> 8) & 0xFFFF;
+            index = ph >> 23;
+            val1 = sinTable_q15[index];
+            val2 = sinTable_q15[index + 1];
+            scale = (ph >> 7) & 0xFFFF;
             val2 *= scale;
             val1 *= 0x10000 - scale;
             *bp++ = multiply_32x32_rshift32(val1 + val2, magnitude);

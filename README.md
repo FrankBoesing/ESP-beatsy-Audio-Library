@@ -1,32 +1,12 @@
 Compatible to Teensy audio Library
 
 
-Optimized for ESP, in a 2nd step ESP-S3 / P4
+Optimized for ESP32, in a 2nd step ESP32-S3 / P4
 
 
-Work in Progress.
+Work in [Progress](lib/AudioLibrary).
 
 
-
-## Stream data path
-
-For network playback, bytes pass through these stages:
-
-1. `AudioStreamRx` reads up to 2 KiB from the HTTP stream into a temporary
-    task-local chunk.
-2. The producer copies that chunk into the 128-KiB PSRAM ring buffer.
-3. `AudioSourceStream::read()` copies available ring-buffer bytes into the
-    MP3 decoder's 2-KiB `_input` buffer in internal RAM, then releases that ring
-    space for the producer.
-4. `AudioDecoder` runs `MP3Decode()` from `_input` and writes PCM into one of
-    the two internal-RAM PCM buffers.
-5. `AudioTask` consumes ready PCM through the audio graph and queues blocks for
-    `AudioI2STx`.
-6. `AudioI2STx` writes the blocks to the I2S driver; DMA clocks them to the
-    codec.
-
-The 128-KiB PSRAM ring is only used by streaming. File playback continues to
-use the decoder's existing 2-KiB input buffer and does not create `AudioStreamRx`.
 
 Working example 1:
 ~~~
