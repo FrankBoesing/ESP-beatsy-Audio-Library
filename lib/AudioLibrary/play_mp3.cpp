@@ -10,6 +10,7 @@ constexpr const char *TAG = "AudioPlayMp3";
 
 AudioPlayMp3::AudioPlayMp3() : AudioDecoderStream(MP3_PCM_BUFFER_SAMPLES) {}
 
+OSIZE
 AudioPlayMp3::~AudioPlayMp3() {
     stop();
     closeSource();
@@ -18,7 +19,7 @@ AudioPlayMp3::~AudioPlayMp3() {
 // ============================================================================
 // Source lifetime
 // ============================================================================
-
+OSIZE
 void AudioPlayMp3::closeSource() {
     if (_source == nullptr) {
         _ownSource = false;
@@ -37,11 +38,12 @@ void AudioPlayMp3::closeSource() {
 // ============================================================================
 // Public play API
 // ============================================================================
-
+OSIZE
 bool AudioPlayMp3::play(const char *filename) {
     return play(SD_MMC, filename);
 }
 
+OSIZE
 bool AudioPlayMp3::play(fs::FS &fs, const char *filename) {
     stop();
     closeSource();
@@ -76,6 +78,7 @@ bool AudioPlayMp3::play(fs::FS &fs, const char *filename) {
     return startPlayback(*fileSource, true);
 }
 
+OSIZE
 bool AudioPlayMp3::play(AudioSource &source) {
     stop();
     closeSource();
@@ -88,7 +91,7 @@ bool AudioPlayMp3::play(AudioSource &source) {
 // ============================================================================
 // Start / stop
 // ============================================================================
-
+OSIZE
 bool AudioPlayMp3::startPlayback(AudioSource &source, bool takeOwnership) {
     if (!source.isOpen()) {
         if (takeOwnership) {
@@ -154,6 +157,7 @@ bool AudioPlayMp3::startPlayback(AudioSource &source, bool takeOwnership) {
     return true;
 }
 
+OSIZE
 void AudioPlayMp3::stop() {
     /*
      * Mark playback stopped immediately for the public API. The base-class
@@ -259,7 +263,7 @@ uint64_t AudioPlayMp3::decodeTimeUsTotal() const {
 // ============================================================================
 // ID3
 // ============================================================================
-
+OSIZE
 size_t AudioPlayMp3::id3TagSize(const uint8_t header[10]) {
     if (header == nullptr || header[0] != 'I' || header[1] != 'D' ||
         header[2] != '3') {
@@ -365,6 +369,7 @@ bool AudioPlayMp3::skipInput(size_t bytes) {
     return true;
 }
 
+OSIZE
 bool AudioPlayMp3::prepareMp3Input() {
     if (!fillInput(10)) {
         if (_lastError != ERR_SOURCE) {
@@ -443,6 +448,7 @@ bool AudioPlayMp3::validateFrameInfo(const MP3FrameInfo &info) {
 // MP3 frame decoding
 // ============================================================================
 
+OSPEED
 AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination,
                                                          size_t capacity,
                                                          size_t &outSamples) {
@@ -587,13 +593,8 @@ AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination,
 
                     return DecodeResult::ERROR;
                 }
-
-                for (size_t i = decoderSamples; i > 0; --i) {
-                    const int16_t sample = destination[i - 1U];
-
-                    destination[(2U * i) - 2U] = sample;
-                    destination[(2U * i) - 1U] = sample;
-                }
+                std::memmove(destination + decoderSamples, destination,
+                             decoderSamples * sizeof(int16_t));
 
                 outSamples = decoderSamples * 2U;
             }

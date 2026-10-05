@@ -1,0 +1,871 @@
+/*
+ * ESP32 / Xtensa benchmark:
+ * AAC in-place sample duplication
+ *
+ * Operation:
+ *
+ *   [A B C D] -> [A A B B C C D D]
+ *
+ * Source and destination are the SAME array.
+ * Therefore all variants operate backwards.
+ *
+ * Variants:
+ *   1.  Original
+ *   2.  Original + GCC unroll 4
+ *   3.  Original + GCC unroll 8
+ *   4.  32-bit store, indexed
+ *   5.  32-bit store, pointer
+ *   6.  32-bit store + GCC unroll 4
+ *   7.  32-bit store + GCC unroll 8
+ *   8.  Manual 4x
+ *   9.  Manual 8x
+ *  10. 32-bit source load + 32-bit stores, unroll 4
+ *  11. 32-bit source load + 32-bit stores, unroll 8
+ *  12. 32-bit store via memcpy
+ *
+ * Measurement:
+ *   - Xtensa/ESP CPU cycle counter (CCOUNT)
+ *   - minimum
+ *   - median
+ *   - average
+ *
+ * Correctness is checked against the original implementation.
+ *
+ * Assumptions for the 32-bit source variants:
+ *   - decoderSamples is even
+ *   - destination is 4-byte aligned
+ *
+ * Default decoderSamples = 1024 (typical AAC-LC frame size).
+ */
+
+#include <Arduino.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <string.h>
+
+#if __has_include(<esp_cpu.h>)
+#include <esp_cpu.h>
+#endif
+
+
+// ============================================================
+// Configuration
+// ============================================================
+
+constexpr size_t DECODER_SAMPLES = 1024;
+constexpr size_t BENCH_BLOCKS    = 8;
+constexpr size_t MEASUREMENTS    = 11;
+constexpr size_t BLOCK_SAMPLES   = DECODER_SAMPLES * 2;
+
+
+// ============================================================
+// Storage
+// ============================================================
+
+alignas(16) static int16_t inputSamples[DECODER_SAMPLES];
+alignas(16) static int16_t work[BENCH_BLOCKS][BLOCK_SAMPLES];
+
+static volatile uint32_t checksumSink = 0;
+
+
+// ============================================================
+// CPU cycle counter
+// ============================================================
+
+static inline uint32_t readCycleCount()
+{
+#if __has_include(<esp_cpu.h>)
+    return esp_cpu_get_cycle_count();
+#elif defined(__XTENSA__)
+    uint32_t c;
+    __asm__ __volatile__("rsr.ccount %0" : "=a"(c));
+    return c;
+#else
+#error "No supported CPU cycle counter"
+#endif
+}
+
+
+// ============================================================
+// Compiler barrier
+// ============================================================
+
+static inline void compilerBarrier()
+{
+    __asm__ __volatile__("" ::: "memory");
+}
+
+
+// ============================================================
+// 1. ORIGINAL
+// ============================================================
+
+__attribute__((noinline))
+void duplicate_original(int16_t* destination, size_t decoderSamples)
+{
+    for (size_t i = decoderSamples; i > 0; --i) {
+        const int16_t sample = destination[i - 1U];
+
+        destination[(2U * i) - 2U] = sample;
+        destination[(2U * i) - 1U] = sample;
+    }
+}
+
+
+// ============================================================
+// 2. ORIGINAL + GCC UNROLL 4
+//
+// Exactly the original algorithm, only adding the pragma.
+// ============================================================
+
+__attribute__((noinline))
+void duplicate_original_unroll4(
+    int16_t* destination,
+    size_t decoderSamples)
+{
+#pragma GCC unroll 4
+    for (size_t i = decoderSamples; i > 0; --i) {
+        const int16_t sample = destination[i - 1U];
+
+        destination[(2U * i) - 2U] = sample;
+        destination[(2U * i) - 1U] = sample;
+    }
+}
+
+
+// ============================================================
+// 3. ORIGINAL + GCC UNROLL 8
+// ============================================================
+
+__attribute__((noinline))
+void duplicate_original_unroll8(
+    int16_t* destination,
+    size_t decoderSamples)
+{
+#pragma GCC unroll 8
+    for (size_t i = decoderSamples; i > 0; --i) {
+        const int16_t sample = destination[i - 1U];
+
+        destination[(2U * i) - 2U] = sample;
+        destination[(2U * i) - 1U] = sample;
+    }
+}
+
+
+// ============================================================
+// 4. 32-BIT STORE, INDEXED
+// ============================================================
+
+__attribute__((noinline))
+void duplicate_32store_indexed(
+    int16_t* destination,
+    size_t decoderSamples)
+{
+    uint32_t* out =
+        reinterpret_cast<uint32_t*>(destination);
+
+    for (size_t i = decoderSamples; i > 0; --i) {
+        const uint32_t sample =
+            static_cast<uint16_t>(destination[i - 1U]);
+
+        out[i - 1U] =
+            sample | (sample << 16);
+    }
+}
+
+
+// ============================================================
+// 5. 32-BIT STORE, POINTER
+// ============================================================
+
+__attribute__((noinline))
+void duplicate_32store_pointer(
+    int16_t* destination,
+    size_t decoderSamples)
+{
+    const int16_t* src =
+        destination + decoderSamples;
+
+    uint32_t* out =
+        reinterpret_cast<uint32_t*>(
+            destination + (2U * decoderSamples));
+
+    for (size_t i = decoderSamples; i > 0; --i) {
+        const uint32_t sample =
+            static_cast<uint16_t>(*--src);
+
+        *--out =
+            sample | (sample << 16);
+    }
+}
+
+
+// ============================================================
+// 6. 32-BIT STORE + GCC UNROLL 4
+// ============================================================
+
+__attribute__((noinline))
+void duplicate_32store_unroll4(
+    int16_t* destination,
+    size_t decoderSamples)
+{
+    const int16_t* src =
+        destination + decoderSamples;
+
+    uint32_t* out =
+        reinterpret_cast<uint32_t*>(
+            destination + (2U * decoderSamples));
+
+#pragma GCC unroll 4
+    for (size_t i = decoderSamples; i > 0; --i) {
+        const uint32_t sample =
+            static_cast<uint16_t>(*--src);
+
+        *--out =
+            sample | (sample << 16);
+    }
+}
+
+
+// ============================================================
+// 7. 32-BIT STORE + GCC UNROLL 8
+// ============================================================
+
+__attribute__((noinline))
+void duplicate_32store_unroll8(
+    int16_t* destination,
+    size_t decoderSamples)
+{
+    const int16_t* src =
+        destination + decoderSamples;
+
+    uint32_t* out =
+        reinterpret_cast<uint32_t*>(
+            destination + (2U * decoderSamples));
+
+#pragma GCC unroll 8
+    for (size_t i = decoderSamples; i > 0; --i) {
+        const uint32_t sample =
+            static_cast<uint16_t>(*--src);
+
+        *--out =
+            sample | (sample << 16);
+    }
+}
+
+
+// ============================================================
+// 8. MANUAL 4x
+// ============================================================
+
+__attribute__((noinline))
+void duplicate_manual4(
+    int16_t* destination,
+    size_t decoderSamples)
+{
+    for (size_t i = decoderSamples; i > 0; i -= 4) {
+        const int16_t s0 = destination[i - 1];
+        const int16_t s1 = destination[i - 2];
+        const int16_t s2 = destination[i - 3];
+        const int16_t s3 = destination[i - 4];
+
+        destination[(2U * i) - 2U] = s0;
+        destination[(2U * i) - 1U] = s0;
+
+        destination[(2U * i) - 4U] = s1;
+        destination[(2U * i) - 3U] = s1;
+
+        destination[(2U * i) - 6U] = s2;
+        destination[(2U * i) - 5U] = s2;
+
+        destination[(2U * i) - 8U] = s3;
+        destination[(2U * i) - 7U] = s3;
+    }
+}
+
+
+// ============================================================
+// 9. MANUAL 8x
+// ============================================================
+
+__attribute__((noinline))
+void duplicate_manual8(
+    int16_t* destination,
+    size_t decoderSamples)
+{
+    for (size_t i = decoderSamples; i > 0; i -= 8) {
+        const int16_t s0 = destination[i - 1];
+        const int16_t s1 = destination[i - 2];
+        const int16_t s2 = destination[i - 3];
+        const int16_t s3 = destination[i - 4];
+        const int16_t s4 = destination[i - 5];
+        const int16_t s5 = destination[i - 6];
+        const int16_t s6 = destination[i - 7];
+        const int16_t s7 = destination[i - 8];
+
+        destination[(2U * i) - 2U]  = s0;
+        destination[(2U * i) - 1U]  = s0;
+
+        destination[(2U * i) - 4U]  = s1;
+        destination[(2U * i) - 3U]  = s1;
+
+        destination[(2U * i) - 6U]  = s2;
+        destination[(2U * i) - 5U]  = s2;
+
+        destination[(2U * i) - 8U]  = s3;
+        destination[(2U * i) - 7U]  = s3;
+
+        destination[(2U * i) - 10U] = s4;
+        destination[(2U * i) - 9U]  = s4;
+
+        destination[(2U * i) - 12U] = s5;
+        destination[(2U * i) - 11U] = s5;
+
+        destination[(2U * i) - 14U] = s6;
+        destination[(2U * i) - 13U] = s6;
+
+        destination[(2U * i) - 16U] = s7;
+        destination[(2U * i) - 15U] = s7;
+    }
+}
+
+
+// ============================================================
+// 10. 32-BIT SOURCE LOAD + TWO 32-BIT STORES, UNROLL 4
+// ============================================================
+
+__attribute__((noinline))
+void duplicate_32source_unroll4(
+    int16_t* destination,
+    size_t decoderSamples)
+{
+    uint32_t* out =
+        reinterpret_cast<uint32_t*>(
+            destination + (2U * decoderSamples));
+
+#pragma GCC unroll 4
+    for (size_t i = decoderSamples; i > 0; i -= 2) {
+        const uint32_t source =
+            *reinterpret_cast<const uint32_t*>(
+                destination + i - 2);
+
+        const uint32_t a =
+            source & 0xFFFFU;
+
+        const uint32_t b =
+            source >> 16;
+
+        const uint32_t aa =
+            a | (a << 16);
+
+        const uint32_t bb =
+            b | (b << 16);
+
+        out -= 2;
+
+        out[0] = aa;
+        out[1] = bb;
+    }
+}
+
+
+// ============================================================
+// 11. 32-BIT SOURCE LOAD + TWO 32-BIT STORES, UNROLL 8
+// ============================================================
+
+__attribute__((noinline))
+void duplicate_32source_unroll8(
+    int16_t* destination,
+    size_t decoderSamples)
+{
+    uint32_t* out =
+        reinterpret_cast<uint32_t*>(
+            destination + (2U * decoderSamples));
+
+#pragma GCC unroll 8
+    for (size_t i = decoderSamples; i > 0; i -= 2) {
+        const uint32_t source =
+            *reinterpret_cast<const uint32_t*>(
+                destination + i - 2);
+
+        const uint32_t a =
+            source & 0xFFFFU;
+
+        const uint32_t b =
+            source >> 16;
+
+        const uint32_t aa =
+            a | (a << 16);
+
+        const uint32_t bb =
+            b | (b << 16);
+
+        out -= 2;
+
+        out[0] = aa;
+        out[1] = bb;
+    }
+}
+
+
+// ============================================================
+// 12. 32-BIT STORE VIA MEMCPY
+// ============================================================
+
+__attribute__((noinline))
+void duplicate_32store_memcpy(
+    int16_t* destination,
+    size_t decoderSamples)
+{
+    const int16_t* src =
+        destination + decoderSamples;
+
+    uint32_t* out =
+        reinterpret_cast<uint32_t*>(
+            destination + (2U * decoderSamples));
+
+#pragma GCC unroll 4
+    for (size_t i = decoderSamples; i > 0; --i) {
+        const uint32_t sample =
+            static_cast<uint16_t>(*--src);
+
+        const uint32_t packed =
+            sample | (sample << 16);
+
+        --out;
+
+        memcpy(out, &packed, sizeof(packed));
+    }
+}
+
+
+// ============================================================
+// Test data
+// ============================================================
+
+static void initInput()
+{
+    for (size_t i = 0; i < DECODER_SAMPLES; ++i) {
+        inputSamples[i] =
+            static_cast<int16_t>(
+                (i * 73U + 1234U) & 0xFFFFU);
+    }
+}
+
+
+static void prepare()
+{
+    for (size_t b = 0; b < BENCH_BLOCKS; ++b) {
+        memcpy(
+            work[b],
+            inputSamples,
+            DECODER_SAMPLES * sizeof(int16_t));
+
+        /*
+         * Destination half gets a non-zero pattern so that every
+         * output location is actually generated by the function.
+         */
+        memset(
+            work[b] + DECODER_SAMPLES,
+            0xA5,
+            DECODER_SAMPLES * sizeof(int16_t));
+    }
+
+    compilerBarrier();
+}
+
+
+// ============================================================
+// Reference
+// ============================================================
+
+static void makeReference(int16_t* reference)
+{
+    memcpy(
+        reference,
+        inputSamples,
+        DECODER_SAMPLES * sizeof(int16_t));
+
+    duplicate_original(
+        reference,
+        DECODER_SAMPLES);
+}
+
+
+// ============================================================
+// Correctness
+// ============================================================
+
+using DuplicateFunction =
+    void (*)(int16_t*, size_t);
+
+
+static bool checkVariant(
+    const char* name,
+    DuplicateFunction fn)
+{
+    alignas(16)
+    static int16_t test[BLOCK_SAMPLES];
+
+    alignas(16)
+    static int16_t reference[BLOCK_SAMPLES];
+
+    memcpy(
+        test,
+        inputSamples,
+        DECODER_SAMPLES * sizeof(int16_t));
+
+    memset(
+        test + DECODER_SAMPLES,
+        0xA5,
+        DECODER_SAMPLES * sizeof(int16_t));
+
+    makeReference(reference);
+
+    fn(
+        test,
+        DECODER_SAMPLES);
+
+    const bool ok =
+        memcmp(
+            test,
+            reference,
+            sizeof(test)) == 0;
+
+    Serial.printf(
+        "%-46s : %s\n",
+        name,
+        ok ? "OK" : "ERROR");
+
+    return ok;
+}
+
+
+// ============================================================
+// Checksum to keep benchmark results observable
+// ============================================================
+
+static uint32_t calculateChecksum()
+{
+    uint32_t sum = 0;
+
+    for (size_t b = 0; b < BENCH_BLOCKS; ++b) {
+        for (size_t i = 0; i < BLOCK_SAMPLES; ++i) {
+            sum =
+                (sum * 33U) ^
+                static_cast<uint16_t>(work[b][i]);
+        }
+    }
+
+    return sum;
+}
+
+
+// ============================================================
+// Benchmark stats
+// ============================================================
+
+struct BenchmarkResult {
+    uint32_t minCycles;
+    uint32_t medianCycles;
+    uint32_t averageCycles;
+};
+
+
+static uint32_t calculateMedian(
+    uint32_t* values,
+    size_t count)
+{
+    for (size_t i = 1; i < count; ++i) {
+        const uint32_t key = values[i];
+
+        size_t j = i;
+
+        while (j > 0 && values[j - 1] > key) {
+            values[j] = values[j - 1];
+            --j;
+        }
+
+        values[j] = key;
+    }
+
+    return values[count / 2];
+}
+
+
+static BenchmarkResult benchmark(
+    DuplicateFunction fn)
+{
+    uint32_t timings[MEASUREMENTS];
+
+    uint64_t total = 0;
+    uint32_t minCycles = UINT32_MAX;
+
+    /*
+     * Warm-up before measurements.
+     */
+    prepare();
+
+    for (size_t b = 0; b < BENCH_BLOCKS; ++b) {
+        fn(work[b], DECODER_SAMPLES);
+    }
+
+    compilerBarrier();
+
+    /*
+     * Actual measurements.
+     */
+    for (size_t m = 0; m < MEASUREMENTS; ++m) {
+        prepare();
+        compilerBarrier();
+
+        const uint32_t start =
+            readCycleCount();
+
+        for (size_t b = 0; b < BENCH_BLOCKS; ++b) {
+            fn(
+                work[b],
+                DECODER_SAMPLES);
+        }
+
+        compilerBarrier();
+
+        const uint32_t end =
+            readCycleCount();
+
+        timings[m] = end - start;
+
+        total += timings[m];
+
+        if (timings[m] < minCycles) {
+            minCycles = timings[m];
+        }
+
+        checksumSink ^= calculateChecksum();
+    }
+
+    BenchmarkResult result;
+
+    result.minCycles = minCycles;
+
+    result.medianCycles =
+        calculateMedian(
+            timings,
+            MEASUREMENTS);
+
+    result.averageCycles =
+        static_cast<uint32_t>(
+            total / MEASUREMENTS);
+
+    return result;
+}
+
+
+static void printResult(
+    const BenchmarkResult& result)
+{
+    const double samples =
+        static_cast<double>(BENCH_BLOCKS) *
+        static_cast<double>(DECODER_SAMPLES);
+
+    Serial.printf(
+        "  min=%10lu  median=%10lu  avg=%10lu cycles / %lu calls\n",
+        static_cast<unsigned long>(result.minCycles),
+        static_cast<unsigned long>(result.medianCycles),
+        static_cast<unsigned long>(result.averageCycles),
+        static_cast<unsigned long>(BENCH_BLOCKS));
+
+    Serial.printf(
+        "  min/sample    = %.4f cycles\n",
+        static_cast<double>(result.minCycles) / samples);
+
+    Serial.printf(
+        "  median/sample = %.4f cycles\n",
+        static_cast<double>(result.medianCycles) / samples);
+}
+
+
+// ============================================================
+// Main
+// ============================================================
+
+static void runBenchmark()
+{
+    Serial.println();
+    Serial.println("============================================================");
+    Serial.println(" ESP32 AAC in-place duplication benchmark");
+    Serial.println("============================================================");
+
+#if defined(CONFIG_IDF_TARGET_ESP32)
+    Serial.println("Target: ESP32");
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+    Serial.println("Target: ESP32-S3");
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+    Serial.println("Target: ESP32-C3");
+#else
+    Serial.println("Target: unknown");
+#endif
+
+    Serial.printf(
+        "CPU: %lu MHz\n",
+        static_cast<unsigned long>(ESP.getCpuFreqMHz()));
+
+    Serial.printf(
+        "decoderSamples: %lu\n",
+        static_cast<unsigned long>(DECODER_SAMPLES));
+
+    Serial.printf(
+        "BENCH_BLOCKS: %lu\n",
+        static_cast<unsigned long>(BENCH_BLOCKS));
+
+    Serial.printf(
+        "MEASUREMENTS: %lu\n",
+        static_cast<unsigned long>(MEASUREMENTS));
+
+    if ((DECODER_SAMPLES & 1U) != 0U) {
+        Serial.println(
+            "ERROR: DECODER_SAMPLES must be even.");
+        return;
+    }
+
+    if ((DECODER_SAMPLES & 7U) != 0U) {
+        Serial.println(
+            "ERROR: DECODER_SAMPLES must be divisible by 8.");
+        return;
+    }
+
+    initInput();
+
+    Serial.println();
+    Serial.println("Correctness:");
+
+    bool allOk = true;
+
+    allOk &= checkVariant(
+        "1. Original",
+        duplicate_original);
+
+    allOk &= checkVariant(
+        "2. Original + GCC unroll 4",
+        duplicate_original_unroll4);
+
+    allOk &= checkVariant(
+        "3. Original + GCC unroll 8",
+        duplicate_original_unroll8);
+
+    allOk &= checkVariant(
+        "4. 32-bit store, indexed",
+        duplicate_32store_indexed);
+
+    allOk &= checkVariant(
+        "5. 32-bit store, pointer",
+        duplicate_32store_pointer);
+
+    allOk &= checkVariant(
+        "6. 32-bit store + GCC unroll 4",
+        duplicate_32store_unroll4);
+
+    allOk &= checkVariant(
+        "7. 32-bit store + GCC unroll 8",
+        duplicate_32store_unroll8);
+
+    allOk &= checkVariant(
+        "8. Manual 4x",
+        duplicate_manual4);
+
+    allOk &= checkVariant(
+        "9. Manual 8x",
+        duplicate_manual8);
+
+    allOk &= checkVariant(
+        "10. 32-bit source + stores, unroll 4",
+        duplicate_32source_unroll4);
+
+    allOk &= checkVariant(
+        "11. 32-bit source + stores, unroll 8",
+        duplicate_32source_unroll8);
+
+    allOk &= checkVariant(
+        "12. 32-bit store via memcpy",
+        duplicate_32store_memcpy);
+
+    if (!allOk) {
+        Serial.println();
+        Serial.println(
+            "ERROR: At least one implementation produced wrong output.");
+        return;
+    }
+
+    Serial.println();
+    Serial.println("Cycle benchmark:");
+
+    Serial.println("\n1. Original");
+    printResult(
+        benchmark(duplicate_original));
+
+    Serial.println("\n2. Original + GCC unroll 4");
+    printResult(
+        benchmark(duplicate_original_unroll4));
+
+    Serial.println("\n3. Original + GCC unroll 8");
+    printResult(
+        benchmark(duplicate_original_unroll8));
+
+    Serial.println("\n4. 32-bit store, indexed");
+    printResult(
+        benchmark(duplicate_32store_indexed));
+
+    Serial.println("\n5. 32-bit store, pointer");
+    printResult(
+        benchmark(duplicate_32store_pointer));
+
+    Serial.println("\n6. 32-bit store + GCC unroll 4");
+    printResult(
+        benchmark(duplicate_32store_unroll4));
+
+    Serial.println("\n7. 32-bit store + GCC unroll 8");
+    printResult(
+        benchmark(duplicate_32store_unroll8));
+
+    Serial.println("\n8. Manual 4x");
+    printResult(
+        benchmark(duplicate_manual4));
+
+    Serial.println("\n9. Manual 8x");
+    printResult(
+        benchmark(duplicate_manual8));
+
+    Serial.println("\n10. 32-bit source + stores, unroll 4");
+    printResult(
+        benchmark(duplicate_32source_unroll4));
+
+    Serial.println("\n11. 32-bit source + stores, unroll 8");
+    printResult(
+        benchmark(duplicate_32source_unroll8));
+
+    Serial.println("\n12. 32-bit store via memcpy");
+    printResult(
+        benchmark(duplicate_32store_memcpy));
+
+    Serial.println();
+    Serial.printf(
+        "checksumSink = 0x%08lX\n",
+        static_cast<unsigned long>(checksumSink));
+
+    Serial.println("Done.");
+}
+
+
+void setup()
+{
+    Serial.begin(115200);
+    delay(1000);
+
+    runBenchmark();
+}
+
+
+void loop()
+{
+    delay(10000);
+}

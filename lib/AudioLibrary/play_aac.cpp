@@ -15,6 +15,7 @@ AudioPlayAac::~AudioPlayAac() {
     closeSource();
 }
 
+OSIZE
 void AudioPlayAac::closeSource() {
     if (_source == nullptr) {
         _ownSource = false;
@@ -34,6 +35,7 @@ bool AudioPlayAac::play(const char *filename) {
     return play(SD_MMC, filename);
 }
 
+OSIZE
 bool AudioPlayAac::play(fs::FS &fs, const char *filename) {
     stop();
     closeSource();
@@ -57,6 +59,7 @@ bool AudioPlayAac::play(fs::FS &fs, const char *filename) {
     return startPlayback(*fileSource, true);
 }
 
+OSIZE
 bool AudioPlayAac::play(AudioSource &source) {
     stop();
     closeSource();
@@ -65,6 +68,7 @@ bool AudioPlayAac::play(AudioSource &source) {
     return startPlayback(source, false);
 }
 
+OSIZE
 bool AudioPlayAac::startPlayback(AudioSource &source, bool takeOwnership) {
     if (!source.isOpen()) {
         if (takeOwnership) {
@@ -123,6 +127,7 @@ bool AudioPlayAac::startPlayback(AudioSource &source, bool takeOwnership) {
     return true;
 }
 
+OSIZE
 void AudioPlayAac::stop() {
     _playing = false;
 
@@ -144,9 +149,7 @@ bool AudioPlayAac::isPlaying() const {
 }
 
 uint32_t AudioPlayAac::positionMillis() const {
-    const uint32_t rate =
-        _sampleRate != 0 ? _sampleRate
-                         : static_cast<uint32_t>(AudioStream::sampleRate());
+    const uint32_t rate = _sampleRate != 0 ? _sampleRate : static_cast<uint32_t>(AudioStream::sampleRate());
 
     if (rate == 0) {
         return 0;
@@ -173,8 +176,7 @@ float AudioPlayAac::decodeProcessorUsage() const {
         return 0.0f;
     }
 
-    const uint64_t usageX100 =
-        (_decodeTimeUsTotal * 10000ULL + audioTimeUs / 2ULL) / audioTimeUs;
+    const uint64_t usageX100 = (_decodeTimeUsTotal * 10000ULL + audioTimeUs / 2ULL) / audioTimeUs;
 
     return static_cast<float>(usageX100) * 0.01f;
 }
@@ -193,16 +195,14 @@ uint64_t AudioPlayAac::decodeTimeUsTotal() const {
 
 #endif
 
+OSIZE
 size_t AudioPlayAac::id3TagSize(const uint8_t header[10]) {
-    if (header == nullptr || header[0] != 'I' || header[1] != 'D' ||
-        header[2] != '3') {
+    if (header == nullptr || header[0] != 'I' || header[1] != 'D' || header[2] != '3') {
         return 0;
     }
 
-    const uint32_t tagDataSize = ((uint32_t)(header[6] & 0x7F) << 21) |
-                                 ((uint32_t)(header[7] & 0x7F) << 14) |
-                                 ((uint32_t)(header[8] & 0x7F) << 7) |
-                                 ((uint32_t)(header[9] & 0x7F));
+    const uint32_t tagDataSize = ((uint32_t)(header[6] & 0x7F) << 21) | ((uint32_t)(header[7] & 0x7F) << 14) |
+                                 ((uint32_t)(header[8] & 0x7F) << 7) | ((uint32_t)(header[9] & 0x7F));
 
     size_t total = 10U + static_cast<size_t>(tagDataSize);
 
@@ -239,8 +239,7 @@ bool AudioPlayAac::fillInput(size_t minimumBytes) {
         }
 
         size_t received = 0;
-        const AudioSourceStatus status =
-            _source->read(_input + _inputLeft, freeSpace, received);
+        const AudioSourceStatus status = _source->read(_input + _inputLeft, freeSpace, received);
 
         if (received > 0) {
             _inputLeft += received;
@@ -290,6 +289,7 @@ bool AudioPlayAac::skipInput(size_t bytes) {
     return true;
 }
 
+OSIZE
 bool AudioPlayAac::prepareAacInput() {
     if (!fillInput(10)) {
         if (_lastError == ERR_NONE) {
@@ -319,24 +319,20 @@ bool AudioPlayAac::prepareAacInput() {
 bool AudioPlayAac::validateFrameInfo(const AACFrameInfo &info) {
     if (info.bitsPerSample != 16 || info.nChans < 1 || info.nChans > 2) {
         _lastError = ERR_FORMAT;
-        ESP_LOGE(TAG, "unsupported AAC format: channels=%d bits=%d",
-                 info.nChans, info.bitsPerSample);
+        ESP_LOGE(TAG, "unsupported AAC format: channels=%d bits=%d", info.nChans, info.bitsPerSample);
         return false;
     }
 
-    const uint32_t outputRate =
-        static_cast<uint32_t>(AudioStream::sampleRate());
+    const uint32_t outputRate = static_cast<uint32_t>(AudioStream::sampleRate());
 
-    if (info.sampRateOut <= 0 ||
-        static_cast<uint32_t>(info.sampRateOut) != outputRate) {
+    if (info.sampRateOut <= 0 || static_cast<uint32_t>(info.sampRateOut) != outputRate) {
         _lastError = ERR_FORMAT;
-        ESP_LOGE(TAG, "AAC sample rate %d Hz does not match audio rate %lu Hz",
-                 info.sampRateOut, static_cast<unsigned long>(outputRate));
+        ESP_LOGE(TAG, "AAC sample rate %d Hz does not match audio rate %lu Hz", info.sampRateOut,
+                 static_cast<unsigned long>(outputRate));
         return false;
     }
 
-    if (info.outputSamps <= 0 ||
-        static_cast<size_t>(info.outputSamps) > AAC_PCM_BUFFER_SAMPLES ||
+    if (info.outputSamps <= 0 || static_cast<size_t>(info.outputSamps) > AAC_PCM_BUFFER_SAMPLES ||
         info.outputSamps % info.nChans != 0) {
         _lastError = ERR_FORMAT;
         ESP_LOGE(TAG, "invalid AAC output sample count: %d", info.outputSamps);
@@ -350,13 +346,12 @@ bool AudioPlayAac::validateFrameInfo(const AACFrameInfo &info) {
     return true;
 }
 
-AudioDecoderStream::DecodeResult
-AudioPlayAac::decodePcmBuffer(int16_t *destination, size_t capacity,
-                              size_t &outSamples) {
+OSPEED
+AudioDecoderStream::DecodeResult AudioPlayAac::decodePcmBuffer(int16_t *destination, size_t capacity,
+                                                               size_t &outSamples) {
     outSamples = 0;
 
-    if (!_decoder.IsInit() || destination == nullptr ||
-        capacity < AAC_PCM_BUFFER_SAMPLES) {
+    if (!_decoder.IsInit() || destination == nullptr || capacity < AAC_PCM_BUFFER_SAMPLES) {
         _lastError = ERR_DECODER;
         return DecodeResult::ERROR;
     }
@@ -368,22 +363,19 @@ AudioPlayAac::decodePcmBuffer(int16_t *destination, size_t capacity,
     for (;;) {
         if (!_inputEof && _inputLeft < AAC_MIN_FRAME_BYTES) {
             if (!fillInput(AAC_MIN_FRAME_BYTES) && !_inputEof) {
-                return _lastError == ERR_NONE ? DecodeResult::RETRY
-                                              : DecodeResult::ERROR;
+                return _lastError == ERR_NONE ? DecodeResult::RETRY : DecodeResult::ERROR;
             }
         }
 
         if (_inputLeft < 4) {
-            return _inputEof ? DecodeResult::END_OF_STREAM
-                             : DecodeResult::RETRY;
+            return _inputEof ? DecodeResult::END_OF_STREAM : DecodeResult::RETRY;
         }
 
         unsigned char *input = _input + _inputPos;
         int32_t bytesLeft = static_cast<int32_t>(_inputLeft);
         const int bytesBefore = bytesLeft;
         const uint32_t decodeStartUs = micros();
-        const int decodeResult = _decoder.Decode(
-            &input, &bytesLeft, reinterpret_cast<short *>(destination));
+        const int decodeResult = _decoder.Decode(&input, &bytesLeft, reinterpret_cast<short *>(destination));
 
 #if SOFTCODEC_METRICS
         const uint32_t decodeElapsedUs = micros() - decodeStartUs;
@@ -415,11 +407,9 @@ AudioPlayAac::decodePcmBuffer(int16_t *destination, size_t capacity,
 
 #if SOFTCODEC_METRICS
             const uint64_t frameAudioSamples =
-                static_cast<uint64_t>(info.outputSamps) /
-                static_cast<uint64_t>(info.nChans);
+                static_cast<uint64_t>(info.outputSamps) / static_cast<uint64_t>(info.nChans);
             const uint64_t frameAudioTimeUs =
-                (frameAudioSamples * 1000000ULL) /
-                static_cast<uint64_t>(info.sampRateOut);
+                (frameAudioSamples * 1000000ULL) / static_cast<uint64_t>(info.sampRateOut);
 
             _decodeFrames = _decodeFrames + 1;
             _decodeTimeUsTotal += decodeElapsedUs;
@@ -427,13 +417,10 @@ AudioPlayAac::decodePcmBuffer(int16_t *destination, size_t capacity,
 
             if (frameAudioTimeUs > 0) {
                 const uint64_t usageX100 =
-                    (static_cast<uint64_t>(decodeElapsedUs) * 10000ULL +
-                     frameAudioTimeUs / 2ULL) /
-                    frameAudioTimeUs;
+                    (static_cast<uint64_t>(decodeElapsedUs) * 10000ULL + frameAudioTimeUs / 2ULL) / frameAudioTimeUs;
 
                 if (usageX100 > _decodeProcessorUsageMaxX100) {
-                    _decodeProcessorUsageMaxX100 =
-                        static_cast<uint32_t>(usageX100);
+                    _decodeProcessorUsageMaxX100 = static_cast<uint32_t>(usageX100);
                 }
             }
 #endif
@@ -449,12 +436,7 @@ AudioPlayAac::decodePcmBuffer(int16_t *destination, size_t capacity,
                     return DecodeResult::ERROR;
                 }
 
-                for (size_t i = decoderSamples; i > 0; --i) {
-                    const int16_t sample = destination[i - 1U];
-                    destination[(2U * i) - 2U] = sample;
-                    destination[(2U * i) - 1U] = sample;
-                }
-
+                std::memcpy(destination + decoderSamples, destination, decoderSamples * sizeof(int16_t));
                 outSamples = decoderSamples * 2U;
             }
 

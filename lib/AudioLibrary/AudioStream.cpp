@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "AudioStream.h"
+#include <esp_cpu.h>
 #include <math.h>
 #include <freertos/idf_additions.h>
 
@@ -34,6 +35,7 @@ float AudioStream::audio_sample_rate = AUDIO_SAMPLE_RATE_EXACT;
 // True while the realtime audio task is traversing the static graph.
 // Used only to make update_stop() safe before deleting the task.
 static bool audio_processing = false;
+static uint32_t cpu_cycles_per_us = 0;
 
 float AudioStream::processorUsage(uint8_t core) {
 #if defined(CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS) && \
@@ -221,6 +223,10 @@ bool AudioStream::update_setup(void) {
     }
     portEXIT_CRITICAL(&audio_mux);
 
+    if (cpu_cycles_per_us == 0) {
+        cpu_cycles_per_us = getCpuFrequencyMhz();
+    }
+
     if (audio_task_handle == nullptr) {
         BaseType_t result = xTaskCreatePinnedToCore(
             scheduler_task, "AudioTask", 4096, nullptr,
@@ -357,17 +363,16 @@ void AudioStream::process_all_now(void) {
     AudioStream *stream = first_update;
 
     portEXIT_CRITICAL(&audio_mux);
-
-    const uint32_t total_start = micros();
+    const uint32_t total_start = esp_cpu_get_cycle_count();
 
     while (stream != nullptr) {
         // Der komplette Audio-Graph muss nach update_setup() unveränderlich sein.
         if (stream->active) {
-            const uint32_t start = micros();
+            const uint32_t start = esp_cpu_get_cycle_count();
             stream->update();
-            const uint32_t elapsed = micros() - start;
-
-            stream->cpu_time_us = elapsed;
+            const uint32_t elapsed_cycles = esp_cpu_get_cycle_count() - start;
+            const uint32_t elapsed = elapsed_cycles / cpu_cycles_per_us;
+            stream->cpu_time_us = elapsed_cycles / cpu_cycles_per_us;
             if (elapsed > stream->cpu_time_max_us) {
                 stream->cpu_time_max_us = elapsed;
             }
@@ -376,7 +381,8 @@ void AudioStream::process_all_now(void) {
         stream = stream->next_update;
     }
 
-    const uint32_t total_elapsed = micros() - total_start;
+    const uint32_t total_elapsed_cycles = esp_cpu_get_cycle_count() - total_start;
+    const uint32_t total_elapsed = total_elapsed_cycles / cpu_cycles_per_us;
 
     portENTER_CRITICAL(&audio_mux);
 

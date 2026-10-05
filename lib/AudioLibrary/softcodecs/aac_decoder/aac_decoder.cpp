@@ -4,8 +4,10 @@
  *
  *  Created on: 26.10.2018
  *  Updated on: 22.05.2024
- *  Updated on: 03.10.2026 //FB
+ *  Updated on: 05.10.2026 //FB
  ************************************************************************************/
+
+#define OUTPUT_INTERLEAVED 1 // 1 selects planar stereo PCM: left samples, then right samples. 0: LRLR interleaved output
 
 #include "aac_decoder.h"
 #include "aac_decoder_consts.h"
@@ -400,7 +402,7 @@ int32_t AACDecoder::AACSetRawBlockParams(int32_t copyLast, int32_t nChans, int32
  *              pointer to number of valid bytes remaining in inbuf
  *              pointer to outbuf, big enough to hold one frame of decoded PCM samples
  *
- * Outputs:     PCM data in outbuf, interleaved LRLRLR... if stereo
+ * Outputs:     PCM data in outbuf, planar L...L R...R if stereo
  *                number of output samples = 1024 per channel
  *              updated inbuf pointer
  *              updated bytesLeft
@@ -2113,12 +2115,11 @@ void AACDecoder::DecodeSpectrumShort(int32_t ch) {
  *              window type (sin or KBD) for input buffer
  *              window type (sin or KBD) for overlap buffer
  *
- * Outputs:     one channel, one frame of 16-bit PCM, interleaved by nChans
+ * Outputs:     one channel, one frame of 16-bit PCM, using the requested output stride
  *
  * Return:      none
  *
- * Notes:       this processes one channel at a time, but skips every other sample in
- *                the output buffer (pcm) for stereo interleaving
+ * Notes:       this processes one channel at a time and uses the supplied output stride
  *              this should fit in registers on ARM
  *
  **********************************************************************************************************************/
@@ -2198,12 +2199,11 @@ void AACDecoder::DecWindowOverlap(int32_t *buf0, int32_t *over0, int16_t *pcm0, 
  *              window type (sin or KBD) for input buffer
  *              window type (sin or KBD) for overlap buffer
  *
- * Outputs:     one channel, one frame of 16-bit PCM, interleaved by nChans
+ * Outputs:     one channel, one frame of 16-bit PCM, using the requested output stride
  *
  * Return:      none
  *
- * Notes:       this processes one channel at a time, but skips every other sample in
- *                the output buffer (pcm) for stereo interleaving
+ * Notes:       this processes one channel at a time and uses the supplied output stride
  *              this should fit in registers on ARM
  **********************************************************************************************************************/
 void AACDecoder::DecWindowOverlapLongStart(int32_t *buf0, int32_t *over0, int16_t *pcm0, int32_t nChans,
@@ -2565,9 +2565,15 @@ void AACDecoder::DecWindowOverlapShort(int32_t *buf0, int32_t *over0, int16_t *p
 int32_t AACDecoder::IMDCT(int32_t ch, int32_t chOut, int16_t *outbuf) {
     int32_t i;
     ICSInfo_t *icsInfo;
+#if OUTPUT_INTERLEAVED
+    const int32_t outputStride = 1;
+    outbuf += chOut * AAC_MAX_NSAMPS * (m_AACDecInfo->sbrEnabled ? 2 : 1);
+#else
+    const int32_t outputStride = m_AACDecInfo->nChans;
+    outbuf += chOut;
+#endif
 
     icsInfo = (ch == 1 && m_PSInfoBase->commonWin == 1) ? &(m_PSInfoBase->icsInfo[0]) : &(m_PSInfoBase->icsInfo[ch]);
-    outbuf += chOut;
 
     /* optimized type-IV DCT (operates inplace) */
     if (icsInfo->winSequence == 2) {
@@ -2601,7 +2607,7 @@ int32_t AACDecoder::IMDCT(int32_t ch, int32_t chOut, int16_t *outbuf) {
     if (!m_AACDecInfo->sbrEnabled) {
         for (i = 0; i < AAC_MAX_NSAMPS; i++) {
             *outbuf = CLIPTOSHORT((m_PSInfoBase->sbrWorkBuf[ch][i] + RND_VAL) >> FBITS_OUT_IMDCT);
-            outbuf += m_AACDecInfo->nChans;
+            outbuf += outputStride;
         }
     }
 
@@ -2611,16 +2617,16 @@ int32_t AACDecoder::IMDCT(int32_t ch, int32_t chOut, int16_t *outbuf) {
 #else
     /* window, overlap-add, round to PCM - optimized for each window sequence */
     if (icsInfo->winSequence == 0)
-        DecWindowOverlap(m_PSInfoBase->coef[ch], m_PSInfoBase->overlap[chOut], outbuf, m_AACDecInfo->nChans,
+        DecWindowOverlap(m_PSInfoBase->coef[ch], m_PSInfoBase->overlap[chOut], outbuf, outputStride,
                          icsInfo->winShape, m_PSInfoBase->prevWinShape[chOut]);
     else if (icsInfo->winSequence == 1)
-        DecWindowOverlapLongStart(m_PSInfoBase->coef[ch], m_PSInfoBase->overlap[chOut], outbuf, m_AACDecInfo->nChans,
+        DecWindowOverlapLongStart(m_PSInfoBase->coef[ch], m_PSInfoBase->overlap[chOut], outbuf, outputStride,
                                   icsInfo->winShape, m_PSInfoBase->prevWinShape[chOut]);
     else if (icsInfo->winSequence == 2)
-        DecWindowOverlapShort(m_PSInfoBase->coef[ch], m_PSInfoBase->overlap[chOut], outbuf, m_AACDecInfo->nChans,
+        DecWindowOverlapShort(m_PSInfoBase->coef[ch], m_PSInfoBase->overlap[chOut], outbuf, outputStride,
                               icsInfo->winShape, m_PSInfoBase->prevWinShape[chOut]);
     else if (icsInfo->winSequence == 3)
-        DecWindowOverlapLongStop(m_PSInfoBase->coef[ch], m_PSInfoBase->overlap[chOut], outbuf, m_AACDecInfo->nChans,
+        DecWindowOverlapLongStop(m_PSInfoBase->coef[ch], m_PSInfoBase->overlap[chOut], outbuf, outputStride,
                                  icsInfo->winShape, m_PSInfoBase->prevWinShape[chOut]);
 
     m_AACDecInfo->rawSampleBuf[ch] = 0;
@@ -5187,6 +5193,7 @@ int32_t AACDecoder::DecodeSBRBitstream(int32_t chBase) {
 int32_t AACDecoder::DecodeSBRData(int32_t chBase, int16_t *outbuf) {
     int32_t k, l, ch, chBlock, qmfaBands, qmfsBands;
     int32_t upsampleOnly, gbIdx, gbMask;
+    int32_t outputStride;
     int32_t *inbuf;
     int16_t *outptr;
 
@@ -5198,6 +5205,11 @@ int32_t AACDecoder::DecodeSBRData(int32_t chBase, int16_t *outbuf) {
     /* same header and freq tables for both channels in CPE */
     sbrHdr = &(m_PSInfoSBR->sbrHdr[chBase]);
     sbrFreq = &(m_PSInfoSBR->sbrFreq[chBase]);
+#if OUTPUT_INTERLEAVED
+    outputStride = 1;
+#else
+    outputStride = m_AACDecInfo->nChans;
+#endif
 
     /* upsample only if we haven't received an SBR header yet or if we have an LFE block */
     if (m_AACDecInfo->currBlockID == AAC_ID_LFE) {
@@ -5231,7 +5243,11 @@ int32_t AACDecoder::DecodeSBRData(int32_t chBase, int16_t *outbuf) {
         if (m_AACDecInfo->rawSampleBuf[ch] == 0 || m_AACDecInfo->rawSampleBytes != 4)
             return ERR_AAC_SBR_PCM_FORMAT;
         inbuf = (int32_t *)m_AACDecInfo->rawSampleBuf[ch];
+#if OUTPUT_INTERLEAVED
+        outptr = outbuf + (chBase + ch) * AAC_MAX_NSAMPS * 2;
+#else
         outptr = outbuf + chBase + ch;
+#endif
 
         /* restore delay buffers (could use ring buffer or keep in temp buffer for nChans == 1) */
         for (l = 0; l < HF_GEN; l++) {
@@ -5257,8 +5273,8 @@ int32_t AACDecoder::DecodeSBRData(int32_t chBase, int16_t *outbuf) {
             for (l = 0; l < 32; l++) {
                 /* step 4 - synthesis QMF */
                 QMFSynthesis(m_PSInfoSBR->XBuf[l + HF_ADJ][0], m_PSInfoSBR->delayQMFS[chBase + ch],
-                             &(m_PSInfoSBR->delayIdxQMFS[chBase + ch]), qmfsBands, outptr, m_AACDecInfo->nChans);
-                outptr += 64 * m_AACDecInfo->nChans;
+                             &(m_PSInfoSBR->delayIdxQMFS[chBase + ch]), qmfsBands, outptr, outputStride);
+                outptr += 64 * outputStride;
             }
         } else {
             /* if previous frame had lower SBR starting freq than current, zero out the synthesized QMF
@@ -5301,16 +5317,16 @@ int32_t AACDecoder::DecodeSBRData(int32_t chBase, int16_t *outbuf) {
         for (l = 0; l < sbrGrid->envTimeBorder[0]; l++) {
             /* if new envelope starts mid-frame, use old settings until start of first envelope in this frame */
             QMFSynthesis(m_PSInfoSBR->XBuf[l + HF_ADJ][0], m_PSInfoSBR->delayQMFS[chBase + ch],
-                         &(m_PSInfoSBR->delayIdxQMFS[chBase + ch]), qmfsBands, outptr, m_AACDecInfo->nChans);
-            outptr += 64 * m_AACDecInfo->nChans;
+                         &(m_PSInfoSBR->delayIdxQMFS[chBase + ch]), qmfsBands, outptr, outputStride);
+            outptr += 64 * outputStride;
         }
 
         qmfsBands = sbrFreq->kStart + sbrFreq->numQMFBands;
         for (; l < 32; l++) {
             /* use new settings for rest of frame (usually the entire frame, unless the first envelope starts mid-frame) */
             QMFSynthesis(m_PSInfoSBR->XBuf[l + HF_ADJ][0], m_PSInfoSBR->delayQMFS[chBase + ch],
-                         &(m_PSInfoSBR->delayIdxQMFS[chBase + ch]), qmfsBands, outptr, m_AACDecInfo->nChans);
-            outptr += 64 * m_AACDecInfo->nChans;
+                         &(m_PSInfoSBR->delayIdxQMFS[chBase + ch]), qmfsBands, outptr, outputStride);
+            outptr += 64 * outputStride;
         }
     }
 

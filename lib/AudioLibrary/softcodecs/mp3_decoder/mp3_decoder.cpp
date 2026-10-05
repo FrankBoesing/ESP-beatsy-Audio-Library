@@ -4,8 +4,11 @@
  *
  *  Created on: 26.10.2018 //FB
  *  Updated on: 09.09.2024
- *  Updated on: 03.10.2026 //FB
+ *  Updated on: 05.10.2026 //FB
  */
+
+#define OUTPUT_INTERLEAVED 1 // 1 selects planar stereo PCM: left samples, then right samples. 0: LRLR interleaved output
+
 #include "mp3_decoder.h"
 #include "mp3_decoder_consts.h"
 
@@ -844,7 +847,7 @@ void MP3Decoder::MP3ClearBadFrame(int16_t *outbuf) {
  *              flag indicating whether MP3 data is normal MPEG format (useSize = 0)
  *              or reformatted as "self-contained" frames (useSize = 1)
  *
- * Outputs:     PCM data in outbuf, interleaved LRLRLR... if stereo
+ * Outputs:     PCM data in outbuf, planar L...L R...R if stereo
  *              number of output samples = nGrans * nGranSamps * nChans
  *              updated inbuf pointer, updated bytesLeft
  *
@@ -984,8 +987,13 @@ int32_t MP3Decoder::MP3Decode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbu
                 return ERR_MP3_INVALID_IMDCT;
             }
         }
-        /* subband transform - if stereo, interleaves pcm LRLRLR */
-        if (Subband(outbuf + gr * m_MP3DecInfo->nGranSamps * m_MP3DecInfo->nChans) < 0) {
+        /* subband transform - if stereo, writes left and right channel planes */
+#if OUTPUT_INTERLEAVED
+        int16_t *granuleOut = outbuf + gr * m_MP3DecInfo->nGranSamps;
+#else
+        int16_t *granuleOut = outbuf + gr * m_MP3DecInfo->nGranSamps * m_MP3DecInfo->nChans;
+#endif
+        if (Subband(granuleOut) < 0) {
             MP3ClearBadFrame(outbuf);
             return ERR_MP3_INVALID_SUBBAND;
         }
@@ -3023,7 +3031,7 @@ int32_t MP3Decoder::IMDCT(int32_t gr, int32_t ch) {
  * Inputs:      filled MP3DecInfo structure, after calling IMDCT for all channels
  *              vbuf[ch] and vindex[ch] must be preserved between calls
  *
- * Outputs:     decoded PCM data, interleaved LRLRLR... if stereo
+ * Outputs:     decoded PCM data, planar L...L R...R if stereo
  *
  * Return:      0 on success,  -1 if null input pointers
  **********************************************************************************************************************/
@@ -3038,7 +3046,11 @@ int32_t MP3Decoder::Subband(int16_t *pcmBuf) {
                    m_IMDCTInfo->gb[1]);
             PolyphaseStereo(pcmBuf, m_SubbandInfo->vbuf + m_SubbandInfo->vindex + m_VBUF_LENGTH * (b & 0x01), polyCoef);
             m_SubbandInfo->vindex = (m_SubbandInfo->vindex - (b & 0x01)) & 7;
+#if OUTPUT_INTERLEAVED
+            pcmBuf += m_NBANDS;
+#else
             pcmBuf += (2 * m_NBANDS);
+#endif
         }
     } else {
         /* mono */
@@ -3421,7 +3433,7 @@ void MP3Decoder::PolyphaseMono(int16_t *pcm, int32_t *vbuf, const uint32_t *coef
  *
  * Return:      none
  *
- * Notes:       interleaves PCM samples LRLRLR...
+ * Notes:       writes left and right channel planes when OUTPUT_INTERLEAVED is enabled
  **********************************************************************************************************************/
 void MP3Decoder::PolyphaseStereo(int16_t *pcm, int32_t *vbuf, const uint32_t *coefBase) {
     int32_t i;
@@ -3429,6 +3441,9 @@ void MP3Decoder::PolyphaseStereo(int16_t *pcm, int32_t *vbuf, const uint32_t *co
     int32_t *vb1;
     int32_t vLo, vHi, c1, c2;
     uint64_t sum1L, sum2L, sum1R, sum2R, rndVal;
+#if OUTPUT_INTERLEAVED
+    int16_t *pcmR = pcm + m_MP3DecInfo->nGranSamps * m_MP3DecInfo->nGrans;
+#endif
 
     rndVal = (uint64_t)(1 << ((m_DQ_FRACBITS_OUT - 2 - 2 - 15) - 1 + (32 - m_CSHIFT)));
 
@@ -3451,8 +3466,13 @@ void MP3Decoder::PolyphaseStereo(int16_t *pcm, int32_t *vbuf, const uint32_t *co
         sum1R = MADD64(sum1R, vLo, c1);
         sum1R = MADD64(sum1R, vHi, -c2);
     }
+#if OUTPUT_INTERLEAVED
+    *(pcm + 0) = ClipToShort((int32_t)SAR64(sum1L, (32 - m_CSHIFT)));
+    *(pcmR + 0) = ClipToShort((int32_t)SAR64(sum1R, (32 - m_CSHIFT)));
+#else
     *(pcm + 0) = ClipToShort((int32_t)SAR64(sum1L, (32 - m_CSHIFT)));
     *(pcm + 1) = ClipToShort((int32_t)SAR64(sum1R, (32 - m_CSHIFT)));
+#endif
 
     /* special case, output sample 16 */
     coef = coefBase + 256;
@@ -3467,13 +3487,23 @@ void MP3Decoder::PolyphaseStereo(int16_t *pcm, int32_t *vbuf, const uint32_t *co
         vLo = *(vb1 + 32 + (j));
         sum1R = MADD64(sum1R, vLo, c1);
     }
+#if OUTPUT_INTERLEAVED
+    *(pcm + 16) = ClipToShort((int32_t)SAR64(sum1L, (32 - m_CSHIFT)));
+    *(pcmR + 16) = ClipToShort((int32_t)SAR64(sum1R, (32 - m_CSHIFT)));
+#else
     *(pcm + 2 * 16 + 0) = ClipToShort((int32_t)SAR64(sum1L, (32 - m_CSHIFT)));
     *(pcm + 2 * 16 + 1) = ClipToShort((int32_t)SAR64(sum1R, (32 - m_CSHIFT)));
+#endif
 
     /* main convolution loop: sum1L = samples 1, 2, 3, ... 15   sum2L = samples 31, 30, ... 17 */
     coef = coefBase + 16;
     vb1 = vbuf + 64;
+#if OUTPUT_INTERLEAVED
+    pcm++;
+    pcmR++;
+#else
     pcm += 2;
+#endif
 
     /* right now, the compiler creates bad asm from this... */
     for (i = 15; i > 0; i--) {
@@ -3499,10 +3529,22 @@ void MP3Decoder::PolyphaseStereo(int16_t *pcm, int32_t *vbuf, const uint32_t *co
             sum2R = MADD64(sum2R, vHi, c1);
         }
         vb1 += 64;
+#if OUTPUT_INTERLEAVED
+        *(pcm + 0) = ClipToShort((int32_t)SAR64(sum1L, (32 - m_CSHIFT)));
+        *(pcmR + 0) = ClipToShort((int32_t)SAR64(sum1R, (32 - m_CSHIFT)));
+        *(pcm + 2 * i) = ClipToShort((int32_t)SAR64(sum2L, (32 - m_CSHIFT)));
+        *(pcmR + 2 * i) = ClipToShort((int32_t)SAR64(sum2R, (32 - m_CSHIFT)));
+#else
         *(pcm + 0) = ClipToShort((int32_t)SAR64(sum1L, (32 - m_CSHIFT)));
         *(pcm + 1) = ClipToShort((int32_t)SAR64(sum1R, (32 - m_CSHIFT)));
         *(pcm + 2 * 2 * i + 0) = ClipToShort((int32_t)SAR64(sum2L, (32 - m_CSHIFT)));
         *(pcm + 2 * 2 * i + 1) = ClipToShort((int32_t)SAR64(sum2R, (32 - m_CSHIFT)));
+#endif
+#if OUTPUT_INTERLEAVED
+        pcm++;
+        pcmR++;
+#else
         pcm += 2;
+#endif
     }
 }

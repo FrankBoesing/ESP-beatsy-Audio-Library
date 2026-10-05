@@ -336,11 +336,9 @@ void AudioDecoderStream::decoderTaskLoop() {
             break;
         }
 
-        /*
-         * All codecs in this layer use interleaved stereo PCM.
-         */
+        // Decoder buffers contain left-channel samples followed by right-channel samples.
         if ((produced & 1U) != 0) {
-            ESP_LOGE(TAG, "codec returned odd interleaved PCM sample count: %zu", produced);
+            ESP_LOGE(TAG, "codec returned odd planar PCM sample count: %zu", produced);
 
             releaseFilledBuffer(bufferIndex);
             setDecoderFinished(-1);
@@ -444,14 +442,14 @@ void AudioDecoderStream::update() {
         }
 
         const size_t totalSamples = _pcmSamples[index];
+        const size_t totalFrames = totalSamples / 2U;
 
-        if (_readPosition >= totalSamples) {
+        if (_readPosition >= totalFrames) {
             releaseReadBuffer(index);
             continue;
         }
 
-        const size_t availableSamples = totalSamples - _readPosition;
-        const size_t availableFrames = availableSamples / 2U;
+        const size_t availableFrames = totalFrames - _readPosition;
 
         if (availableFrames == 0) {
             releaseReadBuffer(index);
@@ -460,20 +458,19 @@ void AudioDecoderStream::update() {
 
         const size_t frames = std::min(availableFrames, AUDIO_BLOCK_SAMPLES - outputFrames);
 
-        const int16_t *__restrict source = _pcm[index] + _readPosition;
+        const int16_t *__restrict sourceLeft = _pcm[index] + _readPosition;
+        const int16_t *__restrict sourceRight = _pcm[index] + totalFrames + _readPosition;
         int16_t *__restrict dstLeft = left->data + outputFrames;
         int16_t *__restrict dstRight = right->data + outputFrames;
 
-#pragma GCC unroll 4
-        for (size_t i = 0; i < frames; ++i) {
-            *dstLeft++ = *source++;
-            *dstRight++ = *source++;
-        }
+        const size_t bytes = frames * sizeof(int16_t);
+        std::memcpy(dstLeft, sourceLeft, bytes);
+        std::memcpy(dstRight, sourceRight, bytes);
 
-        _readPosition += frames * 2U;
+        _readPosition += frames;
         outputFrames += frames;
 
-        if (_readPosition >= totalSamples) {
+        if (_readPosition >= totalFrames) {
             releaseReadBuffer(index);
         }
     }

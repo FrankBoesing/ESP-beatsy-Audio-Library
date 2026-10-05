@@ -226,7 +226,6 @@ class AudioStream {
 
     static audio_block_t *allocate_locked(void);
     static void release_locked(audio_block_t *block);
-
     static bool is_block_from_pool(const audio_block_t *block);
 
     // -------------------------------------------------------------------------
