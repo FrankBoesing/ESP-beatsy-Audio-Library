@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <freertos/task.h>
 #include <esp_timer.h>
 #include <esp_attr.h>
@@ -116,14 +117,17 @@ class AudioStream {
     // Diagnostics
     // -------------------------------------------------------------------------
 
-    float processorUsage(void) const;
-    float processorUsageMax(void) const;
-    void processorUsageMaxReset(void);
+    float AudioProcessorUsage(void) const;
+    float AudioProcessorUsageMax(void) const;
+    void AudioProcessorUsageMaxReset(void);
+    static float AudioProcessorUsageTotal(void);
+    static float AudioProcessorUsageTotalMax(void);
+    static void AudioProcessorUsageTotalMaxReset(void);
     static float processorUsage(uint8_t core);
 
-    static uint16_t memoryUsage(void);
-    static uint16_t memoryUsageMax(void);
-    static void memoryUsageMaxReset(void);
+    static uint16_t AudioMemoryUsage(void);
+    static uint16_t AudioMemoryUsageMax(void);
+    static void AudioMemoryUsageMaxReset(void);
 
     bool isActive(void) const {
         return active;
@@ -171,6 +175,8 @@ class AudioStream {
     // the common entry point for timer and future I2S/DMA clock sources.
     static void update_all(void);
     static bool IRAM_ATTR update_all_from_isr(void);
+    static void disableUpdates(void);
+    static void enableUpdates(void);
 
     // Used by the current test infrastructure for deterministic synchronous
     // execution. The real scheduler uses update_all().
@@ -180,6 +186,8 @@ class AudioStream {
         return true;
     }
     friend class AudioConnection;
+    friend void AudioInterrupts();
+    friend void AudioNoInterrupts();
 
     // -------------------------------------------------------------------------
     // Stream information
@@ -242,10 +250,43 @@ class AudioStream {
     static void software_timer_callback(void *parameter);
 
     static TaskHandle_t audio_task_handle;
+    static SemaphoreHandle_t audio_update_mutex;
     static esp_timer_handle_t software_timer;
     static bool update_scheduled;
     static bool external_update_clock;
     static float audio_sample_rate;
 };
 
+inline float AudioProcessorUsage() {
+    return AudioStream::AudioProcessorUsageTotal();
+}
+
+inline float AudioProcessorUsageMax() {
+    return AudioStream::AudioProcessorUsageTotalMax();
+}
+
+inline void AudioProcessorUsageMaxReset() {
+    AudioStream::AudioProcessorUsageTotalMaxReset();
+}
+
+inline uint16_t AudioMemoryUsage() {
+    return AudioStream::AudioMemoryUsage();
+}
+
+inline uint16_t AudioMemoryUsageMax() {
+    return AudioStream::AudioMemoryUsageMax();
+}
+
+inline void AudioMemoryUsageMaxReset() {
+    AudioStream::AudioMemoryUsageMaxReset();
+}
+
+// Pair these from task context; nested calls are supported.
+inline void AudioInterrupts() {
+    AudioStream::enableUpdates();
+}
+
+inline void AudioNoInterrupts() {
+    AudioStream::disableUpdates();
+}
 #endif // AudioStream_h

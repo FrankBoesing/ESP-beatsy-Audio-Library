@@ -1,5 +1,10 @@
 #pragma once
 
+#ifdef PROGMEM
+#undef PROGMEM
+#define PROGMEM
+#endif
+
 #ifndef AUDIO_BLOCK_SAMPLES
 #define AUDIO_BLOCK_SAMPLES 128
 #endif

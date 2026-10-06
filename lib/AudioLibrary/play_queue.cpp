@@ -25,14 +25,9 @@
 
 static portMUX_TYPE play_queue_mux = portMUX_INITIALIZER_UNLOCKED;
 
-
-void AudioPlayQueue::setMaxBuffers(uint8_t maxb)
-{
-    if (maxb < 2)
-        maxb = 2;
-
-    if (maxb > MAX_BUFFERS)
-        maxb = MAX_BUFFERS;
+void AudioPlayQueue::setMaxBuffers(uint8_t maxb) {
+    if (maxb < 2) maxb = 2;
+    if (maxb > MAX_BUFFERS) maxb = MAX_BUFFERS;
 
     audio_block_t *pending[MAX_BUFFERS];
     unsigned int count = 0;
@@ -40,21 +35,16 @@ void AudioPlayQueue::setMaxBuffers(uint8_t maxb)
     portENTER_CRITICAL(&play_queue_mux);
 
     uint8_t index = tail;
-
     while (index != head) {
         uint8_t next = index + 1;
-
-        if (next >= max_buffers)
-            next = 0;
-
+        if (next >= max_buffers) next = 0;
         index = next;
         pending[count++] = queue[index];
     }
 
     // At least one slot must remain unused so head != tail
     // can distinguish full from empty.
-    if (maxb <= count)
-        maxb = count + 1;
+    if (maxb <= count) maxb = count + 1;
 
     memset(queue, 0, sizeof(queue));
 
@@ -62,23 +52,18 @@ void AudioPlayQueue::setMaxBuffers(uint8_t maxb)
     tail = 0;
     head = count;
 
-    for (unsigned int i = 0; i < count; ++i)
-        queue[i + 1] = pending[i];
+    for (unsigned int i = 0; i < count; ++i) queue[i + 1] = pending[i];
 
     portEXIT_CRITICAL(&play_queue_mux);
 }
 
-
-bool AudioPlayQueue::available(void)
-{
-    if (userblock)
-        return true;
+bool AudioPlayQueue::available(void) {
+    if (userblock) return true;
 
     userblock = allocate();
 
     return userblock != NULL;
 }
-
 
 /**
  * Get address of current data buffer, newly allocated if necessary.
@@ -89,18 +74,13 @@ bool AudioPlayQueue::available(void)
  * With behaviour == NON_STALLING this will never stall and returns NULL
  * if no audio block is available.
  */
-int16_t *AudioPlayQueue::getBuffer(void)
-{
+int16_t *AudioPlayQueue::getBuffer(void) {
     if (userblock == NULL) {
         switch (behaviour) {
-
         default:
             while (1) {
                 userblock = allocate();
-
-                if (userblock)
-                    break;
-
+                if (userblock) break;
                 yield();
             }
             break;
@@ -114,7 +94,6 @@ int16_t *AudioPlayQueue::getBuffer(void)
     return userblock ? userblock->data : NULL;
 }
 
-
 /**
  * Queue userblock for later playback in update().
  *
@@ -122,19 +101,14 @@ int16_t *AudioPlayQueue::getBuffer(void)
  *   0 = success
  *   1 = retry required
  */
-uint32_t AudioPlayQueue::playBuffer(void)
-{
-    if (!userblock)
-        return 0;
+uint32_t AudioPlayQueue::playBuffer(void) {
+    if (!userblock) return 0;
 
     for (;;) {
         portENTER_CRITICAL(&play_queue_mux);
 
         uint8_t next = head + 1;
-
-        if (next >= max_buffers)
-            next = 0;
-
+        if (next >= max_buffers) next = 0;
         if (tail != next) {
             queue[next] = userblock;
             head = next;
@@ -146,13 +120,10 @@ uint32_t AudioPlayQueue::playBuffer(void)
 
         portEXIT_CRITICAL(&play_queue_mux);
 
-        if (behaviour == NON_STALLING)
-            return 1;
-
+        if (behaviour == NON_STALLING) return 1;
         yield();
     }
 }
-
 
 /**
  * Put one sample into the current buffer.
@@ -161,17 +132,14 @@ uint32_t AudioPlayQueue::playBuffer(void)
  *   0 = success
  *   1 = failed, call again with same data
  */
-uint32_t AudioPlayQueue::play(int16_t data)
-{
+uint32_t AudioPlayQueue::play(int16_t data) {
     uint32_t result = 1;
     int16_t *buf = getBuffer();
 
     do {
-        if (buf == NULL)
-            break;
+        if (buf == NULL) break;
 
         if (uptr >= AUDIO_BLOCK_SAMPLES) {
-
             if (playBuffer() == 0) {
                 uptr = 0;
                 buf = getBuffer();
@@ -179,13 +147,10 @@ uint32_t AudioPlayQueue::play(int16_t data)
             }
 
         } else {
-
             buf[uptr++] = data;
             result = 0;
 
-            if (uptr >= AUDIO_BLOCK_SAMPLES &&
-                playBuffer() == 0) {
-
+            if (uptr >= AUDIO_BLOCK_SAMPLES && playBuffer() == 0) {
                 uptr = 0;
             }
         }
@@ -195,7 +160,6 @@ uint32_t AudioPlayQueue::play(int16_t data)
     return result;
 }
 
-
 /**
  * Put multiple samples into buffer(s).
  *
@@ -203,17 +167,13 @@ uint32_t AudioPlayQueue::play(int16_t data)
  *   0 = success
  *   >0 = number of samples not stored
  */
-uint32_t AudioPlayQueue::play(const int16_t *data, uint32_t len)
-{
+uint32_t AudioPlayQueue::play(const int16_t *data, uint32_t len) {
     uint32_t result = len;
     int16_t *buf = getBuffer();
 
     do {
-        if (buf == NULL)
-            break;
-
+        if (buf == NULL) break;
         if (uptr >= AUDIO_BLOCK_SAMPLES) {
-
             if (playBuffer() == 0) {
                 uptr = 0;
                 buf = getBuffer();
@@ -223,20 +183,12 @@ uint32_t AudioPlayQueue::play(const int16_t *data, uint32_t len)
             break;
         }
 
-        if (len == 0)
-            break;
+        if (len == 0) break;
 
-        const uint32_t available_samples =
-            AUDIO_BLOCK_SAMPLES - uptr;
+        const uint32_t available_samples = AUDIO_BLOCK_SAMPLES - uptr;
+        const uint32_t to_copy = available_samples < len ? available_samples : len;
 
-        const uint32_t to_copy =
-            available_samples < len
-                ? available_samples
-                : len;
-
-        memcpy(buf + uptr,
-               data,
-               to_copy * sizeof(int16_t));
+        memcpy(buf + uptr, data, to_copy * sizeof(int16_t));
 
         uptr += to_copy;
         data += to_copy;
@@ -244,12 +196,10 @@ uint32_t AudioPlayQueue::play(const int16_t *data, uint32_t len)
         result -= to_copy;
 
         if (uptr >= AUDIO_BLOCK_SAMPLES) {
-
             if (playBuffer() == 0) {
                 uptr = 0;
 
-                if (len > 0)
-                    buf = getBuffer();
+                if (len > 0) buf = getBuffer();
             } else {
                 break;
             }
@@ -260,20 +210,14 @@ uint32_t AudioPlayQueue::play(const int16_t *data, uint32_t len)
     return result;
 }
 
-
-void AudioPlayQueue::update(void)
-{
+void AudioPlayQueue::update(void) {
     audio_block_t *block = NULL;
 
     portENTER_CRITICAL(&play_queue_mux);
 
     if (tail != head) {
-
         uint8_t next_tail = tail + 1;
-
-        if (next_tail >= max_buffers)
-            next_tail = 0;
-
+        if (next_tail >= max_buffers) next_tail = 0;
         tail = next_tail;
 
         block = queue[tail];
@@ -288,9 +232,7 @@ void AudioPlayQueue::update(void)
     }
 }
 
-
-void AudioPlayQueue::stop(void)
-{
+void AudioPlayQueue::stop(void) {
     audio_block_t *pending[MAX_BUFFERS];
     unsigned int count = 0;
 
@@ -300,17 +242,11 @@ void AudioPlayQueue::stop(void)
     uptr = 0;
 
     portENTER_CRITICAL(&play_queue_mux);
-
     uint8_t index = tail;
-
     while (index != head) {
         uint8_t next = index + 1;
-
-        if (next >= max_buffers)
-            next = 0;
-
+        if (next >= max_buffers) next = 0;
         index = next;
-
         pending[count++] = queue[index];
         queue[index] = NULL;
     }
@@ -320,9 +256,6 @@ void AudioPlayQueue::stop(void)
 
     portEXIT_CRITICAL(&play_queue_mux);
 
-    if (current)
-        release(current);
-
-    for (unsigned int i = 0; i < count; ++i)
-        release(pending[i]);
+    if (current) release(current);
+    for (unsigned int i = 0; i < count; ++i) release(pending[i]);
 }
