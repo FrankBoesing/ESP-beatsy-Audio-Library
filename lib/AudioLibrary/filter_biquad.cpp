@@ -4,22 +4,21 @@
 #include <cstring>
 #include <limits>
 
-namespace {
-constexpr double BIQUAD_PI = 3.14159265358979323846;
-constexpr double Q30_SCALE = 1073741824.0;
+constexpr float BIQUAD_PI = 3.14159265358979323846f;
+constexpr float Q30_SCALE = 1073741824.0f; // 2^30
 
-static inline int32_t toQ30(double value) {
-    const double scaled = value * Q30_SCALE;
+static inline int32_t toQ30(float value) {
+    const float scaled = value * Q30_SCALE;
 
-    if (scaled >= (double)(std::numeric_limits<int32_t>::max())) {
-        return std::numeric_limits<int32_t>::max();
+    if (scaled >= 2147483647.0f) {
+        return INT32_MAX;
     }
 
-    if (scaled <= (double)(std::numeric_limits<int32_t>::min())) {
-        return std::numeric_limits<int32_t>::min();
+    if (scaled <= -2147483648.0f) {
+        return INT32_MIN;
     }
 
-    return (int32_t)(scaled);
+    return (scaled >= 0.0f) ? (int32_t)(scaled + 0.5f) : (int32_t)(scaled - 0.5f);
 }
 
 static inline int64_t roundQ30(int64_t value) {
@@ -45,26 +44,27 @@ static inline int16_t saturatePcm(int64_t value) {
 }
 
 bool validFrequencyAndQ(float frequency, float q) {
-    return std::isfinite(frequency) && frequency > 0.0f &&
-           frequency < AUDIO_SAMPLE_RATE_EXACT * 0.5f && std::isfinite(q) &&
-           q > 0.0f;
+    return std::isfinite(frequency) && frequency > 0.0f && frequency < AUDIO_SAMPLE_RATE_EXACT * 0.5f &&
+           std::isfinite(q) && q > 0.0f;
 }
-} // namespace
 
+OSIZE
 AudioFilterBiquad::AudioFilterBiquad() : AudioStream(1, inputQueueArray) {
     constexpr int32_t Q30_ONE = int32_t{1} << 30;
+
     for (uint32_t stage = 0; stage < MAX_STAGES; ++stage) {
         _coefficients[stage] = {Q30_ONE, 0, 0, 0, 0};
     }
 }
 
-void AudioFilterBiquad::storeCoefficients(uint32_t stage,
-                                          const double coefficients[5]) {
+OSIZE
+void AudioFilterBiquad::storeCoefficients(uint32_t stage, const float coefficients[5]) {
     if (stage >= MAX_STAGES || coefficients == nullptr) {
         return;
     }
 
     int32_t quantized[5];
+
     for (uint32_t i = 0; i < 5; ++i) {
         if (!std::isfinite(coefficients[i])) {
             return;
@@ -73,188 +73,201 @@ void AudioFilterBiquad::storeCoefficients(uint32_t stage,
         quantized[i] = toQ30(coefficients[i]);
     }
 
-    const Coefficients converted = {
-        quantized[0], quantized[1], quantized[2], quantized[3], quantized[4],
-    };
+    const Coefficients converted = {quantized[0], quantized[1], quantized[2], quantized[3], quantized[4]};
 
     portENTER_CRITICAL(&_configMux);
     _coefficients[stage] = converted;
+
     if (_stageCount <= stage) {
         _stageCount = (uint8_t)(stage + 1U);
     }
+
     portEXIT_CRITICAL(&_configMux);
 }
 
-void AudioFilterBiquad::setCoefficients(uint32_t stage,
-                                        const int *coefficients) {
+OSIZE
+void AudioFilterBiquad::setCoefficients(uint32_t stage, const int *coefficients) {
+    if (stage >= MAX_STAGES || coefficients == nullptr) {
+        return;
+    }
+
+    // Die Werte liegen bereits in Q30 vor.
+    // Keine Rückwandlung über float/double und damit keine
+    // zusätzliche Quantisierung.
+    const Coefficients converted = {(int32_t)coefficients[0], (int32_t)coefficients[1], (int32_t)coefficients[2],
+                                    (int32_t)coefficients[3], (int32_t)coefficients[4]};
+
+    portENTER_CRITICAL(&_configMux);
+    _coefficients[stage] = converted;
+
+    if (_stageCount <= stage) {
+        _stageCount = (uint8_t)(stage + 1U);
+    }
+
+    portEXIT_CRITICAL(&_configMux);
+}
+
+OSIZE
+void AudioFilterBiquad::setCoefficients(uint32_t stage, const double *coefficients) {
     if (coefficients == nullptr) {
         return;
     }
 
-    constexpr double Q30_INVERSE = 1.0 / Q30_SCALE;
-    const double converted[5] = {
-        (double)(coefficients[0]) * Q30_INVERSE,
-        (double)(coefficients[1]) * Q30_INVERSE,
-        (double)(coefficients[2]) * Q30_INVERSE,
-        (double)(coefficients[3]) * Q30_INVERSE,
-        (double)(coefficients[4]) * Q30_INVERSE,
-    };
+    float converted[5];
+
+    for (uint32_t i = 0; i < 5; ++i) {
+        if (!std::isfinite(coefficients[i])) {
+            return;
+        }
+
+        converted[i] = (float)coefficients[i];
+    }
 
     storeCoefficients(stage, converted);
 }
 
-void AudioFilterBiquad::setCoefficients(uint32_t stage,
-                                        const double *coefficients) {
-    storeCoefficients(stage, coefficients);
-}
-
+OSIZE
 void AudioFilterBiquad::setLowpass(uint32_t stage, float frequency, float q) {
     if (!validFrequencyAndQ(frequency, q)) {
         return;
     }
 
-    const double w0 = 2.0 * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
-    const double sine = std::sin(w0);
-    const double cosine = std::cos(w0);
-    const double alpha = sine / (2.0 * q);
-    const double a0 = 1.0 + alpha;
-    const double coefficients[5] = {
-        (1.0 - cosine) * 0.5 / a0, (1.0 - cosine) / a0,
-        (1.0 - cosine) * 0.5 / a0, -2.0 * cosine / a0,
-        (1.0 - alpha) / a0,
-    };
+    const float w0 = 2.0f * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
+
+    const float sine = std::sin(w0);
+    const float cosine = std::cos(w0);
+    const float alpha = sine / (2.0f * q);
+    const float a0 = 1.0f + alpha;
+
+    const float coefficients[5] = {(1.0f - cosine) * 0.5f / a0, (1.0f - cosine) / a0, (1.0f - cosine) * 0.5f / a0,
+                                   -2.0f * cosine / a0, (1.0f - alpha) / a0};
 
     storeCoefficients(stage, coefficients);
 }
 
+OSIZE
 void AudioFilterBiquad::setHighpass(uint32_t stage, float frequency, float q) {
     if (!validFrequencyAndQ(frequency, q)) {
         return;
     }
 
-    const double w0 = 2.0 * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
-    const double sine = std::sin(w0);
-    const double cosine = std::cos(w0);
-    const double alpha = sine / (2.0 * q);
-    const double a0 = 1.0 + alpha;
-    const double coefficients[5] = {
-        (1.0 + cosine) * 0.5 / a0, -(1.0 + cosine) / a0,
-        (1.0 + cosine) * 0.5 / a0, -2.0 * cosine / a0,
-        (1.0 - alpha) / a0,
-    };
+    const float w0 = 2.0f * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
+
+    const float sine = std::sin(w0);
+    const float cosine = std::cos(w0);
+    const float alpha = sine / (2.0f * q);
+    const float a0 = 1.0f + alpha;
+
+    const float coefficients[5] = {(1.0f + cosine) * 0.5f / a0, -(1.0f + cosine) / a0, (1.0f + cosine) * 0.5f / a0,
+                                   -2.0f * cosine / a0, (1.0f - alpha) / a0};
 
     storeCoefficients(stage, coefficients);
 }
 
+OSIZE
 void AudioFilterBiquad::setBandpass(uint32_t stage, float frequency, float q) {
     if (!validFrequencyAndQ(frequency, q)) {
         return;
     }
 
-    const double w0 = 2.0 * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
-    const double sine = std::sin(w0);
-    const double cosine = std::cos(w0);
-    const double alpha = sine / (2.0 * q);
-    const double a0 = 1.0 + alpha;
-    const double coefficients[5] = {
-        alpha / a0, 0.0, -alpha / a0, -2.0 * cosine / a0, (1.0 - alpha) / a0,
-    };
+    const float w0 = 2.0f * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
+
+    const float sine = std::sin(w0);
+    const float cosine = std::cos(w0);
+    const float alpha = sine / (2.0f * q);
+    const float a0 = 1.0f + alpha;
+
+    const float coefficients[5] = {alpha / a0, 0.0f, -alpha / a0, -2.0f * cosine / a0, (1.0f - alpha) / a0};
 
     storeCoefficients(stage, coefficients);
 }
 
+OSIZE
 void AudioFilterBiquad::setNotch(uint32_t stage, float frequency, float q) {
     if (!validFrequencyAndQ(frequency, q)) {
         return;
     }
 
-    const double w0 = 2.0 * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
-    const double sine = std::sin(w0);
-    const double cosine = std::cos(w0);
-    const double alpha = sine / (2.0 * q);
-    const double a0 = 1.0 + alpha;
-    const double coefficients[5] = {
-        1.0 / a0,           -2.0 * cosine / a0, 1.0 / a0,
-        -2.0 * cosine / a0, (1.0 - alpha) / a0,
-    };
+    const float w0 = 2.0f * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
+
+    const float sine = std::sin(w0);
+    const float cosine = std::cos(w0);
+    const float alpha = sine / (2.0f * q);
+    const float a0 = 1.0f + alpha;
+
+    const float coefficients[5] = {1.0f / a0, -2.0f * cosine / a0, 1.0f / a0, -2.0f * cosine / a0, (1.0f - alpha) / a0};
 
     storeCoefficients(stage, coefficients);
 }
 
-void AudioFilterBiquad::setLowShelf(uint32_t stage, float frequency, float gain,
-                                    float slope) {
-    if (!std::isfinite(frequency) || frequency <= 0.0f ||
-        frequency >= AUDIO_SAMPLE_RATE_EXACT * 0.5f || !std::isfinite(gain) ||
-        !std::isfinite(slope) || slope <= 0.0f) {
+OSIZE
+void AudioFilterBiquad::setLowShelf(uint32_t stage, float frequency, float gain, float slope) {
+    if (!std::isfinite(frequency) || frequency <= 0.0f || frequency >= AUDIO_SAMPLE_RATE_EXACT * 0.5f ||
+        !std::isfinite(gain) || !std::isfinite(slope) || slope <= 0.0f) {
         return;
     }
 
-    const double a = std::pow(10.0, (double)(gain) / 40.0);
-    const double w0 = 2.0 * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
-    const double sine = std::sin(w0);
-    const double cosine = std::cos(w0);
-    const double radicand =
-        (a + 1.0 / a) * (1.0 / (double)(slope) - 1.0) + 2.0;
+    const float a = std::pow(10.0f, gain / 40.0f);
 
-    if (radicand < 0.0) {
+    const float w0 = 2.0f * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
+
+    const float sine = std::sin(w0);
+    const float cosine = std::cos(w0);
+
+    const float radicand = (a + 1.0f / a) * (1.0f / slope - 1.0f) + 2.0f;
+
+    if (radicand < 0.0f) {
         return;
     }
 
-    const double beta = sine * std::sqrt(radicand);
-    const double aMinus = (a - 1.0) * cosine;
-    const double aPlus = (a + 1.0) * cosine;
-    const double a0 = (a + 1.0) + aMinus + beta;
+    const float beta = sine * std::sqrt(radicand);
+    const float aMinus = (a - 1.0f) * cosine;
+    const float aPlus = (a + 1.0f) * cosine;
+    const float a0 = (a + 1.0f) + aMinus + beta;
 
-    if (a0 == 0.0) {
+    if (a0 == 0.0f) {
         return;
     }
 
-    const double coefficients[5] = {
-        a * ((a + 1.0) - aMinus + beta) / a0,
-        2.0 * a * ((a - 1.0) - aPlus) / a0,
-        a * ((a + 1.0) - aMinus - beta) / a0,
-        -2.0 * ((a - 1.0) + aPlus) / a0,
-        ((a + 1.0) + aMinus - beta) / a0,
-    };
+    const float coefficients[5] = {a * ((a + 1.0f) - aMinus + beta) / a0, 2.0f * a * ((a - 1.0f) - aPlus) / a0,
+                                   a * ((a + 1.0f) - aMinus - beta) / a0, -2.0f * ((a - 1.0f) + aPlus) / a0,
+                                   ((a + 1.0f) + aMinus - beta) / a0};
 
     storeCoefficients(stage, coefficients);
 }
 
-void AudioFilterBiquad::setHighShelf(uint32_t stage, float frequency,
-                                     float gain, float slope) {
-    if (!std::isfinite(frequency) || frequency <= 0.0f ||
-        frequency >= AUDIO_SAMPLE_RATE_EXACT * 0.5f || !std::isfinite(gain) ||
-        !std::isfinite(slope) || slope <= 0.0f) {
+OSIZE
+void AudioFilterBiquad::setHighShelf(uint32_t stage, float frequency, float gain, float slope) {
+    if (!std::isfinite(frequency) || frequency <= 0.0f || frequency >= AUDIO_SAMPLE_RATE_EXACT * 0.5f ||
+        !std::isfinite(gain) || !std::isfinite(slope) || slope <= 0.0f) {
         return;
     }
 
-    const double a = std::pow(10.0, (double)(gain) / 40.0);
-    const double w0 = 2.0 * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
-    const double sine = std::sin(w0);
-    const double cosine = std::cos(w0);
-    const double radicand =
-        (a + 1.0 / a) * (1.0 / (double)(slope) - 1.0) + 2.0;
+    const float a = std::pow(10.0f, gain / 40.0f);
 
-    if (radicand < 0.0) {
+    const float w0 = 2.0f * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
+
+    const float sine = std::sin(w0);
+    const float cosine = std::cos(w0);
+
+    const float radicand = (a + 1.0f / a) * (1.0f / slope - 1.0f) + 2.0f;
+
+    if (radicand < 0.0f) {
         return;
     }
 
-    const double beta = sine * std::sqrt(radicand);
-    const double aMinus = (a - 1.0) * cosine;
-    const double aPlus = (a + 1.0) * cosine;
-    const double a0 = (a + 1.0) - aMinus + beta;
+    const float beta = sine * std::sqrt(radicand);
+    const float aMinus = (a - 1.0f) * cosine;
+    const float aPlus = (a + 1.0f) * cosine;
+    const float a0 = (a + 1.0f) - aMinus + beta;
 
-    if (a0 == 0.0) {
+    if (a0 == 0.0f) {
         return;
     }
 
-    const double coefficients[5] = {
-        a * ((a + 1.0) + aMinus + beta) / a0,
-        -2.0 * a * ((a - 1.0) + aPlus) / a0,
-        a * ((a + 1.0) + aMinus - beta) / a0,
-        2.0 * ((a - 1.0) - aPlus) / a0,
-        ((a + 1.0) - aMinus - beta) / a0,
-    };
+    const float coefficients[5] = {a * ((a + 1.0f) + aMinus + beta) / a0, -2.0f * a * ((a - 1.0f) + aPlus) / a0,
+                                   a * ((a + 1.0f) + aMinus - beta) / a0, 2.0f * ((a - 1.0f) - aPlus) / a0,
+                                   ((a + 1.0f) - aMinus - beta) / a0};
 
     storeCoefficients(stage, coefficients);
 }
@@ -280,24 +293,21 @@ void AudioFilterBiquad::update() {
         return;
     }
 
-    for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        int16_t value = block->data[i];
+    // Process the cascade stage by stage instead of sample by sample.
+    // This keeps the current stage coefficients/state fixed for the
+    // complete block and eliminates the inner stage loop.
+    for (uint8_t stage = 0; stage < stageCount; ++stage) {
+        const Coefficients &c = coefficients[stage];
+        State &state = _state[stage];
 
-        for (uint8_t stage = 0; stage < stageCount; ++stage) {
-            const Coefficients &c = coefficients[stage];
-            State &state = _state[stage];
-            const int16_t stageInput = value;
-
-            const int64_t outputQ30 = (int64_t)(c.b0) * stageInput + state.s1;
-            value = saturatePcm(roundQ30(outputQ30));
-
-            state.s1 = (int64_t)(c.b1) * stageInput + state.s2 -
-                       (int64_t)(c.a1) * value;
-            state.s2 = (int64_t)(c.b2) * stageInput -
-                       (int64_t)(c.a2) * value;
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            const int16_t input = block->data[i];
+            const int64_t outputQ30 = (int64_t)c.b0 * input + state.s1;
+            const int16_t output = saturatePcm(roundQ30(outputQ30));
+            state.s1 = (int64_t)c.b1 * input + state.s2 - (int64_t)c.a1 * output;
+            state.s2 = (int64_t)c.b2 * input - (int64_t)c.a2 * output;
+            block->data[i] = output;
         }
-
-        block->data[i] = value;
     }
 
     transmit(block);

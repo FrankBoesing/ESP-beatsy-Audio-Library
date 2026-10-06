@@ -32,31 +32,39 @@
 // Portable versions of the fixed-point DSP helpers used by the Audio Library.
 // On Teensy/ARM these retain the original DSP instructions where available.
 
+static inline int CLZ(unsigned int x) __attribute__((always_inline, unused));
 static inline int CLZ(unsigned int x) {
     return x == 0 ? 32 : __builtin_clz(x);
 };
 
+static inline unsigned int REV16(unsigned int value) __attribute__((always_inline, unused));
 static inline unsigned int REV16(unsigned int value) {
     return (unsigned int)__builtin_bswap16((unsigned short)value);
 }; //FB
+static inline unsigned int REV32(unsigned int value) __attribute__((always_inline, unused));
 static inline unsigned int REV32(unsigned int value) {
     return __builtin_bswap32(value);
 }; //FB
+static inline int32_t FASTABS(int32_t x) __attribute__((always_inline, unused));
 static inline int32_t FASTABS(int32_t x) {
     return __builtin_abs(x);
 } //xtensa has a fast abs instruction //fb
+static inline uint64_t SAR64(uint64_t x, int32_t n) __attribute__((always_inline, unused));
 static inline uint64_t SAR64(uint64_t x, int32_t n) {
     return x >> n;
 }
+static inline int32_t MULSHIFT32(int32_t x, int32_t y) __attribute__((always_inline, unused));
 static inline int32_t MULSHIFT32(int32_t x, int32_t y) {
     int32_t z;
     z = (uint64_t)x * (uint64_t)y >> 32;
     return z;
 }
+static inline uint64_t MADD64(uint64_t sum64, int32_t x, int32_t y) __attribute__((always_inline, unused));
 static inline uint64_t MADD64(uint64_t sum64, int32_t x, int32_t y) {
     sum64 += (uint64_t)x * (uint64_t)y;
     return sum64;
 }
+static inline uint64_t xSAR64(uint64_t x, int32_t n) __attribute__((always_inline, unused));
 static inline uint64_t xSAR64(uint64_t x, int32_t n) {
     return x >> n;
 }
@@ -172,13 +180,24 @@ extern const int16_t sinTable_q15[513];
 }
 #endif
 
-constexpr size_t FAST_MATH_TABLE_SIZE = 512;
+constexpr size_t FAST_MATH_SIN_TABLE_SIZE = 512;
 
 // Compatible with arm_sin_q15(): x is a fraction of a full turn in Q15 [0, 32768),
 // the result is Q15. Uses a 512-step table with linear interpolation.
 static inline int16_t sin_q15(int16_t x) __attribute__((always_inline, unused));
 static inline int16_t sin_q15(int16_t x) {
     const uint32_t phase = (uint32_t)x & 0x7FFF;
+    const uint32_t index = phase >> 6;
+    const int32_t s0 = sinTable_q15[index];
+    const int32_t s1 = sinTable_q15[index + 1];
+    return (int16_t)(s0 + (((s1 - s0) * (int32_t)(phase & 0x3F)) >> 6));
+}
+
+// Compatible with arm_cos_q15(): x is a fraction of a full turn in Q15 [0, 32768),
+// the result is Q15. Uses the same 512-step table with linear interpolation.
+static inline int16_t cos_q15(int16_t x) __attribute__((always_inline, unused));
+static inline int16_t cos_q15(int16_t x) {
+    const uint32_t phase = ((uint32_t)x + 8192U) & 0x7FFF;
     const uint32_t index = phase >> 6;
     const int32_t s0 = sinTable_q15[index];
     const int32_t s1 = sinTable_q15[index + 1];

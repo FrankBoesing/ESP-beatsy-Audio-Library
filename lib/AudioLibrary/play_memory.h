@@ -1,5 +1,4 @@
-/*
- * Audio Library for Teensy 3.X
+/* Audio Library for Teensy 3.X
  * Copyright (c) 2014, Paul Stoffregen, paul@pjrc.com
  *
  * Development of this audio library was funded by PJRC.COM, LLC by sales of
@@ -25,31 +24,30 @@
  * THE SOFTWARE.
  */
 
-#include "effect_multiply.h"
+#ifndef play_memory_h_
+#define play_memory_h_
 
-#include "utility/dspinst.h"
+#include <Arduino.h>     // github.com/PaulStoffregen/cores/blob/master/teensy4/Arduino.h
+#include <AudioStream.h> // github.com/PaulStoffregen/cores/blob/master/teensy4/AudioStream.h
 
-OSPEED
-void AudioEffectMultiply::update() {
-    audio_block_t *output = receiveWritable(0);
-    audio_block_t *modulator = receiveReadOnly(1);
+class AudioPlayMemory : public AudioStream
+{
+public:
+	AudioPlayMemory(void) : AudioStream(0, NULL), next(NULL), beginning(NULL),
+		length(0), playback_generation(0), prior(0), playing(0) { }
+	void play(const unsigned int *data);
+	void stop(void);
+	bool isPlaying(void);
+	uint32_t positionMillis(void);
+	uint32_t lengthMillis(void);
+	virtual void update(void);
+private:
+	const unsigned int *next;
+	const unsigned int *beginning;
+	uint32_t length;
+	uint32_t playback_generation;
+	int16_t prior;
+	volatile uint8_t playing;
+};
 
-    if (output == nullptr || modulator == nullptr) {
-        if (output != nullptr) {
-            release(output);
-        }
-        if (modulator != nullptr) {
-            release(modulator);
-        }
-        return;
-    }
-
-    for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        const int32_t product = (int32_t)(output->data[i]) * (int32_t)(modulator->data[i]);
-        output->data[i] = (int16_t)(signed_saturate_rshift(product, 16, 15));
-    }
-
-    transmit(output);
-    release(output);
-    release(modulator);
-}
+#endif
