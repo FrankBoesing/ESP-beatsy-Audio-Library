@@ -9,9 +9,9 @@
 
 #include "Audio.h"
 #include "softcodecs/AudioSourceStream.h"
+#include "secrets.h"
 
-constexpr char WIFI_SSID[] = "Abschirmdienst";
-constexpr char WIFI_PASSWORD[] = "frank123";
+
 //constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
 //constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/mid/aac/stream.aac";
 constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac";
@@ -60,10 +60,10 @@ void setup() {
     codec.volume(0.7f);
 
     WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
     Serial.print("Connecting to Wi-Fi");
     while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
+        delay(200);
         Serial.print('.');
     }
     Serial.printf("\nConnected, IP: %s\n", WiFi.localIP().toString().c_str());

@@ -7,8 +7,10 @@
 #include "Audio.h"
 #include "softcodecs/AudioSourceStream.h"
 
-constexpr char WIFI_SSID[] = "Abschirmdienst";
-constexpr char WIFI_PASSWORD[] = "frank123";
+#include "secrets.h"
+
+constexpr char WIFI_SSID[] = WIFI_SSID;
+constexpr char WIFI_PASSWORD[] = WIFI_PASS;
 constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
 
 AudioControlES8388 codec;
