@@ -1,4 +1,5 @@
 TODOs:
+-lizenzen prüfen / übernehmen
 
 -Variable Sampleraten:
  - code dafür fixen
