@@ -56,13 +56,14 @@
 // delay_rate is the rate (in Hz) of the sine wave modulation
 // delay_depth is the maximum variation around delay_offset
 // i.e. the total offset is delay_offset + delay_depth * sin(delay_rate)
+OSIZE
 bool AudioEffectFlange::begin(int16_t *delayline,int d_length,int delay_offset,int d_depth,float delay_rate)
 {
   bool all_ok = true;
 
   delay_length = d_length/2;
   l_delayline = delayline;
-  
+
   delay_depth = d_depth;
   // initial index
   l_delay_rate_index = 0;
@@ -79,19 +80,19 @@ bool AudioEffectFlange::begin(int16_t *delayline,int d_length,int delay_offset,i
   if(delay_offset_idx >= delay_length) {
     delay_offset_idx = delay_length - 1;
     all_ok = false;
-  }  
+  }
   return(all_ok);
 }
 
-
+OSIZE
 bool AudioEffectFlange::voices(int delay_offset,int d_depth,float delay_rate)
 {
   bool all_ok = true;
-  
+
   delay_depth = d_depth;
 
   delay_rate_incr =(uint32_t)((delay_rate * 2147483648.0) / AUDIO_SAMPLE_RATE_EXACT);
-  
+
   delay_offset_idx = delay_offset;
   // Allow the passthru code to go through
   if(delay_offset_idx < -1) {
@@ -107,6 +108,7 @@ bool AudioEffectFlange::voices(int delay_offset,int d_depth,float delay_rate)
   return(all_ok);
 }
 
+OSPEED
 void AudioEffectFlange::update(void)
 {
   audio_block_t *block;
@@ -155,7 +157,7 @@ void AudioEffectFlange::update(void)
       // The argument to the arm_sin_q15 function is NOT in radians. It is
       // actually, in effect, the fraction remaining after the division
       // of radians/(2*PI) which is then expressed as a positive Q15
-      // fraction in the interval [0 , +1) - this is l_delay_rate_index. 
+      // fraction in the interval [0 , +1) - this is l_delay_rate_index.
       // l_delay_rate_index should probably be called l_delay_rate_phase
       // (sorry about that!)
       // It is a Q31 positive number of which the high order 16 bits are
