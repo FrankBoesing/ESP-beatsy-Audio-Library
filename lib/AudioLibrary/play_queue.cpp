@@ -84,7 +84,7 @@ int16_t* AudioPlayQueue::getBuffer(void)
 		switch (behaviour)
 		{
 			default:
-				while (1) 
+				while (1)
 				{
 					userblock = allocate();
 					if (userblock)
@@ -92,13 +92,13 @@ int16_t* AudioPlayQueue::getBuffer(void)
 					yield();
 				}
 				break;
-				
+
 			case NON_STALLING:
 				userblock = allocate();
 				break;
 		}
 	}
-	
+
 	return userblock == NULL
 					?NULL
 					:userblock->data;
@@ -107,8 +107,8 @@ int16_t* AudioPlayQueue::getBuffer(void)
 
 /**
  * Queue userblock for later playback in update().
- * If there's no user block in use then we presume success: this means it's 
- * safe to keep calling playBuffer() regularly even if we've not been 
+ * If there's no user block in use then we presume success: this means it's
+ * safe to keep calling playBuffer() regularly even if we've not been
  * creating audio to be played.
  * \return 0 for success, 1 for re-try required
  */
@@ -146,9 +146,9 @@ uint32_t AudioPlayQueue::play(int16_t data)
 {
 	uint32_t result = 1;
 	int16_t* buf = getBuffer();
-	
+
 	do
-	{		
+	{
 		if (NULL == buf) // no buffer, failed already
 			break;
 
@@ -170,7 +170,7 @@ uint32_t AudioPlayQueue::play(int16_t data)
 			  uptr = 0; // success!
 		}
 	} while (false);
-	
+
 	return result;
 }
 
@@ -182,15 +182,15 @@ uint32_t AudioPlayQueue::play(const int16_t *data, uint32_t len)
 {
 	uint32_t result = len;
 	int16_t * buf = getBuffer();
-	
+
 	do
 	{
 		unsigned int avail_in_userblock = AUDIO_BLOCK_SAMPLES - uptr ;
 		unsigned int to_copy = avail_in_userblock > len ? len : avail_in_userblock ;
-		
+
 		if (NULL == buf) // no buffer, failed
-			break; 
-			
+			break;
+
 		if (uptr >= AUDIO_BLOCK_SAMPLES) // buffer is full, we're re-called: try again
 		{
 			if (0 == playBuffer()) // success emitting old buffer...
@@ -200,17 +200,17 @@ uint32_t AudioPlayQueue::play(const int16_t *data, uint32_t len)
 				continue;			// loop to check buffer and store more samples
 			}
 		}
-		
+
 		if (0 == len) // nothing left to do
 			break;
-			
+
 		// we have a buffer and something to copy to it: do that
 		memcpy(buf + uptr, data, to_copy * sizeof(int16_t));
 		uptr   += to_copy;
 		data   += to_copy;
 		len    -= to_copy;
 		result -= to_copy;
-		
+
 		if (uptr >= AUDIO_BLOCK_SAMPLES)	// buffer is full...
 		{
 			if (0 == playBuffer())			// ... try to queue it
@@ -234,9 +234,13 @@ void AudioPlayQueue::update(void)
 
 	portENTER_CRITICAL(&play_queue_mux);
 	if (tail != head) {
-		if (++tail >= max_buffers) tail = 0;
+		if (tail + 1 >= max_buffers)
+			tail = 0;
+		else
+			tail = tail + 1;
+
 		block = queue[tail];
-		queue[tail] = NULL;
+		queue[tail] = nullptr;
 	}
 	portEXIT_CRITICAL(&play_queue_mux);
 

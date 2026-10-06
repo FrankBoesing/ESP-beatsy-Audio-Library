@@ -127,7 +127,7 @@ void AudioPlayMemory::update(void)
 		consumed = AUDIO_BLOCK_SAMPLES;
 		break;
 
-	  case 0x02: // u-law encoded, 22050 Hz 
+	  case 0x02: // u-law encoded, 22050 Hz
 		for (i=0; i < AUDIO_BLOCK_SAMPLES; i += 8) {
 			tmp32 = *in++;
 			s1 = ulaw_decode_table[(tmp32 >> 0) & 255];
@@ -240,10 +240,10 @@ void AudioPlayMemory::update(void)
 }
 
 
-#define B2M_88200 (uint32_t)((double)4294967296000.0 / AUDIO_SAMPLE_RATE_EXACT / 2.0)
-#define B2M_44100 (uint32_t)((double)4294967296000.0 / AUDIO_SAMPLE_RATE_EXACT) // 97352592
-#define B2M_22050 (uint32_t)((double)4294967296000.0 / AUDIO_SAMPLE_RATE_EXACT * 2.0)
-#define B2M_11025 (uint32_t)((double)4294967296000.0 / AUDIO_SAMPLE_RATE_EXACT * 4.0)
+constexpr uint32_t B2M_44100 = (1000ULL << 32) / AUDIO_SAMPLE_RATE_EXACT;
+constexpr uint32_t B2M_88200 = B2M_44100 / 2;
+constexpr uint32_t B2M_22050 = B2M_44100 * 2;
+constexpr uint32_t B2M_11025 = B2M_44100 * 4;
 
 
 uint32_t AudioPlayMemory::positionMillis(void)
