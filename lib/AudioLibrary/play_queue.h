@@ -58,8 +58,8 @@ private:
 	audio_block_t *queue[MAX_BUFFERS];
 	audio_block_t *userblock;
 	unsigned int uptr; // actually an index, NOT a pointer!
-	volatile uint8_t head, tail;
-	volatile uint8_t max_buffers;
+	uint8_t head, tail;
+	uint8_t max_buffers;
 	behaviour_e behaviour;
 };
 
