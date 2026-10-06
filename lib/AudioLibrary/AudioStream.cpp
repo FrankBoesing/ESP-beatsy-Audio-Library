@@ -27,6 +27,7 @@ AudioStream *AudioStream::first_update = nullptr;
 portMUX_TYPE AudioStream::audio_mux = portMUX_INITIALIZER_UNLOCKED;
 
 TaskHandle_t AudioStream::audio_task_handle = nullptr;
+SemaphoreHandle_t AudioStream::audio_update_mutex = nullptr;
 esp_timer_handle_t AudioStream::software_timer = nullptr;
 bool AudioStream::update_scheduled = false;
 bool AudioStream::external_update_clock = false;
@@ -38,8 +39,7 @@ static bool audio_processing = false;
 static uint32_t cpu_cycles_per_us = 0;
 
 float AudioStream::processorUsage(uint8_t core) {
-#if defined(CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS) && \
-    (!defined(CONFIG_FREERTOS_SMP) || !CONFIG_FREERTOS_SMP)
+#if defined(CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS) && (!defined(CONFIG_FREERTOS_SMP) || !CONFIG_FREERTOS_SMP)
     if (core >= portNUM_PROCESSORS) {
         return -1.0f;
     }
@@ -57,8 +57,7 @@ float AudioStream::processorUsage(uint8_t core) {
     vTaskGetInfo(idleTask, &idleTaskStatus, pdFALSE, eInvalid);
 
     const uint64_t nowUs = esp_timer_get_time();
-    const configRUN_TIME_COUNTER_TYPE idleRuntime =
-        idleTaskStatus.ulRunTimeCounter;
+    const configRUN_TIME_COUNTER_TYPE idleRuntime = idleTaskStatus.ulRunTimeCounter;
 
     if (!initialized[core]) {
         previousIdleRuntime[core] = idleRuntime;
@@ -67,8 +66,7 @@ float AudioStream::processorUsage(uint8_t core) {
         return -1.0f;
     }
 
-    const configRUN_TIME_COUNTER_TYPE idleDelta =
-        idleRuntime - previousIdleRuntime[core];
+    const configRUN_TIME_COUNTER_TYPE idleDelta = idleRuntime - previousIdleRuntime[core];
     const uint64_t elapsedUs = nowUs - previousSampleUs[core];
 
     previousIdleRuntime[core] = idleRuntime;
@@ -78,9 +76,7 @@ float AudioStream::processorUsage(uint8_t core) {
         return -1.0f;
     }
 
-    const float idlePercent =
-        (float)(idleDelta) * 100.0f /
-        (float)(elapsedUs);
+    const float idlePercent = (float)(idleDelta) * 100.0f / (float)(elapsedUs);
 
     return 100.0f - fminf(idlePercent, 100.0f);
 #else
@@ -95,8 +91,8 @@ float AudioStream::processorUsage(uint8_t core) {
 
 OSIZE
 AudioStream::AudioStream(unsigned char ninput, audio_block_t **iqueue)
-    : active(false), num_inputs(ninput), numConnections(0),
-      destination_list(nullptr), inputQueue(iqueue), next_update(nullptr) {
+    : active(false), num_inputs(ninput), numConnections(0), destination_list(nullptr), inputQueue(iqueue),
+      next_update(nullptr) {
     for (unsigned int i = 0; i < num_inputs; ++i) {
         inputQueue[i] = nullptr;
     }
@@ -123,7 +119,6 @@ AudioStream::AudioStream(unsigned char ninput, audio_block_t **iqueue)
 
     portEXIT_CRITICAL(&audio_mux);
 }
-
 
 // =============================================================================
 // Audio timing / scheduler
@@ -171,9 +166,7 @@ uint32_t AudioStream::blockPeriodUs(void) {
         return 0;
     }
 
-    const double period =
-        (1000000.0 * (double)(AUDIO_BLOCK_SAMPLES)) /
-        (double)(rate);
+    const double period = (1000000.0 * (double)(AUDIO_BLOCK_SAMPLES)) / (double)(rate);
 
     if (period < 1.0 || period > 0xFFFFFFFFu) {
         return 0;
@@ -202,8 +195,7 @@ bool AudioStream::setExternalUpdateClock(bool enabled) {
         }
     } else {
         const uint32_t period = blockPeriodUs();
-        if (period == 0 ||
-            esp_timer_start_periodic(software_timer, period) != ESP_OK) {
+        if (period == 0 || esp_timer_start_periodic(software_timer, period) != ESP_OK) {
             return false;
         }
     }
@@ -227,11 +219,17 @@ bool AudioStream::update_setup(void) {
         cpu_cycles_per_us = getCpuFrequencyMhz();
     }
 
+    if (audio_update_mutex == nullptr) {
+        audio_update_mutex = xSemaphoreCreateRecursiveMutex();
+        if (audio_update_mutex == nullptr) {
+            return false;
+        }
+    }
+
     if (audio_task_handle == nullptr) {
-        BaseType_t result = xTaskCreatePinnedToCore(
-            scheduler_task, "AudioTask", 4096, nullptr,
-            configMAX_PRIORITIES - 2, &audio_task_handle,
-            AUDIO_PROCESSING_CORE);
+        BaseType_t result =
+            xTaskCreatePinnedToCore(scheduler_task, "AudioTask", 4096, nullptr, configMAX_PRIORITIES - 2,
+                                    &audio_task_handle, AUDIO_PROCESSING_CORE);
 
         if (result != pdPASS) {
             audio_task_handle = nullptr;
@@ -254,8 +252,7 @@ bool AudioStream::update_setup(void) {
     }
 
     const uint32_t period = blockPeriodUs();
-    if (period == 0 ||
-        esp_timer_start_periodic(software_timer, period) != ESP_OK) {
+    if (period == 0 || esp_timer_start_periodic(software_timer, period) != ESP_OK) {
         esp_timer_delete(software_timer);
         software_timer = nullptr;
         vTaskDelete(audio_task_handle);
@@ -316,15 +313,27 @@ void AudioStream::update_stop(void) {
 }
 
 OSPEED
-void AudioStream::software_timer_callback(void *) {
-    update_all();
-}
+void AudioStream::software_timer_callback(void *) { update_all(); }
 
 OSPEED
 void AudioStream::update_all(void) {
     TaskHandle_t task = audio_task_handle;
     if (task != nullptr) {
         xTaskNotifyGive(task);
+    }
+}
+
+OSIZE
+void AudioStream::disableUpdates(void) {
+    if (audio_update_mutex != nullptr) {
+        xSemaphoreTakeRecursive(audio_update_mutex, portMAX_DELAY);
+    }
+}
+
+OSIZE
+void AudioStream::enableUpdates(void) {
+    if (audio_update_mutex != nullptr && xSemaphoreGiveRecursive(audio_update_mutex) != pdTRUE) {
+        Serial.println("AudioInterrupts called without a matching AudioNoInterrupts");
     }
 }
 
@@ -342,13 +351,17 @@ bool IRAM_ATTR AudioStream::update_all_from_isr(void) {
 OSPEED
 void AudioStream::scheduler_task(void *) {
     for (;;) {
-        ulTaskNotifyTake(pdFALSE, portMAX_DELAY);
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         process_all_now();
     }
 }
 
 OSPEED
 void AudioStream::process_all_now(void) {
+    if (audio_update_mutex == nullptr || xSemaphoreTakeRecursive(audio_update_mutex, portMAX_DELAY) != pdTRUE) {
+        return;
+    }
+
     // The graph is immutable while the audio task exists.
     // Take scheduler state and graph head atomically, then traverse
     // the realtime graph without further critical sections.
@@ -356,6 +369,7 @@ void AudioStream::process_all_now(void) {
 
     if (!update_scheduled) {
         portEXIT_CRITICAL(&audio_mux);
+        xSemaphoreGiveRecursive(audio_update_mutex);
         return;
     }
 
@@ -394,17 +408,16 @@ void AudioStream::process_all_now(void) {
     audio_processing = false;
 
     portEXIT_CRITICAL(&audio_mux);
+    xSemaphoreGiveRecursive(audio_update_mutex);
 }
 
 // =============================================================================
 // Audio memory initialization
 // =============================================================================
 OSIZE
-void AudioStream::initialize_memory(audio_block_t *data, unsigned int num,
-                                    uint32_t *available_mask,
+void AudioStream::initialize_memory(audio_block_t *data, unsigned int num, uint32_t *available_mask,
                                     unsigned int mask_words) {
-    if (data == nullptr || available_mask == nullptr || num == 0 ||
-        mask_words == 0) {
+    if (data == nullptr || available_mask == nullptr || num == 0 || mask_words == 0) {
         return;
     }
 
@@ -484,8 +497,7 @@ bool AudioStream::is_block_from_pool(const audio_block_t *block) {
 // =============================================================================
 
 audio_block_t *AudioStream::allocate_locked(void) {
-    if (memory_pool == nullptr || memory_pool_available_mask == nullptr ||
-        memory_pool_mask_words == 0) {
+    if (memory_pool == nullptr || memory_pool_available_mask == nullptr || memory_pool_mask_words == 0) {
         return nullptr;
     }
 
@@ -608,8 +620,7 @@ void AudioStream::transmit(audio_block_t *block, unsigned char index) {
 
     portENTER_CRITICAL(&audio_mux);
 
-    for (AudioConnection *c = destination_list; c != nullptr;
-         c = c->next_dest) {
+    for (AudioConnection *c = destination_list; c != nullptr; c = c->next_dest) {
         if (c->src_index != index) {
             continue;
         }
@@ -707,25 +718,51 @@ audio_block_t *AudioStream::receiveWritable(unsigned int index) {
 // Processor usage
 // =============================================================================
 OSPEED
-float AudioStream::processorUsage(void) const {
+float AudioStream::AudioProcessorUsage(void) const {
     const float period = (float)(blockPeriodUs());
-    if (period <= 0.0f)
-        return 0.0f;
+    if (period <= 0.0f) return 0.0f;
     return ((float)(cpu_time_us) * 100.0f) / period;
 }
 
 OSPEED
-float AudioStream::processorUsageMax(void) const {
+float AudioStream::AudioProcessorUsageMax(void) const {
     const float period = (float)(blockPeriodUs());
-    if (period <= 0.0f)
-        return 0.0f;
+    if (period <= 0.0f) return 0.0f;
     return ((float)(cpu_time_max_us) * 100.0f) / period;
 }
 
 OSIZE
-void AudioStream::processorUsageMaxReset(void) {
+void AudioStream::AudioProcessorUsageMaxReset(void) {
     portENTER_CRITICAL(&audio_mux);
     cpu_time_max_us = cpu_time_us;
+    portEXIT_CRITICAL(&audio_mux);
+}
+
+float AudioStream::AudioProcessorUsageTotal(void) {
+    const uint32_t period = blockPeriodUs();
+    if (period == 0) return 0.0f;
+
+    portENTER_CRITICAL(&audio_mux);
+    const uint32_t elapsed = cpu_time_total_us;
+    portEXIT_CRITICAL(&audio_mux);
+
+    return (float)(elapsed) * 100.0f / (float)(period);
+}
+
+float AudioStream::AudioProcessorUsageTotalMax(void) {
+    const uint32_t period = blockPeriodUs();
+    if (period == 0) return 0.0f;
+
+    portENTER_CRITICAL(&audio_mux);
+    const uint32_t elapsed = cpu_time_total_max_us;
+    portEXIT_CRITICAL(&audio_mux);
+
+    return (float)(elapsed) * 100.0f / (float)(period);
+}
+
+void AudioStream::AudioProcessorUsageTotalMaxReset(void) {
+    portENTER_CRITICAL(&audio_mux);
+    cpu_time_total_max_us = cpu_time_total_us;
     portEXIT_CRITICAL(&audio_mux);
 }
 
@@ -733,7 +770,7 @@ void AudioStream::processorUsageMaxReset(void) {
 // Memory usage
 // =============================================================================
 
-uint16_t AudioStream::memoryUsage(void) {
+uint16_t AudioStream::AudioMemoryUsage(void) {
     portENTER_CRITICAL(&audio_mux);
     uint16_t value = memory_used;
     portEXIT_CRITICAL(&audio_mux);
@@ -741,7 +778,7 @@ uint16_t AudioStream::memoryUsage(void) {
     return value;
 }
 
-uint16_t AudioStream::memoryUsageMax(void) {
+uint16_t AudioStream::AudioMemoryUsageMax(void) {
     portENTER_CRITICAL(&audio_mux);
     uint16_t value = memory_used_max;
     portEXIT_CRITICAL(&audio_mux);
@@ -749,7 +786,7 @@ uint16_t AudioStream::memoryUsageMax(void) {
     return value;
 }
 
-void AudioStream::memoryUsageMaxReset(void) {
+void AudioStream::AudioMemoryUsageMaxReset(void) {
     portENTER_CRITICAL(&audio_mux);
     memory_used_max = memory_used;
     portEXIT_CRITICAL(&audio_mux);
@@ -760,16 +797,13 @@ void AudioStream::memoryUsageMaxReset(void) {
 // =============================================================================
 
 AudioConnection::AudioConnection()
-    : src(nullptr), dst(nullptr), src_index(0), dest_index(0),
-      next_dest(nullptr), isConnected(false) {}
+    : src(nullptr), dst(nullptr), src_index(0), dest_index(0), next_dest(nullptr), isConnected(false) {}
 
 // =============================================================================
 // AudioConnection destructor
 // =============================================================================
 
-AudioConnection::~AudioConnection() {
-    disconnect();
-}
+AudioConnection::~AudioConnection() { disconnect(); }
 
 // =============================================================================
 // connect()
@@ -794,15 +828,13 @@ int AudioConnection::connect(void) {
     // Therefore connections cannot be changed while the audio task exists.
     if (AudioStream::audio_task_handle != nullptr) {
         portEXIT_CRITICAL(&AudioStream::audio_mux);
-        return 5;  // Graph is locked while the audio task is active.
+        return 5; // Graph is locked while the audio task is active.
     }
 
     // Check whether the destination input is already used.
 
-    for (AudioStream *s = AudioStream::first_update; s != nullptr;
-         s = s->next_update) {
-        for (AudioConnection *p = s->destination_list; p != nullptr;
-             p = p->next_dest) {
+    for (AudioStream *s = AudioStream::first_update; s != nullptr; s = s->next_update) {
+        for (AudioConnection *p = s->destination_list; p != nullptr; p = p->next_dest) {
             if (p->dst == dst && p->dest_index == dest_index) {
                 portEXIT_CRITICAL(&AudioStream::audio_mux);
                 return 4;
@@ -843,8 +875,7 @@ int AudioConnection::connect(void) {
 // connect(source, ...)
 // =============================================================================
 
-int AudioConnection::connect(AudioStream &source, unsigned char sourceOutput,
-                             AudioStream &destination,
+int AudioConnection::connect(AudioStream &source, unsigned char sourceOutput, AudioStream &destination,
                              unsigned char destinationInput) {
     if (isConnected) {
         return 1;
@@ -882,7 +913,7 @@ int AudioConnection::disconnect(void) {
     // Therefore connections cannot be changed while the audio task exists.
     if (AudioStream::audio_task_handle != nullptr) {
         portEXIT_CRITICAL(&AudioStream::audio_mux);
-        return 5;  // Graph is locked while the audio task is active.
+        return 5; // Graph is locked while the audio task is active.
     }
 
     // Remove this connection from the source list.

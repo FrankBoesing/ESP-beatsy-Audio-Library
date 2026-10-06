@@ -33,26 +33,18 @@
 // On Teensy/ARM these retain the original DSP instructions where available.
 
 static inline int CLZ(unsigned int x) __attribute__((always_inline, unused));
-static inline int CLZ(unsigned int x) {
-    return x == 0 ? 32 : __builtin_clz(x);
-};
+static inline int CLZ(unsigned int x) { return x == 0 ? 32 : __builtin_clz(x); };
 
 static inline unsigned int REV16(unsigned int value) __attribute__((always_inline, unused));
 static inline unsigned int REV16(unsigned int value) {
     return (unsigned int)__builtin_bswap16((unsigned short)value);
 }; //FB
 static inline unsigned int REV32(unsigned int value) __attribute__((always_inline, unused));
-static inline unsigned int REV32(unsigned int value) {
-    return __builtin_bswap32(value);
-}; //FB
+static inline unsigned int REV32(unsigned int value) { return __builtin_bswap32(value); }; //FB
 static inline int32_t FASTABS(int32_t x) __attribute__((always_inline, unused));
-static inline int32_t FASTABS(int32_t x) {
-    return __builtin_abs(x);
-} //xtensa has a fast abs instruction //fb
+static inline int32_t FASTABS(int32_t x) { return __builtin_abs(x); } //xtensa has a fast abs instruction //fb
 static inline uint64_t SAR64(uint64_t x, int32_t n) __attribute__((always_inline, unused));
-static inline uint64_t SAR64(uint64_t x, int32_t n) {
-    return x >> n;
-}
+static inline uint64_t SAR64(uint64_t x, int32_t n) { return x >> n; }
 static inline int32_t MULSHIFT32(int32_t x, int32_t y) __attribute__((always_inline, unused));
 static inline int32_t MULSHIFT32(int32_t x, int32_t y) {
     int32_t z;
@@ -65,9 +57,7 @@ static inline uint64_t MADD64(uint64_t sum64, int32_t x, int32_t y) {
     return sum64;
 }
 static inline uint64_t xSAR64(uint64_t x, int32_t n) __attribute__((always_inline, unused));
-static inline uint64_t xSAR64(uint64_t x, int32_t n) {
-    return x >> n;
-}
+static inline uint64_t xSAR64(uint64_t x, int32_t n) { return x >> n; }
 
 static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) __attribute__((always_inline, unused));
 static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) {
@@ -79,11 +69,9 @@ static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) 
     int32_t out = val >> rshift;
     const int32_t max = (int32_t)1 << (bits - 1);
     if (out >= 0) {
-        if (out > max - 1)
-            out = max - 1;
+        if (out > max - 1) out = max - 1;
     } else {
-        if (out < -max)
-            out = -max;
+        if (out < -max) out = -max;
     }
     return out;
 #endif
@@ -124,6 +112,11 @@ static inline int32_t signed_multiply_32x16t(int32_t a, uint32_t b) {
 #else
     return (int32_t)(((int64_t)a * (int16_t)(b >> 16)) >> 16);
 #endif
+}
+
+static inline uint32_t pack_16b_16b(int32_t top, int32_t bottom) __attribute__((always_inline, unused));
+static inline uint32_t pack_16b_16b(int32_t top, int32_t bottom) {
+    return ((uint32_t)(uint16_t)top << 16) | (uint16_t)bottom;
 }
 
 static inline int32_t multiply_32x32_rshift32(int32_t a, int32_t b) __attribute__((always_inline, unused));

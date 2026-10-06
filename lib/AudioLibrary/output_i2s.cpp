@@ -287,12 +287,6 @@ void AudioOutputI2S::txTaskLoop() {
      *
      *   AUDIO_BLOCK_SAMPLES * 2 channels
      *
-     * The AudioStream samples are 16-bit. The ES8388 I2S interface
-     * is configured for 32-bit Philips slots, therefore the samples
-     * are converted to signed 32-bit values here.
-     *
-     * Left-justification in the 32-bit slot is achieved by shifting
-     * the signed 16-bit sample by 16 bits.
      */
     uint16_t buffer[AUDIO_BLOCK_SAMPLES * 2];
 

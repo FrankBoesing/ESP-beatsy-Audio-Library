@@ -27,8 +27,8 @@
 #ifndef play_queue_h_
 #define play_queue_h_
 
-#include <Arduino.h>     // github.com/PaulStoffregen/cores/blob/master/teensy4/Arduino.h
-#include <AudioStream.h> // github.com/PaulStoffregen/cores/blob/master/teensy4/AudioStream.h
+#include <Arduino.h>
+#include <AudioStream.h>
 
 class AudioPlayQueue : public AudioStream
 {
@@ -52,14 +52,14 @@ public:
 	uint32_t playBuffer(void);
 	void stop(void);
 	void setMaxBuffers(uint8_t);
-	virtual void update(void);
 	void setBehaviour(behaviour_e behave) {behaviour = behave;}
+	virtual void update(void);
 private:
 	audio_block_t *queue[MAX_BUFFERS];
 	audio_block_t *userblock;
 	unsigned int uptr; // actually an index, NOT a pointer!
-	volatile uint8_t head, tail;
-	volatile uint8_t max_buffers;
+	uint8_t head, tail;
+	uint8_t max_buffers;
 	behaviour_e behaviour;
 };
 
