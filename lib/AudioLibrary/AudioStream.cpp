@@ -377,6 +377,13 @@ void AudioStream::process_all_now(void) {
     AudioStream *stream = first_update;
 
     portEXIT_CRITICAL(&audio_mux);
+
+    // -------------------------------------------------------------------------
+    // Realtime audio processing
+    //
+    // Only cycle counting is performed here. No division is needed.
+    // -------------------------------------------------------------------------
+
     const uint32_t total_start = esp_cpu_get_cycle_count();
 
     while (stream != nullptr) {
@@ -385,15 +392,22 @@ void AudioStream::process_all_now(void) {
             const uint32_t start = esp_cpu_get_cycle_count();
             stream->update();
             const uint32_t elapsed_cycles = esp_cpu_get_cycle_count() - start;
-            const uint32_t elapsed = elapsed_cycles / cpu_cycles_per_us;
-            stream->cpu_time_us = elapsed_cycles / cpu_cycles_per_us;
-            if (elapsed > stream->cpu_time_max_us) {
-                stream->cpu_time_max_us = elapsed;
+
+            stream->cpu_time_cycles = elapsed_cycles;
+            if (elapsed_cycles > stream->cpu_time_max_cycles) {
+                stream->cpu_time_max_cycles = elapsed_cycles;
             }
         }
 
         stream = stream->next_update;
     }
+
+    // -------------------------------------------------------------------------
+    // Stop total timing BEFORE converting per-stream cycle counts.
+    //
+    // Therefore AudioProcessorUsageTotal() does not include the diagnostic
+    // division overhead.
+    // -------------------------------------------------------------------------
 
     const uint32_t total_elapsed_cycles = esp_cpu_get_cycle_count() - total_start;
     const uint32_t total_elapsed = total_elapsed_cycles / cpu_cycles_per_us;
@@ -401,6 +415,7 @@ void AudioStream::process_all_now(void) {
     portENTER_CRITICAL(&audio_mux);
 
     cpu_time_total_us = total_elapsed;
+
     if (total_elapsed > cpu_time_total_max_us) {
         cpu_time_total_max_us = total_elapsed;
     }
@@ -408,6 +423,23 @@ void AudioStream::process_all_now(void) {
     audio_processing = false;
 
     portEXIT_CRITICAL(&audio_mux);
+
+    // -------------------------------------------------------------------------
+    // Convert per-stream cycle counts to microseconds.
+    //
+    // This is deliberately outside the realtime graph traversal.
+    // -------------------------------------------------------------------------
+
+    if (cpu_cycles_per_us != 0) {
+        for (stream = first_update; stream != nullptr; stream = stream->next_update) {
+            if (stream->active) {
+                stream->cpu_time_us = stream->cpu_time_cycles / cpu_cycles_per_us;
+
+                stream->cpu_time_max_us = stream->cpu_time_max_cycles / cpu_cycles_per_us;
+            }
+        }
+    }
+
     xSemaphoreGiveRecursive(audio_update_mutex);
 }
 
@@ -734,7 +766,10 @@ float AudioStream::AudioProcessorUsageMax(void) const {
 OSIZE
 void AudioStream::AudioProcessorUsageMaxReset(void) {
     portENTER_CRITICAL(&audio_mux);
+
+    cpu_time_max_cycles = cpu_time_cycles;
     cpu_time_max_us = cpu_time_us;
+
     portEXIT_CRITICAL(&audio_mux);
 }
 

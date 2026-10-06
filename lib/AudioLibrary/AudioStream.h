@@ -92,7 +92,7 @@ class AudioConnection {
         static audio_block_t data[num];                                        \
         static uint32_t audio_memory_masks[AUDIO_MEMORY_MASK_WORDS(num)];      \
         AudioStream::initialize_memory(data, (num), audio_memory_masks,        \
-                                       AUDIO_MEMORY_MASK_WORDS(num));          \
+                                       AUDIO_MEMORY_MASK_WORDS(num));           \
     } while (0)
 
 // -----------------------------------------------------------------------------
@@ -134,6 +134,9 @@ class AudioStream {
     }
 
     // Per-stream processor statistics.
+    //
+    // These remain part of the existing interface and are updated after the
+    // realtime graph traversal.
     uint32_t cpu_time_us = 0;
     uint32_t cpu_time_max_us = 0;
 
@@ -185,6 +188,7 @@ class AudioStream {
     virtual bool beginHardware() {
         return true;
     }
+
     friend class AudioConnection;
     friend void AudioInterrupts();
     friend void AudioNoInterrupts();
@@ -226,6 +230,15 @@ class AudioStream {
     static AudioStream *first_update;
     AudioStream *next_update;
 
+    // -------------------------------------------------------------------------
+    // Internal processor timing
+    //
+    // Raw cycle counts are collected during realtime processing. Conversion
+    // to microseconds is intentionally performed after the graph traversal.
+    // -------------------------------------------------------------------------
+
+    uint32_t cpu_time_cycles = 0;
+    uint32_t cpu_time_max_cycles = 0;
 
     // -------------------------------------------------------------------------
     // Internal helpers
@@ -256,6 +269,7 @@ class AudioStream {
     static bool external_update_clock;
     static float audio_sample_rate;
 };
+
 
 inline float AudioProcessorUsage() {
     return AudioStream::AudioProcessorUsageTotal();
@@ -289,4 +303,5 @@ inline void AudioInterrupts() {
 inline void AudioNoInterrupts() {
     AudioStream::disableUpdates();
 }
+
 #endif // AudioStream_h
