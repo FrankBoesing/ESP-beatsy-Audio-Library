@@ -1,0 +1,257 @@
+#include <Arduino.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <algorithm>
+#include "esp_cpu.h"
+
+// Compare micros() against esp_cpu_get_cycle_count().
+//
+// Recommended: fixed CPU frequency and a task pinned to one core.
+// Espressif documents cpu_hal_get_cycle_count() for short, precise
+// measurements and notes that the cycle counter is per-core.
+
+constexpr uint32_t READ_ITERATIONS = 100000;
+constexpr uint32_t WORK_ITERATIONS = 10000;
+constexpr uint32_t WORK_SIZE = 256;
+constexpr uint32_t MEASUREMENTS = 11;
+
+static volatile uint32_t sink = 0;
+
+static inline uint64_t readCycles()
+{
+    return (uint64_t)(esp_cpu_get_cycle_count());
+}
+
+static inline void barrier()
+{
+    __asm__ __volatile__("" ::: "memory");
+}
+
+__attribute__((noinline))
+static void workload()
+{
+    uint32_t x = sink ^ 0x12345678U;
+    for (uint32_t i = 0; i < WORK_SIZE; ++i) {
+        x ^= x << 5;
+        x += 0x9E3779B9U + i;
+        x ^= x >> 7;
+        x *= 33U;
+    }
+    sink = x;
+}
+
+static uint32_t median32(uint32_t *v, size_t n)
+{
+    for (size_t i = 1; i < n; ++i) {
+        uint32_t x = v[i];
+        size_t j = i;
+        while (j && v[j - 1] > x) {
+            v[j] = v[j - 1];
+            --j;
+        }
+        v[j] = x;
+    }
+    return v[n / 2];
+}
+
+static uint64_t median64(uint64_t *v, size_t n)
+{
+    for (size_t i = 1; i < n; ++i) {
+        uint64_t x = v[i];
+        size_t j = i;
+        while (j && v[j - 1] > x) {
+            v[j] = v[j - 1];
+            --j;
+        }
+        v[j] = x;
+    }
+    return v[n / 2];
+}
+
+// ------------------------------------------------------------
+// Measure pure timer-read overhead
+// ------------------------------------------------------------
+
+static void benchmarkReadOverhead()
+{
+    uint64_t cyc[MEASUREMENTS];
+    uint32_t us[MEASUREMENTS];
+
+    Serial.println();
+    Serial.println("1. Read overhead");
+
+    for (uint32_t m = 0; m < MEASUREMENTS; ++m) {
+        barrier();
+
+        const uint64_t c0 = readCycles();
+        const uint32_t u0 = micros();
+
+        volatile uint64_t x = 0;
+        for (uint32_t i = 0; i < READ_ITERATIONS; ++i) {
+            x ^= readCycles();
+        }
+
+        const uint32_t u1 = micros();
+        const uint64_t c1 = readCycles();
+
+        barrier();
+        (void)x;
+
+        cyc[m] = c1 - c0;
+        us[m] = u1 - u0;
+    }
+
+    const uint64_t cmin = *std::min_element(cyc, cyc + MEASUREMENTS);
+    const uint32_t umin = *std::min_element(us, us + MEASUREMENTS);
+
+    // Separate micros() loop:
+    uint64_t mc[MEASUREMENTS];
+
+    for (uint32_t m = 0; m < MEASUREMENTS; ++m) {
+        barrier();
+        const uint64_t c0 = readCycles();
+
+        volatile uint32_t x = 0;
+        for (uint32_t i = 0; i < READ_ITERATIONS; ++i)
+            x ^= micros();
+
+        const uint64_t c1 = readCycles();
+        barrier();
+        (void)x;
+
+        mc[m] = c1 - c0;
+    }
+
+    const uint64_t mcycleMin =
+        *std::min_element(mc, mc + MEASUREMENTS);
+
+    Serial.printf("  cycle reads: min %llu cycles total, %.3f cycles/read\n",
+                  (unsigned long long)cmin,
+                  (double)cmin / READ_ITERATIONS);
+
+    Serial.printf("  cycle reads: median %.3f cycles/read\n",
+                  (double)median64(cyc, MEASUREMENTS) / READ_ITERATIONS);
+
+    Serial.printf("  micros() loop: min %.3f CPU cycles/call (from CCOUNT)\n",
+                  (double)mcycleMin / READ_ITERATIONS);
+
+    Serial.printf("  micros() elapsed wall time: min %lu us for %lu calls\n",
+                  (unsigned long)umin,
+                  (unsigned long)READ_ITERATIONS);
+}
+
+// ------------------------------------------------------------
+// Same workload measured with micros()
+// ------------------------------------------------------------
+
+static uint32_t benchmarkWorkMicros()
+{
+    uint32_t t[MEASUREMENTS];
+
+    for (uint32_t m = 0; m < MEASUREMENTS; ++m) {
+        barrier();
+        const uint32_t start = micros();
+
+        for (uint32_t i = 0; i < WORK_ITERATIONS; ++i)
+            workload();
+
+        barrier();
+        t[m] = micros() - start;
+    }
+
+    return *std::min_element(t, t + MEASUREMENTS);
+}
+
+// ------------------------------------------------------------
+// Same workload measured with cycle counter
+// ------------------------------------------------------------
+
+static uint64_t benchmarkWorkCycles()
+{
+    uint64_t t[MEASUREMENTS];
+
+    for (uint32_t m = 0; m < MEASUREMENTS; ++m) {
+        barrier();
+        const uint64_t start = readCycles();
+
+        for (uint32_t i = 0; i < WORK_ITERATIONS; ++i)
+            workload();
+
+        barrier();
+        t[m] = readCycles() - start;
+    }
+
+    return *std::min_element(t, t + MEASUREMENTS);
+}
+
+void setup()
+{
+    Serial.begin(115200);
+    delay(1000);
+
+    const uint32_t mhz = ESP.getCpuFreqMHz();
+
+    Serial.println();
+    Serial.println("============================================================");
+    Serial.println(" micros() vs esp_cpu_get_cycle_count()");
+    Serial.println("============================================================");
+
+#if defined(CONFIG_IDF_TARGET_ESP32)
+    Serial.println("Target: ESP32");
+#elif defined(CONFIG_IDF_TARGET_ESP32P4)
+    Serial.println("Target: ESP32-P4");
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+    Serial.println("Target: ESP32-S3");
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+    Serial.println("Target: ESP32-C3");
+#else
+    Serial.println("Target: other");
+#endif
+
+    Serial.printf("CPU: %lu MHz\n", (unsigned long)mhz);
+    Serial.printf("READ_ITERATIONS: %lu\n", (unsigned long)READ_ITERATIONS);
+    Serial.printf("WORK_ITERATIONS: %lu\n", (unsigned long)WORK_ITERATIONS);
+    Serial.printf("WORK_SIZE: %lu\n", (unsigned long)WORK_SIZE);
+
+    benchmarkReadOverhead();
+
+    Serial.println();
+    Serial.println("2. Same workload");
+
+    const uint32_t us = benchmarkWorkMicros();
+    const uint64_t cc = benchmarkWorkCycles();
+
+    const double cyclesAsUs =
+        (double)cc / ((double)mhz * 1.0);
+
+    Serial.printf("  micros():       %lu us\n", (unsigned long)us);
+    Serial.printf("  cycle counter:  %llu cycles\n",
+                  (unsigned long long)cc);
+    Serial.printf("  cycles -> us:   %.3f us\n", cyclesAsUs);
+
+    if (us != 0) {
+        Serial.printf("  ratio (cycles-us / micros): %.4f\n",
+                      cyclesAsUs / (double)us);
+    }
+
+    Serial.println();
+    Serial.println("3. What this means for process_all_now()");
+
+    Serial.println(
+        "  micros() is a wall-clock timestamp with microsecond resolution.");
+    Serial.println(
+        "  esp_cpu_get_cycle_count() measures CPU cycles with much lower overhead.");
+    Serial.println(
+        "  For very short stream->update() calls, the cycle counter gives finer resolution.");
+    Serial.println(
+        "  For a task that may migrate between cores, pin it before using the cycle counter.");
+
+    Serial.printf("\nwork sink = 0x%08lX\n",
+                  (unsigned long)sink);
+    Serial.println("Done.");
+}
+
+void loop()
+{
+    delay(10000);
+}
