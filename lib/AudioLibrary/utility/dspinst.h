@@ -114,6 +114,11 @@ static inline int32_t signed_multiply_32x16t(int32_t a, uint32_t b) {
 #endif
 }
 
+static inline uint32_t pack_16b_16b(int32_t top, int32_t bottom) __attribute__((always_inline, unused));
+static inline uint32_t pack_16b_16b(int32_t top, int32_t bottom) {
+    return ((uint32_t)(uint16_t)top << 16) | (uint16_t)bottom;
+}
+
 static inline int32_t multiply_32x32_rshift32(int32_t a, int32_t b) __attribute__((always_inline, unused));
 static inline int32_t multiply_32x32_rshift32(int32_t a, int32_t b) {
 #if defined(__ARM_ARCH_7EM__)
