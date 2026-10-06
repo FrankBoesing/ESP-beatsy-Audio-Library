@@ -10,17 +10,19 @@ class AudioFilterBiquad : public AudioStream {
   public:
     AudioFilterBiquad();
 
+    // Teensy-compatible API:
+    // coefficients are already in Q30 format.
     void setCoefficients(uint32_t stage, const int *coefficients);
-    void setCoefficients(uint32_t stage, const double *coefficients);
 
+    // Keep double overload for API compatibility.
+    // Internally converted to float and then Q30.
+    void setCoefficients(uint32_t stage, const double *coefficients);
     void setLowpass(uint32_t stage, float frequency, float q = 0.7071f);
     void setHighpass(uint32_t stage, float frequency, float q = 0.7071f);
     void setBandpass(uint32_t stage, float frequency, float q = 1.0f);
     void setNotch(uint32_t stage, float frequency, float q = 1.0f);
-    void setLowShelf(uint32_t stage, float frequency, float gain,
-                     float slope = 1.0f);
-    void setHighShelf(uint32_t stage, float frequency, float gain,
-                      float slope = 1.0f);
+    void setLowShelf(uint32_t stage, float frequency, float gain, float slope = 1.0f);
+    void setHighShelf(uint32_t stage, float frequency, float gain, float slope = 1.0f);
 
     void update() override;
 
@@ -40,12 +42,16 @@ class AudioFilterBiquad : public AudioStream {
         int64_t s2;
     };
 
-    void storeCoefficients(uint32_t stage, const double coefficients[5]);
+    // Internal coefficient calculation uses float.
+    void storeCoefficients(uint32_t stage, const float coefficients[5]);
 
     audio_block_t *inputQueueArray[1] = {};
+
     Coefficients _coefficients[MAX_STAGES] = {};
     State _state[MAX_STAGES] = {};
+
     uint8_t _stageCount = 0;
+
     portMUX_TYPE _configMux = portMUX_INITIALIZER_UNLOCKED;
 };
 

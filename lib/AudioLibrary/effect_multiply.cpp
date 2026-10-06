@@ -29,6 +29,7 @@
 
 #include "utility/dspinst.h"
 
+OSPEED
 void AudioEffectMultiply::update() {
     audio_block_t *output = receiveWritable(0);
     audio_block_t *modulator = receiveReadOnly(1);
