@@ -25,15 +25,15 @@
 #include <cmath>
 #include "utility/dspinst.h"
 
-namespace {
+
 constexpr uint32_t FIXED_POINT_ONE = 1U << 16;
 constexpr uint32_t MAX_FIXED_POINT_LENGTH = UINT32_MAX >> 16;
 constexpr uint32_t MIN_GLITCH_LENGTH = 100;
 constexpr uint32_t FADE_LENGTH = 20;
-} // namespace
 
 AudioEffectGranular::AudioEffectGranular() : AudioStream(1, inputQueueArray) {}
 
+OSIZE
 void AudioEffectGranular::begin(int16_t *sampleBank, uint32_t maxLength) {
     portENTER_CRITICAL(&_configMux);
     _sampleBank = sampleBank;
@@ -46,6 +46,7 @@ void AudioEffectGranular::begin(int16_t *sampleBank, uint32_t maxLength) {
     portEXIT_CRITICAL(&_configMux);
 }
 
+OSIZE
 void AudioEffectGranular::setSpeed(float ratio) {
     if (!std::isfinite(ratio)) {
         ratio = 1.0f;
@@ -61,6 +62,7 @@ void AudioEffectGranular::setSpeed(float ratio) {
     portEXIT_CRITICAL(&_configMux);
 }
 
+OSIZE
 void AudioEffectGranular::beginFreeze(float grainLengthMs) {
     if (!std::isfinite(grainLengthMs) || grainLengthMs <= 0.0f) {
         return;
@@ -70,6 +72,7 @@ void AudioEffectGranular::beginFreeze(float grainLengthMs) {
     beginFreezeSamples(samples >= (float)(UINT32_MAX) ? UINT32_MAX : (uint32_t)(samples));
 }
 
+OSIZE
 void AudioEffectGranular::beginPitchShift(float grainLengthMs) {
     if (!std::isfinite(grainLengthMs) || grainLengthMs <= 0.0f) {
         return;
@@ -79,6 +82,7 @@ void AudioEffectGranular::beginPitchShift(float grainLengthMs) {
     beginPitchShiftSamples(samples >= (float)(UINT32_MAX) ? UINT32_MAX : (uint32_t)(samples));
 }
 
+OSIZE
 void AudioEffectGranular::beginFreezeSamples(uint32_t grainSamples) {
     portENTER_CRITICAL(&_configMux);
     if (_sampleBank == nullptr || _maxSampleLength == 0) {
@@ -99,6 +103,7 @@ void AudioEffectGranular::beginFreezeSamples(uint32_t grainSamples) {
     portEXIT_CRITICAL(&_configMux);
 }
 
+OSIZE
 void AudioEffectGranular::beginPitchShiftSamples(uint32_t grainSamples) {
     portENTER_CRITICAL(&_configMux);
     const uint32_t maximum = _maxSampleLength > 1 ? (_maxSampleLength - 1) / 3 : 0;
@@ -119,6 +124,7 @@ void AudioEffectGranular::beginPitchShiftSamples(uint32_t grainSamples) {
     portEXIT_CRITICAL(&_configMux);
 }
 
+OSIZE
 void AudioEffectGranular::stop() {
     portENTER_CRITICAL(&_configMux);
     _requestedMode = Mode::OFF;
@@ -126,6 +132,7 @@ void AudioEffectGranular::stop() {
     portEXIT_CRITICAL(&_configMux);
 }
 
+OSIZE
 void AudioEffectGranular::resetPlayback(Mode mode, uint32_t freezeLength, uint32_t glitchLength) {
     _activeMode = mode;
     _activeFreezeLength = freezeLength;
@@ -138,6 +145,7 @@ void AudioEffectGranular::resetPlayback(Mode mode, uint32_t freezeLength, uint32
     _sampleRequested = mode != Mode::OFF;
 }
 
+OSPEED
 void AudioEffectGranular::update() {
     Mode requestedMode;
     uint32_t freezeLength;

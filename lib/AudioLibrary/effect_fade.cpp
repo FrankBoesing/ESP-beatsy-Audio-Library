@@ -32,6 +32,7 @@ extern const int16_t fader_table[257];
 
 static portMUX_TYPE fadeMux = portMUX_INITIALIZER_UNLOCKED;
 
+OSPEED
 void AudioEffectFade::update(void)
 {
 	audio_block_t *block;
@@ -51,24 +52,23 @@ void AudioEffectFade::update(void)
 		release(block);
 		return;
 	}
-	
+
 	block = receiveWritable();
 	if (block)
 	{
-		uint32_t inc = rate;
-		uint8_t dir = direction;
-		for (uint32_t i=0; i < AUDIO_BLOCK_SAMPLES; i++) 
+		const uint32_t inc = rate;
+		const uint8_t dir = direction;
+		for (uint32_t i=0; i < AUDIO_BLOCK_SAMPLES; i++)
 		{
-			int32_t val1, val2, val, sample;
-			uint32_t index = pos >> 24;
+			int32_t val1, val2;
+			const uint32_t index = pos >> 24;
 			val1 = fader_table[index];
 			val2 = fader_table[index+1];
-			uint32_t scale = (pos >> 8) & 0xFFFF;
+			const uint32_t scale = (pos >> 8) & 0xFFFF;
 			val2 *= scale;
 			val1 *= 0x10000 - scale;
-			val = (val1 + val2) >> 16;
-			sample = block->data[i];
-			sample = (sample * val) >> 15;
+			const int32_t val = (val1 + val2) >> 16;
+			const int32_t sample = (block->data[i] * val) >> 15;
 			block->data[i] = sample;
 			if (dir > 0) {
 				// output is increasing
@@ -91,7 +91,7 @@ void AudioEffectFade::update(void)
 			newPos = (int64_t) position - newPos;
 		else
 			newPos = (int64_t) position + newPos;
-		
+
 		if (newPos <= 0LL) 			position = 0;
 		else if (newPos > MAX_FADE) position = MAX_FADE;
 		else 						position = newPos;
@@ -104,11 +104,11 @@ void AudioEffectFade::fadeBegin(uint32_t samples, uint8_t dir)
 	if (0 == samples) samples = 1; // avoid divide-by-zero error
 	uint32_t newrate = MAX_FADE / samples; // worst case is 1: takes 27 hours...
 	uint32_t pos = position;
-	
+
 	// fader sticks at ends, so ensure it runs if needed
 	if (pos == 0 && dir > 0) 			  position = 1;
 	else if (pos == MAX_FADE && dir <= 0) position = MAX_FADE - 1;
-	
+
 	rate = newrate;
 	direction = dir;
 	portEXIT_CRITICAL(&fadeMux);

@@ -27,6 +27,7 @@ static inline int16_t q15ToPcm(int64_t value) {
 
 AudioFilterFIR::AudioFilterFIR() : AudioStream(1, inputQueueArray) {}
 
+OSIZE
 bool AudioFilterFIR::validCoefficientCount(int coefficientCount) {
     return coefficientCount >= 4 && coefficientCount <= FIR_MAX_COEFFS &&
            (coefficientCount & 1) == 0;
