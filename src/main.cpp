@@ -223,9 +223,9 @@ void setup() {
 void loop() {
     static uint32_t lastStatus = 0;
 
-    static uint8_t icyMetadata[AudioSourceStream::ICY_METADATA_MAX_SIZE];
+    static char icyMetadata[AudioSourceStream::ICY_STREAMTITLE_MAX_SIZE];
 
-    int icyMetadataLen = audioSource.takeIcyMetadata(icyMetadata, sizeof(icyMetadata));
+    int icyMetadataLen = audioSource.takeIcyStreamTitle((char*)icyMetadata, sizeof(icyMetadata));
     if (icyMetadataLen) {
         ESP_LOGI(TAG, "ICY metadata: %s", icyMetadata);
     }
