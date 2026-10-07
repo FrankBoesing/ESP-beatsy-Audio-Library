@@ -11,13 +11,9 @@ AudioOutputI2S::AudioOutputI2S(const Pins &pins) : AudioStream(2, inputQueueArra
     // kein Hardware-Init hier
 }
 
-AudioOutputI2S::~AudioOutputI2S() {
-    end();
-}
+AudioOutputI2S::~AudioOutputI2S() { end(); }
 
-bool AudioOutputI2S::begin() {
-    return beginInternal();
-}
+bool AudioOutputI2S::begin() { return beginInternal(); }
 
 bool AudioOutputI2S::begin(const Pins &pins) {
     end();
@@ -25,8 +21,37 @@ bool AudioOutputI2S::begin(const Pins &pins) {
     return beginInternal();
 }
 
-bool AudioOutputI2S::beginHardware() {
-    return beginInternal();
+bool AudioOutputI2S::beginHardware() { return beginInternal(); }
+
+OSIZE
+bool AudioOutputI2S::setSampleRate(uint32_t hz) {
+    if (!running || txHandle == nullptr) {
+        //I2S noch nicht gestartet. Nicht weiter tun.
+        return AudioStream::setSampleRate((float)hz);
+    }
+
+    if (hz == (uint32_t)AudioStream::sampleRate()) return true;
+
+    // Queue leeren
+    BlockPair pair;
+    while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) {
+        releasePair(pair);
+    }
+
+    esp_err_t err = i2s_channel_disable(txHandle);
+    if (err != ESP_OK) return false;
+
+    i2s_std_clk_config_t clkConfig = I2S_STD_CLK_DEFAULT_CONFIG(hz);
+    clkConfig.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+
+    err = i2s_channel_reconfig_std_clock(txHandle, &clkConfig);
+    if (err != ESP_OK) return false;
+
+    err = i2s_channel_enable(txHandle);
+    if (err != ESP_OK) return false;
+
+    // Erst wenn die Hardware erfolgreich umgestellt wurde:
+    return AudioStream::setSampleRate((float)hz);
 }
 
 OSIZE
@@ -263,9 +288,7 @@ void AudioOutputI2S::releasePair(BlockPair &pair) {
     }
 }
 
-void AudioOutputI2S::txTaskEntry(void *arg) {
-    static_cast<AudioOutputI2S *>(arg)->txTaskLoop();
-}
+void AudioOutputI2S::txTaskEntry(void *arg) { static_cast<AudioOutputI2S *>(arg)->txTaskLoop(); }
 
 bool IRAM_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
     auto *output = static_cast<AudioOutputI2S *>(userContext);

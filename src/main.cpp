@@ -119,7 +119,8 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    AudioStream::setSampleRate(48000);
+    //AudioStream::setSampleRate(48000);
+    i2s.setSampleRate(48000);
     AudioMemory(10);
 
     ESP_LOGI(TAG, "Initializing codec...");
