@@ -52,8 +52,28 @@ class AudioDecoderStream : public AudioStream {
         return _samplesPlayed;
     }
 
+    /*
+     * Called from the decoder task when the stream's sample rate differs from
+     * AudioStream::sampleRate(). The callback must switch the output rate
+     * (e.g. AudioOutputI2S::setSampleRate) and return true on success.
+     */
+    typedef bool (*SampleRateCallback)(uint32_t rate, void *context);
+
+    void onSampleRateChange(SampleRateCallback callback, void *context = nullptr) {
+        _rateCallback = callback;
+        _rateContext = context;
+    }
+
   protected:
     enum : uint8_t { PCM_FREE = 0, PCM_FILLING, PCM_READY };
+
+    // Returns true if the output runs at 'rate' afterwards.
+    bool negotiateSampleRate(uint32_t rate) {
+        if (rate == (uint32_t)AudioStream::sampleRate()) return true;
+        if (_rateCallback == nullptr) return false;
+        if (!_rateCallback(rate, _rateContext)) return false;
+        return rate == (uint32_t)AudioStream::sampleRate();
+    }
 
     /*
      * Called after normal playback completion, once the final PCM buffer has
@@ -91,6 +111,9 @@ class AudioDecoderStream : public AudioStream {
     void setDecoderFinished(int errorCode = 0);
 
   private:
+    SampleRateCallback _rateCallback = nullptr;
+    void *_rateContext = nullptr;
+
     /*
      * AudioStream currently creates its realtime audio task at
      * configMAX_PRIORITIES - 2. The decoder therefore gets exactly one

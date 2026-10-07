@@ -34,29 +34,8 @@ class AudioOutputI2S : public AudioStream {
         int8_t bclk;
         int8_t ws;
         int8_t dout;
-        int8_t mclk;
+        int8_t mclk; // -1 = disable
     };
-
-    /*
-     * ESP32 Audio Kit V2.2 / ES8388 reference pinout:
-     *   BCLK  = GPIO27
-     *   WS    = GPIO25
-     *   DOUT  = GPIO26
-     *   MCLK  = GPIO0
-     *
-     * These are board-specific defaults and can be overridden with
-     * AudioOutputI2S(Pins) or begin(Pins).
-     */
-    static constexpr Pins defaultPins() {
-#if defined(CONFIG_IDF_TARGET_ESP32)
-        return {27, 25, 26, 0};
-#elif defined(CONFIG_IDF_TARGET_ESP32S3)
-        // No universal hardware pin assignment on ESP32-S3.
-        return {4, 5, 21, -1};
-#else
-        return {-1, -1, -1, -1};
-#endif
-    }
 
     AudioOutputI2S();
     explicit AudioOutputI2S(const Pins &pins);
@@ -75,6 +54,7 @@ class AudioOutputI2S : public AudioStream {
     const Pins &pins() const {
         return i2sPins;
     }
+    bool setSampleRate(float sampleRate);
 
   protected:
     void update() override;
@@ -92,7 +72,7 @@ class AudioOutputI2S : public AudioStream {
     static constexpr uint16_t DMA_DESC_NUM = 6;
     static constexpr uint16_t DMA_FRAME_NUM = AUDIO_BLOCK_SAMPLES;
 
-    Pins i2sPins = defaultPins();
+    Pins i2sPins = {-1,-1,-1,-1};
 
     i2s_chan_handle_t txHandle = nullptr;
     i2s_chan_config_t chanConfig = {};

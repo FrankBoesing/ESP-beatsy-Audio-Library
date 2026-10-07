@@ -15,7 +15,7 @@
 constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/mid/aac/stream.aac";
 //constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac";
 //constexpr char STREAM_URL[] = "https://wdr-wdr2-rheinruhr.icecastssl.wdr.de/wdr/wdr2/rheinruhr/mp3/128/stream.mp3";
-AudioControlES8388 codec;
+
 AudioPlayMp3 *mp3 = nullptr;
 AudioPlayAac *aac = nullptr;
 AudioSourceStream audioSource;
@@ -23,10 +23,16 @@ WiFiClientSecure tlsClient;
 HTTPClient http;
 
 AudioOutputI2S i2s({
-    27, // BCLK
-    25, // WS / LRCLK
-    26, // DOUT
-    0   // MCLK
+    PIN_I2S_BLCK, // BCLK
+    PIN_I2S_WS,   // WS / LRCLK
+    PIN_I2S_DOUT, // DOUT
+    PIN_I2S_MLCK  // MCLK
+});
+
+AudioControlES8388 codec({
+    PIN_I2C_SCLK,
+    PIN_I2C_SDA,
+    PIN_AMPLIFIER
 });
 
 AudioConnection *patchCordLeft = nullptr;
@@ -61,7 +67,13 @@ AudioCodec detectCodec(HTTPClient &http) {
     return AudioCodec::Unknown;
 }
 
-bool connectPlayer(AudioStream &player) {
+bool onStreamSampleRate(uint32_t rate, void *) {
+    ESP_LOGI(TAG, "Switching output sample rate to %u Hz", (unsigned)rate);
+    return i2s.setSampleRate((float)rate);
+}
+
+bool connectPlayer(AudioDecoderStream &player) {
+    player.onSampleRateChange(onStreamSampleRate);
     patchCordLeft = new AudioConnection();
     patchCordRight = new AudioConnection();
     if (patchCordLeft == nullptr || patchCordRight == nullptr) {
@@ -119,7 +131,6 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    AudioStream::setSampleRate(48000);
     AudioMemory(10);
 
     ESP_LOGI(TAG, "Initializing codec...");
@@ -215,17 +226,12 @@ void setup() {
 
 void loop() {
     static uint32_t lastStatus = 0;
-    static uint8_t icyMetadata[AudioSourceStream::ICY_METADATA_MAX_SIZE];
 
-    size_t icyMetadataSize = 0;
-    if (audioSource.takeIcyMetadata(icyMetadata, sizeof(icyMetadata), icyMetadataSize)) {
-        while (icyMetadataSize > 0 && icyMetadata[icyMetadataSize - 1] == 0) {
-            --icyMetadataSize;
-        }
+    static char icyMetadata[AudioSourceStream::ICY_STREAMTITLE_MAX_SIZE];
 
-        if (icyMetadataSize > 0) {
-            ESP_LOGI(TAG, "ICY metadata: %s", icyMetadata);
-        }
+    int icyMetadataLen = audioSource.takeIcyStreamTitle((char *)icyMetadata, sizeof(icyMetadata));
+    if (icyMetadataLen) {
+        ESP_LOGI(TAG, "ICY metadata: %s", icyMetadata);
     }
 
     if (millis() - lastStatus >= 5000) {

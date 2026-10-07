@@ -324,7 +324,7 @@ bool AudioPlayAac::validateFrameInfo(const AACFrameInfo &info) {
 
     const uint32_t outputRate = (uint32_t)(AudioStream::sampleRate());
 
-    if (info.sampRateOut <= 0 || (uint32_t)(info.sampRateOut) != outputRate) {
+    if (info.sampRateOut <= 0 || !negotiateSampleRate((uint32_t)(info.sampRateOut))) {
         _lastError = ERR_FORMAT;
         ESP_LOGE(TAG, "AAC sample rate %d Hz does not match audio rate %lu Hz", info.sampRateOut,
                  (unsigned long)(outputRate));
