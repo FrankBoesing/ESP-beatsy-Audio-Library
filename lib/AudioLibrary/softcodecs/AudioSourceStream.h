@@ -11,7 +11,7 @@
 class AudioSourceStream : public AudioSource {
   public:
     static constexpr size_t BUFFER_SIZE = 128U * 1024U;
-    static constexpr size_t ICY_METADATA_MAX_SIZE = 255U * 16U;
+    static constexpr size_t ICY_METADATA_MAX_SIZE = 255U * 2;
 
     AudioSourceStream();
     explicit AudioSourceStream(Stream &stream);
@@ -23,18 +23,16 @@ class AudioSourceStream : public AudioSource {
     // Copies the latest raw ICY metadata block, without a trailing NUL.
     // If capacity is too small, size receives the required size and the
     // pending block remains available for a later call.
-    bool takeIcyMetadata(uint8_t *buffer, size_t capacity, size_t &size);
+    int takeIcyMetadata(uint8_t *buffer, size_t capacity);
 
     AudioSourceStatus read(uint8_t *buffer, size_t requested, size_t &received) override;
 
     uint64_t position() const override;
     uint64_t size() const override;
-
     bool isSeekable() const override;
     bool seek(uint64_t position) override;
 
     void close() override;
-
     bool isOpen() const override;
 
     size_t refillThreshold() const override;
@@ -54,7 +52,7 @@ class AudioSourceStream : public AudioSource {
     void producerTaskLoop();
     bool checkNetworkTimeout();
 
-     Stream *_stream = nullptr;
+    Stream *_stream = nullptr;
     uint64_t _position;
     uint32_t _lastDataMs = 0;
     bool _streamError = false;
@@ -66,13 +64,15 @@ class AudioSourceStream : public AudioSource {
     TaskHandle_t _producerTask = nullptr;
     mutable portMUX_TYPE _bufferMux = portMUX_INITIALIZER_UNLOCKED;
 
-    uint32_t _icyMetaInt = 0;
-    uint32_t _icyAudioRemaining = 0;
-    size_t _icyMetadataExpected = 0;
-    size_t _icyMetadataReceived = 0;
-    bool _icyNeedLength = true;
-    uint8_t *_icyMetadataWriteBuffer = nullptr;
-    uint8_t *_icyMetadataReadyBuffer = nullptr;
-    size_t _icyMetadataReadySize = 0;
-    SemaphoreHandle_t _icyMetadataMutex = nullptr;
+    struct {
+        uint32_t MetaInt = 0;
+        uint32_t AudioRemaining = 0;
+        size_t MetadataExpected = 0;
+        size_t MetadataReceived = 0;
+        size_t MetadataReadySize = 0;
+        uint8_t *MetadataWriteBuffer = nullptr;
+        uint8_t *MetadataReadyBuffer = nullptr;
+        SemaphoreHandle_t MetadataMutex = nullptr;
+        bool NeedLength = true;
+    } _icy;
 };

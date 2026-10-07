@@ -61,7 +61,13 @@ AudioCodec detectCodec(HTTPClient &http) {
     return AudioCodec::Unknown;
 }
 
-bool connectPlayer(AudioStream &player) {
+bool onStreamSampleRate(uint32_t rate, void *) {
+    ESP_LOGI(TAG, "Switching output sample rate to %u Hz", (unsigned)rate);
+    return i2s.setSampleRate((float)rate);
+}
+
+bool connectPlayer(AudioDecoderStream &player) {
+    player.onSampleRateChange(onStreamSampleRate);
     patchCordLeft = new AudioConnection();
     patchCordRight = new AudioConnection();
     if (patchCordLeft == nullptr || patchCordRight == nullptr) {
@@ -120,7 +126,7 @@ void setup() {
     delay(1000);
 
     //AudioStream::setSampleRate(48000);
-    i2s.setSampleRate(48000);
+    //i2s.setSampleRate(48000);
     AudioMemory(10);
 
     ESP_LOGI(TAG, "Initializing codec...");
@@ -216,17 +222,12 @@ void setup() {
 
 void loop() {
     static uint32_t lastStatus = 0;
+
     static uint8_t icyMetadata[AudioSourceStream::ICY_METADATA_MAX_SIZE];
 
-    size_t icyMetadataSize = 0;
-    if (audioSource.takeIcyMetadata(icyMetadata, sizeof(icyMetadata), icyMetadataSize)) {
-        while (icyMetadataSize > 0 && icyMetadata[icyMetadataSize - 1] == 0) {
-            --icyMetadataSize;
-        }
-
-        if (icyMetadataSize > 0) {
-            ESP_LOGI(TAG, "ICY metadata: %s", icyMetadata);
-        }
+    int icyMetadataLen = audioSource.takeIcyMetadata(icyMetadata, sizeof(icyMetadata));
+    if (icyMetadataLen) {
+        ESP_LOGI(TAG, "ICY metadata: %s", icyMetadata);
     }
 
     if (millis() - lastStatus >= 5000) {

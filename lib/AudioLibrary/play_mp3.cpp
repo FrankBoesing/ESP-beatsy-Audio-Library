@@ -407,7 +407,7 @@ bool AudioPlayMp3::validateFrameInfo(const MP3FrameInfo &info) {
 
     const uint32_t outputRate = (uint32_t)(AudioStream::sampleRate());
 
-    if (info.samprate <= 0 || (uint32_t)(info.samprate) != outputRate) {
+    if (info.samprate <= 0 || !negotiateSampleRate((uint32_t)(info.samprate))) {
         _lastError = ERR_FORMAT;
 
         ESP_LOGE(TAG, "MP3 sample rate %d Hz does not match audio rate %lu Hz", info.samprate,
