@@ -75,7 +75,7 @@ class AudioOutputI2S : public AudioStream {
     const Pins &pins() const {
         return i2sPins;
     }
-    bool setSampleRate(uint32_t sampleRate);
+    bool setSampleRate(float sampleRate);
 
   protected:
     void update() override;

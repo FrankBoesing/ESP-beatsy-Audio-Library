@@ -24,13 +24,15 @@ bool AudioOutputI2S::begin(const Pins &pins) {
 bool AudioOutputI2S::beginHardware() { return beginInternal(); }
 
 OSIZE
-bool AudioOutputI2S::setSampleRate(uint32_t hz) {
+bool AudioOutputI2S::setSampleRate(float hz) {
+    if (hz <= 0.0f) return false;
+
     if (!running || txHandle == nullptr) {
-        //I2S noch nicht gestartet. Nicht weiter tun.
-        return AudioStream::setSampleRate((float)hz);
+        // I2S noch nicht gestartet.
+        return AudioStream::setSampleRate(hz);
     }
 
-    if (hz == (uint32_t)AudioStream::sampleRate()) return true;
+    if (hz == AudioStream::sampleRate()) return true;
 
     // Queue leeren
     BlockPair pair;
@@ -41,7 +43,7 @@ bool AudioOutputI2S::setSampleRate(uint32_t hz) {
     esp_err_t err = i2s_channel_disable(txHandle);
     if (err != ESP_OK) return false;
 
-    i2s_std_clk_config_t clkConfig = I2S_STD_CLK_DEFAULT_CONFIG(hz);
+    i2s_std_clk_config_t clkConfig = I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)std::lround(hz));
     clkConfig.mclk_multiple = I2S_MCLK_MULTIPLE_256;
 
     err = i2s_channel_reconfig_std_clock(txHandle, &clkConfig);
@@ -50,8 +52,7 @@ bool AudioOutputI2S::setSampleRate(uint32_t hz) {
     err = i2s_channel_enable(txHandle);
     if (err != ESP_OK) return false;
 
-    // Erst wenn die Hardware erfolgreich umgestellt wurde:
-    return AudioStream::setSampleRate((float)hz);
+    return AudioStream::setSampleRate(hz);
 }
 
 OSIZE
