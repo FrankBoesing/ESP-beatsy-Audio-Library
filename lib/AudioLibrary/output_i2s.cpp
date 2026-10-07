@@ -3,7 +3,7 @@
 #include <cstring>
 #include <esp_err.h>
 
-constexpr const char TAG[] = "I2S";
+static constexpr const char TAG[] = "I2S";
 
 AudioOutputI2S::AudioOutputI2S() : AudioStream(2, inputQueueArray) {
     // kein Hardware-Init hier

@@ -17,9 +17,10 @@ static uint8_t volumeToRegister(float level) {
     return (uint8_t)(attenuation + 0.5f);
 }
 
+/*
 AudioControlES8388::AudioControlES8388()
     : pins_{33, 32, 21}, wire_(&Wire), i2cAddress_(ES8388_ADDRESS), initialized_(false) {}
-
+*/
 AudioControlES8388::AudioControlES8388(const Pins &pins)
     : pins_(pins), wire_(&Wire), i2cAddress_(ES8388_ADDRESS), initialized_(false) {}
 

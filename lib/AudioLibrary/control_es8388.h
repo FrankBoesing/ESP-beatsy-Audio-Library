@@ -21,12 +21,12 @@
 class AudioControlES8388 : public AudioControl {
   public:
     struct Pins {
-        int8_t sda = 33;
-        int8_t scl = 32;
-        int8_t pa_enable = 21; // -1 = no PA
+        int8_t sda;
+        int8_t scl;
+        int8_t pa_enable; // -1 = no PA
     };
 
-    AudioControlES8388();
+    //AudioControlES8388();
     explicit AudioControlES8388(const Pins &pins);
 
     bool enable() override;
