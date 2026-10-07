@@ -139,12 +139,6 @@ class AudioStream {
     static uint16_t AudioMemoryUsageMax(void);
     static void AudioMemoryUsageMaxReset(void);
 
-    // Software-clocked sample rate. Hardware audio sources will be able to
-    // take over the update clock later without changing the AudioStream API.
-    static bool setSampleRate(float rate);
-    static float sampleRate(void);
-
-
     bool isActive(void) const {
         return active;
     }
@@ -177,7 +171,10 @@ class AudioStream {
     // Audio timing / scheduler
     // -------------------------------------------------------------------------
 
-
+    // Software-clocked sample rate. Hardware audio sources will be able to
+    // take over the update clock later without changing the AudioStream API.
+    static bool setSampleRate(float rate);
+    static float sampleRate(void);
     static uint32_t blockPeriodUs(void);
 
     // Initializes the scheduler infrastructure. The current implementation
