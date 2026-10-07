@@ -206,7 +206,7 @@ AudioStream::~AudioStream() {
 // =============================================================================
 OSIZE
 bool AudioStream::setSampleRate(float rate) {
-    if (!(rate > 0.0f) || !isfinite(rate)) {
+    if (!isfinite(rate) || rate <= 0.0f) {
         return false;
     }
 
