@@ -65,6 +65,10 @@ class AudioConnection {
     friend class AudioStream;
 
   protected:
+    // Internal variants used while audio_update_mutex is already held.
+    int disconnect_locked(void);
+    int connect_locked(void);
+
     AudioStream *src;
     AudioStream *dst;
 
@@ -103,8 +107,14 @@ class AudioStream {
   public:
     AudioStream(unsigned char ninput, audio_block_t **iqueue);
 
+#ifdef AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME
+    // The destructor removes the stream from the update graph and disconnects
+    // all attached AudioConnection objects. Do not destroy a stream from its
+    // own update() callback.
+    virtual ~AudioStream();
+#else
     virtual ~AudioStream() = default;
-
+#endif
     // -------------------------------------------------------------------------
     // Memory pool
     // -------------------------------------------------------------------------
@@ -128,6 +138,12 @@ class AudioStream {
     static uint16_t AudioMemoryUsage(void);
     static uint16_t AudioMemoryUsageMax(void);
     static void AudioMemoryUsageMaxReset(void);
+
+    // Software-clocked sample rate. Hardware audio sources will be able to
+    // take over the update clock later without changing the AudioStream API.
+    static bool setSampleRate(float rate);
+    static float sampleRate(void);
+
 
     bool isActive(void) const {
         return active;
@@ -161,10 +177,7 @@ class AudioStream {
     // Audio timing / scheduler
     // -------------------------------------------------------------------------
 
-    // Software-clocked sample rate. Hardware audio sources will be able to
-    // take over the update clock later without changing the AudioStream API.
-    static bool setSampleRate(float rate);
-    static float sampleRate(void);
+
     static uint32_t blockPeriodUs(void);
 
     // Initializes the scheduler infrastructure. The current implementation

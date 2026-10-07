@@ -5,6 +5,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <HTTPClient.h>
 #include "optimize.h"
 
 class AudioSourceStream : public AudioSource {
@@ -16,6 +17,7 @@ class AudioSourceStream : public AudioSource {
     explicit AudioSourceStream(Stream &stream);
     ~AudioSourceStream() override;
 
+    bool open(HTTPClient &http);
     bool open(Stream &stream, uint32_t icyMetaInt = 0);
 
     // Copies the latest raw ICY metadata block, without a trailing NUL.
@@ -29,7 +31,6 @@ class AudioSourceStream : public AudioSource {
     uint64_t size() const override;
 
     bool isSeekable() const override;
-
     bool seek(uint64_t position) override;
 
     void close() override;
@@ -44,15 +45,16 @@ class AudioSourceStream : public AudioSource {
     size_t bufferedBytes() const;
 
   private:
-    static constexpr size_t PRODUCER_CHUNK_SIZE = 2048;
+    static constexpr size_t PRODUCER_CHUNK_SIZE = 4096;
     static constexpr uint32_t NETWORK_IDLE_TIMEOUT_MS = 15000;
     static constexpr uint32_t STREAM_READ_TIMEOUT_MS = 500;
+    static constexpr size_t REFILLTRESHOLD = 32 * 1024;
 
     static void producerTaskEntry(void *arg);
     void producerTaskLoop();
     bool checkNetworkTimeout();
 
-    Stream *_stream;
+     Stream *_stream = nullptr;
     uint64_t _position;
     uint32_t _lastDataMs = 0;
     bool _streamError = false;
