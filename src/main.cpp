@@ -15,7 +15,7 @@
 constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/mid/aac/stream.aac";
 //constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac";
 //constexpr char STREAM_URL[] = "https://wdr-wdr2-rheinruhr.icecastssl.wdr.de/wdr/wdr2/rheinruhr/mp3/128/stream.mp3";
-AudioControlES8388 codec;
+
 AudioPlayMp3 *mp3 = nullptr;
 AudioPlayAac *aac = nullptr;
 AudioSourceStream audioSource;
@@ -23,10 +23,16 @@ WiFiClientSecure tlsClient;
 HTTPClient http;
 
 AudioOutputI2S i2s({
-    27, // BCLK
-    25, // WS / LRCLK
-    26, // DOUT
-    0   // MCLK
+    PIN_I2S_BLCK, // BCLK
+    PIN_I2S_WS,   // WS / LRCLK
+    PIN_I2S_DOUT, // DOUT
+    PIN_I2S_MLCK  // MCLK
+});
+
+AudioControlES8388 codec({
+    PIN_I2C_SCLK,
+    PIN_I2C_SDA,
+    PIN_AMPLIFIER
 });
 
 AudioConnection *patchCordLeft = nullptr;
@@ -125,8 +131,6 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    //AudioStream::setSampleRate(48000);
-    //i2s.setSampleRate(48000);
     AudioMemory(10);
 
     ESP_LOGI(TAG, "Initializing codec...");
@@ -225,7 +229,7 @@ void loop() {
 
     static char icyMetadata[AudioSourceStream::ICY_STREAMTITLE_MAX_SIZE];
 
-    int icyMetadataLen = audioSource.takeIcyStreamTitle((char*)icyMetadata, sizeof(icyMetadata));
+    int icyMetadataLen = audioSource.takeIcyStreamTitle((char *)icyMetadata, sizeof(icyMetadata));
     if (icyMetadataLen) {
         ESP_LOGI(TAG, "ICY metadata: %s", icyMetadata);
     }
