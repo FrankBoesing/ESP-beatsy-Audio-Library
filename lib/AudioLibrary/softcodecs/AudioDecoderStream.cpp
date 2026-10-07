@@ -4,9 +4,8 @@
 #include <algorithm>
 #include <cstring>
 
-namespace {
+
 constexpr const char *TAG = "AudioDecoderStream";
-}
 
 AudioDecoderStream::AudioDecoderStream(size_t pcmBufferSamples)
     : AudioStream(0, nullptr), _pcmBufferSamples(pcmBufferSamples) {
@@ -19,6 +18,7 @@ AudioDecoderStream::~AudioDecoderStream() {
     stopDecoderTask();
 }
 
+OSIZE
 bool AudioDecoderStream::allocatePcmBuffers() {
     if (_pcmBufferSamples == 0) {
         return false;
@@ -44,6 +44,7 @@ bool AudioDecoderStream::allocatePcmBuffers() {
     return true;
 }
 
+OSIZE
 void AudioDecoderStream::freePcmBuffers() {
     for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
         if (_pcm[i] == nullptr) {
@@ -60,12 +61,12 @@ void AudioDecoderStream::freePcmBuffers() {
     }
 }
 
+OSIZE
 void AudioDecoderStream::clearDecoderState() {
     portENTER_CRITICAL(&_decoderMux);
 
     _pcmState[0] = PCM_FREE;
     _pcmState[1] = PCM_FREE;
-
     _pcmSamples[0] = 0;
     _pcmSamples[1] = 0;
     _pcmSeq[0] = 0;
@@ -88,6 +89,7 @@ void AudioDecoderStream::clearDecoderState() {
     portEXIT_CRITICAL(&_decoderMux);
 }
 
+OSIZE
 bool AudioDecoderStream::startDecoderTask() {
     /*
      * startDecoderTask() is only allowed to allocate new PCM storage once
@@ -137,6 +139,7 @@ bool AudioDecoderStream::startDecoderTask() {
     return true;
 }
 
+OSIZE
 void AudioDecoderStream::stopDecoderTask() {
     /*
      * Non-realtime shutdown path.
@@ -205,6 +208,7 @@ void AudioDecoderStream::stopDecoderTask() {
     clearDecoderState();
 }
 
+OSIZE
 int AudioDecoderStream::claimFreeBuffer() {
     portENTER_CRITICAL(&_decoderMux);
 
@@ -222,6 +226,7 @@ int AudioDecoderStream::claimFreeBuffer() {
     return -1;
 }
 
+OSIZE
 void AudioDecoderStream::releaseFilledBuffer(uint8_t index) {
     if (index >= PCM_BUFFER_COUNT) {
         return;
@@ -233,6 +238,7 @@ void AudioDecoderStream::releaseFilledBuffer(uint8_t index) {
     portEXIT_CRITICAL(&_decoderMux);
 }
 
+OSIZE
 void AudioDecoderStream::publishReadyBuffer(uint8_t index, size_t samples) {
     if (index >= PCM_BUFFER_COUNT) {
         return;
@@ -272,6 +278,7 @@ int AudioDecoderStream::acquireReadyBuffer() {
     return best;
 }
 
+OSIZE
 void AudioDecoderStream::releaseReadBuffer(uint8_t index) {
     if (index >= PCM_BUFFER_COUNT) {
         return;
@@ -285,6 +292,7 @@ void AudioDecoderStream::releaseReadBuffer(uint8_t index) {
     portEXIT_CRITICAL(&_decoderMux);
 }
 
+OSIZE
 void AudioDecoderStream::setDecoderFinished(int errorCode) {
     portENTER_CRITICAL(&_decoderMux);
     _decoderFinished = true;
@@ -308,6 +316,7 @@ void AudioDecoderStream::decoderTaskEntry(void *arg) {
     ((AudioDecoderStream *)arg)->decoderTaskLoop();
 }
 
+OSPEED
 void AudioDecoderStream::decoderTaskLoop() {
     for (;;) {
         portENTER_CRITICAL(&_decoderMux);
@@ -396,6 +405,7 @@ decoder_exit:
     vTaskDelete(nullptr);
 }
 
+OSPEED
 void AudioDecoderStream::update() {
     /*
      * Synchronize entry against stopDecoderTask().
