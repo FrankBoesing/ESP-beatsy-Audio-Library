@@ -1,14 +1,13 @@
 #include "AudioSourceStream.h"
 #include <algorithm>
+#include <cstring>
 
 #if defined(ARDUINO_ARCH_ESP32)
 #include <esp_heap_caps.h>
 #endif
 
 AudioSourceStream::AudioSourceStream() : _stream(nullptr), _position(0) {}
-
 AudioSourceStream::AudioSourceStream(Stream &stream) : _stream(nullptr), _position(0) { open(stream); }
-
 AudioSourceStream::~AudioSourceStream() { close(); }
 
 OSIZE
@@ -31,29 +30,25 @@ bool AudioSourceStream::open(Stream &stream, uint32_t icyMetaInt) {
     _buffer = (uint8_t *)malloc(BUFFER_SIZE);
 #endif
 
-    if (_buffer == nullptr) {
-        return false;
-    }
-
+    if (_buffer == nullptr) return false;
     if (icyMetaInt > 0) {
 #if defined(ARDUINO_ARCH_ESP32)
-        _icyMetadataWriteBuffer =
-            (uint8_t *)heap_caps_malloc(ICY_METADATA_MAX_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        _icyMetadataReadyBuffer =
-            (uint8_t *)heap_caps_malloc(ICY_METADATA_MAX_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        uint8_t *buffer =
+            (uint8_t *)heap_caps_malloc(ICY_STREAMTITLE_MAX_SIZE * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 #else
-        _icyMetadataWriteBuffer = (uint8_t *)malloc(ICY_METADATA_MAX_SIZE);
-        _icyMetadataReadyBuffer = (uint8_t *)malloc(ICY_METADATA_MAX_SIZE);
+        uint8_t *buffer = (uint8_t *)malloc(ICY_STREAMTITLE_MAX_SIZE * 2);
 #endif
-        _icyMetadataMutex = xSemaphoreCreateMutex();
-        if (_icyMetadataWriteBuffer == nullptr || _icyMetadataReadyBuffer == nullptr || _icyMetadataMutex == nullptr) {
+        _icy.StreamTitleWriteBuffer = buffer;
+        _icy.StreamTitleReadyBuffer = buffer + ICY_STREAMTITLE_MAX_SIZE;
+        _icy.MetadataMutex = xSemaphoreCreateMutex();
+
+        if (_icy.StreamTitleWriteBuffer == nullptr || _icy.MetadataMutex == nullptr) {
             close();
             return false;
         }
     }
 
     uint32_t now = millis();
-
     portENTER_CRITICAL(&_bufferMux);
     _stream = &stream;
     _position = 0;
@@ -65,12 +60,14 @@ bool AudioSourceStream::open(Stream &stream, uint32_t icyMetaInt) {
     _stopRequested = false;
     portEXIT_CRITICAL(&_bufferMux);
 
-    _icyMetaInt = icyMetaInt;
-    _icyAudioRemaining = icyMetaInt;
-    _icyMetadataExpected = 0;
-    _icyMetadataReceived = 0;
-    _icyNeedLength = true;
-    _icyMetadataReadySize = 0;
+    _icy.MetaInt = icyMetaInt;
+    _icy.AudioRemaining = icyMetaInt;
+    _icy.MetadataExpected = 0;
+    _icy.MetadataReceived = 0;
+    _icy.NeedLength = true;
+    resetIcyMetadataParser();
+    _icy.StreamTitleSize = 0;
+    _icy.StreamTitlePending = false;
 
     stream.setTimeout(STREAM_READ_TIMEOUT_MS);
 
@@ -86,32 +83,112 @@ bool AudioSourceStream::open(Stream &stream, uint32_t icyMetaInt) {
     return true;
 }
 
-bool AudioSourceStream::takeIcyMetadata(uint8_t *buffer, size_t capacity, size_t &size) {
-    size = 0;
-    if (_icyMetadataMutex == nullptr || (buffer == nullptr && capacity > 0)) {
-        return false;
+void AudioSourceStream::resetIcyMetadataParser() {
+    _icy.State = IcyParseState::Search;
+    _icy.KeyMatch = 0;
+    _icy.StreamTitleWriteSize = 0;
+    _icy.StreamTitleTooLong = false;
+    if (_icy.StreamTitleWriteBuffer != nullptr) {
+        _icy.StreamTitleWriteBuffer[0] = '\0';
+    }
+}
+
+void AudioSourceStream::parseIcyMetadata(const uint8_t *buffer, size_t size) {
+    static constexpr char KEY[] = "StreamTitle='";
+    static constexpr size_t KEY_LENGTH = sizeof(KEY) - 1;
+
+    for (size_t i = 0; i < size; ++i) {
+        const uint8_t c = buffer[i];
+
+        if (_icy.State == IcyParseState::Done) {
+            continue;
+        }
+
+        if (_icy.State == IcyParseState::Collect) {
+            if (c == '\'') {
+                _icy.State = IcyParseState::Done;
+                continue;
+            }
+
+            if (_icy.StreamTitleWriteSize < ICY_STREAMTITLE_MAX_SIZE - 1) {
+                _icy.StreamTitleWriteBuffer[_icy.StreamTitleWriteSize++] = c;
+            } else {
+                _icy.StreamTitleTooLong = true;
+            }
+
+            continue;
+        }
+
+        // Search for "StreamTitle='"
+        if (c == static_cast<uint8_t>(KEY[_icy.KeyMatch])) {
+            ++_icy.KeyMatch;
+
+            if (_icy.KeyMatch == KEY_LENGTH) {
+                _icy.State = IcyParseState::Collect;
+                _icy.KeyMatch = 0;
+            }
+        } else {
+            // The key starts with 'S'. If the current byte is an 'S',
+            // it can be the beginning of a new match.
+            _icy.KeyMatch = (c == static_cast<uint8_t>(KEY[0])) ? 1 : 0;
+        }
+    }
+}
+
+void AudioSourceStream::finishIcyMetadata() {
+    if (_icy.State != IcyParseState::Done || _icy.StreamTitleTooLong) {
+        resetIcyMetadataParser();
+        return;
     }
 
-    if (xSemaphoreTake(_icyMetadataMutex, portMAX_DELAY) != pdTRUE) {
-        return false;
+    const size_t size = _icy.StreamTitleWriteSize;
+
+    if (xSemaphoreTake(_icy.MetadataMutex, portMAX_DELAY) != pdTRUE) {
+        resetIcyMetadataParser();
+        return;
     }
 
-    const size_t pendingSize = _icyMetadataReadySize;
-    if (pendingSize == 0) {
-        xSemaphoreGive(_icyMetadataMutex);
-        return false;
+    const bool changed =
+        size != _icy.StreamTitleSize || memcmp(_icy.StreamTitleReadyBuffer, _icy.StreamTitleWriteBuffer, size) != 0;
+
+    if (changed) {
+        std::swap(_icy.StreamTitleWriteBuffer, _icy.StreamTitleReadyBuffer);
+        _icy.StreamTitleSize = size;
+        _icy.StreamTitlePending = true;
     }
 
-    size = pendingSize;
-    if (buffer == nullptr || capacity < pendingSize) {
-        xSemaphoreGive(_icyMetadataMutex);
-        return false;
+    xSemaphoreGive(_icy.MetadataMutex);
+    resetIcyMetadataParser();
+}
+
+int AudioSourceStream::takeIcyStreamTitle(char *buffer, size_t capacity) {
+    if (_icy.MetadataMutex == nullptr || buffer == nullptr || capacity == 0) {
+        return -1;
     }
 
-    memcpy(buffer, _icyMetadataReadyBuffer, pendingSize);
-    _icyMetadataReadySize = 0;
-    xSemaphoreGive(_icyMetadataMutex);
-    return true;
+    if (xSemaphoreTake(_icy.MetadataMutex, portMAX_DELAY) != pdTRUE) {
+        return -1;
+    }
+
+    if (!_icy.StreamTitlePending) {
+        xSemaphoreGive(_icy.MetadataMutex);
+        return 0;
+    }
+
+    const size_t size = _icy.StreamTitleSize;
+
+    // One additional byte is required for the trailing NUL.
+    if (size + 1 > capacity) {
+        xSemaphoreGive(_icy.MetadataMutex);
+        return -1;
+    }
+
+    memcpy(buffer, _icy.StreamTitleReadyBuffer, size);
+    buffer[size] = '\0';
+    _icy.StreamTitlePending = false;
+    xSemaphoreGive(_icy.MetadataMutex);
+
+    return static_cast<int>(size);
 }
 
 AudioSourceStatus AudioSourceStream::read(uint8_t *buffer, size_t requested, size_t &received) {
@@ -125,7 +202,6 @@ AudioSourceStatus AudioSourceStream::read(uint8_t *buffer, size_t requested, siz
     size_t bytesToRead;
 
     portENTER_CRITICAL(&_bufferMux);
-
     bytesToRead = std::min(requested, _bufferedBytes);
     if (bytesToRead == 0) {
         const bool streamError = _streamError;
@@ -133,6 +209,7 @@ AudioSourceStatus AudioSourceStream::read(uint8_t *buffer, size_t requested, siz
         return streamError ? AudioSourceStatus::ERROR : AudioSourceStatus::WOULD_BLOCK;
     }
     readIndex = _readIndex;
+
     portEXIT_CRITICAL(&_bufferMux);
 
     const size_t firstChunk = std::min(bytesToRead, BUFFER_SIZE - readIndex);
@@ -143,11 +220,13 @@ AudioSourceStatus AudioSourceStream::read(uint8_t *buffer, size_t requested, siz
 
     portENTER_CRITICAL(&_bufferMux);
     _readIndex += bytesToRead;
-    if (_readIndex >= BUFFER_SIZE) _readIndex -= BUFFER_SIZE;
+
+    if (_readIndex >= BUFFER_SIZE) {
+        _readIndex -= BUFFER_SIZE;
+    }
     _bufferedBytes -= bytesToRead;
     _position += bytesToRead;
     portEXIT_CRITICAL(&_bufferMux);
-
     received = bytesToRead;
     return AudioSourceStatus::DATA;
 }
@@ -181,7 +260,6 @@ void AudioSourceStream::close() {
     }
 
     portENTER_CRITICAL(&_bufferMux);
-
     _stream = nullptr;
     _position = 0;
     _readIndex = 0;
@@ -189,40 +267,30 @@ void AudioSourceStream::close() {
     _bufferedBytes = 0;
     _lastDataMs = 0;
     _streamError = false;
-
     portEXIT_CRITICAL(&_bufferMux);
 
-    if (_icyMetadataMutex != nullptr) {
-        vSemaphoreDelete(_icyMetadataMutex);
-        _icyMetadataMutex = nullptr;
+    if (_icy.MetadataMutex != nullptr) {
+        vSemaphoreDelete(_icy.MetadataMutex);
+        _icy.MetadataMutex = nullptr;
     }
 
 #if defined(ARDUINO_ARCH_ESP32)
     heap_caps_free(_buffer);
-    heap_caps_free(_icyMetadataWriteBuffer);
-    heap_caps_free(_icyMetadataReadyBuffer);
+    heap_caps_free(_icy.StreamTitleWriteBuffer);
 #else
     free(_buffer);
-    free(_icyMetadataWriteBuffer);
-    free(_icyMetadataReadyBuffer);
+    free(_icy.StreamTitleWriteBuffer);
 #endif
 
     _buffer = nullptr;
-    _icyMetadataWriteBuffer = nullptr;
-    _icyMetadataReadyBuffer = nullptr;
-    _icyMetadataReadySize = 0;
-    _icyMetaInt = 0;
-    _icyAudioRemaining = 0;
-    _icyMetadataExpected = 0;
-    _icyMetadataReceived = 0;
-    _icyNeedLength = true;
+    _icy = {};
+    _icy.NeedLength = true;
 }
 
 bool AudioSourceStream::isOpen() const { return _stream != nullptr; }
 size_t AudioSourceStream::refillThreshold() const { return REFILLTRESHOLD; }
 size_t AudioSourceStream::fillSize() const { return REFILLTRESHOLD; }
 bool AudioSourceStream::fillToThreshold() const { return true; }
-
 Stream *AudioSourceStream::stream() { return _stream; }
 
 bool AudioSourceStream::checkNetworkTimeout() {
@@ -230,13 +298,8 @@ bool AudioSourceStream::checkNetworkTimeout() {
 
     portENTER_CRITICAL(&_bufferMux);
     const bool timedOut = now - _lastDataMs >= NETWORK_IDLE_TIMEOUT_MS;
-
-    if (timedOut) {
-        _streamError = true;
-    }
-
+    if (timedOut) _streamError = true;
     portEXIT_CRITICAL(&_bufferMux);
-
     return timedOut;
 }
 
@@ -244,12 +307,15 @@ size_t AudioSourceStream::bufferedBytes() const {
     portENTER_CRITICAL(&_bufferMux);
     const size_t buffered = _bufferedBytes;
     portEXIT_CRITICAL(&_bufferMux);
-
     return buffered;
 }
 
 void AudioSourceStream::producerTaskEntry(void *arg) { ((AudioSourceStream *)arg)->producerTaskLoop(); }
 void AudioSourceStream::producerTaskLoop() {
+    // Small temporary buffer for incremental ICY metadata parsing.
+    // The complete metadata block is never stored.
+    uint8_t metadataBuffer[ICY_METADATA_PARSE_CHUNK_SIZE];
+
     for (;;) {
         size_t writeIndex;
         size_t freeBytes;
@@ -269,23 +335,19 @@ void AudioSourceStream::producerTaskLoop() {
         freeBytes = std::min(BUFFER_SIZE - _bufferedBytes, BUFFER_SIZE - writeIndex);
         portEXIT_CRITICAL(&_bufferMux);
 
-        if (stopRequested) {
-            break;
-        }
-
-        if (freeBytes == 0) { //Puffer ist voll
+        if (stopRequested) break;
+        if (freeBytes == 0) { // Puffer ist voll
             vTaskDelay(pdMS_TO_TICKS(5));
             continue;
         }
 
         Stream *stream = _stream;
-
         if (stream == nullptr) {
             break;
         }
 
         const int available = stream->available();
-        if (available <= 0) { //No Data
+        if (available <= 0) { // No Data
             if (checkNetworkTimeout()) {
                 break;
             }
@@ -294,15 +356,15 @@ void AudioSourceStream::producerTaskLoop() {
             continue;
         }
 
-        if (_icyMetaInt > 0 && _icyAudioRemaining == 0) {
-            if (_icyNeedLength) {
+        if (_icy.MetaInt > 0 && _icy.AudioRemaining == 0) {
+            if (_icy.NeedLength) {
                 uint8_t lengthUnits = 0;
                 const size_t received = stream->readBytes((char *)&lengthUnits, sizeof(lengthUnits));
+
                 if (received == 0) {
                     if (checkNetworkTimeout()) {
                         break;
                     }
-
                     vTaskDelay(pdMS_TO_TICKS(5));
                     continue;
                 }
@@ -312,21 +374,24 @@ void AudioSourceStream::producerTaskLoop() {
                 _lastDataMs = now;
                 portEXIT_CRITICAL(&_bufferMux);
 
-                _icyMetadataExpected = lengthUnits * 16U;
-                _icyMetadataReceived = 0;
-                _icyNeedLength = false;
-                if (_icyMetadataExpected == 0) {
-                    _icyAudioRemaining = _icyMetaInt;
-                    _icyNeedLength = true;
+                _icy.MetadataExpected = lengthUnits * 16U;
+                _icy.MetadataReceived = 0;
+                _icy.NeedLength = false;
+                resetIcyMetadataParser();
+
+                if (_icy.MetadataExpected == 0) {
+                    _icy.AudioRemaining = _icy.MetaInt;
+                    _icy.NeedLength = true;
                 }
+
                 continue;
             }
 
-            const size_t metadataRemaining = _icyMetadataExpected - _icyMetadataReceived;
-            const size_t availableBytes = available;
-            const size_t metadataChunk = std::min(metadataRemaining, std::min(availableBytes, PRODUCER_CHUNK_SIZE));
-            const size_t received =
-                stream->readBytes((char *)(_icyMetadataWriteBuffer + _icyMetadataReceived), metadataChunk);
+            const size_t metadataRemaining = _icy.MetadataExpected - _icy.MetadataReceived;
+            const size_t availableBytes = (size_t)available;
+            const size_t metadataChunk =
+                std::min(metadataRemaining, std::min(availableBytes, ICY_METADATA_PARSE_CHUNK_SIZE));
+            const size_t received = stream->readBytes((char *)metadataBuffer, metadataChunk);
 
             if (received == 0) {
                 if (checkNetworkTimeout()) {
@@ -342,45 +407,38 @@ void AudioSourceStream::producerTaskLoop() {
             _lastDataMs = now;
             portEXIT_CRITICAL(&_bufferMux);
 
-            _icyMetadataReceived += received;
-            if (_icyMetadataReceived == _icyMetadataExpected) {
-                if (xSemaphoreTake(_icyMetadataMutex, portMAX_DELAY) != pdTRUE) {
-                    break;
-                }
-                std::swap(_icyMetadataWriteBuffer, _icyMetadataReadyBuffer);
-                _icyMetadataReadySize = _icyMetadataExpected;
-                xSemaphoreGive(_icyMetadataMutex);
+            parseIcyMetadata(metadataBuffer, received);
+            _icy.MetadataReceived += received;
 
-                _icyMetadataExpected = 0;
-                _icyMetadataReceived = 0;
-                _icyAudioRemaining = _icyMetaInt;
-                _icyNeedLength = true;
+            if (_icy.MetadataReceived == _icy.MetadataExpected) {
+                finishIcyMetadata();
+                _icy.MetadataExpected = 0;
+                _icy.MetadataReceived = 0;
+                _icy.AudioRemaining = _icy.MetaInt;
+                _icy.NeedLength = true;
             }
+
             continue;
         }
 
         /*
          * Read directly into the ring buffer.
          *
-         * The previous implementation first read into a temporary
-         * stack buffer and then copied the data into _buffer.
-         *
          * Because freeBytes is already limited to the contiguous
          * region up to BUFFER_SIZE, no wrap-around write can occur here.
          */
-        const size_t availableBytes = available;
+        const size_t availableBytes = static_cast<size_t>(available);
         size_t requested = std::min(freeBytes, availableBytes);
-        if (_icyMetaInt > 0) {
-            const size_t icyAudioRemaining = _icyAudioRemaining;
+        if (_icy.MetaInt > 0) {
+            const size_t icyAudioRemaining = _icy.AudioRemaining;
             requested = std::min(requested, icyAudioRemaining);
         }
-        const size_t received = stream->readBytes((char *)(_buffer + writeIndex), requested);
 
+        const size_t received = stream->readBytes((char *)(_buffer + writeIndex), requested);
         if (received == 0) {
             if (checkNetworkTimeout()) {
                 break;
             }
-
             vTaskDelay(pdMS_TO_TICKS(5));
             continue;
         }
@@ -389,10 +447,13 @@ void AudioSourceStream::producerTaskLoop() {
         portENTER_CRITICAL(&_bufferMux);
         _lastDataMs = now;
         _writeIndex += received;
-        if (_writeIndex == BUFFER_SIZE) _writeIndex = 0;
+        if (_writeIndex == BUFFER_SIZE) {
+            _writeIndex = 0;
+        }
+
         _bufferedBytes += received;
-        if (_icyMetaInt > 0) {
-            _icyAudioRemaining -= received;
+        if (_icy.MetaInt > 0) {
+            _icy.AudioRemaining -= received;
         }
         portEXIT_CRITICAL(&_bufferMux);
     }

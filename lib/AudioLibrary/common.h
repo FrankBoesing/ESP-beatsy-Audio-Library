@@ -13,9 +13,9 @@
 #define AUDIO_SAMPLE_RATE_EXACT 44100.0f
 #endif
 
-//Enable connections sorting feature
-#ifndef AUDIO_STREAM_SORT_IO
-#define AUDIO_STREAM_SORT_IO 1
+#ifdef AUDIO_SAMPLE_RATE
+#undef AUDIO_SAMPLE_RATE
+#define AUDIO_SAMPLE_RATE AUDIO_SAMPLE_RATE_EXACT
 #endif
 
 //Cores:

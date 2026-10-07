@@ -206,7 +206,7 @@ AudioStream::~AudioStream() {
 // =============================================================================
 OSIZE
 bool AudioStream::setSampleRate(float rate) {
-    if (!(rate > 0.0f) || !isfinite(rate)) {
+    if (!isfinite(rate) || rate <= 0.0f) {
         return false;
     }
 
@@ -229,6 +229,7 @@ bool AudioStream::setSampleRate(float rate) {
         }
     }
 
+    //ESP_LOGD("","Samplerate updated to %f", rate);
     return true;
 }
 
@@ -415,7 +416,7 @@ void AudioStream::disableUpdates(void) {
 OSIZE
 void AudioStream::enableUpdates(void) {
     if (audio_update_mutex != nullptr && xSemaphoreGiveRecursive(audio_update_mutex) != pdTRUE) {
-        Serial.println("AudioInterrupts called without a matching AudioNoInterrupts");
+        ESP_LOGE("","AudioInterrupts called without a matching AudioNoInterrupts");
     }
 }
 
