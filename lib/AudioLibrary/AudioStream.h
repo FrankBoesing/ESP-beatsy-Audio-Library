@@ -65,6 +65,10 @@ class AudioConnection {
     friend class AudioStream;
 
   protected:
+    // Internal variants used while audio_update_mutex is already held.
+    int disconnect_locked(void);
+    int connect_locked(void);
+
     AudioStream *src;
     AudioStream *dst;
 
@@ -92,7 +96,7 @@ class AudioConnection {
         static audio_block_t data[num];                                        \
         static uint32_t audio_memory_masks[AUDIO_MEMORY_MASK_WORDS(num)];      \
         AudioStream::initialize_memory(data, (num), audio_memory_masks,        \
-                                       AUDIO_MEMORY_MASK_WORDS(num));          \
+                                       AUDIO_MEMORY_MASK_WORDS(num));           \
     } while (0)
 
 // -----------------------------------------------------------------------------
@@ -103,8 +107,14 @@ class AudioStream {
   public:
     AudioStream(unsigned char ninput, audio_block_t **iqueue);
 
+#ifdef AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME
+    // The destructor removes the stream from the update graph and disconnects
+    // all attached AudioConnection objects. Do not destroy a stream from its
+    // own update() callback.
+    virtual ~AudioStream();
+#else
     virtual ~AudioStream() = default;
-
+#endif
     // -------------------------------------------------------------------------
     // Memory pool
     // -------------------------------------------------------------------------
@@ -129,11 +139,20 @@ class AudioStream {
     static uint16_t AudioMemoryUsageMax(void);
     static void AudioMemoryUsageMaxReset(void);
 
+    // Software-clocked sample rate. Hardware audio sources will be able to
+    // take over the update clock later without changing the AudioStream API.
+    static bool setSampleRate(float rate);
+    static float sampleRate(void);
+
+
     bool isActive(void) const {
         return active;
     }
 
     // Per-stream processor statistics.
+    //
+    // These remain part of the existing interface and are updated after the
+    // realtime graph traversal.
     uint32_t cpu_time_us = 0;
     uint32_t cpu_time_max_us = 0;
 
@@ -158,10 +177,7 @@ class AudioStream {
     // Audio timing / scheduler
     // -------------------------------------------------------------------------
 
-    // Software-clocked sample rate. Hardware audio sources will be able to
-    // take over the update clock later without changing the AudioStream API.
-    static bool setSampleRate(float rate);
-    static float sampleRate(void);
+
     static uint32_t blockPeriodUs(void);
 
     // Initializes the scheduler infrastructure. The current implementation
@@ -185,6 +201,7 @@ class AudioStream {
     virtual bool beginHardware() {
         return true;
     }
+
     friend class AudioConnection;
     friend void AudioInterrupts();
     friend void AudioNoInterrupts();
@@ -226,6 +243,15 @@ class AudioStream {
     static AudioStream *first_update;
     AudioStream *next_update;
 
+    // -------------------------------------------------------------------------
+    // Internal processor timing
+    //
+    // Raw cycle counts are collected during realtime processing. Conversion
+    // to microseconds is intentionally performed after the graph traversal.
+    // -------------------------------------------------------------------------
+
+    uint32_t cpu_time_cycles = 0;
+    uint32_t cpu_time_max_cycles = 0;
 
     // -------------------------------------------------------------------------
     // Internal helpers
@@ -256,6 +282,7 @@ class AudioStream {
     static bool external_update_clock;
     static float audio_sample_rate;
 };
+
 
 inline float AudioProcessorUsage() {
     return AudioStream::AudioProcessorUsageTotal();
@@ -289,4 +316,5 @@ inline void AudioInterrupts() {
 inline void AudioNoInterrupts() {
     AudioStream::disableUpdates();
 }
+
 #endif // AudioStream_h

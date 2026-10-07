@@ -9,26 +9,20 @@
 // =============================================================================
 
 audio_block_t *AudioStream::memory_pool = nullptr;
-
 uint16_t AudioStream::memory_pool_size = 0;
-
 uint32_t *AudioStream::memory_pool_available_mask = nullptr;
 uint16_t AudioStream::memory_pool_mask_words = 0;
-
 uint16_t AudioStream::memory_pool_first_mask = 0;
-
 uint16_t AudioStream::memory_used = 0;
 uint16_t AudioStream::memory_used_max = 0;
-
 uint32_t AudioStream::cpu_time_total_us = 0;
 uint32_t AudioStream::cpu_time_total_max_us = 0;
-
 AudioStream *AudioStream::first_update = nullptr;
 portMUX_TYPE AudioStream::audio_mux = portMUX_INITIALIZER_UNLOCKED;
-
 TaskHandle_t AudioStream::audio_task_handle = nullptr;
 SemaphoreHandle_t AudioStream::audio_update_mutex = nullptr;
 esp_timer_handle_t AudioStream::software_timer = nullptr;
+
 bool AudioStream::update_scheduled = false;
 bool AudioStream::external_update_clock = false;
 float AudioStream::audio_sample_rate = AUDIO_SAMPLE_RATE_EXACT;
@@ -99,9 +93,10 @@ AudioStream::AudioStream(unsigned char ninput, audio_block_t **iqueue)
 
     // Add stream to update list.
     //
-    // This mirrors the original AudioStream implementation. Stream objects
-    // are normally constructed during initialization before normal audio
-    // processing starts.
+    // The update mutex protects the list while the audio scheduler is running.
+    // Before the scheduler exists, disableUpdates() is a no-op, so construction
+    // still works during normal static initialization.
+    disableUpdates();
 
     portENTER_CRITICAL(&audio_mux);
 
@@ -118,7 +113,93 @@ AudioStream::AudioStream(unsigned char ninput, audio_block_t **iqueue)
     }
 
     portEXIT_CRITICAL(&audio_mux);
+
+    enableUpdates();
 }
+
+// =============================================================================
+// AudioStream destructor
+// =============================================================================
+#ifdef AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME
+OSIZE
+AudioStream::~AudioStream() {
+    // Graph changes are serialized through the same mutex used by the audio
+    // processing task. The mutex is recursive, so this is also safe when the
+    // caller already used AudioNoInterrupts().
+    //
+    // Do not destroy an AudioStream from its own update() callback. There is no
+    // useful way for a task to suspend itself until the current member function
+    // has returned, and the scheduler could otherwise continue with a dangling
+    // stream pointer.
+    disableUpdates();
+
+    // Disconnect every connection whose source or destination is this stream.
+    // We intentionally keep the existing graph representation and do a linear
+    // search here. Object lifetime changes are control-plane operations and are
+    // not part of the realtime path.
+    for (;;) {
+        AudioConnection *connection = nullptr;
+
+        for (AudioStream *stream = first_update; stream != nullptr && connection == nullptr;
+             stream = stream->next_update) {
+            for (AudioConnection *p = stream->destination_list; p != nullptr; p = p->next_dest) {
+                if (p->isConnected && (p->src == this || p->dst == this)) {
+                    connection = p;
+                    break;
+                }
+            }
+        }
+
+        if (connection == nullptr) {
+            break;
+        }
+
+        connection->disconnect_locked();
+
+        // The connection object may outlive the stream. Do not leave a dangling
+        // endpoint pointer behind. A later connection destructor can then safely
+        // call disconnect(), and the connection can be reused with new endpoints.
+        connection->src = nullptr;
+        connection->dst = nullptr;
+    }
+
+    // Release any block which is still queued at an input. Normally all input
+    // queues belonging to connections have already been cleared above, but
+    // clearing the whole array makes the object lifetime boundary explicit and
+    // robust against orphaned queue entries.
+    portENTER_CRITICAL(&audio_mux);
+
+    for (unsigned int i = 0; i < num_inputs; ++i) {
+        if (inputQueue[i] != nullptr) {
+            release_locked(inputQueue[i]);
+            inputQueue[i] = nullptr;
+        }
+    }
+
+    // Remove the stream from the scheduler update list.
+    if (first_update == this) {
+        first_update = next_update;
+    } else {
+        AudioStream *p = first_update;
+        while (p != nullptr && p->next_update != this) {
+            p = p->next_update;
+        }
+
+        if (p != nullptr) {
+            p->next_update = next_update;
+        }
+    }
+
+    next_update = nullptr;
+    destination_list = nullptr;
+    active = false;
+    numConnections = 0;
+
+    portEXIT_CRITICAL(&audio_mux);
+
+    enableUpdates();
+}
+#endif
 
 // =============================================================================
 // Audio timing / scheduler
@@ -285,7 +366,8 @@ void AudioStream::update_stop(void) {
         xTaskNotifyGive(task);
 
         // A running process_all_now() must finish before the task is deleted.
-        // The graph itself is never locked here.
+        // Graph changes use the same recursive mutex as the processing task, so
+        // they cannot race with a running graph traversal.
         bool processing;
 
         do {
@@ -362,9 +444,10 @@ void AudioStream::process_all_now(void) {
         return;
     }
 
-    // The graph is immutable while the audio task exists.
-    // Take scheduler state and graph head atomically, then traverse
-    // the realtime graph without further critical sections.
+    // The recursive update mutex serializes the realtime graph traversal with
+    // all graph modifications performed by connect(), disconnect(), stream
+    // construction and stream destruction. No graph lock is needed inside the
+    // realtime loop itself.
     portENTER_CRITICAL(&audio_mux);
 
     if (!update_scheduled) {
@@ -377,6 +460,13 @@ void AudioStream::process_all_now(void) {
     AudioStream *stream = first_update;
 
     portEXIT_CRITICAL(&audio_mux);
+
+    // -------------------------------------------------------------------------
+    // Realtime audio processing
+    //
+    // Only cycle counting is performed here. No division is needed.
+    // -------------------------------------------------------------------------
+
     const uint32_t total_start = esp_cpu_get_cycle_count();
 
     while (stream != nullptr) {
@@ -385,15 +475,22 @@ void AudioStream::process_all_now(void) {
             const uint32_t start = esp_cpu_get_cycle_count();
             stream->update();
             const uint32_t elapsed_cycles = esp_cpu_get_cycle_count() - start;
-            const uint32_t elapsed = elapsed_cycles / cpu_cycles_per_us;
-            stream->cpu_time_us = elapsed_cycles / cpu_cycles_per_us;
-            if (elapsed > stream->cpu_time_max_us) {
-                stream->cpu_time_max_us = elapsed;
+
+            stream->cpu_time_cycles = elapsed_cycles;
+            if (elapsed_cycles > stream->cpu_time_max_cycles) {
+                stream->cpu_time_max_cycles = elapsed_cycles;
             }
         }
 
         stream = stream->next_update;
     }
+
+    // -------------------------------------------------------------------------
+    // Stop total timing BEFORE converting per-stream cycle counts.
+    //
+    // Therefore AudioProcessorUsageTotal() does not include the diagnostic
+    // division overhead.
+    // -------------------------------------------------------------------------
 
     const uint32_t total_elapsed_cycles = esp_cpu_get_cycle_count() - total_start;
     const uint32_t total_elapsed = total_elapsed_cycles / cpu_cycles_per_us;
@@ -401,6 +498,7 @@ void AudioStream::process_all_now(void) {
     portENTER_CRITICAL(&audio_mux);
 
     cpu_time_total_us = total_elapsed;
+
     if (total_elapsed > cpu_time_total_max_us) {
         cpu_time_total_max_us = total_elapsed;
     }
@@ -408,6 +506,23 @@ void AudioStream::process_all_now(void) {
     audio_processing = false;
 
     portEXIT_CRITICAL(&audio_mux);
+
+    // -------------------------------------------------------------------------
+    // Convert per-stream cycle counts to microseconds.
+    //
+    // This is deliberately outside the realtime graph traversal.
+    // -------------------------------------------------------------------------
+
+    if (cpu_cycles_per_us != 0) {
+        for (stream = first_update; stream != nullptr; stream = stream->next_update) {
+            if (stream->active) {
+                stream->cpu_time_us = stream->cpu_time_cycles / cpu_cycles_per_us;
+
+                stream->cpu_time_max_us = stream->cpu_time_max_cycles / cpu_cycles_per_us;
+            }
+        }
+    }
+
     xSemaphoreGiveRecursive(audio_update_mutex);
 }
 
@@ -734,7 +849,10 @@ float AudioStream::AudioProcessorUsageMax(void) const {
 OSIZE
 void AudioStream::AudioProcessorUsageMaxReset(void) {
     portENTER_CRITICAL(&audio_mux);
+
+    cpu_time_max_cycles = cpu_time_cycles;
     cpu_time_max_us = cpu_time_us;
+
     portEXIT_CRITICAL(&audio_mux);
 }
 
@@ -810,6 +928,15 @@ AudioConnection::~AudioConnection() { disconnect(); }
 // =============================================================================
 
 int AudioConnection::connect(void) {
+    // Match the Teensy API model: a single connection operation is safe on its
+    // own, while callers can wrap several graph changes in AudioNoInterrupts().
+    AudioStream::disableUpdates();
+    const int result = connect_locked();
+    AudioStream::enableUpdates();
+    return result;
+}
+
+int AudioConnection::connect_locked(void) {
     if (isConnected) {
         return 1;
     }
@@ -824,15 +951,9 @@ int AudioConnection::connect(void) {
 
     portENTER_CRITICAL(&AudioStream::audio_mux);
 
-    // The realtime path traverses the graph without locks.
-    // Therefore connections cannot be changed while the audio task exists.
-    if (AudioStream::audio_task_handle != nullptr) {
-        portEXIT_CRITICAL(&AudioStream::audio_mux);
-        return 5; // Graph is locked while the audio task is active.
-    }
-
-    // Check whether the destination input is already used.
-
+    // Check whether the destination input is already used. The update mutex
+    // held by the caller prevents the realtime scheduler from traversing the
+    // graph while this search and modification are in progress.
     for (AudioStream *s = AudioStream::first_update; s != nullptr; s = s->next_update) {
         for (AudioConnection *p = s->destination_list; p != nullptr; p = p->next_dest) {
             if (p->dst == dst && p->dest_index == dest_index) {
@@ -843,7 +964,6 @@ int AudioConnection::connect(void) {
     }
 
     // Insert into source destination list.
-
     AudioConnection *p = src->destination_list;
 
     if (p == nullptr) {
@@ -895,6 +1015,15 @@ int AudioConnection::connect(AudioStream &source, unsigned char sourceOutput, Au
 // =============================================================================
 
 int AudioConnection::disconnect(void) {
+    // A single disconnect is safe by itself. For several related changes, the
+    // caller can hold AudioNoInterrupts() across all operations.
+    AudioStream::disableUpdates();
+    const int result = disconnect_locked();
+    AudioStream::enableUpdates();
+    return result;
+}
+
+int AudioConnection::disconnect_locked(void) {
     if (!isConnected) {
         return 1;
     }
@@ -908,13 +1037,6 @@ int AudioConnection::disconnect(void) {
     }
 
     portENTER_CRITICAL(&AudioStream::audio_mux);
-
-    // The realtime path traverses the graph without locks.
-    // Therefore connections cannot be changed while the audio task exists.
-    if (AudioStream::audio_task_handle != nullptr) {
-        portEXIT_CRITICAL(&AudioStream::audio_mux);
-        return 5; // Graph is locked while the audio task is active.
-    }
 
     // Remove this connection from the source list.
     AudioConnection *p = src->destination_list;
@@ -936,7 +1058,6 @@ int AudioConnection::disconnect(void) {
     }
 
     // Release any block that is still queued at the destination.
-
     audio_block_t *pending = dst->inputQueue[dest_index];
 
     if (pending != nullptr) {
@@ -945,7 +1066,6 @@ int AudioConnection::disconnect(void) {
     }
 
     // Update active state.
-
     if (src->numConnections > 0) {
         --src->numConnections;
     }

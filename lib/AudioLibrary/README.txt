@@ -138,3 +138,52 @@ idle tasks. Their priorities and core assignments are controlled by the
 framework/SDK configuration, not by this library. The `esp_timer` service
 delivers the software audio clock when software-clock mode is used; active I2S
 output uses the I2S DMA callback instead. The DMA callback is an ISR, not a task.
+
+
+-------------- AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME ---------------------------------------
+
+Default: Disabled
+
+Der Unterschied wird am deutlichsten bei einem dynamisch erzeugten AudioStream.
+Ohne AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME
+AudioSynthWaveform synth;
+AudioOutputI2S output;
+
+AudioConnection connection(synth, 0, output, 0);
+
+Das ist der normale Teensy-/bisherige Anwendungsfall: Die AudioStream-Objekte leben dauerhaft.
+Mit AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME
+auto *synth = new AudioSynthWaveform;
+auto *output = new AudioOutputI2S;
+
+auto *connection = new AudioConnection(*synth, 0, *output, 0);
+
+// ... Audio läuft ...
+
+AudioNoInterrupts();
+
+delete connection;   // Verbindung wird getrennt
+delete synth;        // aus first_update entfernt
+delete output;      // ebenfalls aus first_update entfernt
+
+AudioInterrupts();
+
+Der entscheidende Unterschied ist hier:
+delete synth;
+delete output;
+
+Ohne AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME würdest du damit die Objekte zwar freigeben, aber ihre Einträge in first_update blieben bestehen → der Scheduler würde später auf ungültige Objekte zeigen.
+Mit dem Makro werden sie beim Destruktor sauber aus dem Audio-Graph entfernt.
+Noch ein wichtiger Punkt
+Die Reihenfolge
+delete connection;
+delete synth;
+delete output;
+
+ist sinnvoll, weil die AudioConnection zuerst ihre Verbindung auflöst.
+Für deinen normalen Einsatz würde ich weiterhin einfach statische Objekte verwenden:
+AudioSynthWaveform synth;
+AudioMixer4 mixer;
+AudioOutputI2S output;
+
+und nur für spezielle dynamische Anwendungen AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME aktivieren.
