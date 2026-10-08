@@ -114,7 +114,7 @@ void AudioMixerN::update(void) {
     // ------------------------------------------------------------------------
 
     audio_block_t *inputs[AUDIO_MIXERN_MAX_INPUTS];
-    const float *activeGains[AUDIO_MIXERN_MAX_INPUTS];
+    float activeGains[AUDIO_MIXERN_MAX_INPUTS];
 
     unsigned int activeInputs = 0;
 
@@ -135,7 +135,7 @@ void AudioMixerN::update(void) {
         }
 
         inputs[activeInputs] = in;
-        activeGains[activeInputs] = &gains[channel];
+        activeGains[activeInputs] = gain;
 
         ++activeInputs;
     }
@@ -145,6 +145,16 @@ void AudioMixerN::update(void) {
     // ------------------------------------------------------------------------
 
     if (activeInputs == 0) return;
+
+    // ------------------------------------------------------------------------
+    // Fast-path: single active input with unity gain.
+    // ------------------------------------------------------------------------
+
+    if (activeInputs == 1 && activeGains[0] == 1.0f) {
+        transmit(inputs[0]);
+        release(inputs[0]);
+        return;
+    }
 
     // ------------------------------------------------------------------------
     // Allocate output.
@@ -163,21 +173,39 @@ void AudioMixerN::update(void) {
     // ------------------------------------------------------------------------
     // Float mixer.
     //
-    // No saturation occurs inside the channel loop.
-    // The complete sum remains available as float.
+    // Accumulate per sample in a temporary float buffer.
+    // Saturation is performed only once at the final PCM16 boundary.
     // ------------------------------------------------------------------------
 
-    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        float sum = 0.0f;
+    float accum[AUDIO_BLOCK_SAMPLES];
+
+    // First channel initializes the accumulation buffer.
+    const float g0 = activeGains[0];
+    const int16_t *src0 = inputs[0]->data;
 
 #pragma GCC unroll 4
-        for (unsigned int channel = 0; channel < activeInputs; ++channel) {
-            sum += (float)inputs[channel]->data[i] * *activeGains[channel];
-        }
+    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        accum[i] = (float)src0[i] * g0;
+    }
 
-        // --------------------------------------------------------------------
-        // ONE saturation operation at the final PCM16 boundary.
-        // --------------------------------------------------------------------
+    // Remaining channels are accumulated into the float buffer.
+    for (unsigned int channel = 1; channel < activeInputs; ++channel) {
+        const float g = activeGains[channel];
+        const int16_t *src = inputs[channel]->data;
+
+#pragma GCC unroll 4
+        for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            accum[i] += (float)src[i] * g;
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // ONE saturation operation at the final PCM16 boundary.
+    // ------------------------------------------------------------------------
+
+#pragma GCC unroll 4
+    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        float sum = accum[i];
 
         if (sum > 32767.0f)
             sum = 32767.0f;
@@ -202,7 +230,6 @@ void AudioMixerN::update(void) {
     transmit(out);
     release(out);
 }
-
 // ============================================================================
 // Existing AudioMixer4 implementation
 // ============================================================================

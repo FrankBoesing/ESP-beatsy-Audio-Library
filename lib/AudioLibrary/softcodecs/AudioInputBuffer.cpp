@@ -196,30 +196,23 @@ bool AudioInputBuffer::commitWrite(size_t written) {
     }
 
     if (written > write_length) {
-        write_acquired = false;
-        write_start = 0;
-        write_length = 0;
+        resetWriteLock(); // Neue Hilfsfunktion (siehe unten)
         return false;
     }
 
     if (written == 0) {
-        write_acquired = false;
-        write_start = 0;
-        write_length = 0;
+        resetWriteLock();
         return true;
     }
 
     if (region_a_length + region_b_length == 0) {
         region_a_start = write_start;
         region_a_length = written;
-    } else
-    if (region_b_length > 0) {
+    } else if (region_b_length > 0) {
         const size_t expected = region_b_start + region_b_length;
 
         if (write_start != expected) {
-            write_acquired = false;
-            write_start = 0;
-            write_length = 0;
+            resetWriteLock();
             return false;
         }
 
@@ -233,18 +226,14 @@ bool AudioInputBuffer::commitWrite(size_t written) {
             region_b_start = 0;
             region_b_length = written;
         } else {
-            write_acquired = false;
-            write_start = 0;
-            write_length = 0;
+            resetWriteLock();
             return false;
         }
     }
 
-    write_acquired = false;
-    write_start = 0;
-    write_length = 0;
-
-    return validate();
+    resetWriteLock();
+    //return validate();
+    return true;
 }
 
 AudioSourceStatus AudioInputBuffer::fill(AudioSource &source) {
@@ -314,7 +303,6 @@ AudioSourceStatus AudioInputBuffer::fill(AudioSource &source) {
 
 size_t AudioInputBuffer::availableRead() const {
     return region_a_length + region_b_length;
-    ;
 }
 
 size_t AudioInputBuffer::availableWrite() const {
