@@ -27,9 +27,9 @@
 class AudioControlES8311 : public AudioControl {
   public:
     struct Pins {
-        int8_t sda = 16;
-        int8_t scl = 15;
-        int8_t pa_enable = 1; // -1 = no PA
+        int8_t sda;
+        int8_t scl;
+        int8_t pa_enable; // -1 = no PA
     };
 
     AudioControlES8311();

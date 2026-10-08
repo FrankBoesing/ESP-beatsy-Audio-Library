@@ -112,7 +112,8 @@ AudioOutputI2S audioOut({
     PIN_I2S_MLCK  // MCLK
 });
 //AudioControlSGTL5000 codec;
-AudioControlES8388 codec({PIN_I2C_SCLK, PIN_I2C_SDA, PIN_AMPLIFIER});
+//AudioControlES8388 codec({ PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER});
+AudioControlES8311 codec({ PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER});
 // Mix all channels to both the outputs
 AudioConnection patchCord33(mixer1, 0, mixerLeft, 0);
 AudioConnection patchCord34(mixer2, 0, mixerLeft, 1);

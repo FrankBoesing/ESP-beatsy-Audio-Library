@@ -24,11 +24,11 @@ constexpr AudioControlES8311::ClockCoeff AudioControlES8311::CLOCK_COEFFS[] = {
     {48000,  0x01, 0x00, 0x01, 0x01, 0x00, 0x00, 0xff, 0x04, 0x10, 0x10 },
     {64000,  0x01, 0x00, 0x01, 0x01, 0x00, 0x00, 0xff, 0x04, 0x10, 0x10 },
 };
-
+/*
 AudioControlES8311::AudioControlES8311()
     : pins_{16, 15, 1}, wire_(&Wire), i2cAddress_(ES8311_ADDRESS),
       initialized_(false) {}
-
+*/
 AudioControlES8311::AudioControlES8311(const Pins &pins)
     : pins_(pins), wire_(&Wire), i2cAddress_(ES8311_ADDRESS),
       initialized_(false) {}
