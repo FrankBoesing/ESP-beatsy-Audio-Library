@@ -45,15 +45,9 @@ class AudioOutputI2S : public AudioStream {
     bool begin(const Pins &pins);
     void end();
 
-    bool isRunning() const {
-        return running;
-    }
-    uint32_t txCallbackCount() const {
-        return txCallbackCountValue;
-    }
-    const Pins &pins() const {
-        return i2sPins;
-    }
+    bool isRunning() const { return running; }
+    uint32_t txCallbackCount() const { return txCallbackCountValue; }
+    const Pins &pins() const { return i2sPins; }
     bool setSampleRate(float sampleRate);
 
   protected:
@@ -72,7 +66,7 @@ class AudioOutputI2S : public AudioStream {
     static constexpr uint16_t DMA_DESC_NUM = 6;
     static constexpr uint16_t DMA_FRAME_NUM = AUDIO_BLOCK_SAMPLES;
 
-    Pins i2sPins = {-1,-1,-1,-1};
+    Pins i2sPins = {-1, -1, -1, -1};
 
     i2s_chan_handle_t txHandle = nullptr;
     i2s_chan_config_t chanConfig = {};
@@ -86,9 +80,7 @@ class AudioOutputI2S : public AudioStream {
     volatile uint32_t txCallbackCountValue = 0;
     bool externalClockActive = false;
 
-    static bool IRAM_ATTR onI2STransmit(i2s_chan_handle_t channel,
-                                        i2s_event_data_t *event,
-                                        void *userContext);
+    static bool IRAM_ATTR onI2STransmit(i2s_chan_handle_t channel, i2s_event_data_t *event, void *userContext);
     static void txTaskEntry(void *arg);
     void txTaskLoop();
 

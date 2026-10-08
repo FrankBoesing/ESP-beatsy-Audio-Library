@@ -85,4 +85,10 @@ class AudioInputBuffer {
     uint8_t *getWriteRegion(size_t &length);
 
     bool validate() const;
+
+    inline void resetWriteLock() {
+        write_acquired = false;
+        write_start = 0;
+        write_length = 0;
+    }
 };
