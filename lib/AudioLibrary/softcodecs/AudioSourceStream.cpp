@@ -83,6 +83,7 @@ bool AudioSourceStream::open(Stream &stream, uint32_t icyMetaInt) {
     return true;
 }
 
+OSIZE
 void AudioSourceStream::resetIcyMetadataParser() {
     _icy.State = IcyParseState::Search;
     _icy.KeyMatch = 0;
@@ -443,18 +444,17 @@ void AudioSourceStream::producerTaskLoop() {
             continue;
         }
 
+        if (_icy.MetaInt > 0) {
+            _icy.AudioRemaining -= received;
+        }
         uint32_t now = millis();
         portENTER_CRITICAL(&_bufferMux);
         _lastDataMs = now;
         _writeIndex += received;
-        if (_writeIndex == BUFFER_SIZE) {
+        if (_writeIndex >= BUFFER_SIZE) {
             _writeIndex = 0;
         }
-
         _bufferedBytes += received;
-        if (_icy.MetaInt > 0) {
-            _icy.AudioRemaining -= received;
-        }
         portEXIT_CRITICAL(&_bufferMux);
     }
 
