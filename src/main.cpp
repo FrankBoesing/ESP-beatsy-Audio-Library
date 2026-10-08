@@ -10,14 +10,15 @@
 #include "Audio.h"
 #include "softcodecs/AudioSourceStream.h"
 #include "secrets.h"
+#include "radiohelpers.h"
 
 const char TAG[] = "MAIN";
 
-//constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
+constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
 //constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/mid/aac/stream.aac";
 //constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac";
 //constexpr char STREAM_URL[] = "https://wdr-wdr2-rheinruhr.icecastssl.wdr.de/wdr/wdr2/rheinruhr/mp3/128/stream.mp3";
-constexpr char STREAM_URL[] = "https://mp3.ffh.de/radioffh/hqlivestream.aac";
+//constexpr char STREAM_URL[] = "https://mp3.ffh.de/radioffh/hqlivestream.aac";
 
 AudioPlayMp3 *mp3 = nullptr;
 AudioPlayAac *aac = nullptr;
@@ -43,29 +44,7 @@ AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER
 AudioConnection *patchCordLeft = nullptr;
 AudioConnection *patchCordRight = nullptr;
 
-enum class AudioCodec : uint8_t { Unknown, MP3, AAC, Opus };
-AudioCodec selectedCodec = AudioCodec::Unknown;
-
-AudioCodec detectCodec(HTTPClient &http) {
-    struct ctype {
-        const char *str;
-        AudioCodec codec;
-    };
-    static constexpr ctype contenTypes[] = {
-        {str : "audio/aac", codec : AudioCodec::AAC},  {str : "audio/aacp", codec : AudioCodec::AAC},
-        {str : "audio/ogg", codec : AudioCodec::Opus}, {str : "application/ogg", codec : AudioCodec::Opus},
-        {str : "audio/mpeg", codec : AudioCodec::MP3},
-    };
-
-    String contentType = http.header("content-type");
-    const char *p = contentType.c_str();
-
-    for (const auto &type : contenTypes) {
-        if (strncasecmp(p, type.str, sizeof(type.str) - 1) == 0) return type.codec;
-    }
-
-    return AudioCodec::Unknown;
-}
+Radio::AudioCodec selectedCodec = Radio::AudioCodec::Unknown;
 
 bool onStreamSampleRate(uint32_t rate, void *) {
     ESP_LOGI(TAG, "Switching output sample rate to %u Hz", (unsigned)rate);
@@ -137,7 +116,7 @@ void setup() {
     if (!codec.enable()) {
         stopWithError("ERROR: codec initialization failed");
     }
-    codec.volume(0.7f);
+    codec.volume(0.6f);
 
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASS);
@@ -165,17 +144,13 @@ void setup() {
         stopWithError("ERROR: Stream request failed");
     }
 
-    selectedCodec = detectCodec(http);
-    if (selectedCodec == AudioCodec::Unknown) {
-        ESP_LOGD(TAG, "Unsupported stream content type: %s", http.header("content-type").c_str());
+    selectedCodec = Radio::detectCodec(http); //see radiohelpers.h
+    if (selectedCodec == Radio::AudioCodec::Unknown) {
         http.end();
         stopWithError("ERROR: Could not detect stream codec");
     }
 
-    const char *codecName = selectedCodec == AudioCodec::MP3 ? "MP3" : "AAC";
-    ESP_LOGI(TAG, "Detected stream codec: %s", codecName);
-
-    if (selectedCodec == AudioCodec::MP3) {
+    if (selectedCodec == Radio::AudioCodec::MP3) {
         mp3 = new AudioPlayMp3();
         if (mp3 == nullptr) {
             http.end();
@@ -213,14 +188,14 @@ void setup() {
         stopWithError("ERROR: Stream prebuffer timed out");
     }
 
-    const bool playbackStarted = selectedCodec == AudioCodec::MP3 ? mp3->play(audioSource) : aac->play(audioSource);
+    const bool playbackStarted = selectedCodec == Radio::AudioCodec::MP3 ? mp3->play(audioSource) : aac->play(audioSource);
     if (!playbackStarted) {
         audioSource.close();
         http.end();
         stopWithError("ERROR: Stream playback could not be started");
     }
 
-    ESP_LOGI(TAG, "%s stream playback started", codecName);
+    ESP_LOGI(TAG, "Stream playback started");
     printFreeRam();
 }
 
@@ -239,17 +214,17 @@ void loop() {
         const float core0Usage = AudioStream::processorUsage(0);
         const float core1Usage = AudioStream::processorUsage(1);
 
-        const bool isPlaying = selectedCodec == AudioCodec::MP3 ? mp3->isPlaying() : aac->isPlaying();
-        const int decoderError = selectedCodec == AudioCodec::MP3 ? mp3->lastError() : aac->lastError();
-        const char *codecName = selectedCodec == AudioCodec::MP3 ? "MP3" : "AAC";
+        const bool isPlaying = selectedCodec == Radio::AudioCodec::MP3 ? mp3->isPlaying() : aac->isPlaying();
+        const int decoderError = selectedCodec == Radio::AudioCodec::MP3 ? mp3->lastError() : aac->lastError();
+        const char *codecName = Radio::codecName(selectedCodec);
         ESP_LOGI(TAG, "Wi-Fi: %s (RSSI %d dBm), %s: %s (error %d)",
                  WiFi.status() == WL_CONNECTED ? "connected" : "disconnected", WiFi.RSSI(), codecName,
                  isPlaying ? "playing" : "waiting", decoderError);
 #if SOFTCODEC_METRICS
-        if (selectedCodec == AudioCodec::MP3) {
+        if (selectedCodec == Radio::AudioCodec::MP3) {
             ESP_LOGI(TAG, "Decoder load: avg %.2f%%, max %.2f%%", mp3->decodeProcessorUsage(),
                      mp3->decodeProcessorUsageMax());
-        } else if (selectedCodec == AudioCodec::AAC) {
+        } else if (selectedCodec == Radio::AudioCodec::AAC) {
             ESP_LOGI(TAG, "Decoder load: avg %.2f%%, max %.2f%%", aac->decodeProcessorUsage(),
                      aac->decodeProcessorUsageMax());
         }
