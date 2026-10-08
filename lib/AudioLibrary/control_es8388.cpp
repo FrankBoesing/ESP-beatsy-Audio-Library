@@ -57,7 +57,7 @@ bool AudioControlES8388::enable() {
 
     if (pins_.pa_enable >= 0) {
         pinMode(pins_.pa_enable, OUTPUT);
-        digitalWrite(pins_.pa_enable, LOW);
+        digitalWrite(pins_.pa_enable, !pins_.pa_active); //pa off
     }
 
     wire_->begin(pins_.sda, pins_.scl, ES8388_I2C_FREQUENCY);
@@ -130,7 +130,7 @@ bool AudioControlES8388::enable() {
     if (pins_.pa_enable >= 0) {
         // The I2S stream is already running with silence; let the DAC ramp before enabling the PA.
         delay(50);
-        digitalWrite(pins_.pa_enable, HIGH);
+        digitalWrite(pins_.pa_enable, pins_.pa_active); //pa on;
     }
 
     initialized_ = true;
@@ -150,7 +150,7 @@ bool AudioControlES8388::disable() {
 
     if (pins_.pa_enable >= 0) {
         pinMode(pins_.pa_enable, OUTPUT);
-        digitalWrite(pins_.pa_enable, LOW);
+        digitalWrite(pins_.pa_enable, !pins_.pa_active);
     }
 
     initialized_ = false;

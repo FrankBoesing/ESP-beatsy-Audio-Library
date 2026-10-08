@@ -162,14 +162,14 @@ bool AudioControlES8311::enable(uint32_t sampleRate) {
         return false;
     }
 
-    // Standardwerte: 0 dB Ausgangslautstaerke, nicht stummgeschaltet
-    ok &= volume(1.0f);
+    // / Standardlautstaerke: 70 %, nicht stummgeschaltet
+    ok &= volume(0.7f);
     ok &= unmute();
 
-    // Power Amplifier des Boards einschalten (aktiv HIGH)
+    // Power Amplifier des Boards einschalten
     if (pins_.pa_enable >= 0) {
         pinMode(pins_.pa_enable, OUTPUT);
-        digitalWrite(pins_.pa_enable, HIGH);
+        digitalWrite(pins_.pa_enable, pins_.pa_active);
     }
 
     initialized_ = ok;
@@ -187,7 +187,7 @@ bool AudioControlES8311::disable() {
 
     if (pins_.pa_enable >= 0) {
         pinMode(pins_.pa_enable, OUTPUT);
-        digitalWrite(pins_.pa_enable, LOW);
+        digitalWrite(pins_.pa_enable, !pins_.pa_active);
     }
 
     initialized_ = false;
