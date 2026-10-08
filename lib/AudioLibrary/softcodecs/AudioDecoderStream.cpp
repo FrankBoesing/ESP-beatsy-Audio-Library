@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cstring>
 
-
 constexpr const char *TAG = "AudioDecoderStream";
 
 AudioDecoderStream::AudioDecoderStream(size_t pcmBufferSamples)
@@ -14,9 +13,7 @@ AudioDecoderStream::AudioDecoderStream(size_t pcmBufferSamples)
      */
 }
 
-AudioDecoderStream::~AudioDecoderStream() {
-    stopDecoderTask();
-}
+AudioDecoderStream::~AudioDecoderStream() { stopDecoderTask(); }
 
 OSIZE
 bool AudioDecoderStream::allocatePcmBuffers() {
@@ -28,7 +25,7 @@ bool AudioDecoderStream::allocatePcmBuffers() {
 
     for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
 #if defined(ARDUINO_ARCH_ESP32)
-      //  _pcm[i] = (int16_t *)(heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+        //  _pcm[i] = (int16_t *)(heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         _pcm[i] = (int16_t *)(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
 
 #else
@@ -65,14 +62,13 @@ OSIZE
 void AudioDecoderStream::clearDecoderState() {
     portENTER_CRITICAL(&_decoderMux);
 
-    _pcmState[0] = PCM_FREE;
-    _pcmState[1] = PCM_FREE;
-    _pcmSamples[0] = 0;
-    _pcmSamples[1] = 0;
-    _pcmSeq[0] = 0;
-    _pcmSeq[1] = 0;
-    _publishCounter = 0;
+    for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
+        _pcmState[i] = PCM_FREE;
+        _pcmSamples[i] = 0;
+        _pcmSeq[i] = 0;
+    }
 
+    _publishCounter = 0;
     _readBuffer = -1;
     _readPosition = 0;
 
@@ -133,8 +129,8 @@ bool AudioDecoderStream::startDecoderTask() {
         return false;
     }
 
-    ESP_LOGV(TAG, "decoder task started: core=%d, priority=%u, PCM samples/buffer=%u",
-            DECODER_TASK_CORE, DECODER_TASK_PRIORITY, _pcmBufferSamples);
+    ESP_LOGV(TAG, "decoder task started: core=%d, priority=%u, PCM samples/buffer=%u", DECODER_TASK_CORE,
+             DECODER_TASK_PRIORITY, _pcmBufferSamples);
 
     return true;
 }
@@ -300,21 +296,13 @@ void AudioDecoderStream::setDecoderFinished(int errorCode) {
     portEXIT_CRITICAL(&_decoderMux);
 }
 
-bool AudioDecoderStream::decoderTaskRunning() const {
-    return _decoderTaskRunning;
-}
+bool AudioDecoderStream::decoderTaskRunning() const { return _decoderTaskRunning; }
 
-bool AudioDecoderStream::decoderFinished() const {
-    return _decoderFinished;
-}
+bool AudioDecoderStream::decoderFinished() const { return _decoderFinished; }
 
-int AudioDecoderStream::decoderError() const {
-    return _decoderError;
-}
+int AudioDecoderStream::decoderError() const { return _decoderError; }
 
-void AudioDecoderStream::decoderTaskEntry(void *arg) {
-    ((AudioDecoderStream *)arg)->decoderTaskLoop();
-}
+void AudioDecoderStream::decoderTaskEntry(void *arg) { ((AudioDecoderStream *)arg)->decoderTaskLoop(); }
 
 OSPEED
 void AudioDecoderStream::decoderTaskLoop() {
@@ -466,7 +454,7 @@ void AudioDecoderStream::update() {
         const size_t frames = std::min(availableFrames, AUDIO_BLOCK_SAMPLES - outputFrames);
         const size_t bytes = frames * sizeof(int16_t);
         memcpy(left->data + outputFrames, _pcm[index] + _readPosition, bytes);
-        memcpy(right->data, _pcm[index] + _readPosition + totalFrames, bytes);
+        memcpy(right->data + outputFrames, _pcm[index] + _readPosition + totalFrames, bytes);
 
         _readPosition += frames;
         outputFrames += frames;
@@ -493,9 +481,15 @@ void AudioDecoderStream::update() {
     _samplesPlayed += AUDIO_BLOCK_SAMPLES;
 
     bool finishNow = false;
-
     portENTER_CRITICAL(&_decoderMux);
-    if (_decoderFinished && _readBuffer < 0 && _pcmState[0] != PCM_READY && _pcmState[1] != PCM_READY) {
+    bool anyReady = false;
+    for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
+        if (_pcmState[i] == PCM_READY) {
+            anyReady = true;
+            break;
+        }
+    }
+    if (_decoderFinished && _readBuffer < 0 && !anyReady) {
         finishNow = true;
     }
     _updateRunning = false;
