@@ -24,6 +24,7 @@ class AudioControlES8388 : public AudioControl {
         int8_t sda;
         int8_t scl;
         int8_t pa_enable; // -1 = no PA
+        bool pa_active; //active high/low
     };
 
     //AudioControlES8388();
