@@ -5298,14 +5298,15 @@ int32_t AACDecoder::DecodeSBRData(int32_t chBase, int16_t *outbuf) {
         GenerateHighFreq(sbrGrid, sbrFreq, sbrChan, ch);
 
         /* restore SBR bands that were cleared before patch generation (time slots 0, 1 no longer needed) */
-        /**/
+        /*
         for (k = sbrFreq->kStartPrev; k < sbrFreq->kStart; k++) {
             for (l = HF_ADJ; l < sbrGrid->envTimeBorder[0] + HF_ADJ; l++) {
                 m_PSInfoSBR->XBuf[l][k][0] = m_PSInfoSBR->XBufDelay[chBase + ch][l][k][0];
                 m_PSInfoSBR->XBuf[l][k][1] = m_PSInfoSBR->XBufDelay[chBase + ch][l][k][1];
             }
         }
-        */ for (l = HF_ADJ; l < endL; l++) { //fb
+        */
+       for (l = HF_ADJ; l < endL; l++) { //fb
             memcpy(&XBuf[l][kStartPrev][0], &XBufDelay[chBase + ch][l][kStartPrev][0],
                    (kStart - kStartPrev) * 2 * sizeof(int32_t));
         }
