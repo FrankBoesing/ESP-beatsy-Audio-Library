@@ -17,6 +17,7 @@ const char TAG[] = "MAIN";
 constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/mid/aac/stream.aac";
 //constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac";
 //constexpr char STREAM_URL[] = "https://wdr-wdr2-rheinruhr.icecastssl.wdr.de/wdr/wdr2/rheinruhr/mp3/128/stream.mp3";
+//http://mp3.ffh.de/radioffh/hqlivestream.aac
 
 AudioPlayMp3 *mp3 = nullptr;
 AudioPlayAac *aac = nullptr;
