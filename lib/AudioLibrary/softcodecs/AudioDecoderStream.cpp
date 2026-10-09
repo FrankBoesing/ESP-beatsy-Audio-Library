@@ -7,7 +7,7 @@
 constexpr const char *TAG = "AudioDecoderStream";
 
 AudioDecoderStream::AudioDecoderStream(size_t pcmBufferSamples)
-    : AudioStream(0, nullptr), _pcmBufferSamples(pcmBufferSamples) {
+    : AudioPlayer(), _pcmBufferSamples(pcmBufferSamples) {
     /*
      * No task creation and no decoding here.
      */

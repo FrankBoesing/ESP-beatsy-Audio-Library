@@ -2,7 +2,7 @@
 #define play_sd_wav_h_
 
 #include <Arduino.h>
-#include "AudioStream.h"
+#include "AudioPlayer.h"
 #include "softcodecs/AudioSource.h"
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -10,11 +10,13 @@
 #include <SD_MMC.h>
 #endif
 
-class AudioPlaySdWav : public AudioStream {
+class AudioPlaySdWav : public AudioPlayer {
   public:
+    static constexpr const char *MIME_TYPES[] = {/*"audio/wav", "audio/x-wav"*/};
+    static constexpr AudioPlayerInfo INFO = {AudioCodec::WAV, "WAV", MIME_TYPES,
+                                             sizeof(MIME_TYPES) / sizeof(MIME_TYPES[0])};
     AudioPlaySdWav()
-        : AudioStream(0, nullptr), state(STOPPED), source(nullptr),
-          own_source(false), block_left(nullptr), block_right(nullptr) {
+        : AudioPlayer(), state(STOPPED), source(nullptr), own_source(false), block_left(nullptr), block_right(nullptr) {
         begin();
     }
 
@@ -31,17 +33,20 @@ class AudioPlaySdWav : public AudioStream {
 #endif
 
     // Generische AudioSource
-    bool play(AudioSource &source);
-
-    void stop();
+    bool play(AudioSource &source) override;
+    void stop() override;
     void togglePlayPause();
 
-    bool isPlaying();
+    bool isPlaying() const override;
     bool isPaused();
     bool isStopped();
 
-    uint32_t positionMillis();
-    uint32_t lengthMillis();
+    uint32_t positionMillis() const override;
+    uint32_t lengthMillis() const override;
+
+    const AudioPlayerInfo &info() const override {
+        return INFO;
+    }
 
     void update() override;
 
