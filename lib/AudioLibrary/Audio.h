@@ -10,7 +10,9 @@
 #include "analyze_peak.h"
 #include "control_es8311.h"
 #include "control_es8388.h"
+#include "effect_delay.h"
 #include "effect_envelope.h"
+#include "effect_fade.h"
 #include "effect_granular.h"
 #include "effect_multiply.h"
 #include "filter_biquad.h"
@@ -23,6 +25,7 @@
 #include "play_queue.h"
 #include "play_sd_wav.h"
 #include "synth_dc.h"
+#include "synth_sine.h"
 #include "synth_whitenoise.h"
 #include "synth_waveform.h"
 

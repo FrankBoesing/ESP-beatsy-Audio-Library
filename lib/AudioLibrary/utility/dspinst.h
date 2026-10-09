@@ -197,4 +197,29 @@ static inline int16_t cos_q15(int16_t x) {
     return (int16_t)(s0 + (((s1 - s0) * (int32_t)(phase & 0x3F)) >> 6));
 }
 
+
+// High-resolution phase lookup using the 512-entry Q15 sine table.
+//
+// Input:
+//   phase: 32-bit phase accumulator; one complete turn = 2^32
+//
+// Output:
+//   Interpolated Q15 table value with 16 fractional bits.
+//   The result is in Q15.16 format.
+//
+// Keeping the interpolation fraction avoids quantizing the phase
+// to 15 bits before generating the audio sample.
+static inline int32_t sin_q15_phase_q16(uint32_t phase)
+    __attribute__((always_inline, unused));
+
+static inline int32_t sin_q15_phase_q16(uint32_t phase) {
+    const uint32_t index = phase >> 23;
+    const int32_t scale = (phase >> 7) & 0xFFFF;
+
+    const int32_t s0 = sinTable_q15[index];
+    const int32_t s1 = sinTable_q15[index + 1];
+
+    return s0 * (0x10000 - scale) + s1 * scale;
+}
+
 #endif
