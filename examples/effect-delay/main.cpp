@@ -27,8 +27,16 @@ AudioConnection          patchCord5(delay1, 1, mixer1, 1);
 AudioConnection          patchCord6(delay1, 2, mixer1, 2);
 AudioConnection          patchCord7(delay1, 3, mixer1, 3);
 AudioConnection          patchCord8(mixer1, 0, i2s1, 1);
+
 //AudioControlSGTL5000     sgtl5000_1;     //xy=195,272
-AudioControl_ES8388
+#if defined(AUDIO_CODEC_ES8388)
+AudioControlES8388 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER_ACTIVE});
+#elif defined(AUDIO_CODEC_ES8311)
+AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER_ACTIVE});
+#else
+#error "AUDIO_CODEC not defined"
+#endif
+
 // GUItool: end automatically generated code
 
 void setup() {
