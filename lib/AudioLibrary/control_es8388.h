@@ -48,6 +48,9 @@ class AudioControlES8388 : public AudioControl {
         return i2cAddress_;
     }
 
+    //Codec is stereo:
+    constexpr int channels() { return 2;};
+
 #include "control_es8388_regs.h"
 
   private:

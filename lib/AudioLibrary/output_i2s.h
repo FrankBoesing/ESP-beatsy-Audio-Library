@@ -49,8 +49,10 @@ class AudioOutputI2S : public AudioStream {
     uint32_t txCallbackCount() const { return txCallbackCountValue; }
     const Pins &pins() const { return i2sPins; }
     bool setSampleRate(float sampleRate);
+    bool setChannelCount(uint channels);
 
   protected:
+
     void update() override;
     bool beginHardware() override;
 
@@ -67,6 +69,7 @@ class AudioOutputI2S : public AudioStream {
     static constexpr uint16_t DMA_FRAME_NUM = AUDIO_BLOCK_SAMPLES;
 
     Pins i2sPins = {-1, -1, -1, -1};
+    uint numChannels = 2;
 
     i2s_chan_handle_t txHandle = nullptr;
     i2s_chan_config_t chanConfig = {};

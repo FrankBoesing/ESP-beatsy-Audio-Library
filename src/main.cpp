@@ -222,6 +222,7 @@ void setup() {
     }
 
     codec.volume(0.6f);
+    i2s.setChannelCount(codec.channels()); //i.e.s es8311 is mono
 
     // Wi-Fi
     WiFi.mode(WIFI_STA);
