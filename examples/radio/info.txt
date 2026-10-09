@@ -1,0 +1,311 @@
+
+
+Der aktuelle code unterstüzt keine weiterleitung von http auf https
+Das zu Realiseren ist ein bischen aufwändiger:
+
+
+
+bool isHttpUrl(const String &url) {
+    return strncasecmp(url.c_str(), "http://", 7) == 0;
+}
+
+bool isHttpsUrl(const String &url) {
+    return strncasecmp(url.c_str(), "https://", 8) == 0;
+}
+
+String normalizeHttpUrl(String url) {
+    url.trim();
+
+    // HTTPClient erwartet das Protokoll in Kleinschreibung.
+    if (isHttpsUrl(url)) {
+        return String("https://") + url.substring(8);
+    }
+
+    if (isHttpUrl(url)) {
+        return String("http://") + url.substring(7);
+    }
+
+    return String();
+}
+
+String normalizeUrlPath(const String &path) {
+    String result = "/";
+    const bool trailingSlash = path.endsWith("/");
+    size_t pos = 1;
+
+    while (pos < path.length()) {
+        int slash = path.indexOf('/', pos);
+        size_t end = slash >= 0 ? (size_t)slash : path.length();
+
+        String segment = path.substring(pos, end);
+
+        if (segment == "..") {
+            int lastSlash = result.lastIndexOf('/');
+            if (lastSlash <= 0) {
+                result = "/";
+            } else {
+                result.remove(lastSlash);
+            }
+        } else if (segment.length() > 0 && segment != ".") {
+            if (result.length() > 1) {
+                result += '/';
+            }
+            result += segment;
+        }
+
+        if (slash < 0) {
+            break;
+        }
+
+        pos = end + 1;
+    }
+
+    if (trailingSlash && !result.endsWith("/")) {
+        result += '/';
+    }
+
+    return result;
+}
+
+// Löst absolute, protokollrelative, rootrelative und
+// pfadrelative Location-Adressen auf.
+String resolveRedirectUrl(const String &baseUrl, String location) {
+    location.trim();
+
+    // Fragmente werden nicht an den Server übertragen.
+    int hash = location.indexOf('#');
+    if (hash >= 0) {
+        location.remove(hash);
+    }
+
+    if (location.length() == 0) {
+        return String();
+    }
+
+    // Absolute HTTP-/HTTPS-Adresse.
+    String absoluteUrl = normalizeHttpUrl(location);
+    if (absoluteUrl.length() > 0) {
+        return absoluteUrl;
+    }
+
+    String base = normalizeHttpUrl(baseUrl);
+    if (base.length() == 0) {
+        return String();
+    }
+
+    // Anderes Protokoll nicht als relativen Pfad interpretieren.
+    if (location.indexOf("://") >= 0) {
+        return String();
+    }
+
+    const int schemeEnd = base.indexOf("://");
+    if (schemeEnd < 0) {
+        return String();
+    }
+
+    const String scheme = base.substring(0, schemeEnd);
+
+    // Beispiel: //cdn.example/radio
+    if (location.startsWith("//")) {
+        return normalizeHttpUrl(scheme + ":" + location);
+    }
+
+    // Query-Parameter von der Pfadauflösung trennen.
+    String suffix;
+    int query = location.indexOf('?');
+    if (query >= 0) {
+        suffix = location.substring(query);
+        location.remove(query);
+    }
+
+    // Host und Pfad der bisherigen URL ermitteln.
+    String baseWithoutQuery = base;
+    query = baseWithoutQuery.indexOf('?');
+    if (query >= 0) {
+        baseWithoutQuery.remove(query);
+    }
+
+    const int authorityStart = schemeEnd + 3;
+    const int pathStart = baseWithoutQuery.indexOf('/', authorityStart);
+
+    String origin;
+    String basePath;
+
+    if (pathStart < 0) {
+        origin = baseWithoutQuery;
+        basePath = "/";
+    } else {
+        origin = baseWithoutQuery.substring(0, pathStart);
+        basePath = baseWithoutQuery.substring(pathStart);
+    }
+
+    String resolvedPath;
+
+    if (location.startsWith("/")) {
+        // Root-relative Adresse.
+        resolvedPath = location;
+    } else if (location.length() == 0) {
+        // Nur Query-Parameter im Location-Header.
+        resolvedPath = basePath;
+    } else {
+        // Pfad relativ zum bisherigen Verzeichnis.
+        int lastSlash = basePath.lastIndexOf('/');
+        String directory = lastSlash >= 0
+                               ? basePath.substring(0, lastSlash + 1)
+                               : "/";
+
+        resolvedPath = directory + location;
+    }
+
+    return origin + normalizeUrlPath(resolvedPath) + suffix;
+}
+
+bool beginStreamConnection(const String &url) {
+    if (isHttpsUrl(url)) {
+        // Wie bisher: Zertifikatsprüfung deaktiviert.
+        tlsClient.setInsecure();
+        return http.begin(tlsClient, url);
+    }
+
+    if (isHttpUrl(url)) {
+        return http.begin(plainClient, url);
+    }
+
+    ESP_LOGE(TAG, "Unsupported URL scheme: %s", url.c_str());
+    return false;
+}
+
+void configStream(
+    HTTPClient &client,
+    bool useIcy = false,
+    followRedirects_t redirects = HTTPC_DISABLE_FOLLOW_REDIRECTS,
+    int redirectLimit = 5,
+    int timeout = 15000
+) {
+    client.useHTTP10(true);
+    client.setUserAgent("VLC/3.0.21");
+    client.addHeader("Accept", "*/*");
+
+    const char *headerKeys[] = {
+        "content-type",
+        "icy-metaint",
+        "location"
+    };
+
+    client.collectHeaders(
+        headerKeys,
+        sizeof(headerKeys) / sizeof(headerKeys[0])
+    );
+
+    if (useIcy) {
+        client.addHeader("Icy-MetaData", "1");
+    }
+
+    client.setTimeout(timeout);
+    client.setFollowRedirects(redirects);
+    client.setRedirectLimit(redirectLimit);
+}
+
+bool openStreamWithRedirects() {
+    constexpr uint8_t MAX_REDIRECTS = 5;
+
+    String currentUrl = normalizeHttpUrl(String(STREAM_URL));
+
+    if (currentUrl.length() == 0) {
+        ESP_LOGE(TAG, "Invalid stream URL: %s", STREAM_URL);
+        return false;
+    }
+
+    uint8_t redirectCount = 0;
+
+    for (;;) {
+        // Wichtig: nach jedem http.end() die Request-Header
+        // erneut konfigurieren.
+        configStream(
+            http,
+            true,
+            HTTPC_DISABLE_FOLLOW_REDIRECTS,
+            MAX_REDIRECTS
+        );
+
+        if (!beginStreamConnection(currentUrl)) {
+            ESP_LOGE(TAG, "Could not initialize: %s", currentUrl.c_str());
+            http.end();
+            return false;
+        }
+
+        const int status = http.GET();
+
+        // Unterstützte HTTP-Redirect-Statuscodes.
+        const bool isRedirect =
+            status == 301 || status == 302 ||
+            status == 303 || status == 307 ||
+            status == 308;
+
+        if (isRedirect) {
+            String location = http.header("location");
+
+            if (redirectCount >= MAX_REDIRECTS) {
+                ESP_LOGE(TAG, "Too many HTTP redirects");
+                http.end();
+                return false;
+            }
+
+            if (location.length() == 0) {
+                ESP_LOGE(TAG, "Redirect without Location header");
+                http.end();
+                return false;
+            }
+
+            String nextUrl = resolveRedirectUrl(currentUrl, location);
+
+            if (nextUrl.length() == 0) {
+                ESP_LOGE(TAG, "Invalid redirect target: %s",
+                         location.c_str());
+                http.end();
+                return false;
+            }
+
+            // Kein stiller Wechsel von HTTPS auf unverschlüsseltes HTTP.
+            if (isHttpsUrl(currentUrl) && isHttpUrl(nextUrl)) {
+                ESP_LOGE(TAG, "Rejected HTTPS-to-HTTP downgrade: %s",
+                         nextUrl.c_str());
+                http.end();
+                return false;
+            }
+
+            ESP_LOGI(TAG, "Redirect %u: %s -> %s",
+                     static_cast<unsigned>(redirectCount + 1),
+                     currentUrl.c_str(),
+                     nextUrl.c_str());
+
+            http.end();
+
+            currentUrl = nextUrl;
+            ++redirectCount;
+            continue;
+        }
+
+        if (status != HTTP_CODE_OK) {
+            ESP_LOGE(TAG, "HTTP request failed: %d (%s)",
+                     status, currentUrl.c_str());
+            http.end();
+            return false;
+        }
+
+        ESP_LOGI(TAG, "Final stream URL: %s", currentUrl.c_str());
+
+        // HTTPClient bleibt für AudioSourceStream geöffnet.
+        return true;
+    }
+}
+
+
+Fall	Ergebnis
+HTTP → HTTP	Unterstützt
+HTTP → HTTPS	Unterstützt, Wechsel zu WiFiClientSecure
+HTTPS → HTTPS	Unterstützt
+HTTPS → HTTP	Abgelehnt
+Relative Location-Adresse	Wird aufgelöst
+Mehr als fünf Redirects	Abgelehnt
+Unbekanntes URL-Schema	Abgelehnt

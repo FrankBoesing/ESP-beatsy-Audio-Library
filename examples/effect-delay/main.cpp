@@ -10,20 +10,15 @@
 // This example code is in the public domain.
 
 #include <Audio.h>
+#include <Wire.h>
+#include <SD.h>
 
 // GUItool: begin automatically generated code
-
-AudioOutputI2S i2s1({
-    PIN_I2S_BLCK, // BCLK
-    PIN_I2S_WS,   // WS / LRCLK
-    PIN_I2S_DOUT, // DOUT
-    PIN_I2S_MLCK  // MCLK
-}); //xy=611,61
-
 AudioSynthWaveformSine   sine1;          //xy=158,74
 AudioEffectEnvelope      envelope1;      //xy=232,156
 AudioEffectDelay         delay1;         //xy=393,238
 AudioMixer4              mixer1;         //xy=532,205
+AudioOutputI2S           i2s1;           //xy=611,61
 AudioConnection          patchCord1(sine1, envelope1);
 AudioConnection          patchCord2(envelope1, delay1);
 AudioConnection          patchCord3(envelope1, 0, i2s1, 0);
@@ -33,8 +28,7 @@ AudioConnection          patchCord6(delay1, 2, mixer1, 2);
 AudioConnection          patchCord7(delay1, 3, mixer1, 3);
 AudioConnection          patchCord8(mixer1, 0, i2s1, 1);
 
-
-//AudioControlSGTL5000     codec;     //xy=195,272
+//AudioControlSGTL5000     sgtl5000_1;     //xy=195,272
 #if defined(AUDIO_CODEC_ES8388)
 AudioControlES8388 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER_ACTIVE});
 #elif defined(AUDIO_CODEC_ES8311)
@@ -46,12 +40,12 @@ AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER
 // GUItool: end automatically generated code
 
 void setup() {
-  // delay uses psram
-  AudioMemory(10);
+  // allocate enough memory for the delay
+  AudioMemory(120);
 
   // enable the audio shield
-  codec.enable();
-  codec.volume(0.2);
+  sgtl5000_1.enable();
+  sgtl5000_1.volume(0.5);
 
   // configure a sine wave for the chirp
   // the original is turned on/off by an envelope effect

@@ -19,6 +19,13 @@ bool AudioOutputI2S::begin(const Pins &pins) {
 bool AudioOutputI2S::beginHardware() { return beginInternal(); }
 
 OSIZE
+bool AudioOutputI2S::setChannelCount(uint num) {
+    if (num < 1 || num > 2) return false;
+    numChannels = num;
+    return true;
+}
+
+OSIZE
 bool AudioOutputI2S::setSampleRate(float hz) {
     if (hz <= 0.0f) return false;
     if (!running || txHandle == nullptr) {
@@ -288,63 +295,74 @@ OSPEED
 void AudioOutputI2S::txTaskLoop() {
     static uint32_t writeErrorCount = 0;
     static uint32_t lastErrorLogMs = 0;
-    /*
-     * One stereo audio block contains:
-     *
-     *   AUDIO_BLOCK_SAMPLES * 2 channels
-     *
-     */
-    uint16_t buffer[AUDIO_BLOCK_SAMPLES * 2];
+
+    // Ein uint32_t enthält ein I2S-Frame:
+    // linker Slot: 16 Bit, rechter Slot: 16 Bit.
+    uint32_t buffer[AUDIO_BLOCK_SAMPLES];
+    BlockPair pair;
 
     while (running) {
-        BlockPair pair;
 
         if (xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(100)) != pdTRUE) {
             continue;
         }
 
-        if (pair.left->data != nullptr && pair.right->data != nullptr) {
-            const uint16_t *__restrict left = (uint16_t *)pair.left->data;
-            const uint16_t *__restrict right = (uint16_t *)pair.right->data;
-            uint32_t *__restrict dst = (uint32_t *)buffer;
+        const int16_t *__restrict left = pair.left ? pair.left->data : nullptr;
+        const int16_t *__restrict right = pair.right ? pair.right->data : nullptr;
+
+        if (numChannels == 1) {
+            // Mono: L/R mitteln und dasselbe Sample auf beide Slots legen.
+             //TODO: Check this in godbolt. Is it optimized?
 #pragma GCC unroll 4
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                const uint32_t l = left[i];
-                const uint32_t r = right[i];
-                dst[i] = l | (r << 16);
+                int32_t mono;
+
+                if (left && right) {
+                    mono = ((int32_t)left[i] + (int32_t)right[i]) / 2;
+                } else if (left) {
+                    mono = left[i];
+                } else if (right) {
+                    mono = right[i];
+                } else {
+                    mono = 0;
+                }
+
+                // Zweierkomplement-Sample als 16-Bit-Wert übernehmen.
+                const uint32_t sample = static_cast<uint16_t>(static_cast<int16_t>(mono));
+
+                buffer[i] = sample | (sample << 16);
             }
-        } else
-            //Left
-            if (pair.left->data != nullptr) {
-                const uint16_t *__restrict left = (uint16_t *)pair.left->data;
-                uint32_t *__restrict dst = (uint32_t *)buffer;
+        } else {
+            // Stereo: linker und rechter Kanal bleiben getrennt.
+            if (left && right) {
 #pragma GCC unroll 4
                 for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                    const uint32_t l = left[i];
-                    dst[i] = l | (0 << 16);
+                    const uint32_t l = static_cast<uint16_t>(left[i]);
+                    const uint32_t r = static_cast<uint16_t>(right[i]);
+
+                    buffer[i] = l | (r << 16);
                 }
-            } else
-                //Right
-                if (pair.right->data != nullptr) {
-                    const uint16_t *__restrict right = (uint16_t *)pair.right->data;
-                    uint32_t *__restrict dst = (uint32_t *)buffer;
+            } else if (left) {
 #pragma GCC unroll 4
-                    for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                        const uint32_t r = right[i];
-                        dst[i] = 0 | (r << 16);
-                    }
-                } else
-                //None
-                {
-                    memset(buffer, 0, sizeof(buffer));
+                for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                    buffer[i] = static_cast<uint16_t>(left[i]);
                 }
+            } else if (right) {
+#pragma GCC unroll 4
+                for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                    buffer[i] = static_cast<uint32_t>(static_cast<uint16_t>(right[i])) << 16;
+                }
+            } else {
+                memset(buffer, 0, sizeof(buffer));
+            }
+        }
 
         size_t bytesWritten = 0;
 
         /*
-         * The blocking call is deliberately isolated in this task.
-         * A timeout prevents shutdown from becoming permanently stuck
-         * if the I2S driver stops accepting data.
+         * Der blockierende I2S-Aufruf bleibt ausschließlich im TX-Task.
+         * Ein Timeout verhindert, dass das Beenden dauerhaft blockiert,
+         * falls der I2S-Treiber keine Daten mehr annimmt.
          */
         const esp_err_t err = i2s_channel_write(txHandle, buffer, sizeof(buffer), &bytesWritten, 100);
 
@@ -353,18 +371,17 @@ void AudioOutputI2S::txTaskLoop() {
             ++writeErrorCount;
 
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
-                ESP_LOGE("I2S", "TX error #%lu: %s, bytes=%lu/%lu\n", writeErrorCount, esp_err_to_name(err),
-                         bytesWritten, sizeof(buffer));
+                ESP_LOGE(TAG, "TX error #%lu: %s, bytes=%lu/%lu", (unsigned long)writeErrorCount, esp_err_to_name(err),
+                         (unsigned long)bytesWritten, (unsigned long)sizeof(buffer));
+
                 lastErrorLogMs = now;
             }
         }
+
         releasePair(pair);
     }
 
-    /*
-     * Release anything still queued during shutdown.
-     */
-    BlockPair pair;
+    // Beim Beenden alle noch ausstehenden Blöcke freigeben.
     while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) {
         releasePair(pair);
     }

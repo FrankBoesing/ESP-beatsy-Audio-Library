@@ -1,41 +1,36 @@
 TODOs:
 -lizenzen prüfen / übernehmen
 
--Variable Sampleraten:
-Derzeit:
-AudioStream::setSampleRate(48000.0f);
-AudioMemory(10);
+ pause() etc für alle player
 
-Nötige Änderungen:
+Fehlende
 
-I2S neu konfigurieren (AudioOutputI2S)
+Priorität 1: Grundlegende Effekte
+AudioEffectDelay, AudioEffectChorus und AudioEffectBitcrusher.
+Breiter Nutzen für Synthesizer, Musikplayer und allgemeine Audioverarbeitung.
 
-Neue Methode bool setSampleRate(uint32_t hz).
-Sie führt i2s_channel_disable(), i2s_channel_reconfig_std_clock() (mit I2S_STD_CLK_DEFAULT_CONFIG(hz), MCLK ×256) und i2s_channel_enable() aus.
-Der TX-Task und die Queue können weiterlaufen, aber die Queue sollte vorher geleert werden, damit keine Blöcke mit alter Rate ausgegeben werden.
-Globale Rate und Takt anpassen (AudioStream)
 
-setSampleRate() muss public sein.
-Bei externem Takt (I2S) ändert sich nur audio_sample_rate. Die Block-Periode kommt dann aus dem I2S-DMA-Callback und passt sich automatisch an.
-Der Graph sollte währenddessen angehalten sein, mit disableUpdates()/enableUpdates().
-Decoder entscheiden lassen (validateFrameInfo in MP3 und AAC)
 
-Statt bei abweichender Rate mit ERR_FORMAT abzubrechen, ruft der Decoder bei der ersten Frame-Info einen Callback auf, z. B. std::function<bool(uint32_t)> onRateChange, oder setzt direkt AudioStream::setSampleRate(info.samprate).
-Das Setzen soll nur passieren, wenn noch nichts anderes spielt.
-Der Callback in main.cpp ruft dann i2s.setSampleRate(rate) auf.
-Codec-Chip (ES8388)
 
-Der ES8388 läuft mit MCLK = 256·fs und folgt normalerweise der I2S-Clock. Prüfen, ob codec.enable() eine Rate braucht. Bei control_es8311.h steht ausdrücklich, dass sie mit AudioStream::sampleRate() übereinstimmen muss.
-Alternative: Resampling
+Priorität 2: Analyse
+AudioAnalyzeRMS, AudioAnalyzeFFT1024 und AudioAnalyzeToneDetect.
+Nützlich für Pegelmessung, Spektrumanalyse, Visualisierungen und automatische Steuerung.
 
-Man hält I2S fest bei 48 kHz und resampelt im Decoder (z. B. linear, aus 44,1 kHz).
-Das kostet CPU und Qualität, vermeidet aber das Umkonfigurieren im Betrieb.
-Empfehlung: Variante 1–3, also I2S-Reconfig plus Callback vom Decoder. Das ist am saubersten und verlustfrei. Der Stream muss dann aber erst nach der ersten Frame-Info, also nach der Rate-Entscheidung, an die Ausgabe gehen. Das verträgt sich mit deinem 32-KB-Prebuffer.
-- use esp32-s3 dsp when possible (..#ifdef...)
-- alternativ optimieren für ESP P4
-- benchmark ESP32-S3 ESP-DSP FIR (dsps_fird_s16_aes3, decimation 1); add
-	S3 + P4 -specific fast path while keeping the portable Q15 fallback
-- measure FIR/BiQuad cycle usage on ESP32, ESP32-S3, p4 before adding further
-	S3-specific DSP paths
-- optimize aac / mp3 für p4, too
 
+
+
+Priorität 3: Audio-Eingang und Aufnahme
+AudioInputI2S und AudioRecordQueue.
+Erweitert die Library vom reinen Wiedergabepfad hin zu bidirektionaler Audioverarbeitung.
+
+
+
+
+Priorität 4: Synthese-Erweiterungen
+AudioSynthNoisePink, AudioSynthToneSweep, AudioSynthKarplusStrong und AudioSynthWavetable.
+Besonders interessant für Instrumente und MIDI-Anwendungen.
+
+
+
+Meine Einschätzung: Du musst nicht sämtliche Teensy-Komponenten portieren, um eine leistungsfähige ESP32-Audiolibrary zu erhalten. Sinnvoller ist es, die fehlenden Funktionen nach tatsächlichem Nutzen und Portierungsaufwand zu priorisieren. Die hardwaregebundenen Teensy-Komponenten würde ich separat behandeln.
+Einschränkung: Die Liste ist noch kein vollständiger Dateivergleich. Insbesondere bei den als Kandidaten markierten Komponenten ist noch zu prüfen, ob die Implementierung bereits außerhalb von Audio.h existiert. Erst ein vollständiger Vergleich aller Header und Quelldateien von main mit dem Teensy-Repository würde eine belastbare Liste der tatsächlich fehlenden Klassen ergeben.
