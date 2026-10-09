@@ -27,7 +27,6 @@
 #include <Arduino.h>
 #include <stdint.h>
 #include <limits.h>
-#include "sine_table.h"
 #include "synth_waveform.h"
 
 #pragma GCC optimize("O3")
@@ -93,8 +92,16 @@ void AudioSynthWaveform::update(void) {
 
     switch (tone_type) {
     case WAVEFORM_SINE:
-        AudioSineTable::generate(bp, ph, inc, AUDIO_BLOCK_SAMPLES, magnitude);
-        bp += AUDIO_BLOCK_SAMPLES;
+        for (i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
+            index = ph >> 23;
+            val1 = sinTable_q15[index];
+            val2 = sinTable_q15[index + 1];
+            scale = (ph >> 7) & 0xFFFF;
+            val2 *= scale;
+            val1 *= 0x10000 - scale;
+            *bp++ = multiply_32x32_rshift32(val1 + val2, magnitude);
+            ph += inc;
+        }
         break;
 
     case WAVEFORM_ARBITRARY:
@@ -330,9 +337,16 @@ void AudioSynthWaveformModulated::update(void) {
     // Now generate the output samples using the pre-computed phase angles
     switch (tone_type) {
     case WAVEFORM_SINE:
-        AudioSineTable::generatePhased(
-            bp, phasedata, AUDIO_BLOCK_SAMPLES, magnitude);
-        bp += AUDIO_BLOCK_SAMPLES;
+        for (i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
+            ph = phasedata[i];
+            index = ph >> 23;
+            val1 = sinTable_q15[index];
+            val2 = sinTable_q15[index + 1];
+            scale = (ph >> 7) & 0xFFFF;
+            val2 *= scale;
+            val1 *= 0x10000 - scale;
+            *bp++ = multiply_32x32_rshift32(val1 + val2, magnitude);
+        }
         break;
 
     case WAVEFORM_ARBITRARY:
