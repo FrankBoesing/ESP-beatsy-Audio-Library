@@ -10,6 +10,7 @@
 #include "analyze_peak.h"
 #include "control_es8311.h"
 #include "control_es8388.h"
+#include "effect_delay.h"
 #include "effect_envelope.h"
 #include "effect_fade.h"
 #include "effect_granular.h"
