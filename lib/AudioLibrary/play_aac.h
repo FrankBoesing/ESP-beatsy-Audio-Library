@@ -13,6 +13,9 @@
 
 class AudioPlayAac : public AudioDecoderStream {
   public:
+    static constexpr const char *MIME_TYPES[] = {"audio/aac", "audio/aacp"};
+    static constexpr AudioPlayerInfo INFO = {AudioCodec::AAC, "AAC", MIME_TYPES,
+                                             sizeof(MIME_TYPES) / sizeof(MIME_TYPES[0])};
     static constexpr int ERR_NONE = 0;
     static constexpr int ERR_FILE_NOT_FOUND = 1;
     static constexpr int ERR_OUT_OF_MEMORY = 2;
@@ -27,13 +30,14 @@ class AudioPlayAac : public AudioDecoderStream {
 
     bool play(const char *filename);
     bool play(fs::FS &fs, const char *filename);
-    bool play(AudioSource &source);
+    bool play(AudioSource &source) override;
 
-    void stop();
-    bool isPlaying() const;
+    void stop() override;
+    bool isPlaying() const override;
 
-    uint32_t positionMillis() const;
-    uint32_t lengthMillis() const;
+    uint32_t positionMillis() const override;
+    uint32_t lengthMillis() const override;
+    const AudioPlayerInfo &info() const override { return INFO; }
 
 #if SOFTCODEC_METRICS
     float decodeProcessorUsage() const;
@@ -42,22 +46,12 @@ class AudioPlayAac : public AudioDecoderStream {
     uint64_t decodeTimeUsTotal() const;
 #endif
 
-    int channels() const {
-        return _channels;
-    }
-
-    int bitRate() const {
-        return _bitrate;
-    }
-
-    int lastError() const {
-        return _lastError;
-    }
+    int channels() const { return _channels; }
+    int bitRate() const { return _bitrate; }
+    int lastError() const { return _lastError; }
 
   protected:
-    void onPlaybackFinished() override {
-        _playing = false;
-    }
+    void onPlaybackFinished() override { _playing = false; }
 
     DecodeResult decodePcmBuffer(int16_t *destination, size_t capacity, size_t &outSamples) override;
 

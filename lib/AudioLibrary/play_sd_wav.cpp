@@ -307,7 +307,7 @@ void AudioPlaySdWav::togglePlayPause() {
 // State
 // ============================================================================
 
-bool AudioPlaySdWav::isPlaying() {
+bool AudioPlaySdWav::isPlaying() const {
     return state == PLAYING;
 }
 
@@ -323,7 +323,7 @@ bool AudioPlaySdWav::isStopped() {
 // Position
 // ============================================================================
 
-uint32_t AudioPlaySdWav::positionMillis() {
+uint32_t AudioPlaySdWav::positionMillis() const {
     if (sample_rate == 0 || block_align == 0) {
         return 0;
     }
@@ -337,7 +337,7 @@ uint32_t AudioPlaySdWav::positionMillis() {
 // Length
 // ============================================================================
 
-uint32_t AudioPlaySdWav::lengthMillis() {
+uint32_t AudioPlaySdWav::lengthMillis() const {
     if (sample_rate == 0 || block_align == 0) {
         return 0;
     }

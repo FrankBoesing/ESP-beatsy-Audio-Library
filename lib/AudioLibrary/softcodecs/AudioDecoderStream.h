@@ -2,7 +2,7 @@
 #ifndef AUDIO_DECODER_STREAM_H
 #define AUDIO_DECODER_STREAM_H
 
-#include "AudioStream.h"
+#include "AudioPlayer.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <freertos/FreeRTOS.h>
@@ -16,7 +16,7 @@
  *
  * Codec implementations only provide decodePcmBuffer().
  */
-class AudioDecoderStream : public AudioStream {
+class AudioDecoderStream : public AudioPlayer {
   public:
     enum class DecodeResult : uint8_t { FILLED, RETRY, END_OF_STREAM, ERROR };
 
