@@ -19,6 +19,13 @@ bool AudioOutputI2S::begin(const Pins &pins) {
 bool AudioOutputI2S::beginHardware() { return beginInternal(); }
 
 OSIZE
+bool AudioOutputI2S::setChannelCount(uint num) {
+    if (num < 1 || num > 2) return false;
+    numChannels = num;
+    return true;
+}
+
+OSIZE
 bool AudioOutputI2S::setSampleRate(float hz) {
     if (hz <= 0.0f) return false;
     if (!running || txHandle == nullptr) {

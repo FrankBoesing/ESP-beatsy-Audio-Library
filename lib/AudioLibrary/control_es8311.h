@@ -5,7 +5,7 @@
 #include "AudioControl.h"
 
 /**
- * ES8311 codec control for the Freenove ESP32-S3-DevKitC-1 (FNK0104).
+ * ES8311 codec control
  *
  * Register sequence ported from Espressif's official ES8311 driver
  * (es8311.c/es8311_reg.h, SPDX Apache-2.0), adapted to use Wire
@@ -15,14 +15,6 @@
  * I2S data transport remains the responsibility of AudioOutputI2S,
  * which drives 32-bit I2S slots with MCLK = 256 * sample rate.
  *
- * Default pins match the [env:esp32-s3-devkitc-1] section in platformio.ini:
- *   I2C SCL       = GPIO15
- *   I2C SDA       = GPIO16
- *   PA enable     = GPIO1
- *   I2C speed     = 400 kHz
- *   ES8311 I2C address = 0x18 (CE/ADDR pin tied low)
- *
- * The I2S pins are deliberately NOT defined here.
  */
 class AudioControlES8311 : public AudioControl {
   public:
@@ -60,6 +52,8 @@ class AudioControlES8311 : public AudioControl {
         return i2cAddress_;
     }
 
+    //Codec is mono:
+    constexpr int channels() { return 1;};
   private:
     static constexpr uint8_t ES8311_ADDRESS = 0x18;
 
