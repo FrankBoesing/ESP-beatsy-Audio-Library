@@ -6,7 +6,7 @@ TODOs:
 Fehlende
 
 Priorität 1: Grundlegende Effekte
-AudioEffectFade, AudioEffectDelay, AudioEffectChorus und AudioEffectBitcrusher.
+AudioEffectDelay, AudioEffectChorus und AudioEffectBitcrusher.
 Breiter Nutzen für Synthesizer, Musikplayer und allgemeine Audioverarbeitung.
 
 
