@@ -11,17 +11,18 @@
 
 const char TAG[] = "MAIN";
 
-constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
+//constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
 
 // Weitere Teststreams:
 // constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/mid/aac/stream.aac";
 // constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac";
 // constexpr char STREAM_URL[] = "https://wdr-wdr2-rheinruhr.icecastssl.wdr.de/wdr/wdr2/rheinruhr/mp3/128/stream.mp3";
-// constexpr char STREAM_URL[] = "https://mp3.ffh.de/radioffh/hqlivestream.aac";
+constexpr char STREAM_URL[] = "http://mp3.ffh.de/radioffh/hqlivestream.aac";
 
 AudioPlayer *selectedPlayer = nullptr;
-
 AudioSourceStream audioSource;
+
+WiFiClient plainClient;
 WiFiClientSecure tlsClient;
 HTTPClient http;
 
@@ -129,8 +130,23 @@ bool connectPlayer(AudioPlayer &player) {
 }
 
 // ============================================================================
-// HTTP configuration
+// HTTP
 // ============================================================================
+bool beginStreamConnection() {
+    if (strncasecmp(STREAM_URL, "https://", 8) == 0) {
+        // HTTPS: TLS verwenden, Zertifikatsprüfung deaktiviert.
+        tlsClient.setInsecure();
+        return http.begin(tlsClient, STREAM_URL);
+    }
+
+    if (strncasecmp(STREAM_URL, "http://", 7) == 0) {
+        // HTTP: normale TCP-Verbindung ohne TLS.
+        return http.begin(plainClient, STREAM_URL);
+    }
+
+    ESP_LOGE(TAG, "Unsupported URL scheme: %s", STREAM_URL);
+    return false;
+}
 
 void configStream(HTTPClient &client, bool useIcy = false, followRedirects_t redirects = HTTPC_STRICT_FOLLOW_REDIRECTS,
                   int redirectLimit = 5, int timeout = 15000) {
@@ -220,16 +236,10 @@ void setup() {
 
     ESP_LOGI(TAG, "\nConnected, IP: %s", WiFi.localIP().toString().c_str());
 
-    // HTTPS
-    // Certificate validation is intentionally disabled for this test.
-    tlsClient.setInsecure();
 
     configStream(http, true);
-
-    ESP_LOGI(TAG, "Connecting to radio stream...");
-
-    if (!http.begin(tlsClient, STREAM_URL)) {
-        stopWithError("Could not initialize HTTP connection");
+    if (!beginStreamConnection()) {
+        stopWithError("ERROR: Could not initialize HTTP connection");
     }
 
     const int responseCode = http.GET();
