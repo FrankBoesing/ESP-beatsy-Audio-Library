@@ -49,10 +49,9 @@ class AudioOutputI2S : public AudioStream {
     uint32_t txCallbackCount() const { return txCallbackCountValue; }
     const Pins &pins() const { return i2sPins; }
     bool setSampleRate(float sampleRate);
-    bool setChannelCount(uint channels);
+    bool setChannelCount(uint channels); //Set to one if codec supports mono only (automatic stereo->mono conversion)
 
   protected:
-
     void update() override;
     bool beginHardware() override;
 

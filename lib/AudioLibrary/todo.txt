@@ -3,3 +3,34 @@ TODOs:
 
  pause() etc für alle player
 
+Fehlende
+
+Priorität 1: Grundlegende Effekte
+AudioEffectFade, AudioEffectDelay, AudioEffectChorus und AudioEffectBitcrusher.
+Breiter Nutzen für Synthesizer, Musikplayer und allgemeine Audioverarbeitung.
+
+
+
+
+Priorität 2: Analyse
+AudioAnalyzeRMS, AudioAnalyzeFFT1024 und AudioAnalyzeToneDetect.
+Nützlich für Pegelmessung, Spektrumanalyse, Visualisierungen und automatische Steuerung.
+
+
+
+
+Priorität 3: Audio-Eingang und Aufnahme
+AudioInputI2S und AudioRecordQueue.
+Erweitert die Library vom reinen Wiedergabepfad hin zu bidirektionaler Audioverarbeitung.
+
+
+
+
+Priorität 4: Synthese-Erweiterungen
+AudioSynthNoisePink, AudioSynthToneSweep, AudioSynthKarplusStrong und AudioSynthWavetable.
+Besonders interessant für Instrumente und MIDI-Anwendungen.
+
+
+
+Meine Einschätzung: Du musst nicht sämtliche Teensy-Komponenten portieren, um eine leistungsfähige ESP32-Audiolibrary zu erhalten. Sinnvoller ist es, die fehlenden Funktionen nach tatsächlichem Nutzen und Portierungsaufwand zu priorisieren. Die hardwaregebundenen Teensy-Komponenten würde ich separat behandeln.
+Einschränkung: Die Liste ist noch kein vollständiger Dateivergleich. Insbesondere bei den als Kandidaten markierten Komponenten ist noch zu prüfen, ob die Implementierung bereits außerhalb von Audio.h existiert. Erst ein vollständiger Vergleich aller Header und Quelldateien von main mit dem Teensy-Repository würde eine belastbare Liste der tatsächlich fehlenden Klassen ergeben.
