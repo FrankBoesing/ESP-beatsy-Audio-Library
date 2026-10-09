@@ -9,7 +9,8 @@
 #include "softcodecs/AudioSourceStream.h"
 #include "secrets.h"
 
-const char TAG[] = "MAIN";
+//const char TAG[] = "MAIN";
+const char* TAG = nullptr;
 
 //constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
 
@@ -213,6 +214,7 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
+    i2s.setChannelCount(codec.channels()); //i.e.s es8311 is mono
     AudioMemory(10);
 
     ESP_LOGI(TAG, "Initializing codec...");
@@ -222,7 +224,6 @@ void setup() {
     }
 
     codec.volume(0.6f);
-    i2s.setChannelCount(codec.channels()); //i.e.s es8311 is mono
 
     // Wi-Fi
     WiFi.mode(WIFI_STA);
