@@ -44,13 +44,15 @@ class AudioPlayMp3 : public AudioDecoderStream {
 #if SOFTCODEC_METRICS
     float decodeProcessorUsage() const;
     float decodeProcessorUsageMax() const;
+    bool hasDecoderMetrics() const override { return true; }
     uint32_t decodeFrames() const;
     uint64_t decodeTimeUsTotal() const;
 #endif
 
     int channels() const { return _channels; }
     int bitRate() const { return (int)(_bitrate); }
-    int lastError() const { return _lastError; }
+    bool hasLastError() const override { return true; }
+    int lastError() const override { return _lastError; }
 
   protected:
     void onPlaybackFinished() override { _playing = false; }

@@ -12,6 +12,7 @@
 
 class AudioPlaySdWav : public AudioPlayer {
   public:
+    // No stream support here - needs a seekable source.
     static constexpr const char *MIME_TYPES[] = {/*"audio/wav", "audio/x-wav"*/};
     static constexpr AudioPlayerInfo INFO = {AudioCodec::WAV, "WAV", MIME_TYPES,
                                              sizeof(MIME_TYPES) / sizeof(MIME_TYPES[0])};
@@ -27,10 +28,8 @@ class AudioPlaySdWav : public AudioPlayer {
     // Bestehende API
     bool play(const char *filename);
 
-#if defined(ARDUINO_ARCH_ESP32)
     // Beliebiges Arduino-ESP32 Filesystem
     bool play(fs::FS &fs, const char *filename);
-#endif
 
     // Generische AudioSource
     bool play(AudioSource &source) override;

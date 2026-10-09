@@ -29,6 +29,18 @@ class AudioPlayer : public AudioStream {
     virtual uint32_t positionMillis() const = 0;
     virtual uint32_t lengthMillis() const = 0;
 
+    // Error reporting. Not every player has a persistent error code.
+    virtual bool hasLastError() const { return false; }
+    virtual int lastError() const { return 0; }
+
+    // Optional decoder performance metrics.
+    virtual bool hasDecoderMetrics() const { return false; }
+
+#if SOFTCODEC_METRICS
+    virtual float decodeProcessorUsage() const { return 0.0f; }
+    virtual float decodeProcessorUsageMax() const { return 0.0f; }
+#endif
+
     bool matchesContentType(const char *contentType) const {
         if (contentType == nullptr) return false;
 
