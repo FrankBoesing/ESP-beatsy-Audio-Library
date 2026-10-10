@@ -40,10 +40,6 @@ static inline int32_t wavetable_macc32x16b(int32_t sum, int32_t a, uint32_t b) {
     return sum + (int32_t)(((int64_t)a * (int16_t)(b & 0xFFFFU)) >> 16);
 }
 
-static inline int32_t wavetable_mul32x16b(int32_t a, int16_t b) {
-    return (int32_t)(((int64_t)a * (int32_t)b) >> 16);
-}
-
 static inline int16_t wavetable_saturate16(int32_t value) {
     if (value > INT16_MAX) {
         return INT16_MAX;
