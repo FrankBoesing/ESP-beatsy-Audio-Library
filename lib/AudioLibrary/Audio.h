@@ -20,6 +20,7 @@
 #include "effect_delay.h"
 #include "effect_envelope.h"
 #include "effect_fade.h"
+#include "effect_flange.h"
 #include "effect_granular.h"
 #include "effect_multiply.h"
 #include "effect_wavefolder.h"
