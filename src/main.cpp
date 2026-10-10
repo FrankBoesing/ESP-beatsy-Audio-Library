@@ -11,7 +11,9 @@
 
 const char TAG[] = "";
 
+// Example: Internet Radio
 
+//Some testurls:
 //constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3";
 
 // Weitere Teststreams:
