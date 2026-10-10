@@ -30,8 +30,7 @@
 #include <math.h>
 #include <stdint.h>
 
-AudioSynthWaveformPWM::AudioSynthWaveformPWM()
-    : AudioStream(1, inputQueueArray) {
+AudioSynthWaveformPWM::AudioSynthWaveformPWM() : AudioStream(1, inputQueueArray) {
     frequency(440.0f);
     amplitude(0.0f);
 }
@@ -47,8 +46,7 @@ void AudioSynthWaveformPWM::frequency(float freq) {
     }
 
     // Store the duration of a half-cycle in Q16.16 sample units.
-    const uint32_t newDuration = (uint32_t)(
-        (AUDIO_SAMPLE_RATE_EXACT * 65536.0f + freq) / (freq * 2.0f));
+    const uint32_t newDuration = (uint32_t)((AUDIO_SAMPLE_RATE_EXACT * 65536.0f + freq) / (freq * 2.0f));
 
     portENTER_CRITICAL(&configMux);
     duration = newDuration;
@@ -121,8 +119,7 @@ void AudioSynthWaveformPWM::update() {
             // Map the signed modulation sample onto a 0..100% pulse width.
             // Q16 duration can approach 2^32 / 2 at low output frequencies,
             // so use a 64-bit intermediate for this product.
-            const uint32_t pulseDuration = (uint32_t)(
-                ((uint64_t)(control + 32768) * (uint64_t)localDuration) >> 15);
+            const uint32_t pulseDuration = (uint32_t)(((uint64_t)(control + 32768) * (uint64_t)localDuration) >> 15);
 
             int32_t output;
             if (elapsed < pulseDuration) {
@@ -137,8 +134,7 @@ void AudioSynthWaveformPWM::update() {
                 }
                 elapsed = overshoot;
 
-                output = magnitude -
-                         ((magnitude * (int32_t)elapsed) >> 15);
+                output = magnitude - ((magnitude * (int32_t)elapsed) >> 15);
                 magnitude = -magnitude;
             }
 
@@ -157,8 +153,7 @@ void AudioSynthWaveformPWM::update() {
                 elapsed -= localDuration;
 
                 // Fractional-sample edge smoothing limits aliasing.
-                output = magnitude -
-                         ((magnitude * (int32_t)elapsed) >> 15);
+                output = magnitude - ((magnitude * (int32_t)elapsed) >> 15);
                 magnitude = -magnitude;
             }
 
