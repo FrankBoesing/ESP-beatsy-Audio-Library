@@ -150,4 +150,3 @@ class AudioSynthWavetable : public AudioStream {
     int32_t mod_pitch_offset_init = 0;
     int32_t mod_pitch_offset_scnd = 0;
 };
-

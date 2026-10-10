@@ -30,37 +30,39 @@
 #include <stdint.h>
 #include <math.h>
 
+#define _INLINE_ __attribute__((always_inline, unused))
+
 // Portable versions of the fixed-point DSP helpers used by the Audio Library.
 // On Teensy/ARM these retain the original DSP instructions where available.
 
-static inline int CLZ(unsigned int x) __attribute__((always_inline, unused));
+static inline int CLZ(unsigned int x) _INLINE_;
 static inline int CLZ(unsigned int x) { return x == 0 ? 32 : __builtin_clz(x); };
 
-static inline unsigned int REV16(unsigned int value) __attribute__((always_inline, unused));
+static inline unsigned int REV16(unsigned int value) _INLINE_;
 static inline unsigned int REV16(unsigned int value) {
     return (unsigned int)__builtin_bswap16((unsigned short)value);
 }; //FB
-static inline unsigned int REV32(unsigned int value) __attribute__((always_inline, unused));
+static inline unsigned int REV32(unsigned int value) _INLINE_;
 static inline unsigned int REV32(unsigned int value) { return __builtin_bswap32(value); }; //FB
-static inline int32_t FASTABS(int32_t x) __attribute__((always_inline, unused));
+static inline int32_t FASTABS(int32_t x) _INLINE_;
 static inline int32_t FASTABS(int32_t x) { return __builtin_abs(x); } //xtensa has a fast abs instruction //fb
-static inline uint64_t SAR64(uint64_t x, int32_t n) __attribute__((always_inline, unused));
+static inline uint64_t SAR64(uint64_t x, int32_t n) _INLINE_;
 static inline uint64_t SAR64(uint64_t x, int32_t n) { return x >> n; }
-static inline int32_t MULSHIFT32(int32_t x, int32_t y) __attribute__((always_inline, unused));
+static inline int32_t MULSHIFT32(int32_t x, int32_t y) _INLINE_;
 static inline int32_t MULSHIFT32(int32_t x, int32_t y) {
     int32_t z;
     z = (uint64_t)x * (uint64_t)y >> 32;
     return z;
 }
-static inline uint64_t MADD64(uint64_t sum64, int32_t x, int32_t y) __attribute__((always_inline, unused));
+static inline uint64_t MADD64(uint64_t sum64, int32_t x, int32_t y) _INLINE_;
 static inline uint64_t MADD64(uint64_t sum64, int32_t x, int32_t y) {
     sum64 += (uint64_t)x * (uint64_t)y;
     return sum64;
 }
-static inline uint64_t xSAR64(uint64_t x, int32_t n) __attribute__((always_inline, unused));
+static inline uint64_t xSAR64(uint64_t x, int32_t n) _INLINE_;
 static inline uint64_t xSAR64(uint64_t x, int32_t n) { return x >> n; }
 
-static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) __attribute__((always_inline, unused));
+static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) _INLINE_;
 static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
@@ -78,7 +80,7 @@ static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) 
 #endif
 }
 
-static inline int16_t saturate16(int32_t val) __attribute__((always_inline, unused));
+static inline int16_t saturate16(int32_t val) _INLINE_;
 static inline int16_t saturate16(int32_t val) {
     if (val > 32767)
         val = 32767;
@@ -87,7 +89,7 @@ static inline int16_t saturate16(int32_t val) {
     return (int16_t)val;
 }
 
-static inline int32_t signed_multiply_32x16b(int32_t a, uint32_t b) __attribute__((always_inline, unused));
+static inline int32_t signed_multiply_32x16b(int32_t a, uint32_t b) _INLINE_;
 static inline int32_t signed_multiply_32x16b(int32_t a, uint32_t b) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
@@ -98,7 +100,7 @@ static inline int32_t signed_multiply_32x16b(int32_t a, uint32_t b) {
 #endif
 }
 
-static inline int32_t signed_multiply_32x16t(int32_t a, uint32_t b) __attribute__((always_inline, unused));
+static inline int32_t signed_multiply_32x16t(int32_t a, uint32_t b) _INLINE_;
 static inline int32_t signed_multiply_32x16t(int32_t a, uint32_t b) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
@@ -109,12 +111,12 @@ static inline int32_t signed_multiply_32x16t(int32_t a, uint32_t b) {
 #endif
 }
 
-static inline uint32_t pack_16b_16b(int32_t top, int32_t bottom) __attribute__((always_inline, unused));
+static inline uint32_t pack_16b_16b(int32_t top, int32_t bottom) _INLINE_;
 static inline uint32_t pack_16b_16b(int32_t top, int32_t bottom) {
     return ((uint32_t)(uint16_t)top << 16) | (uint16_t)bottom;
 }
 
-static inline int32_t multiply_32x32_rshift32(int32_t a, int32_t b) __attribute__((always_inline, unused));
+static inline int32_t multiply_32x32_rshift32(int32_t a, int32_t b) _INLINE_;
 static inline int32_t multiply_32x32_rshift32(int32_t a, int32_t b) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
@@ -125,7 +127,7 @@ static inline int32_t multiply_32x32_rshift32(int32_t a, int32_t b) {
 #endif
 }
 
-static inline int32_t multiply_32x32_rshift32_rounded(int32_t a, int32_t b) __attribute__((always_inline, unused));
+static inline int32_t multiply_32x32_rshift32_rounded(int32_t a, int32_t b) _INLINE_;
 static inline int32_t multiply_32x32_rshift32_rounded(int32_t a, int32_t b) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
@@ -137,7 +139,7 @@ static inline int32_t multiply_32x32_rshift32_rounded(int32_t a, int32_t b) {
 }
 
 static inline int32_t multiply_accumulate_32x32_rshift32_rounded(int32_t sum, int32_t a, int32_t b)
-    __attribute__((always_inline, unused));
+    _INLINE_;
 static inline int32_t multiply_accumulate_32x32_rshift32_rounded(int32_t sum, int32_t a, int32_t b) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
@@ -149,7 +151,7 @@ static inline int32_t multiply_accumulate_32x32_rshift32_rounded(int32_t sum, in
 }
 
 static inline int32_t multiply_subtract_32x32_rshift32_rounded(int32_t sum, int32_t a, int32_t b)
-    __attribute__((always_inline, unused));
+    _INLINE_;
 static inline int32_t multiply_subtract_32x32_rshift32_rounded(int32_t sum, int32_t a, int32_t b) {
 #if defined(__ARM_ARCH_7EM__)
     int32_t out;
@@ -161,7 +163,7 @@ static inline int32_t multiply_subtract_32x32_rshift32_rounded(int32_t sum, int3
 }
 
 // Portable replacement for CMSIS arm_float_to_q31().
-static inline int32_t float_to_q31(float value)  __attribute__((always_inline, unused));
+static inline int32_t float_to_q31(float value)  _INLINE_;
 static inline int32_t float_to_q31(float value) {
     if (!isfinite(value)) {
         return 0;
@@ -176,7 +178,7 @@ static inline int32_t float_to_q31(float value) {
     return (int32_t)(value * 2147483648.0f);
 }
 
-static inline int32_t saturate_q31(int64_t value) __attribute__((always_inline, unused));
+static inline int32_t saturate_q31(int64_t value) _INLINE_;
 static inline int32_t saturate_q31(int64_t value) {
     if (value > INT32_MAX) {
         return INT32_MAX;
@@ -188,7 +190,7 @@ static inline int32_t saturate_q31(int64_t value) {
 }
 
 // Portable equivalent of CMSIS arm_add_q31() for one sample.
-static inline int32_t add_q31_saturate(int32_t a, int32_t b) __attribute__((always_inline, unused));
+static inline int32_t add_q31_saturate(int32_t a, int32_t b) _INLINE_;
 static inline int32_t add_q31_saturate(int32_t a, int32_t b) { return saturate_q31((int64_t)a + (int64_t)b); }
 
 #ifdef __cplusplus
@@ -203,7 +205,7 @@ constexpr size_t FAST_MATH_SIN_TABLE_SIZE = 512;
 
 // Compatible with arm_sin_q15(): x is a fraction of a full turn in Q15 [0, 32768),
 // the result is Q15. Uses a 512-step table with linear interpolation.
-static inline int16_t sin_q15(int16_t x) __attribute__((always_inline, unused));
+static inline int16_t sin_q15(int16_t x) _INLINE_;
 static inline int16_t sin_q15(int16_t x) {
     const uint32_t phase = (uint32_t)x & 0x7FFF;
     const uint32_t index = phase >> 6;
@@ -214,7 +216,7 @@ static inline int16_t sin_q15(int16_t x) {
 
 // Compatible with arm_cos_q15(): x is a fraction of a full turn in Q15 [0, 32768),
 // the result is Q15. Uses the same 512-step table with linear interpolation.
-static inline int16_t cos_q15(int16_t x) __attribute__((always_inline, unused));
+static inline int16_t cos_q15(int16_t x) _INLINE_;
 static inline int16_t cos_q15(int16_t x) {
     const uint32_t phase = ((uint32_t)x + 8192U) & 0x7FFF;
     const uint32_t index = phase >> 6;
@@ -234,7 +236,7 @@ static inline int16_t cos_q15(int16_t x) {
 //
 // Keeping the interpolation fraction avoids quantizing the phase
 // to 15 bits before generating the audio sample.
-static inline int32_t sin_q15_phase_q16(uint32_t phase) __attribute__((always_inline, unused));
+static inline int32_t sin_q15_phase_q16(uint32_t phase) _INLINE_;
 
 static inline int32_t sin_q15_phase_q16(uint32_t phase) {
     const uint32_t index = phase >> 23;
@@ -266,7 +268,7 @@ for ($i=0; $i <= 32; $i++) {
 print "};\n";
 */
 
-static inline uint32_t sqrt_uint32(uint32_t in) __attribute__((always_inline, unused));
+static inline uint32_t sqrt_uint32(uint32_t in) _INLINE_;
 static inline uint32_t sqrt_uint32(uint32_t in) {
     if (in == 0) {
         return 0;
@@ -280,7 +282,7 @@ static inline uint32_t sqrt_uint32(uint32_t in) {
 }
 
 // Faster approximate integer square root. Also safe for zero input.
-static inline uint32_t sqrt_uint32_approx(uint32_t in) __attribute__((always_inline, unused));
+static inline uint32_t sqrt_uint32_approx(uint32_t in) _INLINE_;
 static inline uint32_t sqrt_uint32_approx(uint32_t in) {
     if (in == 0) {
         return 0;
