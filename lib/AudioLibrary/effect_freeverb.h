@@ -69,24 +69,24 @@ class AudioEffectFreeverbBase : public AudioStream {
 
     audio_block_t *inputQueueArray[1] = {};
 
+    // Shared realtime state used by the derived mono/stereo update methods.
+    ChannelState channels[2] = {};
+    int32_t comb_feedback = 27524;
+    int32_t comb_damp1 = 6553;
+    int32_t comb_damp2 = 26215;
+    portMUX_TYPE parameter_mux = portMUX_INITIALIZER_UNLOCKED;
+
   private:
     void configureChannel(ChannelState &channel, size_t &offset,
                           const uint16_t *comb_lengths,
                           const uint16_t *allpass_lengths);
 
-    ChannelState channels[2] = {};
     int16_t *delay_memory = nullptr;
     size_t delay_samples = 0;
     bool stereo_mode = false;
     bool using_psram = false;
     bool allocation_error_logged = false;
 
-    int32_t comb_feedback = 27524;
-    int32_t comb_damp1 = 6553;
-    int32_t comb_damp2 = 26215;
-
-    // Protect parameter snapshots against changes from another task/core.
-    portMUX_TYPE parameter_mux = portMUX_INITIALIZER_UNLOCKED;
 };
 
 class AudioEffectFreeverb : public AudioEffectFreeverbBase {
