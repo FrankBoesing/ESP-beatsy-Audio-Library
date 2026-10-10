@@ -54,10 +54,22 @@
 class AudioEffectReverb : public AudioStream {
   public:
     AudioEffectReverb() : AudioStream(1, inputQueueArray) {
-        init_comb_filters();
-        clear_buffers();
         reverbTime(5.0f);
     }
+
+    ~AudioEffectReverb() override;
+
+    AudioEffectReverb(const AudioEffectReverb &) = delete;
+    AudioEffectReverb &operator=(const AudioEffectReverb &) = delete;
+
+    // Allocate and initialize delay buffers. Call from setup before starting
+    // audio updates to avoid doing the allocations in the realtime audio task.
+    // If internal RAM cannot hold all LPF buffers, all four are placed in PSRAM.
+    bool begin();
+
+    // True when the four LPF delay buffers were allocated in PSRAM.
+    // Returns false before successful initialization and when internal RAM is used.
+    bool usingPSRAM() const { return using_psram; }
 
     void update() override;
 
@@ -86,6 +98,8 @@ class AudioEffectReverb : public AudioStream {
         uint32_t wr_idx;
     };
 
+    bool allocate_lpf_buffers(uint32_t capabilities);
+    void free_lpf_buffers();
     void init_comb_filters();
     void clear_buffers();
 
@@ -108,18 +122,23 @@ class AudioEffectReverb : public AudioStream {
     float g2_flt_lpf = 0.985f;
     int32_t g2_q31_lpf = 0;
 
+    // APF and working buffers stay in internal memory.
     int32_t apf1_buf[APF1_BUF_LEN] = {};
     int32_t apf2_buf[APF2_BUF_LEN] = {};
     int32_t apf3_buf[APF3_BUF_LEN] = {};
 
-    int32_t lpf1_buf[LPF1_BUF_LEN] = {};
-    int32_t lpf2_buf[LPF2_BUF_LEN] = {};
-    int32_t lpf3_buf[LPF3_BUF_LEN] = {};
-    int32_t lpf4_buf[LPF4_BUF_LEN] = {};
+    // LPF buffers are allocated in internal RAM first, then in PSRAM as a set.
+    int32_t *lpf1_buf = nullptr;
+    int32_t *lpf2_buf = nullptr;
+    int32_t *lpf3_buf = nullptr;
+    int32_t *lpf4_buf = nullptr;
 
     int32_t q31_buf[AUDIO_BLOCK_SAMPLES] = {};
     int32_t sum_buf[AUDIO_BLOCK_SAMPLES] = {};
     int32_t aux_buf[AUDIO_BLOCK_SAMPLES] = {};
+
+    bool initialized = false;
+    bool using_psram = false;
 };
 
 #endif
