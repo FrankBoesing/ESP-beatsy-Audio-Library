@@ -1,19 +1,20 @@
 TODOs:
 -lizenzen prüfen / übernehmen
 
- pause() etc für alle player
+- pause() etc für alle player
+- pc compatibility
 
 Fehlende
 
 Priorität 1: Grundlegende Effekte
-AudioEffectChorus und AudioEffectBitcrusher.
+AudioEffectChorus
 Breiter Nutzen für Synthesizer, Musikplayer und allgemeine Audioverarbeitung.
 
 
 
 
 Priorität 2: Analyse
-AudioAnalyzeRMS, AudioAnalyzeFFT1024 und AudioAnalyzeToneDetect.
+AudioAnalyzeToneDetect.
 Nützlich für Pegelmessung, Spektrumanalyse, Visualisierungen und automatische Steuerung.
 
 
