@@ -24,7 +24,7 @@
 
 #include "effect_reverb.h"
 
-#include <cmath>
+#include <math.h>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <stdint.h>
@@ -38,7 +38,7 @@ constexpr const char *TAG = "AudioEffectReverb";
 
 // Portable replacement for CMSIS arm_float_to_q31().
 static int32_t float_to_q31(float value) {
-    if (!std::isfinite(value)) {
+    if (!isfinite(value)) {
         return 0;
     }
     if (value >= 1.0f) {
@@ -260,7 +260,7 @@ void AudioEffectReverb::clear_buffers() {
 }
 
 void AudioEffectReverb::reverbTime(float seconds) {
-    if (!std::isfinite(seconds) || seconds <= 0.0f) {
+    if (!isfinite(seconds) || seconds <= 0.0f) {
         return;
     }
 
