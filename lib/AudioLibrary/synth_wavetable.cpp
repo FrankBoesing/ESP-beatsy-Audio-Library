@@ -34,20 +34,8 @@
 
 #include "utility/dspinst.h"
 
-// Portable equivalents of the ARM DSP operations used by the original source.
-static inline int32_t wavetable_mul32x32_rshift32(int32_t a, int32_t b) {
-    return (int32_t)(((int64_t)a * (int64_t)b) >> 32);
-}
-
-static inline int32_t wavetable_mul32x32_rshift32_rounded(int32_t a, int32_t b) {
-    return (int32_t)((((int64_t)a * (int64_t)b) + INT64_C(0x80000000)) >> 32);
-}
-
-static inline int32_t wavetable_macc32x32_rshift32_rounded(
-    int32_t sum, int32_t a, int32_t b) {
-    return sum + wavetable_mul32x32_rshift32_rounded(a, b);
-}
-
+// The library's portable DSP helpers cover 32x32 multiplies. The one
+// signed 32x16 accumulate needed by the SoundFont tremolo path is kept local.
 static inline int32_t wavetable_macc32x16b(int32_t sum, int32_t a, uint32_t b) {
     return sum + (int32_t)(((int64_t)a * (int16_t)(b & 0xFFFFU)) >> 16);
 }
@@ -361,7 +349,7 @@ void AudioSynthWavetable::update() {
                 : (int32_t)(0x3FFFFFFFU - vibratoPhase);
             const int32_t vibratoPitchOffset = vibratoScale >= 0
                 ? vibratoPitchOffsetInitial : vibratoPitchOffsetSecond;
-            toneIncrementOffset = wavetable_macc32x32_rshift32_rounded(
+            toneIncrementOffset = multiply_accumulate_32x32_rshift32_rounded(
                 toneIncrementOffset, vibratoScale, vibratoPitchOffset);
         }
 
@@ -381,7 +369,7 @@ void AudioSynthWavetable::update() {
                 ? sample->MODULATION_AMPLITUDE_INITIAL_GAIN
                 : sample->MODULATION_AMPLITUDE_SECOND_GAIN;
 
-            modulationScale = wavetable_mul32x32_rshift32(
+            modulationScale = multiply_32x32_rshift32(
                 modulationScale, modulationAmplitudeOffset);
             modulationAmplitude = wavetable_macc32x16b(
                 modulationAmplitude, modulationScale,
