@@ -141,6 +141,7 @@ void AudioFilterLadder::interpolationMethod(AudioFilterLadderInterpolation metho
     portEXIT_CRITICAL(&configMux);
 }
 
+OSPEED
 void AudioFilterLadder::computeCoefficients(float fc, float &newAlpha, float &newQAdjust) const {
     if (!isfinite(fc)) {
         fc = 5.0f;
@@ -161,6 +162,7 @@ void AudioFilterLadder::computeCoefficients(float fc, float &newAlpha, float &ne
                  0.05f * wc2 * wc2;
 }
 
+OSPEED
 float AudioFilterLadder::lpf(float sample, int stage) {
     float filtered = sample * (1.0f / 1.3f) +
                      (0.3f / 1.3f) * z0[stage] - z1[stage];
@@ -179,6 +181,7 @@ bool AudioFilterLadder::resonating() const {
     return false;
 }
 
+OSPEED
 float AudioFilterLadder::fastExp2(float x) {
     float integerPart;
     float fraction = modff(x, &integerPart);
@@ -195,6 +198,7 @@ float AudioFilterLadder::fastExp2(float x) {
     return ldexpf(fraction, (int)integerPart);
 }
 
+OSPEED
 float AudioFilterLadder::fastTanh(float x) {
     if (x > 3.0f) {
         return 1.0f;
@@ -224,6 +228,7 @@ int16_t AudioFilterLadder::toPcm(float value) {
 // Portable equivalent of CMSIS arm_fir_interpolate_f32() for L=4, 36 taps.
 // Coefficients remain in CMSIS time-reversed order; the phases are emitted
 // from L-1 down to zero to preserve the original interpolation timing.
+OSPEED
 void AudioFilterLadder::interpolateBlock(const int16_t *input, float drive) {
     constexpr int phaseLength = INTERPOLATION_PHASE_LENGTH;
 
@@ -258,6 +263,7 @@ void AudioFilterLadder::interpolateBlock(const int16_t *input, float drive) {
 // Portable equivalent of CMSIS arm_fir_decimate_f32() for M=4, 36 taps.
 // The full input is copied to state first, so oversampled[] can also be used
 // as the output buffer without corrupting samples that have yet to be read.
+OSPEED
 void AudioFilterLadder::decimateBlock() {
     constexpr int tapHistory = INTERPOLATION_TAPS - 1;
     constexpr int inputSamples = AUDIO_BLOCK_SAMPLES * INTERPOLATION;
