@@ -29,44 +29,9 @@
 #include <esp_log.h>
 #include <stdint.h>
 #include <string.h>
-
 #include "utility/dspinst.h"
 
-namespace {
-
-constexpr const char *TAG = "AudioEffectReverb";
-
-// Portable replacement for CMSIS arm_float_to_q31().
-static int32_t float_to_q31(float value) {
-    if (!isfinite(value)) {
-        return 0;
-    }
-    if (value >= 1.0f) {
-        return INT32_MAX;
-    }
-    if (value <= -1.0f) {
-        return INT32_MIN;
-    }
-
-    return (int32_t)(value * 2147483648.0f);
-}
-
-static int32_t saturate_q31(int64_t value) {
-    if (value > INT32_MAX) {
-        return INT32_MAX;
-    }
-    if (value < INT32_MIN) {
-        return INT32_MIN;
-    }
-    return (int32_t)value;
-}
-
-// Portable equivalent of CMSIS arm_add_q31() for one sample.
-static int32_t add_q31_saturate(int32_t a, int32_t b) {
-    return saturate_q31((int64_t)a + (int64_t)b);
-}
-
-} // namespace
+static constexpr const char *TAG = "AudioEffectReverb";
 
 AudioEffectReverb::~AudioEffectReverb() {
     free_lpf_buffers();

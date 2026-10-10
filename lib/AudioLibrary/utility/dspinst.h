@@ -28,6 +28,7 @@
 #define dspinst_h_
 
 #include <stdint.h>
+#include <math.h>
 
 // Portable versions of the fixed-point DSP helpers used by the Audio Library.
 // On Teensy/ARM these retain the original DSP instructions where available.
@@ -158,6 +159,37 @@ static inline int32_t multiply_subtract_32x32_rshift32_rounded(int32_t sum, int3
     return sum - (int32_t)((((int64_t)a * (int64_t)b) + INT64_C(0x80000000)) >> 32);
 #endif
 }
+
+// Portable replacement for CMSIS arm_float_to_q31().
+static inline int32_t float_to_q31(float value)  __attribute__((always_inline, unused));
+static inline int32_t float_to_q31(float value) {
+    if (!isfinite(value)) {
+        return 0;
+    }
+    if (value >= 1.0f) {
+        return INT32_MAX;
+    }
+    if (value <= -1.0f) {
+        return INT32_MIN;
+    }
+
+    return (int32_t)(value * 2147483648.0f);
+}
+
+static inline int32_t saturate_q31(int64_t value) __attribute__((always_inline, unused));
+static inline int32_t saturate_q31(int64_t value) {
+    if (value > INT32_MAX) {
+        return INT32_MAX;
+    }
+    if (value < INT32_MIN) {
+        return INT32_MIN;
+    }
+    return (int32_t)value;
+}
+
+// Portable equivalent of CMSIS arm_add_q31() for one sample.
+static inline int32_t add_q31_saturate(int32_t a, int32_t b) __attribute__((always_inline, unused));
+static inline int32_t add_q31_saturate(int32_t a, int32_t b) { return saturate_q31((int64_t)a + (int64_t)b); }
 
 #ifdef __cplusplus
 extern "C" {
