@@ -45,12 +45,12 @@ class AudioSynthNoisePink : public AudioStream {
     static const int32_t pfirb[64];
     static uint32_t instance_cnt;
 
-    uint32_t plfsr;       // linear feedback shift register
-    int32_t pinc;          // increment for all noise sources
-    int32_t pdec;          // decrement for all noise sources
-    int32_t paccu;         // accumulator
-    uint8_t pncnt;         // overflowing counter as index to pnmask[]
-    int32_t level;         // 0=off, 65536=max
+    uint32_t plfsr; // linear feedback shift register
+    int32_t pinc;   // increment for all noise sources
+    int32_t pdec;   // decrement for all noise sources
+    int32_t paccu;  // accumulator
+    uint8_t pncnt;  // overflowing counter as index to pnmask[]
+    int32_t level;  // 0=off, 65536=max
 
     portMUX_TYPE levelMux = portMUX_INITIALIZER_UNLOCKED;
 };

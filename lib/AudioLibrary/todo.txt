@@ -9,12 +9,8 @@ analyze_notefreq	Tonhöhen- bzw. Frequenzschätzung	Nützlich für Stimmgeräte 
 analyze_tonedetect	Tonerkennung	Ergänzt FFT, Peak- und RMS-Analyse
 Priorität 2 – weitere Synthesizer und Generatoren
 Klasse	Funktion
-synth_tonesweep	Frequenz-Sweep
-synth_pinknoise	Rosa Rauschen
 synth_karplusstrong	Plucked-String-Synthese
 synth_simple_drum	Einfacher Drum-Synthesizer
-synth_wavetable	Wavetable-Synthese
-Synt​h_wavetable wäre besonders interessant, wenn ihr die vorhandene Synthese-Bibliothek erweitern möchtet. synth_pwm steht ebenfalls im Teensy-Upstream, ist aber stark hardwareabhängig und für den ESP32 nicht ohne Weiteres identisch übertragbar.
 2. Playback und Recording
 Klasse	Funktion	Hinweis für ESP-beatsy
 play_sd_raw	Rohes PCM von SD abspielen	Gegen AudioSourceFile und vorhandene Player abgleichen

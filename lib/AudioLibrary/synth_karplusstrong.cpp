@@ -51,12 +51,10 @@ static inline uint32_t karplusStrongNextSeed(uint32_t seed) {
 
 uint32_t AudioSynthKarplusStrong::seed = 1U;
 
-AudioSynthKarplusStrong::AudioSynthKarplusStrong()
-    : AudioStream(0, nullptr) {}
+AudioSynthKarplusStrong::AudioSynthKarplusStrong() : AudioStream(0, nullptr) {}
 
 void AudioSynthKarplusStrong::noteOn(float frequency, float velocity) {
-    if (!isfinite(frequency) || frequency <= 0.0f ||
-        !isfinite(velocity) || velocity <= 0.0f) {
+    if (!isfinite(frequency) || frequency <= 0.0f || !isfinite(velocity) || velocity <= 0.0f) {
         noteOff(velocity);
         return;
     }
@@ -67,9 +65,7 @@ void AudioSynthKarplusStrong::noteOn(float frequency, float velocity) {
     }
 
     float requestedLength = AUDIO_SAMPLE_RATE_EXACT / frequency + 0.5f;
-    uint32_t length = requestedLength >= (float)MAX_BUFFER_LENGTH
-                          ? MAX_BUFFER_LENGTH
-                          : (uint32_t)requestedLength;
+    uint32_t length = requestedLength >= (float)MAX_BUFFER_LENGTH ? MAX_BUFFER_LENGTH : (uint32_t)requestedLength;
 
     // A positive frequency can still produce a zero-length delay at high
     // frequencies. Keep at least one delay sample to prevent invalid indexing.
@@ -123,8 +119,7 @@ void AudioSynthKarplusStrong::update() {
         uint32_t localSeed = seed;
         for (uint16_t i = 0; i < localBufferLen; ++i) {
             localSeed = karplusStrongNextSeed(localSeed);
-            buffer[i] = (int16_t)signed_multiply_32x16b(
-                localMagnitude, localSeed);
+            buffer[i] = (int16_t)signed_multiply_32x16b(localMagnitude, localSeed);
         }
 
         portENTER_CRITICAL(&stateMux);
@@ -157,17 +152,15 @@ void AudioSynthKarplusStrong::update() {
         return;
     }
 
-    int16_t prior = localBufferIndex > 0
-                        ? buffer[localBufferIndex - 1U]
-                        : buffer[localBufferLen - 1U];
+    int16_t prior = localBufferIndex > 0 ? buffer[localBufferIndex - 1U] : buffer[localBufferLen - 1U];
 
+#pragma GCC unroll 4
     for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const int16_t input = buffer[localBufferIndex];
 
         // Averaging adjacent samples with a slight loss creates the
         // characteristic decay of the Karplus-Strong string model.
-        const int32_t output =
-            ((int32_t)input * 32686 + (int32_t)prior * 32686) >> 16;
+        const int32_t output = ((int32_t)input * 32686 + (int32_t)prior * 32686) >> 16;
 
         block->data[i] = saturate16(output);
         buffer[localBufferIndex] = block->data[i];
