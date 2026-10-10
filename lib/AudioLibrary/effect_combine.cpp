@@ -3,7 +3,7 @@
 #include "utility/dspinst.h"
 
 // Audio blocks are 32-bit aligned. may_alias permits packed 32-bit access to
-// the int16_t sample storage without memcpy or strict-aliasing violations.
+// the int16_t sample storage while keeping strict-aliasing rules satisfied.
 typedef uint32_t audio_word_t __attribute__((__may_alias__));
 
 static_assert((AUDIO_BLOCK_SAMPLES % 2) == 0,
