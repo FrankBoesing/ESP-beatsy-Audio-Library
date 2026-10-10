@@ -23,6 +23,7 @@
 #include "effect_flange.h"
 #include "effect_granular.h"
 #include "effect_multiply.h"
+#include "effect_reverb.h"
 #include "effect_wavefolder.h"
 #include "effect_waveshaper.h"
 #include "filter_biquad.h"
