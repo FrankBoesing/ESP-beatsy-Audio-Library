@@ -15,7 +15,7 @@
 
 class AudioPlayAac : public AudioDecoderStream {
   public:
-    static constexpr const char *MIME_TYPES[] = {"audio/aac", "audio/aacp"};
+    static constexpr const char *MIME_TYPES[] = {"audio/aac", "audio/aacp", "audio/x-aac" /*, "audio/mp4"*/};
     static constexpr AudioPlayerInfo INFO = {AudioCodec::AAC, "AAC", MIME_TYPES,
                                              sizeof(MIME_TYPES) / sizeof(MIME_TYPES[0])};
     static constexpr int ERR_NONE = 0;
