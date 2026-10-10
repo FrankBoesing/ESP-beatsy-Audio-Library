@@ -10,4 +10,4 @@ compile_commands.json
 secrets.h
 .github/*
 copilot-instructions.md
-
+/src/SimpleDrum.cpp
