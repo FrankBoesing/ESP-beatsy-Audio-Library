@@ -56,7 +56,7 @@ class AudioFilterLadder : public AudioStream {
 
     struct Config {
         float baseFrequency;
-        float resonance;
+        float k;
         float octaveScale;
         float passbandGain;
         float overdrive;
@@ -95,7 +95,7 @@ class AudioFilterLadder : public AudioStream {
     // Updated from control/task context and snapshotted once per audio block.
     portMUX_TYPE configMux = portMUX_INITIALIZER_UNLOCKED;
     float baseFrequency = 1000.0f;
-    float baseResonance = 1.0f;
+    float baseK = 1.0f;
     float octaveScale = 1.0f / 32768.0f;
     float pbg = 0.5f;
     float hostOverdrive = 1.0f;
