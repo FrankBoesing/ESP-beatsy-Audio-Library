@@ -37,19 +37,14 @@ void AudioEffectRectifier::update() {
     }
 
     for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        int32_t sample = block->data[i];
+        int16_t sample = block->data[i];
 
         if (sample < 0) {
-            sample = -sample;
+            // -INT16_MIN cannot be represented by int16_t; saturate it.
+            sample = sample == INT16_MIN ? INT16_MAX : (int16_t)-sample;
         }
 
-        // A negative full-scale input (-32768) has magnitude 32768, which is
-        // outside the positive int16_t range. Match the Teensy saturation.
-        if (sample > INT16_MAX) {
-            sample = INT16_MAX;
-        }
-
-        block->data[i] = (int16_t)sample;
+        block->data[i] = sample;
     }
 
     transmit(block);
