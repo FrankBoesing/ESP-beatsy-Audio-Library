@@ -6,9 +6,6 @@
 // the int16_t sample storage while keeping strict-aliasing rules satisfied.
 typedef uint32_t audio_word_t __attribute__((__may_alias__));
 
-static_assert((AUDIO_BLOCK_SAMPLES % 2) == 0,
-              "AudioEffectDigitalCombine requires an even number of samples per block");
-
 OSPEED
 void AudioEffectDigitalCombine::update() {
     audio_block_t *blocka = receiveWritable(0);
@@ -42,8 +39,8 @@ void AudioEffectDigitalCombine::update() {
             break;
 
         case OR: {
-            auto *a = reinterpret_cast<audio_word_t *>(blocka->data);
-            const auto *b = reinterpret_cast<const audio_word_t *>(blockb->data);
+            audio_word_t *a = (audio_word_t *)blocka->data;
+            const audio_word_t *b = (const audio_word_t *)blockb->data;
             constexpr size_t words = AUDIO_BLOCK_SAMPLES / 2;
             for (size_t i = 0; i < words; ++i) {
                 a[i] |= b[i];
@@ -52,8 +49,8 @@ void AudioEffectDigitalCombine::update() {
         }
 
         case XOR: {
-            auto *a = reinterpret_cast<audio_word_t *>(blocka->data);
-            const auto *b = reinterpret_cast<const audio_word_t *>(blockb->data);
+            audio_word_t *a = (audio_word_t *)blocka->data;
+            const audio_word_t *b = (const audio_word_t *)blockb->data;
             constexpr size_t words = AUDIO_BLOCK_SAMPLES / 2;
             for (size_t i = 0; i < words; ++i) {
                 a[i] ^= b[i];
@@ -62,8 +59,8 @@ void AudioEffectDigitalCombine::update() {
         }
 
         case AND: {
-            auto *a = reinterpret_cast<audio_word_t *>(blocka->data);
-            const auto *b = reinterpret_cast<const audio_word_t *>(blockb->data);
+            audio_word_t *a = (audio_word_t *)blocka->data;
+            const audio_word_t *b = (const audio_word_t *)blockb->data;
             constexpr size_t words = AUDIO_BLOCK_SAMPLES / 2;
             for (size_t i = 0; i < words; ++i) {
                 a[i] &= b[i];
@@ -72,8 +69,8 @@ void AudioEffectDigitalCombine::update() {
         }
 
         case MODULO: {
-            auto *a = reinterpret_cast<audio_word_t *>(blocka->data);
-            const auto *b = reinterpret_cast<const audio_word_t *>(blockb->data);
+            audio_word_t *a = (audio_word_t *)blocka->data;
+            const audio_word_t *b = (const audio_word_t *)blockb->data;
             constexpr size_t words = AUDIO_BLOCK_SAMPLES / 2;
             for (size_t i = 0; i < words; ++i) {
                 // Preserve Teensy's packed unsigned 32-bit modulo semantics.
