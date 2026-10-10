@@ -103,9 +103,7 @@ void AudioSynthWavetable::stop() {
     portENTER_CRITICAL(&stateMux);
     if (env_state != STATE_IDLE) {
         env_state = STATE_RELEASE;
-        env_count = current_sample != nullptr
-                        ? (int32_t)current_sample->RELEASE_COUNT
-                        : 1;
+        env_count = current_sample != nullptr ? (int32_t)current_sample->RELEASE_COUNT : 1;
         if (env_count <= 0) {
             env_count = 1;
         }
@@ -152,14 +150,10 @@ void AudioSynthWavetable::setFrequencyLocked(float freq) {
         tone_incr = (uint32_t)increment;
     }
 
-    vib_pitch_offset_init = (int32_t)(
-        increment * current_sample->VIBRATO_PITCH_COEFFICIENT_INITIAL);
-    vib_pitch_offset_scnd = (int32_t)(
-        increment * current_sample->VIBRATO_PITCH_COEFFICIENT_SECOND);
-    mod_pitch_offset_init = (int32_t)(
-        increment * current_sample->MODULATION_PITCH_COEFFICIENT_INITIAL);
-    mod_pitch_offset_scnd = (int32_t)(
-        increment * current_sample->MODULATION_PITCH_COEFFICIENT_SECOND);
+    vib_pitch_offset_init = (int32_t)(increment * current_sample->VIBRATO_PITCH_COEFFICIENT_INITIAL);
+    vib_pitch_offset_scnd = (int32_t)(increment * current_sample->VIBRATO_PITCH_COEFFICIENT_SECOND);
+    mod_pitch_offset_init = (int32_t)(increment * current_sample->MODULATION_PITCH_COEFFICIENT_INITIAL);
+    mod_pitch_offset_scnd = (int32_t)(increment * current_sample->MODULATION_PITCH_COEFFICIENT_SECOND);
 }
 
 void AudioSynthWavetable::setFrequency(float freq) {
@@ -190,17 +184,15 @@ void AudioSynthWavetable::setState(int note, int amp, float freq) {
     env_state = STATE_IDLE;
     current_sample = nullptr;
 
-    if (instrument != nullptr && instrument->sample_count != 0 &&
-        instrument->sample_note_ranges != nullptr && instrument->samples != nullptr) {
+    if (instrument != nullptr && instrument->sample_count != 0 && instrument->sample_note_ranges != nullptr &&
+        instrument->samples != nullptr) {
         uint8_t index = 0;
-        while ((uint16_t)(index + 1U) < instrument->sample_count &&
-               note > instrument->sample_note_ranges[index]) {
+        while ((uint16_t)(index + 1U) < instrument->sample_count && note > instrument->sample_note_ranges[index]) {
             ++index;
         }
 
         const sample_data *candidate = &instrument->samples[index];
-        if (candidate->sample != nullptr &&
-            candidate->INDEX_BITS > 0 && candidate->INDEX_BITS <= 16) {
+        if (candidate->sample != nullptr && candidate->INDEX_BITS > 0 && candidate->INDEX_BITS <= 16) {
             current_sample = candidate;
         }
     }
@@ -212,8 +204,7 @@ void AudioSynthWavetable::setState(int note, int amp, float freq) {
         env_count = (int32_t)current_sample->DELAY_COUNT;
 
         tone_amp = (uint16_t)(amp * (UINT16_MAX / 127));
-        tone_amp = (uint16_t)(((uint32_t)current_sample->INITIAL_ATTENUATION_SCALAR *
-                               (uint32_t)tone_amp) >> 16);
+        tone_amp = (uint16_t)(((uint32_t)current_sample->INITIAL_ATTENUATION_SCALAR * (uint32_t)tone_amp) >> 16);
 
         env_state = STATE_DELAY;
     } else {
@@ -314,35 +305,29 @@ void AudioSynthWavetable::update() {
 
         if (vibratoCount++ > sample->VIBRATO_DELAY) {
             vibratoPhase += sample->VIBRATO_INCREMENT;
-            const int32_t vibratoScale = (vibratoPhase & 0x80000000U)
-                ? (int32_t)(0x40000000U + vibratoPhase)
-                : (int32_t)(0x3FFFFFFFU - vibratoPhase);
-            const int32_t vibratoPitchOffset = vibratoScale >= 0
-                ? vibratoPitchOffsetInitial : vibratoPitchOffsetSecond;
-            toneIncrementOffset = multiply_accumulate_32x32_rshift32_rounded(
-                toneIncrementOffset, vibratoScale, vibratoPitchOffset);
+            const int32_t vibratoScale = (vibratoPhase & 0x80000000U) ? (int32_t)(0x40000000U + vibratoPhase)
+                                                                      : (int32_t)(0x3FFFFFFFU - vibratoPhase);
+            const int32_t vibratoPitchOffset = vibratoScale >= 0 ? vibratoPitchOffsetInitial : vibratoPitchOffsetSecond;
+            toneIncrementOffset =
+                multiply_accumulate_32x32_rshift32_rounded(toneIncrementOffset, vibratoScale, vibratoPitchOffset);
         }
 
         int32_t modulationAmplitude = toneAmplitude;
         if (modulationCount++ > sample->MODULATION_DELAY) {
             modulationPhase += sample->MODULATION_INCREMENT;
-            int32_t modulationScale = (modulationPhase & 0x80000000U)
-                ? (int32_t)(0x40000000U + modulationPhase)
-                : (int32_t)(0x3FFFFFFFU - modulationPhase);
+            int32_t modulationScale = (modulationPhase & 0x80000000U) ? (int32_t)(0x40000000U + modulationPhase)
+                                                                      : (int32_t)(0x3FFFFFFFU - modulationPhase);
 
-            const int32_t modulationPitchOffset = modulationScale >= 0
-                ? modulationPitchOffsetInitial : modulationPitchOffsetSecond;
-            toneIncrementOffset = multiply_accumulate_32x32_rshift32_rounded(
-                toneIncrementOffset, modulationScale, modulationPitchOffset);
+            const int32_t modulationPitchOffset =
+                modulationScale >= 0 ? modulationPitchOffsetInitial : modulationPitchOffsetSecond;
+            toneIncrementOffset =
+                multiply_accumulate_32x32_rshift32_rounded(toneIncrementOffset, modulationScale, modulationPitchOffset);
 
-            const int32_t modulationAmplitudeOffset = modulationScale >= 0
-                ? sample->MODULATION_AMPLITUDE_INITIAL_GAIN
-                : sample->MODULATION_AMPLITUDE_SECOND_GAIN;
+            const int32_t modulationAmplitudeOffset = modulationScale >= 0 ? sample->MODULATION_AMPLITUDE_INITIAL_GAIN
+                                                                           : sample->MODULATION_AMPLITUDE_SECOND_GAIN;
 
-            modulationScale = multiply_32x32_rshift32(
-                modulationScale, modulationAmplitudeOffset);
-            modulationAmplitude += signed_multiply_32x16b(
-                modulationScale, (uint32_t)modulationAmplitude);
+            modulationScale = multiply_32x32_rshift32(modulationScale, modulationAmplitudeOffset);
+            modulationAmplitude += signed_multiply_32x16b(modulationScale, (uint32_t)modulationAmplitude);
         }
 
         if (modulationAmplitude < 0) {
@@ -351,8 +336,7 @@ void AudioSynthWavetable::update() {
             modulationAmplitude = UINT16_MAX;
         }
 
-        const int segmentEnd = (sampleOffset + lfoPeriod < blockSize)
-                                  ? sampleOffset + lfoPeriod : blockSize;
+        const int segmentEnd = (sampleOffset + lfoPeriod < blockSize) ? sampleOffset + lfoPeriod : blockSize;
 
         for (; sampleOffset < segmentEnd; ++sampleOffset) {
             if (!sample->LOOP && tonePhase >= sample->MAX_PHASE) {
@@ -371,8 +355,7 @@ void AudioSynthWavetable::update() {
             const int32_t part0 = (sample0 * (int32_t)(0xFFFFU - scale)) >> 16;
             const int32_t part1 = (sample1 * (int32_t)scale) >> 16;
             const int32_t interpolatedSample = part0 + part1;
-            const int32_t output = (int32_t)(
-                ((int64_t)modulationAmplitude * interpolatedSample) >> 16);
+            const int32_t output = (int32_t)(((int64_t)modulationAmplitude * interpolatedSample) >> 16);
 
             block->data[sampleOffset] = saturate16(output);
 
@@ -383,8 +366,7 @@ void AudioSynthWavetable::update() {
                 break;
             }
 
-            if (sample->LOOP && sample->LOOP_PHASE_LENGTH != 0U &&
-                tonePhase >= sample->LOOP_PHASE_END) {
+            if (sample->LOOP && sample->LOOP_PHASE_LENGTH != 0U && tonePhase >= sample->LOOP_PHASE_END) {
                 tonePhase -= sample->LOOP_PHASE_LENGTH;
             }
         }
@@ -404,65 +386,60 @@ void AudioSynthWavetable::update() {
 
         while (envelopeCount <= 0) {
             switch (envelopeState) {
-                case STATE_DELAY:
-                    envelopeState = STATE_ATTACK;
-                    envelopeCount = (int32_t)sample->ATTACK_COUNT;
-                    if (envelopeCount <= 0) {
-                        envelopeCount = 1;
-                    }
-                    envelopeIncrement = (int32_t)(
-                        (int64_t)UNITY_GAIN /
-                        ((int64_t)envelopeCount * ENVELOPE_PERIOD));
-                    continue;
+            case STATE_DELAY:
+                envelopeState = STATE_ATTACK;
+                envelopeCount = (int32_t)sample->ATTACK_COUNT;
+                if (envelopeCount <= 0) {
+                    envelopeCount = 1;
+                }
+                envelopeIncrement = (int32_t)((int64_t)UNITY_GAIN / ((int64_t)envelopeCount * ENVELOPE_PERIOD));
+                continue;
 
-                case STATE_ATTACK:
-                    envelopeMultiplier = UNITY_GAIN;
-                    envelopeState = STATE_HOLD;
-                    envelopeCount = (int32_t)sample->HOLD_COUNT;
-                    envelopeIncrement = 0;
-                    continue;
+            case STATE_ATTACK:
+                envelopeMultiplier = UNITY_GAIN;
+                envelopeState = STATE_HOLD;
+                envelopeCount = (int32_t)sample->HOLD_COUNT;
+                envelopeIncrement = 0;
+                continue;
 
-                case STATE_HOLD:
-                    envelopeState = STATE_DECAY;
-                    envelopeCount = (int32_t)sample->DECAY_COUNT;
-                    if (envelopeCount <= 0) {
-                        envelopeCount = 1;
-                    }
-                    envelopeIncrement = (int32_t)(
-                        -((int64_t)sample->SUSTAIN_MULT) /
-                        ((int64_t)envelopeCount * ENVELOPE_PERIOD));
-                    continue;
+            case STATE_HOLD:
+                envelopeState = STATE_DECAY;
+                envelopeCount = (int32_t)sample->DECAY_COUNT;
+                if (envelopeCount <= 0) {
+                    envelopeCount = 1;
+                }
+                envelopeIncrement =
+                    (int32_t)(-((int64_t)sample->SUSTAIN_MULT) / ((int64_t)envelopeCount * ENVELOPE_PERIOD));
+                continue;
 
-                case STATE_DECAY:
-                    envelopeMultiplier = UNITY_GAIN - sample->SUSTAIN_MULT;
-                    envelopeState = envelopeMultiplier < UNITY_GAIN / UINT16_MAX
-                                        ? STATE_RELEASE : STATE_SUSTAIN;
-                    envelopeIncrement = 0;
-                    continue;
+            case STATE_DECAY:
+                envelopeMultiplier = UNITY_GAIN - sample->SUSTAIN_MULT;
+                envelopeState = envelopeMultiplier < UNITY_GAIN / UINT16_MAX ? STATE_RELEASE : STATE_SUSTAIN;
+                envelopeIncrement = 0;
+                continue;
 
-                case STATE_SUSTAIN:
-                    envelopeCount = INT32_MAX;
-                    continue;
+            case STATE_SUSTAIN:
+                envelopeCount = INT32_MAX;
+                continue;
 
-                case STATE_RELEASE:
-                    envelopeState = STATE_IDLE;
-                    envelopeCount = 0;
-                    envelopeMultiplier = 0;
-                    envelopeIncrement = 0;
-                    zeroRemainder = true;
-                    break;
+            case STATE_RELEASE:
+                envelopeState = STATE_IDLE;
+                envelopeCount = 0;
+                envelopeMultiplier = 0;
+                envelopeIncrement = 0;
+                zeroRemainder = true;
+                break;
 
-                case STATE_IDLE:
-                default:
-                    zeroRemainder = true;
-                    break;
+            case STATE_IDLE:
+            default:
+                zeroRemainder = true;
+                break;
             }
             break;
         }
 
         if (zeroRemainder || envelopeState == STATE_IDLE) {
-            memset(block->data + envelopeOffset, 0,
-                   (size_t)(blockSize - envelopeOffset) * sizeof(block->data[0]));
+            memset(block->data + envelopeOffset, 0, (size_t)(blockSize - envelopeOffset) * sizeof(block->data[0]));
             break;
         }
 
@@ -472,14 +449,10 @@ void AudioSynthWavetable::update() {
         }
 
         for (int i = 0; i < samplesThisGroup; ++i) {
-            const int64_t nextEnvelopeMultiplier =
-                (int64_t)envelopeMultiplier + envelopeIncrement;
-            envelopeMultiplier = nextEnvelopeMultiplier < 0
-                                     ? 0
-                                     : saturate_q31(nextEnvelopeMultiplier);
+            const int64_t nextEnvelopeMultiplier = (int64_t)envelopeMultiplier + envelopeIncrement;
+            envelopeMultiplier = nextEnvelopeMultiplier < 0 ? 0 : saturate_q31(nextEnvelopeMultiplier);
 
-            const int32_t scaled = (int32_t)(
-                ((int64_t)block->data[envelopeOffset] * envelopeMultiplier) >> 31);
+            const int32_t scaled = (int32_t)(((int64_t)block->data[envelopeOffset] * envelopeMultiplier) >> 31);
             block->data[envelopeOffset] = saturate16(scaled);
             ++envelopeOffset;
         }
