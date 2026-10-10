@@ -32,6 +32,7 @@
 #include "filter_biquad.h"
 #include "filter_fir.h"
 #include "filter_ladder.h"
+#include "filter_variable.h"
 #include "mixer.h"
 #include "output_i2s.h"
 #include "play_aac.h"
@@ -41,7 +42,13 @@
 #include "play_sd_wav.h"
 #include "synth_dc.h"
 #include "synth_sine.h"
+#include "synth_tonesweep.h"
 #include "synth_whitenoise.h"
+#include "synth_pinknoise.h"
 #include "synth_waveform.h"
+#include "synth_wavetable.h"
+#include "synth_pwm.h"
+#include "synth_simple_drum.h"
+#include "synth_karplusstrong.h"
 
 #endif

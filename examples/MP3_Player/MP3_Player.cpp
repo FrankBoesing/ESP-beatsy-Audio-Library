@@ -2,34 +2,35 @@
 #include <Arduino.h>
 #include <SD_MMC.h>
 #include <Audio.h>
-#include "play_mp3.h"
-#include "output_i2s.h"
-#include "control_es8388.h"
-
 
 // ============================================================================
 // Audio objects
 // ============================================================================
 
-AudioControlES8388 codec;
-AudioSourceFile source;
-AudioPlayAac aac;
-
-AudioOutputI2S i2s({
-    27, // BCLK
-    25, // WS / LRCLK
-    26, // DOUT
-    0   // MCLK
+AudioOutputI2S output({
+    PIN_I2S_BLCK, // BCLK
+    PIN_I2S_WS,   // WS / LRCLK
+    PIN_I2S_DOUT, // DOUT
+    PIN_I2S_MLCK  // MCLK
 });
 
+#if defined(AUDIO_CODEC_ES8388)
+AudioControlES8388 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER_ACTIVE});
+#elif defined(AUDIO_CODEC_ES8311)
+AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER_ACTIVE});
+#else
+#error "AUDIO_CODEC not defined"
+#endif
 
+AudioSourceFile source;
+AudioPlayMp3 mp3;
 
 // ============================================================================
 // Connections
 // ============================================================================
 
-AudioConnection patchCord1(aac, 0, i2s, 0);
-AudioConnection patchCord2(aac, 1, i2s, 1);
+AudioConnection patchCord1(mp3, 0, output, 0);
+AudioConnection patchCord2(mp3, 1, output, 1);
 
 // ============================================================================
 // Setup
@@ -57,17 +58,17 @@ void setup() {
     // ES8388
     // ------------------------------------------------------------------------
 
-    Serial.println("Initializing ES8388...");
+    Serial.println("Initializing Codec...");
 
     if (!codec.enable()) {
-        Serial.println("ERROR: ES8388 initialization failed");
+        Serial.println("ERROR: Codec initialization failed");
 
         while (true) {
             delay(1000);
         }
     }
 
-    Serial.println("ES8388 initialized");
+    Serial.println("Codec initialized");
 
     float volume = 0.7f;
     codec.volume(volume);
@@ -85,7 +86,7 @@ void setup() {
      *
      * 1-bit mode.
      */
-    if (!SD_MMC.begin("/sdcard", false)) {
+    if (!SD_MMC.begin("/sdcard", true)) {
         Serial.println("ERROR: SD_MMC initialization failed");
 
         while (true) {
@@ -99,34 +100,34 @@ void setup() {
     // Open MP3
     // ------------------------------------------------------------------------
 
-    Serial.println("Opening /test.aac...");
+    Serial.println("Opening /test.mp3...");
 
-    if (!source.open(SD_MMC, "/test.aac")) {
-        Serial.println("ERROR: Could not open /test.aac");
+    if (!source.open(SD_MMC, "/test.mp3")) {
+        Serial.println("ERROR: Could not open /test.mp3");
 
         while (true) {
             delay(1000);
         }
     }
 
-    Serial.printf("AAC source opened, size=%llu bytes\n",
+    Serial.printf("MP3 source opened, size=%llu bytes\n",
                   (unsigned long long)source.size());
 
     // ------------------------------------------------------------------------
     // Start playback
     // ------------------------------------------------------------------------
 
-    Serial.println("Starting AAC playback...");
+    Serial.println("Starting MP3 playback...");
 
-    if (!aac.play(source)) {
-        Serial.println("ERROR: AAC playback could not be started");
+    if (!mp3.play(source)) {
+        Serial.println("ERROR: MP3 playback could not be started");
 
         while (true) {
             delay(1000);
         }
     }
 
-    Serial.println("AAC playback started");
+    Serial.println("MP3 playback started");
 }
 
 // ============================================================================
@@ -142,22 +143,22 @@ void loop() {
         Serial.println();
         Serial.println("--------------------------------------");
 
-        Serial.printf("Playing: %s\n", aac.isPlaying() ? "yes" : "no");
+        Serial.printf("Playing: %s\n", mp3.isPlaying() ? "yes" : "no");
 
         /*
          * AudioStream statistics:
          *   processorUsage()    = most recent update() execution
          *   processorUsageMax() = maximum update() execution since start
          */
-        Serial.printf("Audio CPU: AAC %.2f%% (max %.2f%%), "
+        Serial.printf("Audio CPU: MP3 %.2f%% (max %.2f%%), "
                       "I2S %.2f%% (max %.2f%%)\n",
-                      aac.processorUsage(), aac.processorUsageMax(),
-                      i2s.processorUsage(), i2s.processorUsageMax());
+                      mp3.AudioProcessorUsage(), mp3.AudioProcessorUsageMax(),
+                      output.AudioProcessorUsage(), output.AudioProcessorUsageMax());
 
         Serial.printf("Audio memory: %u / %u blocks "
                       "(current / max)\n",
-                      AudioStream::memoryUsage(),
-                      AudioStream::memoryUsageMax());
+                      AudioStream::AudioMemoryUsage(),
+                      AudioStream::AudioMemoryUsageMax());
 
         const float cpu0 = AudioStream::processorUsage(0);
         const float cpu1 = AudioStream::processorUsage(1);
@@ -166,20 +167,20 @@ void loop() {
         }
 
         /*
-         * AAC-specific decoder load:
+         * MP3-specific decoder load:
          * total time inside MP3Decode(), relative to the audio time generated.
          * Source/SD waiting and vTaskDelay() are deliberately excluded.
          */
 #if SOFTCODEC_METRICS
-        Serial.printf("AAC decode: avg %.2f%%, frame max %.2f%%, "
+        Serial.printf("MP3 decode: avg %.2f%%, frame max %.2f%%, "
                       "frames %lu, decode %.3f s\n",
                       aac.decodeProcessorUsage(), aac.decodeProcessorUsageMax(),
                       (unsigned long)aac.decodeFrames(),
                       (double)aac.decodeTimeUsTotal() / 1000000.0);
 #endif
         Serial.printf("Position: %lu ms / %lu ms\n",
-                      (unsigned long)aac.positionMillis(),
-                      (unsigned long)aac.lengthMillis());
+                      (unsigned long)mp3.positionMillis(),
+                      (unsigned long)mp3.lengthMillis());
     }
     delay(500);
 }

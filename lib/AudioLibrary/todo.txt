@@ -1,37 +1,86 @@
-TODOs:
--lizenzen prüfen / übernehmen
 
-- pause() etc für alle player
-- pc compatibility
+TODO: Röhrenklang
 
-Fehlende
+1. Noch offene DSP-Klassen
 
-Priorität 1: Grundlegende Effekte
-AudioEffectChorus
-Breiter Nutzen für Synthesizer, Musikplayer und allgemeine Audioverarbeitung.
+Priorität 1 – universell nutzbare Audiobearbeitung
+Klasse	Funktion	Einschätzung
+analyze_notefreq	Tonhöhen- bzw. Frequenzschätzung	Nützlich für Stimmgeräte und Audioanalyse
+analyze_tonedetect	Tonerkennung	Ergänzt FFT, Peak- und RMS-Analyse
+Priorität 2 – weitere Synthesizer und Generatoren
+Klasse	Funktion
+synth_karplusstrong	Plucked-String-Synthese
+synth_simple_drum	Einfacher Drum-Synthesizer
+2. Playback und Recording
+Klasse	Funktion	Hinweis für ESP-beatsy
+play_sd_raw	Rohes PCM von SD abspielen	Gegen AudioSourceFile und vorhandene Player abgleichen
+play_serialflash_raw	Rohes PCM aus Serial Flash	Nur nötig, wenn dieser Speichertyp unterstützt werden soll
+record_queue	Audioblöcke zur Aufnahme bereitstellen	Für Aufnahme, Weiterverarbeitung und Streaming nützlich
+MP3- und AAC-Wiedergabe sind bei euch bereits durch eigene Implementierungen abgedeckt. Die Raw- und Recording-Funktionen sind daher eher eine Frage des gewünschten Funktionsumfangs als zwingende Voraussetzung.
+3. Audio-Eingänge und -Ausgänge
+Hier ist die Liste länger, die Portierung sollte aber nicht durch blindes Kopieren der Teensy-Treiber erfolgen.
+Eingangsknoten fehlen noch
+- input_adc, input_adcs
+- input_i2s, input_i2s2
+- input_i2s_quad, input_i2s_hex, input_i2s_oct
+- input_tdm, input_tdm2
+- input_pdm, input_pdm_i2s2
+- input_spdif3, async_input_spdif3
+Für eure Plattform wäre zunächst ein sauber integrierter AudioInputI2S-Knoten am naheliegendsten. ADC-, PDM- und Mehrkanal-Eingänge könnten später entsprechend dem tatsächlichen Hardwarebedarf folgen.
+Weitere Ausgangsknoten fehlen
+- output_dac, output_dacs
+- output_i2s2
+- output_i2s_quad, output_i2s_hex, output_i2s_oct
+- output_pwm
+- output_spdif, output_spdif2, output_spdif3
+- output_pt8211, output_pt8211_2
+- output_tdm, output_tdm2, output_adat
+output_i2s habt ihr bereits. Welche weiteren Ausgänge sinnvoll sind, hängt davon ab, ob ihr zusätzliche I2S-Ports, Mehrkanal-Audio oder spezielle DACs unterstützen möchtet.
+4. Codec-Steuerungen
+Der Teensy-Upstream unterstützt weitere Codec- und Audiochip-Treiber, die bei euch fehlen:
+- control_sgtl5000
+- control_wm8731
+- control_ak4558
+- control_cs4272
+- control_cs42448
+- control_tlv320aic3206
+Eure Library unterstützt bereits ES8311 und ES8388. Die übrigen Treiber müssen nur portiert werden, wenn die zugehörige Hardware unterstützt werden soll.
+5. Zusätzliche Dateien außerhalb der Standardklassen
+Beim Vergleich sind außerdem einige Dateien aufgefallen, die nicht Teil der normalen Audio.h-Klassenliste sind:
+- Quantizer.h/.cpp
+- Resampler.h/.cpp
+- biquad.h
+Diese sollten wir separat bewerten. Insbesondere Quantizer und Resampler würde ich zunächst auf Einsatzzweck und API prüfen, bevor wir sie als zwingend fehlende Komponenten einstufen.
+Die Daten- und Hilfsdateien data_windows.c, data_waveforms.c, data_bandlimit_step.c, data_spdif.c und data_ulaw.c liegen bei euch bereits unter utility/; sie zählen deshalb nicht zu den fehlenden Dateien.
+
+Meine empfohlene Reihenfolge
+1
+
+effect_freeverb
+Ergänzt das bereits vorhandene Reverb um einen zweiten Algorithmus und ist eine klar abgegrenzte nächste Effektklasse.
 
 
 
+2
 
-Priorität 2: Analyse
-AudioAnalyzeToneDetect.
-Nützlich für Pegelmessung, Spektrumanalyse, Visualisierungen und automatische Steuerung.
-
-
-
-
-Priorität 3: Audio-Eingang und Aufnahme
-AudioInputI2S und AudioRecordQueue.
-Erweitert die Library vom reinen Wiedergabepfad hin zu bidirektionaler Audioverarbeitung.
+filter_variable und filter_ladder
+Zwei nützliche Filterkomponenten, deren DSP-Arithmetik wir gezielt auf ESP32 und ESP32-S3 abstimmen können.
 
 
 
+3
 
-Priorität 4: Synthese-Erweiterungen
-AudioSynthNoisePink, AudioSynthToneSweep, AudioSynthKarplusStrong und AudioSynthWavetable.
-Besonders interessant für Instrumente und MIDI-Anwendungen.
+analyze_notefreq und analyze_tonedetect
+Ergänzen den Analysebereich, ohne die Audio-Hardwarearchitektur verändern zu müssen.
 
 
 
-Meine Einschätzung: Du musst nicht sämtliche Teensy-Komponenten portieren, um eine leistungsfähige ESP32-Audiolibrary zu erhalten. Sinnvoller ist es, die fehlenden Funktionen nach tatsächlichem Nutzen und Portierungsaufwand zu priorisieren. Die hardwaregebundenen Teensy-Komponenten würde ich separat behandeln.
-Einschränkung: Die Liste ist noch kein vollständiger Dateivergleich. Insbesondere bei den als Kandidaten markierten Komponenten ist noch zu prüfen, ob die Implementierung bereits außerhalb von Audio.h existiert. Erst ein vollständiger Vergleich aller Header und Quelldateien von main mit dem Teensy-Repository würde eine belastbare Liste der tatsächlich fehlenden Klassen ergeben.
+4
+
+AudioInputI2S
+Danach würde ich die ESP-spezifische Eingabeseite ergänzen. Das ist architektonisch wichtiger als die vollständige Übernahme aller Teensy-Hardwareknoten.
+
+
+
+Vergleichsgrundlage: Eure aktuelle Audio.h auf Branch work und die originale Teensy Audio.h.
+Die Liste zeigt fehlende Klassen und Schnittstellen im Vergleich, nicht bereits durch einen Build bestätigte Portierungsqualität. Einige eurer vorhandenen Komponenten sind ESP-spezifische Ersatzimplementierungen und deshalb absichtlich nicht namensgleich zum Teensy-Upstream.
