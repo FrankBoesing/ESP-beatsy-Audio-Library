@@ -26,12 +26,15 @@
 
 #include <cmath>
 #include <esp_heap_caps.h>
+#include <esp_log.h>
 #include <stdint.h>
 #include <string.h>
 
 #include "utility/dspinst.h"
 
 namespace {
+
+constexpr const char *TAG = "AudioEffectReverb";
 
 // Portable replacement for CMSIS arm_float_to_q31().
 static int32_t float_to_q31(float value) {
@@ -108,11 +111,20 @@ bool AudioEffectReverb::begin() {
         using_psram = false;
     } else if (allocate_lpf_buffers(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)) {
         using_psram = true;
+        ESP_LOGD(TAG, "Internal RAM insufficient for reverb LPF buffers; using PSRAM");
     } else {
         using_psram = false;
+
+        // update() may retry begin() on every audio cycle; report this only once
+        // to avoid flooding the log while allocation remains unavailable.
+        if (!allocation_error_logged) {
+            ESP_LOGE(TAG, "Failed to allocate reverb LPF buffers in internal RAM and PSRAM");
+            allocation_error_logged = true;
+        }
         return false;
     }
 
+    allocation_error_logged = false;
     init_comb_filters();
     clear_buffers();
     initialized = true;
