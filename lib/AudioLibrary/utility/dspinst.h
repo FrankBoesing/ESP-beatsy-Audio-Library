@@ -235,8 +235,6 @@ for ($i=0; $i <= 32; $i++) {
 print "};\n";
 */
 
-// Integer square root using Newton iterations. Zero must be handled before
-// __builtin_clz(): its result is undefined for zero on GCC/Clang targets.
 static inline uint32_t sqrt_uint32(uint32_t in) __attribute__((always_inline, unused));
 static inline uint32_t sqrt_uint32(uint32_t in) {
     if (in == 0) {
