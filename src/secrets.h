@@ -1,4 +1,4 @@
 #pragma once
 
-#define WIFI_SSID "Guest"
-#define WIFI_PASS "Himbeergeist"
+#define WIFI_SSID "Funkloch"
+#define WIFI_PASS "Bezerra-2017"
