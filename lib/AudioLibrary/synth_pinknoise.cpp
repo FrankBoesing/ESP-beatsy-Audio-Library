@@ -45,42 +45,32 @@ uint32_t AudioSynthNoisePink::instance_cnt = 0;
 // FIR filter. These coefficients preserve the original New Shade of Pink
 // implementation.
 #define PINK_FN(cf, m, shift) (2048 * cf * (2 * (((m) >> (shift)) & 1) - 1))
-#define PINK_FA(n) \
-    (int32_t)(PINK_FN(1.190566, n, 0) + PINK_FN(0.162580, n, 1) + \
-              PINK_FN(0.002208, n, 2) + PINK_FN(0.025475, n, 3) + \
+#define PINK_FA(n)                                                                                                     \
+    (int32_t)(PINK_FN(1.190566, n, 0) + PINK_FN(0.162580, n, 1) + PINK_FN(0.002208, n, 2) + PINK_FN(0.025475, n, 3) +  \
               PINK_FN(-0.001522, n, 4) + PINK_FN(0.007322, n, 5))
-#define PINK_FB(n) \
-    (int32_t)(PINK_FN(0.001774, n, 0) + PINK_FN(0.004529, n, 1) + \
-              PINK_FN(-0.001561, n, 2) + PINK_FN(0.000776, n, 3) + \
+#define PINK_FB(n)                                                                                                     \
+    (int32_t)(PINK_FN(0.001774, n, 0) + PINK_FN(0.004529, n, 1) + PINK_FN(-0.001561, n, 2) + PINK_FN(0.000776, n, 3) + \
               PINK_FN(-0.000486, n, 4) + PINK_FN(0.002017, n, 5))
-#define PINK_FA8(n) PINK_FA(n), PINK_FA(n + 1), PINK_FA(n + 2), PINK_FA(n + 3), PINK_FA(n + 4), PINK_FA(n + 5), PINK_FA(n + 6), PINK_FA(n + 7)
-#define PINK_FB8(n) PINK_FB(n), PINK_FB(n + 1), PINK_FB(n + 2), PINK_FB(n + 3), PINK_FB(n + 4), PINK_FB(n + 5), PINK_FB(n + 6), PINK_FB(n + 7)
+#define PINK_FA8(n)                                                                                                    \
+    PINK_FA(n), PINK_FA(n + 1), PINK_FA(n + 2), PINK_FA(n + 3), PINK_FA(n + 4), PINK_FA(n + 5), PINK_FA(n + 6),        \
+        PINK_FA(n + 7)
+#define PINK_FB8(n)                                                                                                    \
+    PINK_FB(n), PINK_FB(n + 1), PINK_FB(n + 2), PINK_FB(n + 3), PINK_FB(n + 4), PINK_FB(n + 5), PINK_FB(n + 6),        \
+        PINK_FB(n + 7)
 
-const int32_t AudioSynthNoisePink::pfira[64] = {
-    PINK_FA8(0), PINK_FA8(8), PINK_FA8(16), PINK_FA8(24),
-    PINK_FA8(32), PINK_FA8(40), PINK_FA8(48), PINK_FA8(56)
-};
+const int32_t AudioSynthNoisePink::pfira[64] = {PINK_FA8(0),  PINK_FA8(8),  PINK_FA8(16), PINK_FA8(24),
+                                                PINK_FA8(32), PINK_FA8(40), PINK_FA8(48), PINK_FA8(56)};
 
-const int32_t AudioSynthNoisePink::pfirb[64] = {
-    PINK_FB8(0), PINK_FB8(8), PINK_FB8(16), PINK_FB8(24),
-    PINK_FB8(32), PINK_FB8(40), PINK_FB8(48), PINK_FB8(56)
-};
+const int32_t AudioSynthNoisePink::pfirb[64] = {PINK_FB8(0),  PINK_FB8(8),  PINK_FB8(16), PINK_FB8(24),
+                                                PINK_FB8(32), PINK_FB8(40), PINK_FB8(48), PINK_FB8(56)};
 
 #define PINK_PM16(n) n, 0x80, 0x40, 0x80, 0x20, 0x80, 0x40, 0x80, 0x10, 0x80, 0x40, 0x80, 0x20, 0x80, 0x40, 0x80
 const uint8_t AudioSynthNoisePink::pnmask[256] = {
-    PINK_PM16(0), PINK_PM16(8), PINK_PM16(4), PINK_PM16(8),
-    PINK_PM16(2), PINK_PM16(8), PINK_PM16(4), PINK_PM16(8),
-    PINK_PM16(1), PINK_PM16(8), PINK_PM16(4), PINK_PM16(8),
-    PINK_PM16(2), PINK_PM16(8), PINK_PM16(4), PINK_PM16(8)
-};
+    PINK_PM16(0), PINK_PM16(8), PINK_PM16(4), PINK_PM16(8), PINK_PM16(2), PINK_PM16(8), PINK_PM16(4), PINK_PM16(8),
+    PINK_PM16(1), PINK_PM16(8), PINK_PM16(4), PINK_PM16(8), PINK_PM16(2), PINK_PM16(8), PINK_PM16(4), PINK_PM16(8)};
 
 AudioSynthNoisePink::AudioSynthNoisePink()
-    : AudioStream(0, nullptr),
-      plfsr(0x5EED41F5U + instance_cnt++),
-      pinc(0x0CCC),
-      pdec(0x0CCC),
-      paccu(0),
-      pncnt(0),
+    : AudioStream(0, nullptr), plfsr(0x5EED41F5U + instance_cnt++), pinc(0x0CCC), pdec(0x0CCC), paccu(0), pncnt(0),
       level(0) {}
 
 void AudioSynthNoisePink::amplitude(float n) {
@@ -101,16 +91,16 @@ void AudioSynthNoisePink::amplitude(float n) {
 
 // One pink-noise update step. The signed-multiply helper is shared with the
 // other fixed-point DSP components in utility/dspinst.h.
-#define PINK_STEP(bitmask, out)                                      \
-    do {                                                             \
-        bit = (int32_t)(lfsr >> 31);                                 \
-        dec &= ~(bitmask);                                           \
-        lfsr <<= 1;                                                  \
-        dec |= inc & (bitmask);                                      \
-        inc ^= bit & taps;                                           \
-        accu += inc - dec;                                           \
-        lfsr ^= (uint32_t)(bit & taps);                              \
-        (out) = accu + pfira[lfsr & 0x3FU] + pfirb[(lfsr >> 6) & 0x3FU]; \
+#define PINK_STEP(bitmask, out)                                                                                        \
+    do {                                                                                                               \
+        bit = (int32_t)(lfsr >> 31);                                                                                   \
+        dec &= ~(bitmask);                                                                                             \
+        lfsr <<= 1;                                                                                                    \
+        dec |= inc & (bitmask);                                                                                        \
+        inc ^= bit & taps;                                                                                             \
+        accu += inc - dec;                                                                                             \
+        lfsr ^= (uint32_t)(bit & taps);                                                                                \
+        (out) = accu + pfira[lfsr & 0x3FU] + pfirb[(lfsr >> 6) & 0x3FU];                                               \
     } while (0)
 
 OSPEED
@@ -139,17 +129,13 @@ void AudioSynthNoisePink::update() {
 
     // Same eight-tap mask cadence as the original implementation, but write
     // individual int16 samples rather than aliasing the audio buffer as uint32_t.
-    static const uint16_t pairMasks[8] = {
-        0, 0x0400, 0x0200, 0x0400, 0x0100, 0x0400, 0x0200, 0x0400
-    };
+    static const uint16_t pairMasks[8] = {0, 0x0400, 0x0200, 0x0400, 0x0100, 0x0400, 0x0200, 0x0400};
 
     uint32_t sampleIndex = 0;
     uint32_t pairIndex = 0;
     while (sampleIndex < AUDIO_BLOCK_SAMPLES) {
         const uint32_t pairInGroup = pairIndex & 7U;
-        const int32_t mask = pairInGroup == 0
-                                 ? pnmask[pncnt++]
-                                 : pairMasks[pairInGroup];
+        const int32_t mask = pairInGroup == 0 ? pnmask[pncnt++] : pairMasks[pairInGroup];
 
         int32_t n1;
         PINK_STEP(mask, n1);

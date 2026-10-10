@@ -33,8 +33,7 @@
 #include "synth_waveform.h"
 #include "utility/dspinst.h"
 
-AudioSynthSimpleDrum::AudioSynthSimpleDrum()
-    : AudioStream(1, inputQueueArray) {
+AudioSynthSimpleDrum::AudioSynthSimpleDrum() : AudioStream(1, inputQueueArray) {
     length(600);
     frequency(60.0f);
 
@@ -63,8 +62,7 @@ void AudioSynthSimpleDrum::frequency(float freq) {
         freq = AUDIO_SAMPLE_RATE_EXACT / 2.0f;
     }
 
-    const uint32_t increment =
-        (uint32_t)(freq * (2147483647.0f / AUDIO_SAMPLE_RATE_EXACT) + 0.5f);
+    const uint32_t increment =  (uint32_t)(freq * (2147483647.0f / AUDIO_SAMPLE_RATE_EXACT) + 0.5f);
 
     portENTER_CRITICAL(&configMux);
     wav_increment = increment;
@@ -84,8 +82,7 @@ void AudioSynthSimpleDrum::length(int32_t milliseconds) {
     if (milliseconds == 0) {
         lengthSamples = 1;
     } else {
-        lengthSamples = (uint32_t)(
-            (float)milliseconds * (AUDIO_SAMPLE_RATE_EXACT / 1000.0f));
+        lengthSamples = (uint32_t)((float)milliseconds * (AUDIO_SAMPLE_RATE_EXACT / 1000.0f));
         if (lengthSamples == 0) {
             lengthSamples = 1;
         }
@@ -200,11 +197,8 @@ void AudioSynthSimpleDrum::update() {
 
         // Pitch modulation is strongest at the start and fades with the
         // square of the envelope. Keep the original fixed-point scaling.
-        const int32_t mod = signed_multiply_32x16b(
-                                envelopeSquared,
-                                (uint32_t)(pitchModulation >> 1)) >> 13;
-        const int32_t mod2 = signed_multiply_32x16b(
-            (int32_t)(increment << 3), (uint32_t)(mod >> 1));
+        const int32_t mod = signed_multiply_32x16b(envelopeSquared, (uint32_t)(pitchModulation >> 1)) >> 13;
+        const int32_t mod2 = signed_multiply_32x16b((int32_t)(increment << 3), (uint32_t)(mod >> 1));
 
         phase1 = (phase1 + (uint32_t)mod2) & 0x7fffffffU;
 
@@ -238,8 +232,7 @@ void AudioSynthSimpleDrum::update() {
             interpolated = ((interpolated * amplitude1) >> 15) + second;
         }
 
-        const int32_t output =
-            signed_multiply_32x16b(envelopeSquared, (uint32_t)interpolated) >> 15;
+        const int32_t output = signed_multiply_32x16b(envelopeSquared, (uint32_t)interpolated) >> 15;
         block->data[i] = saturate16(output);
     }
 
