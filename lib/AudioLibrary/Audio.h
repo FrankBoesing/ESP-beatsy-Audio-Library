@@ -22,6 +22,7 @@
 #include "effect_fade.h"
 #include "effect_flange.h"
 #include "effect_granular.h"
+#include "effect_midside.h"
 #include "effect_multiply.h"
 #include "effect_reverb.h"
 #include "effect_rectifier.h"
