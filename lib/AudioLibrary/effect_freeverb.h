@@ -38,6 +38,9 @@ class AudioEffectFreeverbBase : public AudioStream {
   public:
     ~AudioEffectFreeverbBase() override;
 
+    AudioEffectFreeverbBase(const AudioEffectFreeverbBase &) = delete;
+    AudioEffectFreeverbBase &operator=(const AudioEffectFreeverbBase &) = delete;
+
     // Allocate and clear delay-line storage. Call from setup() before starting
     // audio updates. update() retries lazily for compatibility with sketches
     // that do not call begin().
