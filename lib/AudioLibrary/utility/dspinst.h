@@ -241,7 +241,7 @@ static inline uint32_t sqrt_uint32(uint32_t in) {
         return 0;
     }
 
-    uint32_t n = sqrt_integer_guess_table[__builtin_clz(in)];
+    uint32_t n = sqrt_integer_guess_table[CLZ(in)];
     n = ((in / n) + n) / 2;
     n = ((in / n) + n) / 2;
     n = ((in / n) + n) / 2;
