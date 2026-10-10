@@ -9,6 +9,7 @@
 
 #include "analyze_peak.h"
 #include "analyze_print.h"
+#include "analyze_rms.h"
 #include "control_es8311.h"
 #include "control_es8388.h"
 #include "effect_bitcrusher.h"
