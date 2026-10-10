@@ -25,6 +25,7 @@
 #include "effect_reverb.h"
 
 #include <cmath>
+#include <esp_heap_caps.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -63,6 +64,60 @@ static int32_t add_q31_saturate(int32_t a, int32_t b) {
 }
 
 } // namespace
+
+AudioEffectReverb::~AudioEffectReverb() {
+    free_lpf_buffers();
+}
+
+bool AudioEffectReverb::allocate_lpf_buffers(uint32_t capabilities) {
+    lpf1_buf = (int32_t *)heap_caps_malloc((size_t)LPF1_BUF_LEN * sizeof(int32_t), capabilities);
+    lpf2_buf = (int32_t *)heap_caps_malloc((size_t)LPF2_BUF_LEN * sizeof(int32_t), capabilities);
+    lpf3_buf = (int32_t *)heap_caps_malloc((size_t)LPF3_BUF_LEN * sizeof(int32_t), capabilities);
+    lpf4_buf = (int32_t *)heap_caps_malloc((size_t)LPF4_BUF_LEN * sizeof(int32_t), capabilities);
+
+    if (lpf1_buf == nullptr || lpf2_buf == nullptr ||
+        lpf3_buf == nullptr || lpf4_buf == nullptr) {
+        free_lpf_buffers();
+        return false;
+    }
+
+    return true;
+}
+
+void AudioEffectReverb::free_lpf_buffers() {
+    if (lpf1_buf != nullptr) heap_caps_free(lpf1_buf);
+    if (lpf2_buf != nullptr) heap_caps_free(lpf2_buf);
+    if (lpf3_buf != nullptr) heap_caps_free(lpf3_buf);
+    if (lpf4_buf != nullptr) heap_caps_free(lpf4_buf);
+
+    lpf1_buf = nullptr;
+    lpf2_buf = nullptr;
+    lpf3_buf = nullptr;
+    lpf4_buf = nullptr;
+}
+
+bool AudioEffectReverb::begin() {
+    if (initialized) {
+        return true;
+    }
+
+    // Prefer internal RAM for predictable access latency. We require all four
+    // LPF buffers there; if any allocation fails, free the partial set and
+    // retry the complete set in PSRAM.
+    if (allocate_lpf_buffers(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)) {
+        using_psram = false;
+    } else if (allocate_lpf_buffers(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)) {
+        using_psram = true;
+    } else {
+        using_psram = false;
+        return false;
+    }
+
+    init_comb_filters();
+    clear_buffers();
+    initialized = true;
+    return true;
+}
 
 void AudioEffectReverb::_do_comb_apf(comb_apf *filter, int32_t *in_buf, int32_t *out_buf) {
     const int32_t g = filter->g;
@@ -173,7 +228,7 @@ void AudioEffectReverb::init_comb_filters() {
     lpf[3].delay = LPF4_DLY_LEN;
 
     for (uint32_t i = 0; i < 4; ++i) {
-        lpf[i].g1 = 0; // Set by reverbTime() after initialization.
+        lpf[i].g1 = g1_q31_lpf[i];
         lpf[i].g2 = g2_q31_lpf;
         lpf[i].z1 = 0;
         lpf[i].wr_idx = 0;
@@ -186,10 +241,10 @@ void AudioEffectReverb::clear_buffers() {
     memset(apf2_buf, 0, sizeof(apf2_buf));
     memset(apf3_buf, 0, sizeof(apf3_buf));
 
-    memset(lpf1_buf, 0, sizeof(lpf1_buf));
-    memset(lpf2_buf, 0, sizeof(lpf2_buf));
-    memset(lpf3_buf, 0, sizeof(lpf3_buf));
-    memset(lpf4_buf, 0, sizeof(lpf4_buf));
+    memset(lpf1_buf, 0, (size_t)LPF1_BUF_LEN * sizeof(int32_t));
+    memset(lpf2_buf, 0, (size_t)LPF2_BUF_LEN * sizeof(int32_t));
+    memset(lpf3_buf, 0, (size_t)LPF3_BUF_LEN * sizeof(int32_t));
+    memset(lpf4_buf, 0, (size_t)LPF4_BUF_LEN * sizeof(int32_t));
 }
 
 void AudioEffectReverb::reverbTime(float seconds) {
@@ -206,12 +261,26 @@ void AudioEffectReverb::reverbTime(float seconds) {
 
     for (uint32_t i = 0; i < 4; ++i) {
         g1_q31_lpf[i] = float_to_q31(g1_flt_lpf[i]);
-        lpf[i].g1 = g1_q31_lpf[i];
+        if (initialized) {
+            lpf[i].g1 = g1_q31_lpf[i];
+        }
     }
 }
 
 OSPEED
 void AudioEffectReverb::update() {
+    // The preferred path is to call begin() in setup(), before starting audio.
+    // Keep existing sketches working by retrying initialization on first update.
+    if (!initialized && !begin()) {
+        // If both heaps are exhausted, don't interrupt the signal path.
+        audio_block_t *input = receiveReadOnly();
+        if (input != nullptr) {
+            transmit(input);
+            release(input);
+        }
+        return;
+    }
+
     audio_block_t *block = receiveWritable();
 
     // Keep producing the reverb tail when no upstream block was available.
