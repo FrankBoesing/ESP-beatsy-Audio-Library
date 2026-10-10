@@ -139,6 +139,7 @@ class AudioEffectReverb : public AudioStream {
 
     bool initialized = false;
     bool using_psram = false;
+    bool allocation_error_logged = false;
 };
 
 #endif
