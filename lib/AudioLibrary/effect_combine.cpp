@@ -1,8 +1,10 @@
 #include "effect_combine.h"
 
-#include <cstring>
-
 #include "utility/dspinst.h"
+
+// Audio blocks are 32-bit aligned. may_alias permits packed 32-bit access to
+// the int16_t sample storage without memcpy or strict-aliasing violations.
+typedef uint32_t audio_word_t __attribute__((__may_alias__));
 
 static_assert((AUDIO_BLOCK_SAMPLES % 2) == 0,
               "AudioEffectDigitalCombine requires an even number of samples per block");
@@ -22,47 +24,63 @@ void AudioEffectDigitalCombine::update() {
         return;
     }
 
-    const combineMode mode = mode_sel;
-
-    if (mode == ADD || mode == SUBTRACT) {
-        // PCM arithmetic: calculate in 32 bits, then saturate back to int16.
-        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            const int32_t a = blocka->data[i];
-            const int32_t b = blockb->data[i];
-            const int32_t result = (mode == ADD) ? (a + b) : (a - b);
-            blocka->data[i] = saturate16(result);
-        }
-    } else {
-        // The original Teensy implementation combines pairs of packed samples.
-        // memcpy avoids strict-aliasing violations from casting int16_t* to uint32_t*.
-        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; i += 2) {
-            uint32_t a;
-            uint32_t b;
-            std::memcpy(&a, &blocka->data[i], sizeof(a));
-            std::memcpy(&b, &blockb->data[i], sizeof(b));
-
-            switch (mode) {
-                case OR:
-                    a |= b;
-                    break;
-                case XOR:
-                    a ^= b;
-                    break;
-                case AND:
-                    a &= b;
-                    break;
-                case MODULO:
-                    // MODULO retains the original unsigned 32-bit packed-sample
-                    // semantics. Avoid division by zero for robustness.
-                    a = (b == 0U) ? 0U : (a % b);
-                    break;
-                case ADD:
-                case SUBTRACT:
-                    // Handled by the sample-wise path above.
-                    break;
+    switch (mode_sel) {
+        case ADD:
+            for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                const int32_t a = blocka->data[i];
+                const int32_t b = blockb->data[i];
+                blocka->data[i] = saturate16(a + b);
             }
+            break;
 
-            std::memcpy(&blocka->data[i], &a, sizeof(a));
+        case SUBTRACT:
+            for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                const int32_t a = blocka->data[i];
+                const int32_t b = blockb->data[i];
+                blocka->data[i] = saturate16(a - b);
+            }
+            break;
+
+        case OR: {
+            auto *a = reinterpret_cast<audio_word_t *>(blocka->data);
+            const auto *b = reinterpret_cast<const audio_word_t *>(blockb->data);
+            constexpr size_t words = AUDIO_BLOCK_SAMPLES / 2;
+            for (size_t i = 0; i < words; ++i) {
+                a[i] |= b[i];
+            }
+            break;
+        }
+
+        case XOR: {
+            auto *a = reinterpret_cast<audio_word_t *>(blocka->data);
+            const auto *b = reinterpret_cast<const audio_word_t *>(blockb->data);
+            constexpr size_t words = AUDIO_BLOCK_SAMPLES / 2;
+            for (size_t i = 0; i < words; ++i) {
+                a[i] ^= b[i];
+            }
+            break;
+        }
+
+        case AND: {
+            auto *a = reinterpret_cast<audio_word_t *>(blocka->data);
+            const auto *b = reinterpret_cast<const audio_word_t *>(blockb->data);
+            constexpr size_t words = AUDIO_BLOCK_SAMPLES / 2;
+            for (size_t i = 0; i < words; ++i) {
+                a[i] &= b[i];
+            }
+            break;
+        }
+
+        case MODULO: {
+            auto *a = reinterpret_cast<audio_word_t *>(blocka->data);
+            const auto *b = reinterpret_cast<const audio_word_t *>(blockb->data);
+            constexpr size_t words = AUDIO_BLOCK_SAMPLES / 2;
+            for (size_t i = 0; i < words; ++i) {
+                // Preserve Teensy's packed unsigned 32-bit modulo semantics.
+                // A zero divisor yields zero instead of triggering division UB.
+                a[i] = (b[i] == 0U) ? 0U : (a[i] % b[i]);
+            }
+            break;
         }
     }
 
