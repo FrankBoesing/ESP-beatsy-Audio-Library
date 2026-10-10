@@ -7,6 +7,8 @@
 #include "AudioStream.h"
 #include "softcodecs/AudioSourceFile.h"
 
+#include "analyze_fft1024.h"
+#include "analyze_fft256.h"
 #include "analyze_peak.h"
 #include "analyze_print.h"
 #include "analyze_rms.h"

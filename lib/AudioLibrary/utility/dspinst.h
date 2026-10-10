@@ -197,7 +197,6 @@ static inline int16_t cos_q15(int16_t x) {
     return (int16_t)(s0 + (((s1 - s0) * (int32_t)(phase & 0x3F)) >> 6));
 }
 
-
 // High-resolution phase lookup using the 512-entry Q15 sine table.
 //
 // Input:
@@ -209,8 +208,7 @@ static inline int16_t cos_q15(int16_t x) {
 //
 // Keeping the interpolation fraction avoids quantizing the phase
 // to 15 bits before generating the audio sample.
-static inline int32_t sin_q15_phase_q16(uint32_t phase)
-    __attribute__((always_inline, unused));
+static inline int32_t sin_q15_phase_q16(uint32_t phase) __attribute__((always_inline, unused));
 
 static inline int32_t sin_q15_phase_q16(uint32_t phase) {
     const uint32_t index = phase >> 23;
@@ -220,6 +218,50 @@ static inline int32_t sin_q15_phase_q16(uint32_t phase) {
     const int32_t s1 = sinTable_q15[index + 1];
 
     return s0 * (0x10000 - scale) + s1 * scale;
+}
+
+static constexpr uint16_t sqrt_integer_guess_table[33] = {
+    55109, 38968, 27555, 19484, 13778, 9742, 6889, 4871, 3445, 2436, 1723, 1218, 862, 609, 431, 305, 216,
+    153,   108,   77,    54,    39,    27,   20,   14,   10,   7,    5,    4,    3,   2,   1,   0};
+
+/*
+#! /usr/bin/perl
+use POSIX;
+print "const uint16_t sqrt_integer_guess_table[33] = {\n";
+for ($i=0; $i <= 32; $i++) {
+	printf "%5d", ceil(sqrt((0xFFFFFFFF >> $i) * sqrt(2)/2 ));
+	print "," if $i < 32;
+	print "\n";
+}
+print "};\n";
+*/
+
+// Integer square root using Newton iterations. Zero must be handled before
+// __builtin_clz(): its result is undefined for zero on GCC/Clang targets.
+static inline uint32_t sqrt_uint32(uint32_t in) __attribute__((always_inline, unused));
+static inline uint32_t sqrt_uint32(uint32_t in) {
+    if (in == 0) {
+        return 0;
+    }
+
+    uint32_t n = sqrt_integer_guess_table[__builtin_clz(in)];
+    n = ((in / n) + n) / 2;
+    n = ((in / n) + n) / 2;
+    n = ((in / n) + n) / 2;
+    return n;
+}
+
+// Faster approximate integer square root. Also safe for zero input.
+static inline uint32_t sqrt_uint32_approx(uint32_t in) __attribute__((always_inline, unused));
+static inline uint32_t sqrt_uint32_approx(uint32_t in) {
+    if (in == 0) {
+        return 0;
+    }
+
+    uint32_t n = sqrt_integer_guess_table[__builtin_clz(in)];
+    n = ((in / n) + n) / 2;
+    n = ((in / n) + n) / 2;
+    return n;
 }
 
 #endif
