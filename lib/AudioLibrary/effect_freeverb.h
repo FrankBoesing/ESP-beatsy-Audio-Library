@@ -54,9 +54,11 @@ class AudioEffectFreeverbBase : public AudioStream {
 
     struct ChannelState {
         int16_t *comb[8] = {};
+        uint16_t comb_length[8] = {};
         uint16_t comb_index[8] = {};
         int16_t comb_filter[8] = {};
         int16_t *allpass[4] = {};
+        uint16_t allpass_length[4] = {};
         uint16_t allpass_index[4] = {};
     };
 
