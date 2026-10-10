@@ -21,7 +21,7 @@ class AudioEffectDigitalCombine : public AudioStream {
         AND      = 2,
         MODULO   = 3,
         ADD      = 4,
-        SUBTRACT = 5,
+        SUBTRACT = 5, // Karaoke ;)
     };
 
     AudioEffectDigitalCombine() : AudioStream(2, inputQueueArray), mode_sel(OR) {}

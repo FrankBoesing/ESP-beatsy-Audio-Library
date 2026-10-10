@@ -1,5 +1,4 @@
 #include "effect_combine.h"
-
 #include "utility/dspinst.h"
 
 // Audio blocks are 32-bit aligned. may_alias permits packed 32-bit access to
@@ -23,14 +22,15 @@ void AudioEffectDigitalCombine::update() {
 
     switch (mode_sel) {
         case ADD:
+#pragma GCC unroll 4
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
                 const int32_t a = blocka->data[i];
                 const int32_t b = blockb->data[i];
                 blocka->data[i] = saturate16(a + b);
             }
             break;
-
         case SUBTRACT:
+#pragma GCC unroll 4
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
                 const int32_t a = blocka->data[i];
                 const int32_t b = blockb->data[i];
@@ -42,6 +42,7 @@ void AudioEffectDigitalCombine::update() {
             audio_word_t *a = (audio_word_t *)blocka->data;
             const audio_word_t *b = (const audio_word_t *)blockb->data;
             constexpr size_t words = AUDIO_BLOCK_SAMPLES / 2;
+#pragma GCC unroll 2
             for (size_t i = 0; i < words; ++i) {
                 a[i] |= b[i];
             }
@@ -52,6 +53,7 @@ void AudioEffectDigitalCombine::update() {
             audio_word_t *a = (audio_word_t *)blocka->data;
             const audio_word_t *b = (const audio_word_t *)blockb->data;
             constexpr size_t words = AUDIO_BLOCK_SAMPLES / 2;
+#pragma GCC unroll 2
             for (size_t i = 0; i < words; ++i) {
                 a[i] ^= b[i];
             }
@@ -62,6 +64,7 @@ void AudioEffectDigitalCombine::update() {
             audio_word_t *a = (audio_word_t *)blocka->data;
             const audio_word_t *b = (const audio_word_t *)blockb->data;
             constexpr size_t words = AUDIO_BLOCK_SAMPLES / 2;
+#pragma GCC unroll 2
             for (size_t i = 0; i < words; ++i) {
                 a[i] &= b[i];
             }
@@ -72,6 +75,7 @@ void AudioEffectDigitalCombine::update() {
             audio_word_t *a = (audio_word_t *)blocka->data;
             const audio_word_t *b = (const audio_word_t *)blockb->data;
             constexpr size_t words = AUDIO_BLOCK_SAMPLES / 2;
+#pragma GCC unroll 2
             for (size_t i = 0; i < words; ++i) {
                 // Preserve Teensy's packed unsigned 32-bit modulo semantics.
                 // A zero divisor yields zero instead of triggering division UB.
