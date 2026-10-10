@@ -15,6 +15,7 @@
 #include "control_es8311.h"
 #include "control_es8388.h"
 #include "effect_bitcrusher.h"
+#include "effect_chorus.h"
 #include "effect_combine.h"
 #include "effect_delay.h"
 #include "effect_envelope.h"
