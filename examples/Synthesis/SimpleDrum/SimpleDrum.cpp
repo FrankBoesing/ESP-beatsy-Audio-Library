@@ -23,7 +23,6 @@ AudioSynthSimpleDrum     drum3;          //xy=424,310
 AudioSynthSimpleDrum     drum1;          //xy=431,197
 AudioSynthSimpleDrum     drum4;          //xy=464,374
 AudioMixer4              mixer1;         //xy=737,265
-AudioOutputI2S           i2s1;           //xy=979,214
 AudioConnection          patchCord1(drum2, 0, mixer1, 1);
 AudioConnection          patchCord2(drum3, 0, mixer1, 2);
 AudioConnection          patchCord3(drum1, 0, mixer1, 0);
