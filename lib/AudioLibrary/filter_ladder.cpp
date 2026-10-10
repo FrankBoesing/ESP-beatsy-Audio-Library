@@ -228,11 +228,12 @@ void AudioFilterLadder::interpolateBlock(const int16_t *input, float drive) {
     constexpr int phaseLength = INTERPOLATION_PHASE_LENGTH;
 
     for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        // Match CMSIS state timing: only append the current sample before
+        // calculating its four interpolated output samples. Copying the full
+        // block first would make future input samples visible to the FIR.
         interpolationState[(phaseLength - 1) + i] =
             ((float)input[i] * drive * (float)INTERPOLATION) / 32768.0f;
-    }
 
-    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const float *state = interpolationState + i;
 
         for (int phase = INTERPOLATION; phase > 0; --phase) {
