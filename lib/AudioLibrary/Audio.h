@@ -48,5 +48,6 @@
 #include "synth_waveform.h"
 #include "synth_wavetable.h"
 #include "synth_pwm.h"
+#include "synth_simple_drum.h"
 
 #endif
