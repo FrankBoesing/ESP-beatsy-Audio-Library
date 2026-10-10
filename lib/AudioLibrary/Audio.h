@@ -44,5 +44,6 @@
 #include "synth_sine.h"
 #include "synth_whitenoise.h"
 #include "synth_waveform.h"
+#include "synth_pwm.h"
 
 #endif
