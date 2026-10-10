@@ -99,7 +99,6 @@ OSPEED
 void AudioSynthKarplusStrong::update() {
     uint16_t localBufferLen;
     uint16_t localBufferIndex;
-    int32_t localMagnitude;
     uint32_t localGeneration;
     uint8_t localState;
 
@@ -127,7 +126,6 @@ void AudioSynthKarplusStrong::update() {
 
     localBufferLen = bufferLen;
     localBufferIndex = bufferIndex;
-    localMagnitude = magnitude;
     localGeneration = stateGeneration;
     portEXIT_CRITICAL(&stateMux);
 
