@@ -34,32 +34,6 @@
 
 #include "utility/dspinst.h"
 
-// The library's portable DSP helpers cover 32x32 multiplies. The one
-// signed 32x16 accumulate needed by the SoundFont tremolo path is kept local.
-static inline int32_t wavetable_macc32x16b(int32_t sum, int32_t a, uint32_t b) {
-    return sum + (int32_t)(((int64_t)a * (int16_t)(b & 0xFFFFU)) >> 16);
-}
-
-static inline int16_t wavetable_saturate16(int32_t value) {
-    if (value > INT16_MAX) {
-        return INT16_MAX;
-    }
-    if (value < INT16_MIN) {
-        return INT16_MIN;
-    }
-    return (int16_t)value;
-}
-
-static inline int32_t wavetable_clamp_envelope(int64_t value) {
-    if (value > AudioSynthWavetable::UNITY_GAIN) {
-        return AudioSynthWavetable::UNITY_GAIN;
-    }
-    if (value < 0) {
-        return 0;
-    }
-    return (int32_t)value;
-}
-
 void AudioSynthWavetable::setInstrument(const instrument_data &newInstrument) {
     portENTER_CRITICAL(&stateMux);
     instrument = &newInstrument;
@@ -358,7 +332,7 @@ void AudioSynthWavetable::update() {
 
             const int32_t modulationPitchOffset = modulationScale >= 0
                 ? modulationPitchOffsetInitial : modulationPitchOffsetSecond;
-            toneIncrementOffset = wavetable_macc32x32_rshift32_rounded(
+            toneIncrementOffset = multiply_accumulate_32x32_rshift32_rounded(
                 toneIncrementOffset, modulationScale, modulationPitchOffset);
 
             const int32_t modulationAmplitudeOffset = modulationScale >= 0
@@ -367,9 +341,8 @@ void AudioSynthWavetable::update() {
 
             modulationScale = multiply_32x32_rshift32(
                 modulationScale, modulationAmplitudeOffset);
-            modulationAmplitude = wavetable_macc32x16b(
-                modulationAmplitude, modulationScale,
-                (uint32_t)modulationAmplitude);
+            modulationAmplitude += signed_multiply_32x16b(
+                modulationScale, (uint32_t)modulationAmplitude);
         }
 
         if (modulationAmplitude < 0) {
@@ -401,7 +374,7 @@ void AudioSynthWavetable::update() {
             const int32_t output = (int32_t)(
                 ((int64_t)modulationAmplitude * interpolatedSample) >> 16);
 
-            block->data[sampleOffset] = wavetable_saturate16(output);
+            block->data[sampleOffset] = saturate16(output);
 
             tonePhase += toneIncrement + (uint32_t)toneIncrementOffset;
             if (!sample->LOOP && tonePhase >= sample->MAX_PHASE) {
@@ -499,12 +472,15 @@ void AudioSynthWavetable::update() {
         }
 
         for (int i = 0; i < samplesThisGroup; ++i) {
-            envelopeMultiplier = wavetable_clamp_envelope(
-                (int64_t)envelopeMultiplier + envelopeIncrement);
+            const int64_t nextEnvelopeMultiplier =
+                (int64_t)envelopeMultiplier + envelopeIncrement;
+            envelopeMultiplier = nextEnvelopeMultiplier < 0
+                                     ? 0
+                                     : saturate_q31(nextEnvelopeMultiplier);
 
             const int32_t scaled = (int32_t)(
                 ((int64_t)block->data[envelopeOffset] * envelopeMultiplier) >> 31);
-            block->data[envelopeOffset] = wavetable_saturate16(scaled);
+            block->data[envelopeOffset] = saturate16(scaled);
             ++envelopeOffset;
         }
 
