@@ -216,7 +216,6 @@ static inline int32_t sin_q15_phase_q16(uint32_t phase) {
 
 /*
 Integer square root using Newton iterations. Zero must be handled before
- __builtin_clz(): its result is undefined for zero on GCC/Clang targets.
 */
 
 static constexpr uint16_t sqrt_integer_guess_table[33] = {
@@ -255,7 +254,7 @@ static inline uint32_t sqrt_uint32_approx(uint32_t in) {
         return 0;
     }
 
-    uint32_t n = sqrt_integer_guess_table[__builtin_clz(in)];
+    uint32_t n = sqrt_integer_guess_table[CLZ(in)];
     n = ((in / n) + n) / 2;
     n = ((in / n) + n) / 2;
     return n;
