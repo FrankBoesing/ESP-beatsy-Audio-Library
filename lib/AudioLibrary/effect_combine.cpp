@@ -1,6 +1,11 @@
 #include "effect_combine.h"
 
+#include <cstring>
+
 #include "utility/dspinst.h"
+
+static_assert((AUDIO_BLOCK_SAMPLES % 2) == 0,
+              "AudioEffectDigitalCombine requires an even number of samples per block");
 
 OSPEED
 void AudioEffectDigitalCombine::update() {
@@ -20,6 +25,7 @@ void AudioEffectDigitalCombine::update() {
     const combineMode mode = mode_sel;
 
     if (mode == ADD || mode == SUBTRACT) {
+        // PCM arithmetic: calculate in 32 bits, then saturate back to int16.
         for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
             const int32_t a = blocka->data[i];
             const int32_t b = blockb->data[i];
@@ -27,51 +33,36 @@ void AudioEffectDigitalCombine::update() {
             blocka->data[i] = saturate16(result);
         }
     } else {
-        // Preserve the original Teensy bitwise semantics by operating on
-        // pairs of packed 16-bit samples as 32-bit words.
-        uint32_t *pa = reinterpret_cast<uint32_t *>(blocka->data);
-        const uint32_t *pb = reinterpret_cast<const uint32_t *>(blockb->data);
-        const uint32_t *end = pa + AUDIO_BLOCK_SAMPLES / 2;
+        // The original Teensy implementation combines pairs of packed samples.
+        // memcpy avoids strict-aliasing violations from casting int16_t* to uint32_t*.
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; i += 2) {
+            uint32_t a;
+            uint32_t b;
+            std::memcpy(&a, &blocka->data[i], sizeof(a));
+            std::memcpy(&b, &blockb->data[i], sizeof(b));
 
-        switch (mode) {
-            case OR:
-                while (pa < end) {
-                    *pa = *pa | *pb;
-                    ++pa;
-                    ++pb;
-                }
-                break;
+            switch (mode) {
+                case OR:
+                    a |= b;
+                    break;
+                case XOR:
+                    a ^= b;
+                    break;
+                case AND:
+                    a &= b;
+                    break;
+                case MODULO:
+                    // MODULO retains the original unsigned 32-bit packed-sample
+                    // semantics. Avoid division by zero for robustness.
+                    a = (b == 0U) ? 0U : (a % b);
+                    break;
+                case ADD:
+                case SUBTRACT:
+                    // Handled by the sample-wise path above.
+                    break;
+            }
 
-            case XOR:
-                while (pa < end) {
-                    *pa = *pa ^ *pb;
-                    ++pa;
-                    ++pb;
-                }
-                break;
-
-            case AND:
-                while (pa < end) {
-                    *pa = *pa & *pb;
-                    ++pa;
-                    ++pb;
-                }
-                break;
-
-            case MODULO:
-                // Preserve signed sample-wise modulo behavior while guarding
-                // against a zero divisor. A zero divisor produces zero.
-                for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                    const int32_t a = blocka->data[i];
-                    const int32_t b = blockb->data[i];
-                    blocka->data[i] = (b == 0) ? 0 : static_cast<int16_t>(a % b);
-                }
-                break;
-
-            case ADD:
-            case SUBTRACT:
-                // Handled above.
-                break;
+            std::memcpy(&blocka->data[i], &a, sizeof(a));
         }
     }
 
