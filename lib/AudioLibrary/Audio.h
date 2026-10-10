@@ -31,6 +31,7 @@
 #include "effect_waveshaper.h"
 #include "filter_biquad.h"
 #include "filter_fir.h"
+#include "filter_ladder.h"
 #include "mixer.h"
 #include "output_i2s.h"
 #include "play_aac.h"
