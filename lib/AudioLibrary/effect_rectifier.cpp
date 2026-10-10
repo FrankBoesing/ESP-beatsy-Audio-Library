@@ -36,6 +36,7 @@ void AudioEffectRectifier::update() {
         return;
     }
 
+#pragma GCC unroll 4
     for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         int16_t sample = block->data[i];
 
