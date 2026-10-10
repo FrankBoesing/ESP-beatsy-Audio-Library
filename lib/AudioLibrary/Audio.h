@@ -8,6 +8,7 @@
 #include "softcodecs/AudioSourceFile.h"
 
 #include "analyze_peak.h"
+#include "analyze_print.h"
 #include "control_es8311.h"
 #include "control_es8388.h"
 #include "effect_delay.h"
