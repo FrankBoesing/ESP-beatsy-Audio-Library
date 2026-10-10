@@ -22,6 +22,7 @@
 #include "effect_fade.h"
 #include "effect_granular.h"
 #include "effect_multiply.h"
+#include "effect_wavefolder.h"
 #include "filter_biquad.h"
 #include "filter_fir.h"
 #include "mixer.h"
