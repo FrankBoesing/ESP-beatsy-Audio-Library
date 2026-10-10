@@ -169,7 +169,7 @@ int16_t AudioEffectFreeverbBase::processSample(
     int32_t damping1, int32_t damping2) {
 
     // Preserve the input/output scaling used by the original Teensy effect.
-    input = sat16_shift((int64_t)input * 8738, 17);
+    input = sat16_shift((int32_t)input * 8738, 17);
 
     int32_t sum = 0;
     for (size_t i = 0; i < 8; ++i) {
@@ -177,14 +177,18 @@ int16_t AudioEffectFreeverbBase::processSample(
         const int16_t bufout = channel.comb[i][index];
         sum += bufout;
 
-        const int64_t damped = (int64_t)bufout * damping2 +
-                               (int64_t)channel.comb_filter[i] * damping1;
+        // These products stay in int32_t for the coefficient ranges accepted
+        // by roomsize() and damping(); keeping them 32-bit avoids expensive
+        // 64-bit multiplies in the per-sample inner loop.
+        const int32_t damped = (int32_t)bufout * damping2 +
+                               (int32_t)channel.comb_filter[i] * damping1;
         channel.comb_filter[i] = sat16_shift(damped, 15);
 
-        const int16_t feedback_sample = sat16_shift(
-            (int64_t)channel.comb_filter[i] * feedback, 15);
+        const int32_t feedback_product =
+            (int32_t)channel.comb_filter[i] * feedback;
+        const int16_t feedback_sample = sat16_shift(feedback_product, 15);
         channel.comb[i][index] = sat16_shift(
-            (int64_t)input + feedback_sample, 0);
+            (int32_t)input + feedback_sample, 0);
 
         uint16_t next = (uint16_t)(index + 1U);
         if (next >= channel.comb_length[i]) {
