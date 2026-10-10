@@ -25,8 +25,6 @@
 
 #include <string.h>
 
-#include <limits.h>
-
 // The accumulator is int32_t. This cap keeps the sum of int16 samples in range.
 static const int32_t CHORUS_MAX_VOICES = 65535;
 
