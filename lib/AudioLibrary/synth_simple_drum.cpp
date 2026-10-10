@@ -30,7 +30,6 @@
 #include <math.h>
 #include <stdint.h>
 
-#include "synth_waveform.h"
 #include "utility/dspinst.h"
 
 AudioSynthSimpleDrum::AudioSynthSimpleDrum() : AudioStream(1, inputQueueArray) {
@@ -211,22 +210,14 @@ void AudioSynthSimpleDrum::update() {
             phase2 &= 0x7fffffffU;
         }
 
-        uint32_t index = phase1 >> 23;
-        int32_t sineLeft = AudioWaveformSine[index];
-        int32_t sineRight = AudioWaveformSine[index + 1U];
-        int32_t delta = sineRight - sineLeft;
-        uint32_t scale = (phase1 >> 7) & 0xffffU;
-        delta = (delta * (int32_t)scale) >> 16;
-        int32_t interpolated = sineLeft + delta;
+        // The oscillator phasor uses a 31-bit cycle (wrap at 0x80000000).
+        // Convert it to the full 32-bit phase expected by sin_q15_phase_q16().
+        // That helper uses the shared 513-entry table and returns Q15.16.
+        int32_t interpolated = sin_q15_phase_q16(phase1 << 1) >> 16;
 
         if (doSecond) {
-            index = phase2 >> 23;
-            sineLeft = AudioWaveformSine[index];
-            sineRight = AudioWaveformSine[index + 1U];
-            delta = sineRight - sineLeft;
-            scale = (phase2 >> 7) & 0xffffU;
-            delta = (delta * (int32_t)scale) >> 16;
-            const int32_t interpolated2 = sineLeft + delta;
+            const int32_t interpolated2 =
+                sin_q15_phase_q16(phase2 << 1) >> 16;
 
             const int32_t second = (interpolated2 * amplitude2) >> 15;
             interpolated = ((interpolated * amplitude1) >> 15) + second;
