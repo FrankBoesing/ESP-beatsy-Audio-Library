@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 #include "analyze_rms.h"
-#include "utility/sqrt_integer.h"
+#include "utility/dspinst.h"
 
 bool AudioAnalyzeRMS::available(void) {
     AudioStream::disableUpdates();
@@ -40,9 +40,6 @@ float AudioAnalyzeRMS::read(void) {
     // Mean square. The result cannot exceed 32768^2 for valid
     // int16_t input samples and therefore fits into uint32_t.
     const uint32_t meanSquare = (uint32_t)((uint64_t)(sum) / numSamples);
-
-    // sqrt_uint32() uses __builtin_clz() and must not receive zero.
-    if (meanSquare == 0) return 0.0f;
 
     // Integer square root; no sqrtf() required.
     return (float)sqrt_uint32(meanSquare) / 32767.0f;

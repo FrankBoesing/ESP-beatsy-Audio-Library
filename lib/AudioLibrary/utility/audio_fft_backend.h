@@ -2,8 +2,8 @@
  * Copyright (c) 2014, Paul Stoffregen, paul@pjrc.com
  *
  * Development of this audio library was funded by PJRC.COM, LLC by sales of
- * Teensy and Audio Adaptor boards.  Please support PJRC's efforts to develop
- * open source software by purchasing Teensy or other PJRC products.
+ * Teensy and Audio Adaptor boards. Please support PJRC's efforts to develop
+ * open source software by purchasing other PJRC or Teensy products.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,30 +24,29 @@
  * THE SOFTWARE.
  */
 
+#ifndef AUDIO_FFT_BACKEND_H
+#define AUDIO_FFT_BACKEND_H
+
 #include <stdint.h>
 
-#ifdef __cplusplus
-extern "C" const uint16_t sqrt_integer_guess_table[];
-#else
-extern const uint16_t sqrt_integer_guess_table[];
-#endif
+namespace AudioFFT {
 
-inline uint32_t sqrt_uint32(uint32_t in) __attribute__((always_inline,unused));
-inline uint32_t sqrt_uint32(uint32_t in)
-{
-	uint32_t n = sqrt_integer_guess_table[__builtin_clz(in)];
-	n = ((in / n) + n) / 2;
-	n = ((in / n) + n) / 2;
-	n = ((in / n) + n) / 2;
-	return n;
-}
+// Prepare shared twiddle tables and initialize ESP-DSP if it is available.
+// Called by analyzer constructors so initialization does not occur in update().
+void initialize();
 
-inline uint32_t sqrt_uint32_approx(uint32_t in) __attribute__((always_inline,unused));
-inline uint32_t sqrt_uint32_approx(uint32_t in)
-{
-	uint32_t n = sqrt_integer_guess_table[__builtin_clz(in)];
-	n = ((in / n) + n) / 2;
-	n = ((in / n) + n) / 2;
-	return n;
-}
+// In-place forward complex FFT. data contains [Re0, Im0, Re1, Im1, ...].
+// Supported lengths: 256 and 1024.
+bool transform(float *data, uint16_t length);
 
+// Return squared magnitude scaled to the legacy Teensy output convention:
+// sqrt(power) ~= 16384 for a full-scale sine at its fundamental with no window.
+uint32_t magnitudeSquaredScaled(const float *data, uint16_t bin,
+                                float powerScale);
+
+// sqrt helper with a zero guard. Returns a 16-bit magnitude value.
+uint16_t magnitudeFromSquared(uint32_t power);
+
+} // namespace AudioFFT
+
+#endif // AUDIO_FFT_BACKEND_H
