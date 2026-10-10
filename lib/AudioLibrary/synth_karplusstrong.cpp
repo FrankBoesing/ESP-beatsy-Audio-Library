@@ -99,44 +99,57 @@ OSPEED
 void AudioSynthKarplusStrong::update() {
     uint16_t localBufferLen;
     uint16_t localBufferIndex;
+    int32_t localMagnitude;
     uint32_t localGeneration;
     uint8_t localState;
 
     portENTER_CRITICAL(&stateMux);
     localState = state;
-
     if (localState == 0 || bufferLen == 0) {
         portEXIT_CRITICAL(&stateMux);
         return;
     }
 
-    // Create the initial noise burst while holding the lock so a concurrent
-    // noteOn() cannot replace the note part-way through initialization.
-    if (localState == 1) {
-        uint32_t localSeed = seed;
-        for (uint16_t i = 0; i < bufferLen; ++i) {
-            localSeed = karplusStrongNextSeed(localSeed);
-            buffer[i] = (int16_t)signed_multiply_32x16b(
-                magnitude, localSeed);
-        }
-        seed = localSeed;
-        state = 2;
-        localState = 2;
-    }
-
     localBufferLen = bufferLen;
     localBufferIndex = bufferIndex;
+    localMagnitude = magnitude;
     localGeneration = stateGeneration;
     portEXIT_CRITICAL(&stateMux);
 
-    if (localBufferLen == 0 || localState != 2) {
+    if (localState == 1) {
+        // Generate the excitation outside the critical section. If noteOn()
+        // arrives during this loop, the generation check below rejects this
+        // initialization and the new note is prepared by the next update.
+        uint32_t localSeed = seed;
+        for (uint16_t i = 0; i < localBufferLen; ++i) {
+            localSeed = karplusStrongNextSeed(localSeed);
+            buffer[i] = (int16_t)signed_multiply_32x16b(
+                localMagnitude, localSeed);
+        }
+
+        portENTER_CRITICAL(&stateMux);
+        const bool initialized = stateGeneration == localGeneration && state == 1;
+        if (initialized) {
+            seed = localSeed;
+            state = 2;
+            localBufferIndex = bufferIndex;
+        }
+        portEXIT_CRITICAL(&stateMux);
+
+        if (!initialized) {
+            return;
+        }
+        localState = 2;
+    }
+
+    if (localState != 2 || localBufferLen == 0) {
         return;
     }
 
     audio_block_t *block = allocate();
     if (block == nullptr) {
         portENTER_CRITICAL(&stateMux);
-        if (stateGeneration == localGeneration) {
+        if (stateGeneration == localGeneration && state == 2) {
             state = 0;
             ++stateGeneration;
         }
