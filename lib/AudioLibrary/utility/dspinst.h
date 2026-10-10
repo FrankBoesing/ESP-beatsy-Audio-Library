@@ -79,17 +79,11 @@ static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) 
 
 static inline int16_t saturate16(int32_t val) __attribute__((always_inline, unused));
 static inline int16_t saturate16(int32_t val) {
-#if defined(__ARM_ARCH_7EM__)
-    int32_t tmp;
-    asm volatile("ssat %0, %1, %2" : "=r"(tmp) : "I"(16), "r"(val));
-    return (int16_t)tmp;
-#else
     if (val > 32767)
         val = 32767;
     else if (val < -32768)
         val = -32768;
     return (int16_t)val;
-#endif
 }
 
 static inline int32_t signed_multiply_32x16b(int32_t a, uint32_t b) __attribute__((always_inline, unused));
@@ -219,6 +213,11 @@ static inline int32_t sin_q15_phase_q16(uint32_t phase) {
 
     return s0 * (0x10000 - scale) + s1 * scale;
 }
+
+/*
+Integer square root using Newton iterations. Zero must be handled before
+ __builtin_clz(): its result is undefined for zero on GCC/Clang targets.
+*/
 
 static constexpr uint16_t sqrt_integer_guess_table[33] = {
     55109, 38968, 27555, 19484, 13778, 9742, 6889, 4871, 3445, 2436, 1723, 1218, 862, 609, 431, 305, 216,
