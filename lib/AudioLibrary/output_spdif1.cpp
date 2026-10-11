@@ -251,7 +251,8 @@ void AudioOutputSPDIF1::update() {
     pair.left = receiveReadOnly(0);
     pair.right = receiveReadOnly(1);
 
-    if (pair.left == nullptr && pair.right == nullptr) return;
+    // Keep a valid BMC stream on the wire even when the graph has no source
+    // blocks; nullptr channels are encoded as PCM silence by the TX task.
     if (txQueue == nullptr) {
         releasePair(pair);
         return;
