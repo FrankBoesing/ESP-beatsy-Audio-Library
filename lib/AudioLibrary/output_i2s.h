@@ -82,7 +82,7 @@ class AudioOutputI2S : public AudioStream {
     bool beginInternal();
     void releasePair(BlockPair &pair);
     void setRunning(bool value);
-    bool markTxCallbackFromISR();
+    bool IRAM_ATTR markTxCallbackFromISR();
     void resetTxCallbackCount();
 
     // Non-copyable
