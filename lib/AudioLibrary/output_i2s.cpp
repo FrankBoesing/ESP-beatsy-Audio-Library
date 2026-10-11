@@ -32,7 +32,7 @@ void AudioOutputI2S::setRunning(bool value) {
     portEXIT_CRITICAL(&stateMux);
 }
 
-bool AudioOutputI2S::markTxCallbackFromISR() {
+bool IRAM_ATTR AudioOutputI2S::markTxCallbackFromISR() {
     portENTER_CRITICAL_ISR(&stateMux);
     const bool active = running;
     if (active) ++txCallbackCountValue;

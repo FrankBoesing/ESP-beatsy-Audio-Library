@@ -579,7 +579,10 @@ bool AudioI2SPort::setSampleRate(float rate) {
 }
 
 bool IRAM_ATTR AudioI2SPort::isClockOwner(uint8_t controller, Direction d) {
-    const int8_t requestedOwner = ownerCode(controller, d);
+    const int8_t requestedOwner =
+        (d == Direction::None || controller >= MAX_PORTS)
+            ? -1
+            : static_cast<int8_t>(controller * 2U + (d == Direction::Rx ? 1U : 0U));
     portENTER_CRITICAL_ISR(&schedulerMux);
     const bool isOwner = schedulerOwner == requestedOwner;
     portEXIT_CRITICAL_ISR(&schedulerMux);
