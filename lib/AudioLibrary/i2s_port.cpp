@@ -229,9 +229,9 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
 
         i2s_pdm_tx_config_t pdmCfg = {};
         pdmCfg.clk_cfg = I2S_PDM_TX_CLK_DAC_DEFAULT_CONFIG(rate);
-        // The DAC default uses fs = rate / 100 (fixed 6.144 MHz PDM clock).
-        // Tests showed audible noise at 22.05 kHz with that mode. Use the
-        // alternative documented DAC mode: fp=960, fs=480, Fpdm=128*Fpcm.
+        // Use the documented DAC mode fp=960, fs=480, where Fpdm is
+        // 128 times the PCM sample rate. Runtime reconfiguration uses the
+        // same up_sample_fs value.
         pdmCfg.clk_cfg.up_sample_fs = 480;
         pdmCfg.slot_cfg = I2S_PDM_TX_SLOT_PCM_FMT_DAC_DEFAULT_CONFIG(
             I2S_DATA_BIT_WIDTH_16BIT,
