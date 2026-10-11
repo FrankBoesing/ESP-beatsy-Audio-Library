@@ -229,6 +229,10 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
 
         i2s_pdm_tx_config_t pdmCfg = {};
         pdmCfg.clk_cfg = I2S_PDM_TX_CLK_DAC_DEFAULT_CONFIG(rate);
+        // The DAC default uses fs = rate / 100 (fixed 6.144 MHz PDM clock).
+        // Tests showed audible noise at 22.05 kHz with that mode. Use the
+        // alternative documented DAC mode: fp=960, fs=480, Fpdm=128*Fpcm.
+        pdmCfg.clk_cfg.up_sample_fs = 480;
         pdmCfg.slot_cfg = I2S_PDM_TX_SLOT_PCM_FMT_DAC_DEFAULT_CONFIG(
             I2S_DATA_BIT_WIDTH_16BIT,
             format.slots == 1 ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO);
@@ -615,7 +619,9 @@ bool AudioI2SPort::setSampleRate(float rate) {
         if (s.format.mode == AudioI2SPort::PeripheralMode::PDM) {
 #if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && \
     defined(SOC_I2S_HW_VERSION_2) && SOC_I2S_HW_VERSION_2
-            const i2s_pdm_tx_clk_config_t cfg = I2S_PDM_TX_CLK_DAC_DEFAULT_CONFIG(hz);
+            i2s_pdm_tx_clk_config_t cfg = I2S_PDM_TX_CLK_DAC_DEFAULT_CONFIG(hz);
+            // Keep runtime sample-rate changes in the same clock mode as init.
+            cfg.up_sample_fs = 480;
             return i2s_channel_reconfig_pdm_tx_clock(s.txHandle, &cfg);
 #else
             (void)hz;
