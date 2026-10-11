@@ -200,6 +200,7 @@ class AudioStream {
     }
 
     friend class AudioConnection;
+    friend class AudioI2SPort;
     friend void AudioInterrupts();
     friend void AudioNoInterrupts();
 
