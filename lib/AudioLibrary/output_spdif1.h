@@ -1,0 +1,91 @@
+#pragma once
+#ifndef AUDIO_OUTPUT_SPDIF1_H
+#define AUDIO_OUTPUT_SPDIF1_H
+
+#include <Arduino.h>
+#include <atomic>
+#include "i2s_port.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include "AudioStream.h"
+
+/*
+ * IEC 60958 / S/PDIF consumer PCM output, implemented by software BMC
+ * encoding and the I2S0 standard-mode serializer.
+ *
+ * One 16-bit stereo AudioStream block is encoded as 128 BMC half-bit states
+ * per stereo sample frame. I2S therefore runs at 4x the AudioStream rate with
+ * 16-bit stereo slots. Only the DATA output pin needs to be routed.
+ *
+ * This is a logic-level signal output. A coaxial S/PDIF connector requires
+ * suitable line-driver / transformer circuitry; connect an optical transmitter
+ * module only if its input levels and bandwidth are compatible.
+ */
+class AudioOutputSPDIF1 : public AudioStream {
+  public:
+    struct Pins {
+        int8_t dout; // BMC-encoded S/PDIF signal output
+    };
+
+    static constexpr uint8_t CONTROLLER = 0;
+
+    AudioOutputSPDIF1();
+    explicit AudioOutputSPDIF1(const Pins &pins);
+    explicit AudioOutputSPDIF1(int8_t dout);
+    ~AudioOutputSPDIF1() override;
+
+    bool begin();
+    bool begin(const Pins &pins);
+    bool begin(int8_t dout);
+    void end();
+
+    bool isRunning() const;
+    uint32_t txCallbackCount() const;
+    const Pins &pins() const { return spdifPins; }
+    bool setSampleRate(float sampleRate);
+
+  protected:
+    void update() override;
+    bool beginHardware() override;
+
+  private:
+    struct BlockPair {
+        audio_block_t *left;
+        audio_block_t *right;
+    };
+
+    static constexpr size_t QUEUE_LENGTH = 4;
+
+    Pins spdifPins{-1};
+    i2s_chan_handle_t txHandle = nullptr;
+    QueueHandle_t txQueue = nullptr;
+    TaskHandle_t txTask = nullptr;
+
+    std::atomic<uint32_t> running{0};
+    std::atomic<uint32_t> txCallbackCountValue{0};
+    std::atomic<uint8_t> sampleRateCode{0};
+
+    // Reused exclusively by the TX task: four 16-bit I2S frames per PCM
+    // sample per channel pair, i.e. eight halfwords per stereo PCM frame.
+    alignas(4) uint16_t encodedBuffer[AUDIO_BLOCK_SAMPLES * 8U] = {};
+    uint16_t frameInBlock = 0;
+
+    static bool AUDIO_I2S_ISR_ATTR onI2STransmit(i2s_chan_handle_t channel, i2s_event_data_t *event,
+                                                 void *userContext);
+    static void txTaskEntry(void *arg);
+
+    void txTaskLoop();
+    bool beginInternal();
+    void releasePair(BlockPair &pair);
+    void setRunning(bool value);
+    void resetTxCallbackCount();
+    uint8_t channelStatusBit(uint16_t frame) const;
+    void updateChannelStatus(float sampleRate);
+
+    AudioOutputSPDIF1(const AudioOutputSPDIF1 &) = delete;
+    AudioOutputSPDIF1 &operator=(const AudioOutputSPDIF1 &) = delete;
+
+    audio_block_t *inputQueueArray[2] = {};
+};
+
+#endif
