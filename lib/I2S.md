@@ -82,10 +82,10 @@ AudioOutputPDM pdmOut(PDM_DATA_PIN);
 AudioConnection patch(sine, 0, pdmOut, 0);
 
 void setup() {
-    AudioMemory(12);
+    pdmOut.setSampleRate(44100.0f);
     sine.frequency(1000.0f);
     sine.amplitude(0.25f);
-    pdmOut.setSampleRate(44100.0f);
+    AudioMemory(12);
     pdmOut.begin();
 }
 
@@ -118,9 +118,9 @@ void loop() {}
 AudioOutputPDM pdmOut({PDM_DATA_LEFT, PDM_DATA_RIGHT});
 
 void setup() {
-    AudioMemory(12);
     pdmOut.setChannelCount(2);
     pdmOut.setSampleRate(44100.0f);
+    AudioMemory(12);
     // Connect separate left/right AudioStream outputs to inputs 0 and 1.
 }
 
