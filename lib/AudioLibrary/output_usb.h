@@ -9,6 +9,18 @@
 #include "AudioStream.h"
 #include "usb_audio_backend.h"
 
+// With USB CDC auto-start disabled, the USB audio backend registers this CDC
+// interface before USB.begin(). Use USBSerial for logs over the same USB cable.
+#if defined(ARDUINO_ARCH_ESP32)
+#include <soc/soc_caps.h>
+#include <sdkconfig.h>
+#if SOC_USB_OTG_SUPPORTED && (!defined(ARDUINO_USB_CDC_ON_BOOT) || !ARDUINO_USB_CDC_ON_BOOT) && \
+    defined(CONFIG_TINYUSB_CDC_ENABLED) && CONFIG_TINYUSB_CDC_ENABLED
+#include <USB.h>
+extern USBCDC USBSerial;
+#endif
+#endif
+
 /**
  * USB audio sink: sends samples from the AudioStream graph to the USB host.
  *
