@@ -249,8 +249,14 @@ void AudioOutputPDM::update() {
 
     if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
         BlockPair oldPair;
-        if (xQueueReceive(txQueue, &oldPair, 0) == pdTRUE) releasePair(oldPair);
-        if (xQueueSend(txQueue, &pair, 0) != pdTRUE) releasePair(pair);
+        if (xQueueReceive(txQueue, &oldPair, 0) == pdTRUE) {
+            releasePair(oldPair);
+            txQueueDropCountValue.fetch_add(1, std::memory_order_relaxed);
+        }
+        if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
+            releasePair(pair);
+            txQueueDropCountValue.fetch_add(1, std::memory_order_relaxed);
+        }
     }
 }
 
@@ -327,11 +333,30 @@ void AudioOutputPDM::txTaskLoop() {
             }
         }
 
+        // Capture the actual PCM range immediately before handing it to
+        // ESP-IDF. This is diagnostic only; it does not modify the samples.
+        int32_t minSample = INT16_MAX;
+        int32_t maxSample = INT16_MIN;
+        uint64_t sumAbs = 0;
+        for (size_t i = 0; i < sampleCount; ++i) {
+            const int32_t sample = pcmBuffer[i];
+            if (sample < minSample) minSample = sample;
+            if (sample > maxSample) maxSample = sample;
+            sumAbs += static_cast<uint32_t>(sample < 0 ? -sample : sample);
+        }
+        lastPcmMinValue.store(minSample, std::memory_order_relaxed);
+        lastPcmMaxValue.store(maxSample, std::memory_order_relaxed);
+        lastPcmMeanAbsValue.store(
+            sampleCount ? static_cast<uint32_t>(sumAbs / sampleCount) : 0,
+            std::memory_order_relaxed);
+        txBlockCountValue.fetch_add(1, std::memory_order_relaxed);
+
         size_t bytesWritten = 0;
         const size_t bytesToWrite = sampleCount * sizeof(int16_t);
         const esp_err_t err = i2s_channel_write(txHandle, pcmBuffer, bytesToWrite, &bytesWritten, 100);
 
         if (err != ESP_OK || bytesWritten != bytesToWrite) {
+            txWriteErrorCountValue.fetch_add(1, std::memory_order_relaxed);
             const uint32_t now = millis();
             ++writeErrorCount;
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
