@@ -19,10 +19,9 @@
  * Four software controller IDs (0..3) are reserved. The SoC/ESP-IDF driver
  * decides which IDs physically exist; unsupported IDs fail in i2s_new_channel.
  *
- * Controller lifetime is separate from wire format. Standard stereo PCM is
- * implemented today. TDM and SPDIF_BMC are reserved profiles:
- * SPDIF_BMC means software-encoded Biphase-Mark data sent by the I2S serializer
- * in a multi-slot frame, not ordinary stereo PCM.
+ * Controller lifetime is separate from wire format. Standard stereo PCM and
+ * TX of software-encoded SPDIF_BMC data are implemented. TDM and SPDIF RX
+ * decoding are not implemented.
  */
 class AudioI2SPort {
   public:
