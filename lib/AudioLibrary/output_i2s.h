@@ -4,9 +4,7 @@
 
 #include <Arduino.h>
 #include <atomic>
-#include <esp_attr.h>
-#include <driver/i2s_std.h>
-#include <driver/i2s_common.h>
+#include "i2s_port.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include "AudioStream.h"
@@ -76,14 +74,14 @@ class AudioOutputI2S : public AudioStream {
     std::atomic<uint32_t> running{0};
     std::atomic<uint32_t> txCallbackCountValue{0};
 
-    static bool IRAM_ATTR onI2STransmit(i2s_chan_handle_t channel, i2s_event_data_t *event, void *userContext);
+    static bool AUDIO_I2S_ISR_ATTR onI2STransmit(i2s_chan_handle_t channel, i2s_event_data_t *event, void *userContext);
     static void txTaskEntry(void *arg);
     void txTaskLoop();
 
     bool beginInternal();
     void releasePair(BlockPair &pair);
     void setRunning(bool value);
-    bool IRAM_ATTR markTxCallbackFromISR();
+    bool AUDIO_I2S_ISR_ATTR markTxCallbackFromISR();
     void resetTxCallbackCount();
 
     // Non-copyable
