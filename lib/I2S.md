@@ -53,7 +53,9 @@ AudioStream processing loop; the I²S/DMA hardware generates the high-rate strea
 
 - Uses I²S0 in PCM-to-PDM direct-DAC mode.
 - Supports mono output on one DATA pin and stereo output on two separate DATA
-  pins, provided the target exposes the PDM two-line DAC mode.
+  pins, provided the target exposes the PDM two-line DAC mode. The public stereo
+  pin order is `dataLeft, dataRight`; ESP-IDF routes the left PCM slot to DOUT2
+  and the right PCM slot to DOUT, so the class maps these pins explicitly.
 - The PDM DAC mode does not need a PDM CLK pin at the external connector.
 - Each DATA pin should go through its own low-pass filter before feeding an
   amplifier. Do not connect a speaker directly to an ESP32 GPIO.
