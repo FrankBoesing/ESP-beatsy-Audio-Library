@@ -38,13 +38,27 @@ struct PortState {
     void *txContext = nullptr;
     EventCallback rxCallback = nullptr;
     void *rxContext = nullptr;
-    volatile uint32_t txCallbacksInFlight = 0;
-    volatile uint32_t rxCallbacksInFlight = 0;
+    uint32_t txCallbacksInFlight = 0;
+    uint32_t rxCallbacksInFlight = 0;
 };
 
 PortState ports[MAX_PORTS]{};
 // AudioStream has one graph clock, irrespective of how many I2S controllers run.
-volatile int8_t schedulerOwner = -1;
+int8_t schedulerOwner = -1;
+portMUX_TYPE schedulerMux = portMUX_INITIALIZER_UNLOCKED;
+
+int8_t getSchedulerOwner() {
+    portENTER_CRITICAL(&schedulerMux);
+    const int8_t owner = schedulerOwner;
+    portEXIT_CRITICAL(&schedulerMux);
+    return owner;
+}
+
+void setSchedulerOwner(int8_t owner) {
+    portENTER_CRITICAL(&schedulerMux);
+    schedulerOwner = owner;
+    portEXIT_CRITICAL(&schedulerMux);
+}
 
 PortState *stateFor(uint8_t controller) {
     return controller < MAX_PORTS ? &ports[controller] : nullptr;
@@ -128,7 +142,8 @@ void resetPortState(PortState &s) {
     portENTER_CRITICAL(&s.callbackMux);
     s.txCallback = s.rxCallback = nullptr;
     s.txContext = s.rxContext = nullptr;
-    s.txCallbacksInFlight = s.rxCallbacksInFlight = 0;
+    s.txCallbacksInFlight = 0;
+    s.rxCallbacksInFlight = 0;
     portEXIT_CRITICAL(&s.callbackMux);
 }
 
@@ -430,7 +445,7 @@ bool AudioI2SPort::start(uint8_t controller, Direction d) {
 
     if (d == Direction::Tx) s->txActive = true;
     else s->rxActive = true;
-    if (firstActive || schedulerOwner < 0) schedulerOwner = ownerCode(controller, d);
+    if (firstActive || getSchedulerOwner() < 0) setSchedulerOwner(ownerCode(controller, d));
     return true;
 }
 
@@ -449,9 +464,11 @@ void AudioI2SPort::stop(uint8_t controller, Direction d) {
         disableChannel(*s, s->physicalMaster);
     }
 
-    if (schedulerOwner == ownerCode(controller, d)) schedulerOwner = findActiveOwner();
+    if (getSchedulerOwner() == ownerCode(controller, d)) {
+        setSchedulerOwner(findActiveOwner());
+    }
     if (!anyActive()) {
-        schedulerOwner = -1;
+        setSchedulerOwner(-1);
         if (!AudioStream::setExternalUpdateClock(false)) {
             ESP_LOGE(TAG, "Could not restore software AudioStream clock");
         }
@@ -562,5 +579,9 @@ bool AudioI2SPort::setSampleRate(float rate) {
 }
 
 bool IRAM_ATTR AudioI2SPort::isClockOwner(uint8_t controller, Direction d) {
-    return schedulerOwner == ownerCode(controller, d);
+    const int8_t requestedOwner = ownerCode(controller, d);
+    portENTER_CRITICAL_ISR(&schedulerMux);
+    const bool isOwner = schedulerOwner == requestedOwner;
+    portEXIT_CRITICAL_ISR(&schedulerMux);
+    return isOwner;
 }
