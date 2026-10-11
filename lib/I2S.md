@@ -72,6 +72,20 @@ AudioStream processing loop; the I²S/DMA hardware generates the high-rate strea
   two-line direct-DAC mode; `AudioOutputPDM` reports unsupported on targets
   without the required ESP-IDF/SoC feature combination.
 
+### Direct ESP-IDF diagnostic
+
+Before debugging `AudioOutputPDM`, the independent low-level test
+[`examples/HardwareTesting/PDMDirectIDF.cpp`](../examples/HardwareTesting/PDMDirectIDF.cpp)
+can be used to isolate the ESP-IDF PDM-DAC driver. It outputs the same 1 kHz
+sine on GPIO 43 (left/DOUT2) and GPIO 44 (right/DOUT), without `AudioStream`
+or the library's PDM output task. It requires a target with two-line PDM DAC
+support, such as ESP32-S3. The sketch reports initialization and write errors
+over `Serial`.
+
+Note that GPIO 43 and GPIO 44 are also commonly the ESP32-S3 UART0 TX/RX pins.
+Use a USB CDC/USB Serial-JTAG console or change the DATA pins if the serial
+console is wired to UART0.
+
 ### Mono example
 
 A runnable hardware smoke test is available at
