@@ -45,6 +45,68 @@ The I²S input classes expose:
 - `droppedBlockCount()`: blocks dropped because the software ring is full or
   AudioStream memory allocation fails.
 
+## PDM output
+
+`AudioOutputPDM` sends 16-bit PCM blocks to the ESP-IDF PDM TX driver and uses
+the SoC's hardware PCM-to-PDM converter. This does not encode PDM bits in the
+AudioStream processing loop; the I²S/DMA hardware generates the high-rate stream.
+
+- Uses I²S0 in PCM-to-PDM direct-DAC mode.
+- Supports mono output on one DATA pin and stereo output on two separate DATA
+  pins, provided the target exposes the PDM two-line DAC mode.
+- The PDM DAC mode does not need a PDM CLK pin at the external connector.
+- Each DATA pin should go through its own low-pass filter before feeding an
+  amplifier. Do not connect a speaker directly to an ESP32 GPIO.
+- PDM controller mode and normal I²S0 TX are mutually exclusive; do not run
+  `AudioOutputPDM`, `AudioOutputI2S`, or `AudioOutputSPDIF1` simultaneously.
+- The current class accepts PCM sample rates from 16 kHz through 48 kHz.
+- The common ESP32-S3 has PCM-to-PDM on I²S0 and supports two PDM DAC lines.
+  The original ESP32 supports PCM-to-PDM but does not expose the same
+  two-line direct-DAC mode; `AudioOutputPDM` reports unsupported on targets
+  without the required ESP-IDF/SoC feature combination.
+
+### Mono example
+
+```cpp
+#include "Audio.h"
+
+AudioOutputPDM pdmOut(PDM_DATA_PIN);
+// Connect the source's left and right outputs to pdmOut inputs 0 and 1.
+
+void setup() {
+    AudioMemory(12);
+    pdmOut.setSampleRate(44100.0f);
+    // Optional: this is already the default.
+    pdmOut.setChannelCount(1);
+    // The audio graph starts the port when the hardware output is initialized.
+}
+
+void loop() {}
+```
+
+### Stereo example
+
+```cpp
+#include "Audio.h"
+
+AudioOutputPDM pdmOut({PDM_DATA_LEFT, PDM_DATA_RIGHT});
+
+void setup() {
+    AudioMemory(12);
+    pdmOut.setChannelCount(2);
+    pdmOut.setSampleRate(44100.0f);
+    // Connect separate left/right AudioStream outputs to inputs 0 and 1.
+}
+
+void loop() {}
+```
+
+The helper class exposes `begin()`, `begin(pin)`, `begin(Pins)`, `end()`,
+`isRunning()`, `txCallbackCount()`, `channels()`, `setChannelCount()`,
+and `setSampleRate()`.
+
+Reference: [ESP-IDF I²S PDM TX mode](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/peripherals/i2s.html#pdm-tx-mode-in-pcm-format-with-pcm-to-pdm-converter).
+
 ## S/PDIF output 1
 
 `AudioOutputSPDIF1` is an output-only IEC 60958 / consumer S/PDIF encoder. It
