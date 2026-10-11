@@ -1,4 +1,7 @@
 #include "control_es8388.h"
+
+#include <cmath>
+
 #pragma GCC optimize("Os")
 
 // DAC main volume registers:
@@ -22,7 +25,8 @@ AudioControlES8388::AudioControlES8388()
     : pins_{33, 32, 21}, wire_(&Wire), i2cAddress_(ES8388_ADDRESS), initialized_(false) {}
 */
 AudioControlES8388::AudioControlES8388(const Pins &pins)
-    : pins_(pins), wire_(&Wire), i2cAddress_(ES8388_ADDRESS), initialized_(false) {}
+    : pins_(pins), wire_(&Wire), i2cAddress_(ES8388_ADDRESS),
+      initialized_(false), adcEnabled_(false) {}
 
 bool AudioControlES8388::writeReg(uint8_t reg, uint8_t value) {
     wire_->beginTransmission(i2cAddress_);
@@ -54,6 +58,7 @@ bool AudioControlES8388::isConnected() {
 
 bool AudioControlES8388::enable() {
     initialized_ = false;
+    adcEnabled_ = false;
 
     if (pins_.pa_enable >= 0) {
         pinMode(pins_.pa_enable, OUTPUT);
@@ -79,6 +84,9 @@ bool AudioControlES8388::enable() {
 
                                                      // Chip Power
                                                      {REG_CHIPPOWER, 0x00},
+
+                                                     // Start playback-only; inputSelect() enables/configures the ADC.
+                                                     {REG_ADCPOWER, 0xFF},
 
                                                      // ESP32 ist I2S-Master -> ES8388 ist Slave
                                                      {REG_MASTERMODE, 0x00},
@@ -144,8 +152,9 @@ bool AudioControlES8388::disable() {
 
     if (initialized_) {
         if (!mute()) return false;
-        ok &= !writeReg(REG_DACPOWER, 0xC0);
-        ok &= !writeReg(REG_CHIPPOWER, 0xFF);
+        ok &= writeReg(REG_ADCPOWER, 0xFF);
+        ok &= writeReg(REG_DACPOWER, 0xC0);
+        ok &= writeReg(REG_CHIPPOWER, 0xFF);
     }
 
     if (pins_.pa_enable >= 0) {
@@ -154,6 +163,7 @@ bool AudioControlES8388::disable() {
     }
 
     initialized_ = false;
+    adcEnabled_ = false;
     return ok;
 }
 
@@ -190,10 +200,62 @@ bool AudioControlES8388::unmute() {
     return writeReg(REG_DACCONTROL3, reg);
 }
 
-bool AudioControlES8388::inputLevel(float) {
-    return false;
+bool AudioControlES8388::inputLevel(float level) {
+    if (!initialized_ || !adcEnabled_ || !std::isfinite(level)) {
+        return false;
+    }
+
+    if (level < 0.0f) level = 0.0f;
+    else if (level > 1.0f) level = 1.0f;
+
+    // ES8388 ADC PGA gain: register 0x09, each channel uses a 4-bit
+    // gain value. 0..8 maps to 0..24 dB in 3 dB steps.
+    const uint8_t gain = static_cast<uint8_t>(level * 8.0f + 0.5f);
+    const uint8_t reg = static_cast<uint8_t>((gain << 4) | gain);
+    return writeReg(REG_ADCCONTROL1, reg);
 }
 
-bool AudioControlES8388::inputSelect(int) {
-    return false;
+bool AudioControlES8388::inputSelect(int input) {
+    if (!initialized_) {
+        return false;
+    }
+
+    uint8_t inputConfig = 0;
+    switch (input) {
+        case AUDIO_INPUT_MIC:
+            // Intended Audio Kit wiring: microphone signal on LIN1/RIN1.
+            inputConfig = 0x00;
+            break;
+        case AUDIO_INPUT_LINEIN:
+            // Line-in is wired to LIN2/RIN2 on the standard board layout.
+            inputConfig = 0x50;
+            break;
+        default:
+            return false;
+    }
+
+    // Configure the ADC for the same 16-bit Philips I2S format and
+    // 256 * Fs clocking used by AudioI2SPort. The ADC is kept powered down
+    // until the input mux, gain, format and digital volume are configured.
+    bool ok = writeReg(REG_ADCPOWER, 0xFF);
+    ok &= writeReg(REG_ADCCONTROL1, 0x77); // 21 dB PGA gain, both channels.
+    ok &= writeReg(REG_ADCCONTROL2, inputConfig);
+    ok &= writeReg(REG_ADCCONTROL3, 0x02);
+    ok &= writeReg(REG_ADCCONTROL4, 0x0C); // 16-bit I2S.
+    ok &= writeReg(REG_ADCCONTROL5, 0x02); // Single speed, MCLK/LRCK = 256.
+    ok &= writeReg(REG_ADCCONTROL8, 0x00); // ADC digital volume: 0 dB, left.
+    ok &= writeReg(REG_ADCCONTROL9, 0x00); // ADC digital volume: 0 dB, right.
+
+    if (ok) {
+        ok = writeReg(REG_ADCPOWER, 0x09); // Power up ADC and analog inputs.
+    }
+
+    if (!ok) {
+        writeReg(REG_ADCPOWER, 0xFF);
+        adcEnabled_ = false;
+        return false;
+    }
+
+    adcEnabled_ = true;
+    return true;
 }
