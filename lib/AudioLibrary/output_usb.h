@@ -14,7 +14,8 @@
 #if defined(ARDUINO_ARCH_ESP32)
 #include <soc/soc_caps.h>
 #include <sdkconfig.h>
-#if SOC_USB_OTG_SUPPORTED && (!defined(ARDUINO_USB_CDC_ON_BOOT) || !ARDUINO_USB_CDC_ON_BOOT) && \
+#if SOC_USB_OTG_SUPPORTED && defined(CONFIG_TINYUSB_AUDIO_ENABLED) && CONFIG_TINYUSB_AUDIO_ENABLED && \
+    (!defined(ARDUINO_USB_CDC_ON_BOOT) || !ARDUINO_USB_CDC_ON_BOOT) && \
     defined(CONFIG_TINYUSB_CDC_ENABLED) && CONFIG_TINYUSB_CDC_ENABLED
 #include <USB.h>
 extern USBCDC USBSerial;
