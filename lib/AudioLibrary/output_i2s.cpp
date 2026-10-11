@@ -13,37 +13,25 @@ AudioOutputI2S::AudioOutputI2S(const Pins &pins)
 AudioOutputI2S::~AudioOutputI2S() { end(); }
 
 bool AudioOutputI2S::isRunning() const {
-    portENTER_CRITICAL(&stateMux);
-    const bool value = running;
-    portEXIT_CRITICAL(&stateMux);
-    return value;
+    return running.load(std::memory_order_acquire) != 0;
 }
 
 uint32_t AudioOutputI2S::txCallbackCount() const {
-    portENTER_CRITICAL(&stateMux);
-    const uint32_t value = txCallbackCountValue;
-    portEXIT_CRITICAL(&stateMux);
-    return value;
+    return txCallbackCountValue.load(std::memory_order_relaxed);
 }
 
 void AudioOutputI2S::setRunning(bool value) {
-    portENTER_CRITICAL(&stateMux);
-    running = value;
-    portEXIT_CRITICAL(&stateMux);
+    running.store(value ? 1U : 0U, std::memory_order_release);
 }
 
 bool IRAM_ATTR AudioOutputI2S::markTxCallbackFromISR() {
-    portENTER_CRITICAL_ISR(&stateMux);
-    const bool active = running;
-    if (active) ++txCallbackCountValue;
-    portEXIT_CRITICAL_ISR(&stateMux);
-    return active;
+    if (running.load(std::memory_order_acquire) == 0) return false;
+    txCallbackCountValue.fetch_add(1, std::memory_order_relaxed);
+    return true;
 }
 
 void AudioOutputI2S::resetTxCallbackCount() {
-    portENTER_CRITICAL(&stateMux);
-    txCallbackCountValue = 0;
-    portEXIT_CRITICAL(&stateMux);
+    txCallbackCountValue.store(0, std::memory_order_relaxed);
 }
 
 bool AudioOutputI2S::begin() { return beginInternal(); }
