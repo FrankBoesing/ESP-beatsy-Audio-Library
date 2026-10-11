@@ -18,13 +18,13 @@ void setup() {
     Serial.begin(115200);
     delay(500);
 
-    AudioMemory(12);
-    sine.frequency(1000.0f);
-    sine.amplitude(0.25f);
-
     if (!pdmOut.setSampleRate(44100.0f)) {
         Serial.println("PDM sample-rate setup failed");
     }
+
+    sine.frequency(1000.0f);
+    sine.amplitude(0.25f);
+    AudioMemory(12);
 
     if (!pdmOut.begin()) {
         Serial.println("PDM start failed. Check target support and DATA pin.");
