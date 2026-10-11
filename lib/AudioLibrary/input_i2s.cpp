@@ -88,6 +88,12 @@ bool AudioInputI2S::beginInternal() {
         AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Rx);
         AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
         rxHandle = nullptr;
+
+        portENTER_CRITICAL(&rxMux);
+        writeFrameIndex.store(0, std::memory_order_relaxed);
+        readFrameIndex.store(0, std::memory_order_relaxed);
+        clockFrameRemainder = 0;
+        portEXIT_CRITICAL(&rxMux);
         return false;
     }
 
