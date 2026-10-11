@@ -19,9 +19,9 @@
  * Four software controller IDs (0..3) are reserved. The SoC/ESP-IDF driver
  * decides which IDs physically exist; unsupported IDs fail in i2s_new_channel.
  *
- * Controller lifetime is separate from wire format. Standard stereo PCM and
- * TX of software-encoded SPDIF_BMC data are implemented. TDM and SPDIF RX
- * decoding are not implemented.
+ * Controller lifetime is separate from wire format. Standard stereo PCM,
+ * software-encoded SPDIF_BMC TX and hardware PCM-to-PDM DAC TX are implemented.
+ * TDM and SPDIF RX decoding are not implemented.
  */
 class AudioI2SPort {
   public:
@@ -34,10 +34,11 @@ class AudioI2SPort {
         int8_t din;
         int8_t mclk;
         uint8_t controller = 0; // Hardware index; default preserves I2S0 behavior.
+        int8_t dout2 = -1;      // Optional second PDM-DAC data line.
     };
 
     enum class Direction : uint8_t { Tx, Rx, None };
-    enum class PeripheralMode : uint8_t { Standard, TDM };
+    enum class PeripheralMode : uint8_t { Standard, TDM, PDM };
     enum class DataEncoding : uint8_t { PCM, SpdifBMC };
 
     struct Format {
@@ -46,7 +47,7 @@ class AudioI2SPort {
         uint8_t slots = 2;
         uint8_t slotBits = 16;
         // Physical serializer rate relative to the AudioStream sample rate.
-        // SPDIF BMC uses 4x with 16-bit stereo slots, yielding 128 bits/frame.
+        // SPDIF BMC uses 4x; PDM PCM-to-PDM uses the source sample rate directly.
         uint8_t rateMultiplier = 1;
     };
 
