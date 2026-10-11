@@ -95,12 +95,12 @@ These examples are present in the repository. Their board-specific pin and codec
 | **AudioOutputI2S2** | Convenience wrapper selecting the second I2S controller. Board-specific pins must be supplied. |
 | **AudioOutputI2S3** | Convenience wrapper selecting the third I2S controller, where supported by the SoC. |
 | **AudioOutputPDM** | Hardware PCM-to-PDM DAC output on I2S0; supports mono or stereo data lines on compatible targets. |
-| **AudioOutputSPDIF1** | Software-encoded S/PDIF output on I2S0; cannot run concurrently with I2S or PDM output. |
+
 
 The I2S2/I2S3 wrappers do not add extra hardware: they select a controller index. Whether those controllers exist, can be used concurrently and expose suitable pins depends on the particular ESP32 variant and board. AudioControlES8311 and AudioControlES8388 are available as codec-control classes, not as audio-stream inputs or outputs themselves. PDM direct-DAC output requires a compatible SoC/ESP-IDF combination; see [I2S.md](lib/I2S.md) for pin mapping and clock configuration.
 
-USB Audio input/output is WIP and not currently part of the active Audio.h interface.
-S/PDIF input and TDM are planned; PDM output and S/PDIF1 output are implemented on supported targets.
+USB Audio input/output and S/PDIF output is WIP and not currently part of the active Audio.h interface.
+TDM is planned; PDM output is implemented on supported targets.
 
 ## Players and audio sources
 
