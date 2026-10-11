@@ -24,8 +24,10 @@ namespace audio_usb_detail {
 uint8_t normalizeChannelCount(uint8_t channels);
 bool attachInput(AudioInputUSB *input, uint8_t channels);
 void detachInput(AudioInputUSB *input);
+void setInputEnabled(AudioInputUSB *input, bool enabled);
 bool attachOutput(AudioOutputUSB *output, uint8_t channels);
 void detachOutput(AudioOutputUSB *output);
+void setOutputEnabled(AudioOutputUSB *output, bool enabled); 
 bool start(float sampleRate);
 bool isStarted();
 bool canChangeSampleRate();
