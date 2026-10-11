@@ -35,6 +35,7 @@
 #include "filter_variable.h"
 #include "mixer.h"
 #include "output_i2s.h"
+#include "input_i2s.h"
 //#include "input_usb.h"
 //#include "output_usb.h"
 #include "play_aac.h"

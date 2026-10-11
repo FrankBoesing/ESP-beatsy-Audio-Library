@@ -2,6 +2,8 @@
 
 #include <cstring>
 #include <esp_err.h>
+#include <cmath>
+#include "i2s_port.h"
 
 static constexpr const char TAG[] = "I2S";
 
@@ -27,163 +29,88 @@ bool AudioOutputI2S::setChannelCount(uint num) {
 
 OSIZE
 bool AudioOutputI2S::setSampleRate(float hz) {
-    if (hz <= 0.0f) return false;
-    if (!running || txHandle == nullptr) {
-        // I2S noch nicht gestartet.
-        return AudioStream::setSampleRate(hz);
-    }
+    if (!std::isfinite(hz) || hz <= 0.0f) return false;
     if (hz == AudioStream::sampleRate()) return true;
 
-    // Queue leeren
-    BlockPair pair;
-    while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) {
-        releasePair(pair);
+    // Do not let queued blocks from the previous rate leak into the new clock.
+    if (txQueue != nullptr) {
+        BlockPair pair;
+        while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) {
+            releasePair(pair);
+        }
     }
 
-    esp_err_t err = i2s_channel_disable(txHandle);
-    if (err != ESP_OK) return false;
-
-    i2s_std_clk_config_t clkConfig = I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)std::lround(hz));
-    clkConfig.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-
-    err = i2s_channel_reconfig_std_clock(txHandle, &clkConfig);
-    if (err != ESP_OK) return false;
-
-    err = i2s_channel_enable(txHandle);
-    if (err != ESP_OK) return false;
-
-    return AudioStream::setSampleRate(hz);
+    return AudioI2SPort::setSampleRate(hz);
 }
 
 OSIZE
 bool AudioOutputI2S::beginInternal() {
     if (running) return true;
-
-    if (i2sPins.bclk < 0 || i2sPins.ws < 0 || i2sPins.dout < 0) return false;
+    if (i2sPins.bclk < 0 || i2sPins.ws < 0 || i2sPins.dout < 0) {
+        ESP_LOGE(TAG, "Invalid I2S output pins");
+        return false;
+    }
 
     txQueue = xQueueCreate(QUEUE_LENGTH, sizeof(BlockPair));
     if (txQueue == nullptr) return false;
 
-    /*
-     * ESP-IDF I2S channel configuration.
-     *
-     * This follows the architecture used by ESP32-audioI2S:
-     * master controller, explicit DMA sizing, automatic zero output
-     * when no data is available.
-     */
-    memset(&chanConfig, 0, sizeof(chanConfig));
-    chanConfig.id = I2S_NUM_AUTO;
-    chanConfig.role = I2S_ROLE_MASTER;
-    chanConfig.dma_desc_num = DMA_DESC_NUM;
-    chanConfig.dma_frame_num = DMA_FRAME_NUM;
-    chanConfig.auto_clear_after_cb = true;
-    chanConfig.allow_pd = false;
-    chanConfig.intr_priority = 2;
+    const AudioI2SPort::Pins portPins{
+        i2sPins.bclk, i2sPins.ws, i2sPins.dout, -1, i2sPins.mclk
+    };
+    if (!AudioI2SPort::acquireTx(portPins, &txHandle)) {
+        vQueueDelete(txQueue);
+        txQueue = nullptr;
+        txHandle = nullptr;
+        return false;
+    }
 
-    esp_err_t err = i2s_new_channel(&chanConfig, &txHandle, nullptr);
-
-    if (err != ESP_OK) {
+    if (!AudioI2SPort::setEventHandler(AudioI2SPort::Direction::Tx,
+                                       &AudioOutputI2S::onI2STransmit, this)) {
+        ESP_LOGE(TAG, "Could not register TX event handler");
+        AudioI2SPort::release(AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
         return false;
     }
 
-    /*
-     * Standard Philips I2S.
-     *
-     * IMPORTANT:
-     * The ES8388 reference implementation uses 32-bit slots here,
-     * even though our AudioStream blocks contain 16-bit PCM.
-     */
-    memset(&stdConfig, 0, sizeof(stdConfig));
-
-    stdConfig.clk_cfg.sample_rate_hz = static_cast<uint32_t>(AudioStream::sampleRate());
-    stdConfig.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
-    stdConfig.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-
-    stdConfig.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-
-    stdConfig.gpio_cfg.bclk = static_cast<gpio_num_t>(i2sPins.bclk);
-    stdConfig.gpio_cfg.ws = static_cast<gpio_num_t>(i2sPins.ws);
-    stdConfig.gpio_cfg.dout = static_cast<gpio_num_t>(i2sPins.dout);
-    stdConfig.gpio_cfg.din = I2S_GPIO_UNUSED;
-
-    // MCLK-Pin dynamsich aus i2sPins zuweisen (GPIO 0 bei ESP32)
-    stdConfig.gpio_cfg.mclk = (i2sPins.mclk >= 0) ? static_cast<gpio_num_t>(i2sPins.mclk) : I2S_GPIO_UNUSED;
-
-    stdConfig.gpio_cfg.invert_flags.mclk_inv = false;
-    stdConfig.gpio_cfg.invert_flags.bclk_inv = false;
-    stdConfig.gpio_cfg.invert_flags.ws_inv = false;
-
-    err = i2s_channel_init_std_mode(txHandle, &stdConfig);
-    if (err != ESP_OK) {
-        i2s_del_channel(txHandle);
-        txHandle = nullptr;
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
-        return false;
-    }
-
-    i2s_event_callbacks_t callbacks = {};
-    callbacks.on_sent = &AudioOutputI2S::onI2STransmit;
-    err = i2s_channel_register_event_callback(txHandle, &callbacks, this);
-    if (err != ESP_OK) {
-        i2s_del_channel(txHandle);
-        txHandle = nullptr;
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
-        return false;
-    }
-
-    if (!AudioStream::setExternalUpdateClock(true)) {
-        i2s_del_channel(txHandle);
-        txHandle = nullptr;
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
-        return false;
-    }
-    externalClockActive = true;
     txCallbackCountValue = 0;
-
     running = true;
     taskExited = false;
 
-    BaseType_t result = xTaskCreatePinnedToCore(txTaskEntry, "AudioI2STx", 2048, this, configMAX_PRIORITIES - 2,
-                                                &txTask, AUDIO_PROCESSING_CORE);
+    const BaseType_t result = xTaskCreatePinnedToCore(
+        txTaskEntry, "AudioI2STx", 2048, this,
+        configMAX_PRIORITIES - 2, &txTask, AUDIO_PROCESSING_CORE);
 
     if (result != pdPASS) {
         running = false;
         taskExited = true;
-        AudioStream::setExternalUpdateClock(false);
-        externalClockActive = false;
-
-        i2s_del_channel(txHandle);
+        txTask = nullptr;
+        AudioI2SPort::clearEventHandler(AudioI2SPort::Direction::Tx, this);
+        AudioI2SPort::release(AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
-
         vQueueDelete(txQueue);
         txQueue = nullptr;
-        txTask = nullptr;
-
         return false;
     }
 
-    err = i2s_channel_enable(txHandle);
-    if (err != ESP_OK) {
+    if (!AudioI2SPort::start(AudioI2SPort::Direction::Tx)) {
         running = false;
         xTaskNotifyGive(txTask);
-
         const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(200);
-        while (txTask != nullptr && static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0) {
+        while (txTask != nullptr &&
+               static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0) {
             vTaskDelay(1);
         }
 
-        AudioStream::setExternalUpdateClock(false);
-        externalClockActive = false;
-        i2s_del_channel(txHandle);
+        AudioI2SPort::clearEventHandler(AudioI2SPort::Direction::Tx, this);
+        AudioI2SPort::stop(AudioI2SPort::Direction::Tx);
+        AudioI2SPort::release(AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
+        if (txQueue != nullptr) {
+            vQueueDelete(txQueue);
+            txQueue = nullptr;
+        }
         return false;
     }
 
@@ -192,48 +119,36 @@ bool AudioOutputI2S::beginInternal() {
 
 OSIZE
 void AudioOutputI2S::end() {
-    if (!running && txQueue == nullptr && txHandle == nullptr && !externalClockActive) {
-        return;
-    }
+    if (!running && txQueue == nullptr && txHandle == nullptr) return;
 
     running = false;
 
     if (txTask != nullptr) {
         xTaskNotifyGive(txTask);
-
-        /*
-         * Give the TX task enough time to leave i2s_channel_write(),
-         * release its current block and delete itself.
-         */
         const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(200);
-
-        while (txTask != nullptr && static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0) {
+        while (txTask != nullptr &&
+               static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0) {
             vTaskDelay(1);
         }
     }
 
     if (txQueue != nullptr) {
         BlockPair pair;
-
         while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) {
             releasePair(pair);
         }
     }
 
     if (txHandle != nullptr) {
-        i2s_channel_disable(txHandle);
-        i2s_del_channel(txHandle);
+        AudioI2SPort::clearEventHandler(AudioI2SPort::Direction::Tx, this);
+        AudioI2SPort::stop(AudioI2SPort::Direction::Tx);
+        AudioI2SPort::release(AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
     }
 
     if (txQueue != nullptr) {
         vQueueDelete(txQueue);
         txQueue = nullptr;
-    }
-
-    if (externalClockActive) {
-        AudioStream::setExternalUpdateClock(false);
-        externalClockActive = false;
     }
 }
 
@@ -283,11 +198,14 @@ void AudioOutputI2S::releasePair(BlockPair &pair) {
 
 void AudioOutputI2S::txTaskEntry(void *arg) { static_cast<AudioOutputI2S *>(arg)->txTaskLoop(); }
 
-bool IRAM_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
+bool IRAM_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t,
+                                                                      i2s_event_data_t *,
+                                                                      void *userContext) {
     auto *output = static_cast<AudioOutputI2S *>(userContext);
     if (output == nullptr || !output->running) return false;
 
-    output->txCallbackCountValue = output->txCallbackCountValue + 1;
+    ++output->txCallbackCountValue;
+    if (!AudioI2SPort::isClockOwner(AudioI2SPort::Direction::Tx)) return false;
     return AudioStream::update_all_from_isr();
 }
 
