@@ -86,6 +86,18 @@ Note that GPIO 43 and GPIO 44 are also commonly the ESP32-S3 UART0 TX/RX pins.
 Use a USB CDC/USB Serial-JTAG console or change the DATA pins if the serial
 console is wired to UART0.
 
+### Direct ESP-IDF mono diagnostic
+
+If the stereo tests sound correct but the mono library test does not, run
+[`examples/HardwareTesting/PDMDirectIDFMono.cpp`](../examples/HardwareTesting/PDMDirectIDFMono.cpp).
+It uses the native ESP-IDF PDM DAC in `I2S_SLOT_MODE_MONO` on GPIO 43 and
+sends the same 1 kHz / 44.1 kHz sine without AudioStream. Compare it with
+`PDMDirectIDF.cpp` (stereo) and `PDMMono.cpp` (library mono):
+- If direct mono is noisy too, the issue is isolated to the native mono DAC
+  mode/configuration or its output routing.
+- If direct mono is clean but library mono is noisy, investigate the
+  `AudioOutputPDM` mono PCM transfer path.
+
 ### AudioStream comparison test
 
 After the direct ESP-IDF test succeeds, use
