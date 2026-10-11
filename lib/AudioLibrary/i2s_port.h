@@ -7,6 +7,12 @@
 #include <driver/i2s_std.h>
 #include <driver/i2s_common.h>
 
+#if defined(CONFIG_I2S_ISR_IRAM_SAFE) && CONFIG_I2S_ISR_IRAM_SAFE
+#define AUDIO_I2S_ISR_ATTR IRAM_ATTR
+#else
+#define AUDIO_I2S_ISR_ATTR
+#endif
+
 /*
  * Owns one physical ESP-IDF I2S controller and its optional TX/RX pair.
  *
@@ -61,7 +67,7 @@ class AudioI2SPort {
     // AudioStream has one global sample rate, so all allocated controllers
     // are reconfigured together.
     static bool setSampleRate(float sampleRate);
-    static bool IRAM_ATTR isClockOwner(uint8_t controller, Direction direction);
+    static bool AUDIO_I2S_ISR_ATTR isClockOwner(uint8_t controller, Direction direction);
 };
 
 #endif
