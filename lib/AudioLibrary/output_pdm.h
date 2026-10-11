@@ -34,6 +34,8 @@ class AudioOutputPDM : public AudioStream {
     bool begin();
     bool begin(const Pins &pins);
     bool begin(int8_t data);
+    // Two DATA pins select stereo automatically: left first, right second.
+    bool begin(int8_t dataLeft, int8_t dataRight);
     void end();
 
     bool isRunning() const;
