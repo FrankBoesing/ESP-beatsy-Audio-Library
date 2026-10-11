@@ -64,16 +64,19 @@ bool sameFormat(const Format &a, const Format &b) {
 }
 
 bool formatImplemented(const Format &f) {
-    if (f.mode != AudioI2SPort::PeripheralMode::Standard || f.slots != 2 || f.slotBits != 16) {
-        return false;
+    if (f.slotBits != 16) return false;
+
+    if (f.mode == AudioI2SPort::PeripheralMode::PDM) {
+        return f.encoding == AudioI2SPort::DataEncoding::PCM && f.rateMultiplier == 1 &&
+               (f.slots == 1 || f.slots == 2);
     }
 
-    if (f.encoding == AudioI2SPort::DataEncoding::PCM) {
-        return f.rateMultiplier == 1;
-    }
+    if (f.mode != AudioI2SPort::PeripheralMode::Standard || f.slots != 2) return false;
 
-    // Software BMC stream: at 4x the PCM frame rate, stereo 16-bit I2S
-    // serializes 128 BMC half-bit states for each stereo PCM frame.
+    if (f.encoding == AudioI2SPort::DataEncoding::PCM) return f.rateMultiplier == 1;
+
+    // Software BMC stream: at 4x PCM frame rate, stereo 16-bit I2S serializes
+    // 128 BMC half-bit states for each stereo PCM frame.
     return f.encoding == AudioI2SPort::DataEncoding::SpdifBMC && f.rateMultiplier == 4;
 }
 
@@ -172,9 +175,11 @@ bool AUDIO_I2S_ISR_ATTR dispatchRx(i2s_chan_handle_t channel, i2s_event_data_t *
 OSIZE
 bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t rate, const Format &format) {
     const bool spdifBmc = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC;
-    if ((!spdifBmc && (requested.bclk < 0 || requested.ws < 0)) ||
+    const bool pdmDac = format.mode == AudioI2SPort::PeripheralMode::PDM;
+    if ((!spdifBmc && !pdmDac && (requested.bclk < 0 || requested.ws < 0)) ||
         (first == Direction::Tx && requested.dout < 0) ||
-        (first == Direction::Rx && requested.din < 0)) {
+        (first == Direction::Rx && requested.din < 0) ||
+        (pdmDac && format.slots == 2 && requested.dout2 < 0)) {
         ESP_LOGE(TAG, "Invalid initial I2S pins");
         return false;
     }
@@ -182,8 +187,12 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
         ESP_LOGE(TAG, "Requested I2S format is not implemented");
         return false;
     }
-    if (spdifBmc && first != Direction::Tx) {
-        ESP_LOGE(TAG, "Software SPDIF BMC is currently TX-only");
+    if ((spdifBmc || pdmDac) && first != Direction::Tx) {
+        ESP_LOGE(TAG, "SPDIF BMC and PDM DAC formats are TX-only");
+        return false;
+    }
+    if (pdmDac && controllerOf(&s) != 0) {
+        ESP_LOGE(TAG, "PCM-to-PDM output is only supported on I2S0");
         return false;
     }
 
@@ -203,6 +212,63 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
     cfg.auto_clear_after_cb = true;
     cfg.allow_pd = false;
     cfg.intr_priority = 2;
+
+    if (pdmDac) {
+#if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && \
+    defined(SOC_I2S_HW_VERSION_2) && SOC_I2S_HW_VERSION_2
+        // Direct-to-filter DAC mode: PCM is modulated by I2S hardware.
+        // Controller 0 is allocated TX-only because PDM mode is not compatible
+        // with this manager's standard-mode full-duplex channel pair.
+        esp_err_t err = i2s_new_channel(&cfg, &s.txHandle, nullptr);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "I2S0 PDM allocation failed: %s", esp_err_to_name(err));
+            resetPortState(s);
+            return false;
+        }
+
+        i2s_pdm_tx_config_t pdmCfg = {};
+        pdmCfg.clk_cfg = I2S_PDM_TX_CLK_DAC_DEFAULT_CONFIG(rate);
+        pdmCfg.slot_cfg = I2S_PDM_TX_SLOT_PCM_FMT_DAC_DEFAULT_CONFIG(
+            I2S_DATA_BIT_WIDTH_16BIT,
+            format.slots == 1 ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO);
+        pdmCfg.gpio_cfg.clk = I2S_GPIO_UNUSED;
+        pdmCfg.gpio_cfg.dout = static_cast<gpio_num_t>(requested.dout);
+#if defined(SOC_I2S_PDM_MAX_TX_LINES) && SOC_I2S_PDM_MAX_TX_LINES > 1
+        pdmCfg.gpio_cfg.dout2 = format.slots == 2
+                                    ? static_cast<gpio_num_t>(requested.dout2)
+                                    : I2S_GPIO_UNUSED;
+#else
+        if (format.slots == 2) {
+            ESP_LOGE(TAG, "This target does not support two-line PDM DAC output");
+            i2s_del_channel(s.txHandle);
+            resetPortState(s);
+            return false;
+        }
+#endif
+        pdmCfg.gpio_cfg.invert_flags.clk_inv = false;
+
+        err = i2s_channel_init_pdm_tx_mode(s.txHandle, &pdmCfg);
+        if (err == ESP_OK) {
+            i2s_event_callbacks_t cb = {};
+            cb.on_sent = &dispatchTx;
+            err = i2s_channel_register_event_callback(s.txHandle, &cb, &s);
+        }
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "I2S0 PDM setup failed: %s", esp_err_to_name(err));
+            i2s_del_channel(s.txHandle);
+            resetPortState(s);
+            return false;
+        }
+
+        s.sampleRate = rate;
+        s.pairCreated = true;
+        return true;
+#else
+        ESP_LOGE(TAG, "Direct PCM-to-PDM DAC mode is not supported by this target/IDF");
+        resetPortState(s);
+        return false;
+#endif
+    }
 
     esp_err_t err = i2s_new_channel(&cfg, &s.txHandle, &s.rxHandle);
     if (err != ESP_OK) {
@@ -544,15 +610,31 @@ bool AudioI2SPort::setSampleRate(float rate) {
         return cfg;
     };
 
-    esp_err_t err = ESP_OK;
-    for (PortState &s : ports) {
-        if (!s.pairCreated) continue;
+    auto reconfigurePortClock = [&](PortState &s, uint32_t hz) -> esp_err_t {
+        if (s.format.mode == AudioI2SPort::PeripheralMode::PDM) {
+#if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && \
+    defined(SOC_I2S_HW_VERSION_2) && SOC_I2S_HW_VERSION_2
+            const i2s_pdm_tx_clk_config_t cfg = I2S_PDM_TX_CLK_DAC_DEFAULT_CONFIG(hz);
+            return i2s_channel_reconfig_pdm_tx_clock(s.txHandle, &cfg);
+#else
+            (void)hz;
+            return ESP_ERR_NOT_SUPPORTED;
+#endif
+        }
+
         const Direction slave = s.physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
         const i2s_chan_handle_t master = s.physicalMaster == Direction::Tx ? s.txHandle : s.rxHandle;
         const i2s_chan_handle_t slaveHandle = slave == Direction::Tx ? s.txHandle : s.rxHandle;
-        const auto cfg = clockConfig(newRate, s.format);
-        err = i2s_channel_reconfig_std_clock(master, &cfg);
+        const auto cfg = clockConfig(hz, s.format);
+        esp_err_t err = i2s_channel_reconfig_std_clock(master, &cfg);
         if (err == ESP_OK) err = i2s_channel_reconfig_std_clock(slaveHandle, &cfg);
+        return err;
+    };
+
+    esp_err_t err = ESP_OK;
+    for (PortState &s : ports) {
+        if (!s.pairCreated) continue;
+        err = reconfigurePortClock(s, newRate);
         if (err != ESP_OK) break;
     }
     if (err == ESP_OK && !AudioStream::setSampleRate(rate)) err = ESP_FAIL;
@@ -561,12 +643,7 @@ bool AudioI2SPort::setSampleRate(float rate) {
         ESP_LOGE(TAG, "I2S sample-rate reconfiguration failed: %s", esp_err_to_name(err));
         for (PortState &s : ports) {
             if (!s.pairCreated) continue;
-            const Direction slave = s.physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
-            const i2s_chan_handle_t master = s.physicalMaster == Direction::Tx ? s.txHandle : s.rxHandle;
-            const i2s_chan_handle_t slaveHandle = slave == Direction::Tx ? s.txHandle : s.rxHandle;
-            const auto oldClock = clockConfig(oldRate, s.format);
-            i2s_channel_reconfig_std_clock(master, &oldClock);
-            i2s_channel_reconfig_std_clock(slaveHandle, &oldClock);
+            reconfigurePortClock(s, oldRate);
             s.sampleRate = oldRate;
         }
         AudioStream::setSampleRate(oldRateFloat);
