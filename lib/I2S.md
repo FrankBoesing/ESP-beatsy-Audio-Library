@@ -57,8 +57,13 @@ AudioStream processing loop; the I²S/DMA hardware generates the high-rate strea
   pin order is `dataLeft, dataRight`; ESP-IDF routes the left PCM slot to DOUT2
   and the right PCM slot to DOUT, so the class maps these pins explicitly.
 - The PDM DAC mode does not need a PDM CLK pin at the external connector.
-- Each DATA pin should go through its own low-pass filter before feeding an
-  amplifier. Do not connect a speaker directly to an ESP32 GPIO.
+- PDM is a high-frequency 1-bit stream, not an analog audio voltage. Use a
+  low-pass filter before the amplifier; do not connect a speaker directly to
+  an ESP32 GPIO. A single RC pole (for example 1 kΩ + 4.7 nF) may leave
+  substantial PDM noise. For an initial test, use two cascaded RC stages:
+  DATA → 1 kΩ → node A → 1 kΩ → node B → amplifier input, with 2.2 nF from
+  each node to GND. Connect ESP32 and amplifier grounds. This is a starting
+  point, not a substitute for a filter designed for the chosen amplifier/load.
 - PDM controller mode and normal I²S0 TX are mutually exclusive; do not run
   `AudioOutputPDM`, `AudioOutputI2S`, or `AudioOutputSPDIF1` simultaneously.
 - The current class accepts PCM sample rates from 16 kHz through 48 kHz.
@@ -115,21 +120,22 @@ void loop() {}
 ```cpp
 #include "Audio.h"
 
-AudioOutputPDM pdmOut({PDM_DATA_LEFT, PDM_DATA_RIGHT});
+AudioOutputPDM pdmOut;
 
 void setup() {
-    pdmOut.setChannelCount(2);
     pdmOut.setSampleRate(44100.0f);
     AudioMemory(12);
+    pdmOut.begin(PDM_DATA_LEFT, PDM_DATA_RIGHT); // Enables stereo automatically.
     // Connect separate left/right AudioStream outputs to inputs 0 and 1.
 }
 
 void loop() {}
 ```
 
-The helper class exposes `begin()`, `begin(pin)`, `begin(Pins)`, `end()`,
-`isRunning()`, `txCallbackCount()`, `channels()`, `setChannelCount()`,
-and `setSampleRate()`.
+The helper class exposes `begin()`, `begin(pin)`, `begin(left, right)`,
+`begin(Pins)`, `end()`, `isRunning()`, `txCallbackCount()`,
+`channels()`, `setChannelCount()`, and `setSampleRate()`. Passing two pins
+to the constructor or to `begin(left, right)` selects stereo automatically.
 
 Reference: [ESP-IDF I²S PDM TX mode](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/peripherals/i2s.html#pdm-tx-mode-in-pcm-format-with-pcm-to-pdm-converter).
 
