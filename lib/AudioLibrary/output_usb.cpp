@@ -10,10 +10,25 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-#if defined(ARDUINO_ARCH_ESP32) && __has_include(<USBAudioCard.h>)
+// When this target explicitly requires Arduino USB Audio, include the framework
+// headers directly. Hiding them behind __has_include can prevent PlatformIO's
+// Library Dependency Finder from discovering the built-in Arduino USB library.
+#if defined(AUDIO_USB_REQUIRE_ARDUINO_UAC) && AUDIO_USB_REQUIRE_ARDUINO_UAC
 #include <soc/soc_caps.h>
 #include <sdkconfig.h>
-#if defined(SOC_USB_OTG_SUPPORTED) && SOC_USB_OTG_SUPPORTED && defined(CONFIG_TINYUSB_AUDIO_ENABLED) && CONFIG_TINYUSB_AUDIO_ENABLED
+#include <USB.h>
+#include <USBAudioCard.h>
+#if defined(SOC_USB_OTG_SUPPORTED) && SOC_USB_OTG_SUPPORTED && \
+    defined(CONFIG_TINYUSB_AUDIO_ENABLED) && CONFIG_TINYUSB_AUDIO_ENABLED
+#define AUDIO_USB_HAS_ARDUINO_UAC 1
+#else
+#error "USB audio target requires SOC_USB_OTG_SUPPORTED and CONFIG_TINYUSB_AUDIO_ENABLED"
+#endif
+#elif defined(ARDUINO_ARCH_ESP32) && __has_include(<USBAudioCard.h>)
+#include <soc/soc_caps.h>
+#include <sdkconfig.h>
+#if defined(SOC_USB_OTG_SUPPORTED) && SOC_USB_OTG_SUPPORTED && \
+    defined(CONFIG_TINYUSB_AUDIO_ENABLED) && CONFIG_TINYUSB_AUDIO_ENABLED
 #include <USB.h>
 #include <USBAudioCard.h>
 #define AUDIO_USB_HAS_ARDUINO_UAC 1
@@ -22,10 +37,6 @@
 
 #ifndef AUDIO_USB_HAS_ARDUINO_UAC
 #define AUDIO_USB_HAS_ARDUINO_UAC 0
-#endif
-
-#if defined(AUDIO_USB_REQUIRE_ARDUINO_UAC) && AUDIO_USB_REQUIRE_ARDUINO_UAC && !AUDIO_USB_HAS_ARDUINO_UAC
-#error "USB audio requested, but this Arduino core lacks enabled USBAudioCard/TinyUSB Audio support"
 #endif
 
 // CDC-on-boot starts TinyUSB before setup(), which prevents the audio interface
