@@ -20,8 +20,8 @@
 class AudioOutputPDM : public AudioStream {
   public:
     struct Pins {
-        int8_t data;
-        int8_t data2 = -1;
+        int8_t dataLeft;
+        int8_t dataRight = -1;
     };
 
     static constexpr uint8_t CONTROLLER = 0;
@@ -40,8 +40,8 @@ class AudioOutputPDM : public AudioStream {
     uint32_t txCallbackCount() const;
     const Pins &pins() const { return pdmPins; }
 
-    // Mono averages AudioStream inputs 0/1 onto one DATA pin. Stereo keeps the
-    // channels separate and requires Pins::data and Pins::data2.
+    // Mono averages AudioStream inputs 0/1 onto dataLeft. Stereo keeps the
+    // channels separate and requires both dataLeft and dataRight pins.
     bool setChannelCount(uint channels);
     uint channels() const { return numChannels; }
     bool setSampleRate(float sampleRate);
