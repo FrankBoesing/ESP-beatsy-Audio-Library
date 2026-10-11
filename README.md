@@ -24,7 +24,7 @@ Compatibility is primarily **source/API-level compatibility**, not binary compat
 - **Filter implementation:** AudioFilterLadder replaces the Teensy/CMSIS-DSP FIR interpolation path with portable polyphase FIR routines and uses 4× internal oversampling.
 - **ESP-specific playback:** MP3/AAC decoding, generic AudioSource objects and network-stream handling extend the original hardware-focused audio graph with ESP32 software-decoder functionality.
 - **Hardware codecs:** AudioControlES8311 and AudioControlES8388 are included for boards using those codecs.
-- **USB Audio:** USB audio headers are currently commented out in Audio.h. They are not included in the supported I/O inventory below.
+- **USB Audio:** Work in progress
 
 ## Examples currently present
 
@@ -43,7 +43,7 @@ These examples are present in the repository. Their board-specific pin and codec
 | [Polyphonic synth music](examples/Synthesis/PlaySynthMusic/main.cpp) | Plays a score stored in memory using 16 waveform voices, envelopes and left/right AudioMixerN instances. |
 | [Simple Drum](examples/Synthesis/SimpleDrum/SimpleDrum.cpp) | Triggers four simple-drum synthesizers and mixes them to stereo output. |
 
-The files in examples/Synthesis/PlaySynthMusic include an older snapshot named main.cpp_old; the active example entry point is main.cpp.
+
 
 ## Implemented filters
 
@@ -83,6 +83,7 @@ The files in examples/Synthesis/PlaySynthMusic include an older snapshot named m
 | **AudioMixerN** | Extended mixer supporting 4–32 inputs. Accumulates in float and saturates once when converting the final output to 16-bit PCM. |
 | **AudioAmplifier** | Single-input gain stage. |
 
+
 ## Audio inputs and outputs
 
 | Class | Functionality and notes |
@@ -96,7 +97,8 @@ The files in examples/Synthesis/PlaySynthMusic include an older snapshot named m
 
 The I2S2/I2S3 wrappers do not add extra hardware: they select a controller index. Whether those controllers exist, can be used concurrently and expose suitable pins depends on the particular ESP32 variant and board. AudioControlES8311 and AudioControlES8388 are available as codec-control classes, not as audio-stream inputs or outputs themselves.
 
-USB Audio input/output is not currently part of the active Audio.h interface.
+USB Audio input/output is WIP and not currently part of the active Audio.h interface.
+SPDIF, PDM, TDM: planned.
 
 ## Players and audio sources
 
@@ -127,6 +129,8 @@ MP3 and AAC use the ESP-beatsy software-decoder/AudioDecoderStream path. The rad
 | **AudioSynthWavetable** | Wavetable-based synthesis. |
 | **AudioSynthSimpleDrum** | Simple percussive/drum synthesis. |
 | **AudioSynthKarplusStrong** | Plucked-string synthesis using the Karplus–Strong algorithm. |
+
+A 513 entry sine table replaces the Teensy 257 entry table.
 
 ## Audio analysis
 
