@@ -185,6 +185,13 @@ The helper class exposes `begin()`, `begin(pin)`, `begin(left, right)`,
 `channels()`, `setChannelCount()`, and `setSampleRate()`. Passing two pins
 to the constructor or to `begin(left, right)` selects stereo automatically.
 
+For transport diagnostics, `txBlockCount()` counts PCM blocks processed by the
+TX task; `lastPcmMin()`, `lastPcmMax()`, and `lastPcmMeanAbs()` expose the
+range and mean absolute sample value of the last PCM block prepared for the
+driver. `txWriteErrorCount()` and `txQueueDropCount()` count failed driver
+writes and dropped queue pairs, respectively. These counters do not inspect
+the sound after the hardware PDM modulator.
+
 Reference: [ESP-IDF I²S PDM TX mode](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/peripherals/i2s.html#pdm-tx-mode-in-pcm-format-with-pcm-to-pdm-converter).
 
 ## S/PDIF output 1
