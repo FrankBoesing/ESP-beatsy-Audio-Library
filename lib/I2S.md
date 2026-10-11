@@ -86,6 +86,16 @@ Note that GPIO 43 and GPIO 44 are also commonly the ESP32-S3 UART0 TX/RX pins.
 Use a USB CDC/USB Serial-JTAG console or change the DATA pins if the serial
 console is wired to UART0.
 
+### AudioStream comparison test
+
+After the direct ESP-IDF test succeeds, use
+[`examples/HardwareTesting/PDMViaAudioStreamStereo.cpp`](../examples/HardwareTesting/PDMViaAudioStreamStereo.cpp)
+to test the same two pins and a 1 kHz / 44.1 kHz sine through
+`AudioOutputPDM`. This deliberately uses stereo on GPIO 43 and GPIO 44,
+matching `PDMDirectIDF.cpp`, to separate a mono-mode issue from an
+AudioStream/queue issue. Watch the serial callback counter and compare the
+sound with the direct IDF test.
+
 ### Mono example
 
 A runnable hardware smoke test is available at
