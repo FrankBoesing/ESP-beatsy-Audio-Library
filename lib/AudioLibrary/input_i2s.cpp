@@ -126,6 +126,7 @@ bool AudioInputI2S::onI2SReceive(i2s_chan_handle_t, i2s_event_data_t *event, voi
     return AudioStream::update_all_from_isr();
 }
 
+OSPEED
 void AudioInputI2S::update() {
     alignas(4) int16_t captured[AUDIO_BLOCK_SAMPLES * 2];
 
@@ -134,6 +135,7 @@ void AudioInputI2S::update() {
     if (write == read) return;
 
     const int16_t *src = rxSampleRing[read & (RX_RING_BLOCKS - 1U)];
+#pragma GCC unroll 4
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         captured[i * 2U] = src[i * 2U];
         captured[i * 2U + 1U] = src[i * 2U + 1U];
@@ -154,6 +156,7 @@ void AudioInputI2S::update() {
         return;
     }
 
+#pragma GCC unroll 4
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         left->data[i] = captured[i * 2U];
         right->data[i] = captured[i * 2U + 1U];
