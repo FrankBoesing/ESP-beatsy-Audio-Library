@@ -118,6 +118,16 @@ sends the same 1 kHz / 44.1 kHz sine without AudioStream. Compare it with
 - If direct mono is clean but library mono is noisy, investigate the
   `AudioOutputPDM` mono PCM transfer path.
 
+### Sample-rate caveat for waveform-synth tests
+
+`AudioSynthWaveformSine::frequency()` calculates its phase increment using
+the compile-time `AUDIO_SAMPLE_RATE_EXACT` constant (default 44.1 kHz), not the
+runtime `AudioStream` sample rate. If the output rate is changed at runtime,
+the generated pitch scales with the ratio
+`runtime sample rate / AUDIO_SAMPLE_RATE_EXACT`. This affects waveform-synth
+test tones, but not PCM samples already decoded at the negotiated sample rate.
+Use `PDMViaAudioStreamStereoRuntimeRateTone.cpp` for a 1 kHz test at 22.05 kHz.
+
 ### AudioStream comparison test
 
 After the direct ESP-IDF test succeeds, use
