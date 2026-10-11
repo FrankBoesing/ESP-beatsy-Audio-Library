@@ -60,8 +60,7 @@ class AudioInputI2S : public AudioStream {
     // the ISR return before AudioStream allocates and transmits its blocks.
     static constexpr uint32_t RX_RING_BLOCKS = 4;
     static constexpr uint32_t RX_RING_FRAMES = AUDIO_BLOCK_SAMPLES * RX_RING_BLOCKS;
-    static_assert((RX_RING_FRAMES & (RX_RING_FRAMES - 1U)) == 0,
-                  "RX ring size must be a power of two");
+    static_assert((RX_RING_FRAMES & (RX_RING_FRAMES - 1U)) == 0, "RX ring size must be a power of two");
 
     Pins i2sPins = defaultPins();
     i2s_chan_handle_t rxHandle = nullptr;
@@ -82,9 +81,7 @@ class AudioInputI2S : public AudioStream {
     std::atomic<uint32_t> rxErrorCountValue{0};
     std::atomic<uint32_t> droppedBlockCountValue{0};
 
-    static bool IRAM_ATTR onI2SReceive(i2s_chan_handle_t channel,
-                                       i2s_event_data_t *event,
-                                       void *userContext);
+    static bool IRAM_ATTR onI2SReceive(i2s_chan_handle_t channel, i2s_event_data_t *event, void *userContext);
     bool beginInternal();
 
     AudioInputI2S(const AudioInputI2S &) = delete;

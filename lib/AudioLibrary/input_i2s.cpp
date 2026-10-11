@@ -8,64 +8,39 @@ constexpr char TAG[] = "AudioInputI2S";
 }
 
 AudioInputI2S::AudioInputI2S() : AudioStream(0, nullptr) {}
+AudioInputI2S::AudioInputI2S(const Pins &pins) : AudioStream(0, nullptr), i2sPins(pins) {}
+AudioInputI2S::~AudioInputI2S() { end(); }
+bool AudioInputI2S::isRunning() const { return running.load(std::memory_order_acquire) != 0; }
+uint32_t AudioInputI2S::rxBlockCount() const { return rxBlockCountValue.load(std::memory_order_relaxed); }
+uint32_t AudioInputI2S::rxErrorCount() const { return rxErrorCountValue.load(std::memory_order_relaxed); }
+uint32_t AudioInputI2S::droppedBlockCount() const { return droppedBlockCountValue.load(std::memory_order_relaxed); }
 
-AudioInputI2S::AudioInputI2S(const Pins &pins)
-    : AudioStream(0, nullptr), i2sPins(pins) {}
-
-AudioInputI2S::~AudioInputI2S() {
-    end();
-}
-
-bool AudioInputI2S::isRunning() const {
-    return running.load(std::memory_order_acquire) != 0;
-}
-
-uint32_t AudioInputI2S::rxBlockCount() const {
-    return rxBlockCountValue.load(std::memory_order_relaxed);
-}
-
-uint32_t AudioInputI2S::rxErrorCount() const {
-    return rxErrorCountValue.load(std::memory_order_relaxed);
-}
-
-uint32_t AudioInputI2S::droppedBlockCount() const {
-    return droppedBlockCountValue.load(std::memory_order_relaxed);
-}
-
-bool AudioInputI2S::begin() {
-    return beginInternal();
-}
-
+bool AudioInputI2S::begin() { return beginInternal(); }
 bool AudioInputI2S::begin(const Pins &pins) {
     end();
     i2sPins = pins;
     return beginInternal();
 }
+bool AudioInputI2S::beginHardware() { return beginInternal(); }
 
-bool AudioInputI2S::beginHardware() {
-    return beginInternal();
-}
-
+OSIZE
 bool AudioInputI2S::beginInternal() {
     if (isRunning()) return true;
 
     if (i2sPins.bclk < 0 || i2sPins.ws < 0 || i2sPins.din < 0) {
-        ESP_LOGE(TAG, "Invalid I2S pins: BCLK=%d WS=%d DIN=%d",
-                 i2sPins.bclk, i2sPins.ws, i2sPins.din);
+        ESP_LOGE(TAG, "Invalid I2S pins: BCLK=%d WS=%d DIN=%d", i2sPins.bclk, i2sPins.ws, i2sPins.din);
         return false;
     }
 
-    const AudioI2SPort::Pins portPins{
-        i2sPins.bclk, i2sPins.ws, -1, i2sPins.din, i2sPins.mclk, i2sPins.controller
-    };
+    const AudioI2SPort::Pins portPins{i2sPins.bclk, i2sPins.ws, -1, i2sPins.din, i2sPins.mclk, i2sPins.controller};
 
     if (!AudioI2SPort::acquireRx(portPins, &rxHandle)) {
         rxHandle = nullptr;
         return false;
     }
 
-    if (!AudioI2SPort::setEventHandler(i2sPins.controller, AudioI2SPort::Direction::Rx,
-                                       &AudioInputI2S::onI2SReceive, this)) {
+    if (!AudioI2SPort::setEventHandler(i2sPins.controller, AudioI2SPort::Direction::Rx, &AudioInputI2S::onI2SReceive,
+                                       this)) {
         ESP_LOGE(TAG, "Could not register RX event handler");
         AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
         rxHandle = nullptr;
@@ -100,6 +75,7 @@ bool AudioInputI2S::beginInternal() {
     return true;
 }
 
+OSIZE
 void AudioInputI2S::end() {
     if (!isRunning() && rxHandle == nullptr) return;
 
@@ -121,9 +97,8 @@ void AudioInputI2S::end() {
     portEXIT_CRITICAL(&rxMux);
 }
 
-bool IRAM_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t,
-                                          i2s_event_data_t *event,
-                                          void *userContext) {
+OSIZE
+bool IRAM_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
     auto *input = static_cast<AudioInputI2S *>(userContext);
     if (input == nullptr || event == nullptr || event->dma_buf == nullptr) {
         return false;
