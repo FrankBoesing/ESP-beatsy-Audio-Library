@@ -15,9 +15,13 @@
 
 ## FNK0104B / PlatformIO
 
-Use the PioArduino stable PlatformIO platform for the FNK0104B environment. This supplies a recent Arduino-ESP32 3.x core with the `USBAudioCard` API (introduced in 3.3.8). Use USB-OTG/TinyUSB (`ARDUINO_USB_MODE=0`) and leave `ARDUINO_USB_CDC_ON_BOOT=1` so the sketch can keep using `Serial.println()`. CDC is not an audio-library feature; it is registered by Arduino-ESP32.
+Use the PioArduino stable PlatformIO platform for the FNK0104B environment. This supplies a recent Arduino-ESP32 3.x core with the `USBAudioCard` API (introduced in 3.3.8). Use USB-OTG/TinyUSB (`ARDUINO_USB_MODE=0`) and set `ARDUINO_USB_CDC_ON_BOOT=0`: auto-starting CDC calls `USB.begin()` before the runtime-created audio interface can register.
 
-**Unverified compatibility point:** The implementation no longer depends on `USBAudioCard` interface-event symbols, which are absent in some installed core versions. Simultaneous CDC + UAC operation must still be confirmed on the FNK0104B with the selected Arduino-ESP32 core. This implementation has not yet passed a hardware test.
+The backend registers the explicit `USBCDC USBSerial` instance and the UAC interface before calling `USB.begin()`. Use `USBSerial.print/println/printf()` for logging over the same USB cable. With CDC-on-boot disabled, Arduino's `Serial` maps to UART0 instead.
+
+The environment defines `AUDIO_USB_REQUIRE_ARDUINO_UAC=1`, so the build fails clearly if the installed core does not expose enabled `USBAudioCard` / TinyUSB Audio support instead of silently enumerating CDC only.
+
+**Unverified compatibility point:** Simultaneous CDC + UAC operation must still be confirmed on the FNK0104B with the selected Arduino-ESP32 core. This implementation has not yet passed a hardware test.
 
 ## Sample rate
 
