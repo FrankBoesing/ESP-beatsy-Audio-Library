@@ -46,8 +46,8 @@ class AudioOutputI2S : public AudioStream {
     bool begin(const Pins &pins);
     void end();
 
-    bool isRunning() const { return running; }
-    uint32_t txCallbackCount() const { return txCallbackCountValue; }
+    bool isRunning() const;
+    uint32_t txCallbackCount() const;
     const Pins &pins() const { return i2sPins; }
     bool setSampleRate(float sampleRate);
     bool setChannelCount(uint channels); //Set to one if codec supports mono only (automatic stereo->mono conversion)
@@ -71,8 +71,9 @@ class AudioOutputI2S : public AudioStream {
     QueueHandle_t txQueue = nullptr;
     TaskHandle_t txTask = nullptr;
 
-    volatile bool running = false;
-    volatile uint32_t txCallbackCountValue = 0;
+    mutable portMUX_TYPE stateMux = portMUX_INITIALIZER_UNLOCKED;
+    bool running = false;
+    uint32_t txCallbackCountValue = 0;
 
     static bool IRAM_ATTR onI2STransmit(i2s_chan_handle_t channel, i2s_event_data_t *event, void *userContext);
     static void txTaskEntry(void *arg);
@@ -80,6 +81,9 @@ class AudioOutputI2S : public AudioStream {
 
     bool beginInternal();
     void releasePair(BlockPair &pair);
+    void setRunning(bool value);
+    bool markTxCallbackFromISR();
+    void resetTxCallbackCount();
 
     // Non-copyable
     AudioOutputI2S(const AudioOutputI2S &) = delete;

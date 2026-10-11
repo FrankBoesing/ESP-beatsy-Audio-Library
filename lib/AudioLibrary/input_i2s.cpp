@@ -16,6 +16,34 @@ AudioInputI2S::~AudioInputI2S() {
     end();
 }
 
+bool AudioInputI2S::isRunning() const {
+    portENTER_CRITICAL(&rxMux);
+    const bool value = running;
+    portEXIT_CRITICAL(&rxMux);
+    return value;
+}
+
+uint32_t AudioInputI2S::rxBlockCount() const {
+    portENTER_CRITICAL(&rxMux);
+    const uint32_t value = rxBlockCountValue;
+    portEXIT_CRITICAL(&rxMux);
+    return value;
+}
+
+uint32_t AudioInputI2S::rxErrorCount() const {
+    portENTER_CRITICAL(&rxMux);
+    const uint32_t value = rxErrorCountValue;
+    portEXIT_CRITICAL(&rxMux);
+    return value;
+}
+
+uint32_t AudioInputI2S::droppedBlockCount() const {
+    portENTER_CRITICAL(&rxMux);
+    const uint32_t value = droppedBlockCountValue;
+    portEXIT_CRITICAL(&rxMux);
+    return value;
+}
+
 bool AudioInputI2S::begin() {
     return beginInternal();
 }
@@ -31,7 +59,7 @@ bool AudioInputI2S::beginHardware() {
 }
 
 bool AudioInputI2S::beginInternal() {
-    if (running) return true;
+    if (isRunning()) return true;
 
     if (i2sPins.bclk < 0 || i2sPins.ws < 0 || i2sPins.din < 0) {
         ESP_LOGE(TAG, "Invalid I2S pins: BCLK=%d WS=%d DIN=%d",
@@ -60,15 +88,16 @@ bool AudioInputI2S::beginInternal() {
     writeFrameIndex = 0;
     readFrameIndex = 0;
     clockFrameRemainder = 0;
-    portEXIT_CRITICAL(&rxMux);
-
     rxBlockCountValue = 0;
     rxErrorCountValue = 0;
     droppedBlockCountValue = 0;
     running = true;
+    portEXIT_CRITICAL(&rxMux);
 
     if (!AudioI2SPort::start(i2sPins.controller, AudioI2SPort::Direction::Rx)) {
+        portENTER_CRITICAL(&rxMux);
         running = false;
+        portEXIT_CRITICAL(&rxMux);
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Rx, this);
         AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Rx);
         AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
@@ -80,9 +109,14 @@ bool AudioInputI2S::beginInternal() {
 }
 
 void AudioInputI2S::end() {
-    if (!running && rxHandle == nullptr) return;
+    if (!isRunning() && rxHandle == nullptr) return;
 
+    portENTER_CRITICAL(&rxMux);
     running = false;
+    writeFrameIndex = 0;
+    readFrameIndex = 0;
+    clockFrameRemainder = 0;
+    portEXIT_CRITICAL(&rxMux);
 
     if (rxHandle != nullptr) {
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Rx, this);
@@ -91,31 +125,30 @@ void AudioInputI2S::end() {
         rxHandle = nullptr;
     }
 
-    portENTER_CRITICAL(&rxMux);
-    writeFrameIndex = 0;
-    readFrameIndex = 0;
-    clockFrameRemainder = 0;
-    portEXIT_CRITICAL(&rxMux);
 }
 
 bool IRAM_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t,
                                           i2s_event_data_t *event,
                                           void *userContext) {
     auto *input = static_cast<AudioInputI2S *>(userContext);
-    if (input == nullptr || !input->running || event == nullptr || event->dma_buf == nullptr) {
+    if (input == nullptr || event == nullptr || event->dma_buf == nullptr) {
         return false;
     }
 
     constexpr size_t BYTES_PER_STEREO_FRAME = 2U * sizeof(int16_t);
     const size_t bytes = event->size;
     if (bytes == 0 || (bytes % BYTES_PER_STEREO_FRAME) != 0) {
-        ++input->rxErrorCountValue;
+        portENTER_CRITICAL_ISR(&input->rxMux);
+        if (input->running) ++input->rxErrorCountValue;
+        portEXIT_CRITICAL_ISR(&input->rxMux);
         return false;
     }
 
     const size_t frames = bytes / BYTES_PER_STEREO_FRAME;
     if (frames > RX_RING_FRAMES) {
-        ++input->rxErrorCountValue;
+        portENTER_CRITICAL_ISR(&input->rxMux);
+        if (input->running) ++input->rxErrorCountValue;
+        portEXIT_CRITICAL_ISR(&input->rxMux);
         return false;
     }
 
@@ -123,6 +156,10 @@ bool IRAM_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t,
     uint32_t completedBlocks = 0;
 
     portENTER_CRITICAL_ISR(&input->rxMux);
+    if (!input->running) {
+        portEXIT_CRITICAL_ISR(&input->rxMux);
+        return false;
+    }
 
     const uint32_t usedFrames = input->writeFrameIndex - input->readFrameIndex;
     if (usedFrames + frames > RX_RING_FRAMES) {

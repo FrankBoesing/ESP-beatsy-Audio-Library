@@ -12,6 +12,40 @@ AudioOutputI2S::AudioOutputI2S(const Pins &pins)
     : AudioStream(2, inputQueueArray), i2sPins(pins) {} // kein Hardware-Init hier
 AudioOutputI2S::~AudioOutputI2S() { end(); }
 
+bool AudioOutputI2S::isRunning() const {
+    portENTER_CRITICAL(&stateMux);
+    const bool value = running;
+    portEXIT_CRITICAL(&stateMux);
+    return value;
+}
+
+uint32_t AudioOutputI2S::txCallbackCount() const {
+    portENTER_CRITICAL(&stateMux);
+    const uint32_t value = txCallbackCountValue;
+    portEXIT_CRITICAL(&stateMux);
+    return value;
+}
+
+void AudioOutputI2S::setRunning(bool value) {
+    portENTER_CRITICAL(&stateMux);
+    running = value;
+    portEXIT_CRITICAL(&stateMux);
+}
+
+bool AudioOutputI2S::markTxCallbackFromISR() {
+    portENTER_CRITICAL_ISR(&stateMux);
+    const bool active = running;
+    if (active) ++txCallbackCountValue;
+    portEXIT_CRITICAL_ISR(&stateMux);
+    return active;
+}
+
+void AudioOutputI2S::resetTxCallbackCount() {
+    portENTER_CRITICAL(&stateMux);
+    txCallbackCountValue = 0;
+    portEXIT_CRITICAL(&stateMux);
+}
+
 bool AudioOutputI2S::begin() { return beginInternal(); }
 bool AudioOutputI2S::begin(const Pins &pins) {
     end();
@@ -45,7 +79,7 @@ bool AudioOutputI2S::setSampleRate(float hz) {
 
 OSIZE
 bool AudioOutputI2S::beginInternal() {
-    if (running) return true;
+    if (isRunning()) return true;
     if (i2sPins.bclk < 0 || i2sPins.ws < 0 || i2sPins.dout < 0) {
         ESP_LOGE(TAG, "Invalid I2S output pins");
         return false;
@@ -74,15 +108,15 @@ bool AudioOutputI2S::beginInternal() {
         return false;
     }
 
-    txCallbackCountValue = 0;
-    running = true;
+    resetTxCallbackCount();
+    setRunning(true);
 
     const BaseType_t result = xTaskCreatePinnedToCore(
         txTaskEntry, "AudioI2STx", 2048, this,
         configMAX_PRIORITIES - 2, &txTask, AUDIO_PROCESSING_CORE);
 
     if (result != pdPASS) {
-        running = false;
+        setRunning(false);
         txTask = nullptr;
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, this);
         AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx);
@@ -93,7 +127,7 @@ bool AudioOutputI2S::beginInternal() {
     }
 
     if (!AudioI2SPort::start(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
-        running = false;
+        setRunning(false);
         xTaskNotifyGive(txTask);
         const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(200);
         while (txTask != nullptr &&
@@ -117,9 +151,9 @@ bool AudioOutputI2S::beginInternal() {
 
 OSIZE
 void AudioOutputI2S::end() {
-    if (!running && txQueue == nullptr && txHandle == nullptr) return;
+    if (!isRunning() && txQueue == nullptr && txHandle == nullptr) return;
 
-    running = false;
+    setRunning(false);
 
     if (txTask != nullptr) {
         xTaskNotifyGive(txTask);
@@ -200,9 +234,7 @@ bool IRAM_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t,
                                                                       i2s_event_data_t *,
                                                                       void *userContext) {
     auto *output = static_cast<AudioOutputI2S *>(userContext);
-    if (output == nullptr || !output->running) return false;
-
-    ++output->txCallbackCountValue;
+    if (output == nullptr || !output->markTxCallbackFromISR()) return false;
     if (!AudioI2SPort::isClockOwner(output->i2sPins.controller, AudioI2SPort::Direction::Tx)) return false;
     return AudioStream::update_all_from_isr();
 }
@@ -217,7 +249,7 @@ void AudioOutputI2S::txTaskLoop() {
     uint32_t buffer[AUDIO_BLOCK_SAMPLES];
     BlockPair pair;
 
-    while (running) {
+    while (isRunning()) {
 
         if (xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(100)) != pdTRUE) {
             continue;

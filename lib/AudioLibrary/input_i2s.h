@@ -43,10 +43,10 @@ class AudioInputI2S : public AudioStream {
     bool begin(const Pins &pins);
     void end();
 
-    bool isRunning() const { return running; }
-    uint32_t rxBlockCount() const { return rxBlockCountValue; }
-    uint32_t rxErrorCount() const { return rxErrorCountValue; }
-    uint32_t droppedBlockCount() const { return droppedBlockCountValue; }
+    bool isRunning() const;
+    uint32_t rxBlockCount() const;
+    uint32_t rxErrorCount() const;
+    uint32_t droppedBlockCount() const;
     const Pins &pins() const { return i2sPins; }
 
   protected:
@@ -66,15 +66,15 @@ class AudioInputI2S : public AudioStream {
     i2s_chan_handle_t rxHandle = nullptr;
 
     alignas(4) int16_t rxSampleRing[RX_RING_FRAMES * 2] = {};
-    portMUX_TYPE rxMux = portMUX_INITIALIZER_UNLOCKED;
-    volatile uint32_t writeFrameIndex = 0;
-    volatile uint32_t readFrameIndex = 0;
+    mutable portMUX_TYPE rxMux = portMUX_INITIALIZER_UNLOCKED;
+    uint32_t writeFrameIndex = 0;
+    uint32_t readFrameIndex = 0;
     uint32_t clockFrameRemainder = 0;
 
-    volatile bool running = false;
-    volatile uint32_t rxBlockCountValue = 0;
-    volatile uint32_t rxErrorCountValue = 0;
-    volatile uint32_t droppedBlockCountValue = 0;
+    bool running = false;
+    uint32_t rxBlockCountValue = 0;
+    uint32_t rxErrorCountValue = 0;
+    uint32_t droppedBlockCountValue = 0;
 
     static bool IRAM_ATTR onI2SReceive(i2s_chan_handle_t channel,
                                        i2s_event_data_t *event,
