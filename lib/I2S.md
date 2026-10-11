@@ -86,6 +86,16 @@ Note that GPIO 43 and GPIO 44 are also commonly the ESP32-S3 UART0 TX/RX pins.
 Use a USB CDC/USB Serial-JTAG console or change the DATA pins if the serial
 console is wired to UART0.
 
+### Mono AudioStream dual-input diagnostic
+
+If native ESP-IDF mono and library stereo both work, but the one-input library
+mono test does not, try
+[`examples/HardwareTesting/PDMViaAudioStreamMonoDualInput.cpp`](../examples/HardwareTesting/PDMViaAudioStreamMonoDualInput.cpp).
+It uses the mono output on GPIO 43 but connects the same sine to both AudioStream
+inputs. The mono path therefore averages two identical blocks. Compare with
+`PDMMono.cpp`, which connects only input 0. This isolates the one-input
+fallback from the two-input mono-mix branch.
+
 ### Direct ESP-IDF mono diagnostic
 
 If the stereo tests sound correct but the mono library test does not, run
