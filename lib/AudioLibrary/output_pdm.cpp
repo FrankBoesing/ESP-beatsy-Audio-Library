@@ -1,7 +1,6 @@
 #include "output_pdm.h"
 
 #include <cmath>
-#include <cstring>
 #include <esp_err.h>
 #include <esp_log.h>
 #include "i2s_port.h"
@@ -326,7 +325,7 @@ void AudioOutputPDM::txTaskLoop() {
         const esp_err_t err = i2s_channel_write(txHandle, pcmBuffer, bytesToWrite, &bytesWritten, 100);
 
         if (err != ESP_OK || bytesWritten != bytesToWrite) {
-                const uint32_t now = millis();
+            const uint32_t now = millis();
             ++writeErrorCount;
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
                 ESP_LOGE(TAG, "PDM TX error #%lu: %s, bytes=%lu/%lu",
