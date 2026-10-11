@@ -55,7 +55,7 @@ bool AudioOutputI2S::beginInternal() {
     if (txQueue == nullptr) return false;
 
     const AudioI2SPort::Pins portPins{
-        i2sPins.bclk, i2sPins.ws, i2sPins.dout, -1, i2sPins.mclk
+        i2sPins.bclk, i2sPins.ws, i2sPins.dout, -1, i2sPins.mclk, i2sPins.controller
     };
     if (!AudioI2SPort::acquireTx(portPins, &txHandle)) {
         vQueueDelete(txQueue);
@@ -64,10 +64,10 @@ bool AudioOutputI2S::beginInternal() {
         return false;
     }
 
-    if (!AudioI2SPort::setEventHandler(AudioI2SPort::Direction::Tx,
+    if (!AudioI2SPort::setEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx,
                                        &AudioOutputI2S::onI2STransmit, this)) {
         ESP_LOGE(TAG, "Could not register TX event handler");
-        AudioI2SPort::release(AudioI2SPort::Direction::Tx);
+        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
@@ -76,7 +76,6 @@ bool AudioOutputI2S::beginInternal() {
 
     txCallbackCountValue = 0;
     running = true;
-    taskExited = false;
 
     const BaseType_t result = xTaskCreatePinnedToCore(
         txTaskEntry, "AudioI2STx", 2048, this,
@@ -84,17 +83,16 @@ bool AudioOutputI2S::beginInternal() {
 
     if (result != pdPASS) {
         running = false;
-        taskExited = true;
         txTask = nullptr;
-        AudioI2SPort::clearEventHandler(AudioI2SPort::Direction::Tx, this);
-        AudioI2SPort::release(AudioI2SPort::Direction::Tx);
+        AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, this);
+        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
         return false;
     }
 
-    if (!AudioI2SPort::start(AudioI2SPort::Direction::Tx)) {
+    if (!AudioI2SPort::start(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
         running = false;
         xTaskNotifyGive(txTask);
         const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(200);
@@ -103,9 +101,9 @@ bool AudioOutputI2S::beginInternal() {
             vTaskDelay(1);
         }
 
-        AudioI2SPort::clearEventHandler(AudioI2SPort::Direction::Tx, this);
-        AudioI2SPort::stop(AudioI2SPort::Direction::Tx);
-        AudioI2SPort::release(AudioI2SPort::Direction::Tx);
+        AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, this);
+        AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Tx);
+        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
         if (txQueue != nullptr) {
             vQueueDelete(txQueue);
@@ -140,9 +138,9 @@ void AudioOutputI2S::end() {
     }
 
     if (txHandle != nullptr) {
-        AudioI2SPort::clearEventHandler(AudioI2SPort::Direction::Tx, this);
-        AudioI2SPort::stop(AudioI2SPort::Direction::Tx);
-        AudioI2SPort::release(AudioI2SPort::Direction::Tx);
+        AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, this);
+        AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Tx);
+        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
     }
 
@@ -205,7 +203,7 @@ bool IRAM_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t,
     if (output == nullptr || !output->running) return false;
 
     ++output->txCallbackCountValue;
-    if (!AudioI2SPort::isClockOwner(AudioI2SPort::Direction::Tx)) return false;
+    if (!AudioI2SPort::isClockOwner(output->i2sPins.controller, AudioI2SPort::Direction::Tx)) return false;
     return AudioStream::update_all_from_isr();
 }
 
@@ -304,7 +302,6 @@ void AudioOutputI2S::txTaskLoop() {
         releasePair(pair);
     }
 
-    taskExited = true;
     txTask = nullptr;
 
     vTaskDelete(nullptr);

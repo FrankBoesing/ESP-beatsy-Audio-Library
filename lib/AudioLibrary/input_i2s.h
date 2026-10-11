@@ -22,6 +22,7 @@ class AudioInputI2S : public AudioStream {
         int8_t ws;
         int8_t din;
         int8_t mclk;
+        uint8_t controller = 0; // ESP-IDF hardware controller index (0..3)
     };
 
     // Reference pinout for the classic ESP32 Audio Kit. ESP32-S3 boards

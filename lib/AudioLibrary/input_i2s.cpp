@@ -40,7 +40,7 @@ bool AudioInputI2S::beginInternal() {
     }
 
     const AudioI2SPort::Pins portPins{
-        i2sPins.bclk, i2sPins.ws, -1, i2sPins.din, i2sPins.mclk
+        i2sPins.bclk, i2sPins.ws, -1, i2sPins.din, i2sPins.mclk, i2sPins.controller
     };
 
     if (!AudioI2SPort::acquireRx(portPins, &rxHandle)) {
@@ -48,10 +48,10 @@ bool AudioInputI2S::beginInternal() {
         return false;
     }
 
-    if (!AudioI2SPort::setEventHandler(AudioI2SPort::Direction::Rx,
+    if (!AudioI2SPort::setEventHandler(i2sPins.controller, AudioI2SPort::Direction::Rx,
                                        &AudioInputI2S::onI2SReceive, this)) {
         ESP_LOGE(TAG, "Could not register RX event handler");
-        AudioI2SPort::release(AudioI2SPort::Direction::Rx);
+        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
         rxHandle = nullptr;
         return false;
     }
@@ -67,11 +67,11 @@ bool AudioInputI2S::beginInternal() {
     droppedBlockCountValue = 0;
     running = true;
 
-    if (!AudioI2SPort::start(AudioI2SPort::Direction::Rx)) {
+    if (!AudioI2SPort::start(i2sPins.controller, AudioI2SPort::Direction::Rx)) {
         running = false;
-        AudioI2SPort::clearEventHandler(AudioI2SPort::Direction::Rx, this);
-        AudioI2SPort::stop(AudioI2SPort::Direction::Rx);
-        AudioI2SPort::release(AudioI2SPort::Direction::Rx);
+        AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Rx, this);
+        AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Rx);
+        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
         rxHandle = nullptr;
         return false;
     }
@@ -85,9 +85,9 @@ void AudioInputI2S::end() {
     running = false;
 
     if (rxHandle != nullptr) {
-        AudioI2SPort::clearEventHandler(AudioI2SPort::Direction::Rx, this);
-        AudioI2SPort::stop(AudioI2SPort::Direction::Rx);
-        AudioI2SPort::release(AudioI2SPort::Direction::Rx);
+        AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Rx, this);
+        AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Rx);
+        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
         rxHandle = nullptr;
     }
 
@@ -149,7 +149,7 @@ bool IRAM_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t,
 
     // Only the shared I2S clock owner may clock the graph. The TX callback
     // performs this job when TX owns the clock, avoiding duplicate updates.
-    if (completedBlocks != 0 && AudioI2SPort::isClockOwner(AudioI2SPort::Direction::Rx)) {
+    if (completedBlocks != 0 && AudioI2SPort::isClockOwner(input->i2sPins.controller, AudioI2SPort::Direction::Rx)) {
         bool taskWoken = false;
         for (uint32_t i = 0; i < completedBlocks; ++i) {
             taskWoken |= AudioStream::update_all_from_isr();
