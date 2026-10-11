@@ -291,7 +291,11 @@ class AudioUSBBackend {
     bool isStarted() const { return started_.load(std::memory_order_acquire); }
 
     bool canChangeSampleRate() const {
+#if AUDIO_USB_HAS_ARDUINO_UAC
         return !started_.load(std::memory_order_acquire) && card_ == nullptr;
+#else
+        return !started_.load(std::memory_order_acquire);
+#endif
     }
 
     bool inputStreaming() const {
