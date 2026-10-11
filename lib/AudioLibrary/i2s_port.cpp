@@ -121,7 +121,7 @@ void resetPortState(PortState &s) {
     portEXIT_CRITICAL(&s.callbackMux);
 }
 
-bool IRAM_ATTR dispatchTx(i2s_chan_handle_t channel, i2s_event_data_t *event, void *context) {
+bool AUDIO_I2S_ISR_ATTR dispatchTx(i2s_chan_handle_t channel, i2s_event_data_t *event, void *context) {
     auto *s = static_cast<PortState *>(context);
     if (!s) return false;
     EventCallback callback;
@@ -138,7 +138,7 @@ bool IRAM_ATTR dispatchTx(i2s_chan_handle_t channel, i2s_event_data_t *event, vo
     return taskWoken;
 }
 
-bool IRAM_ATTR dispatchRx(i2s_chan_handle_t channel, i2s_event_data_t *event, void *context) {
+bool AUDIO_I2S_ISR_ATTR dispatchRx(i2s_chan_handle_t channel, i2s_event_data_t *event, void *context) {
     auto *s = static_cast<PortState *>(context);
     if (!s) return false;
     EventCallback callback;
@@ -566,7 +566,7 @@ bool AudioI2SPort::setSampleRate(float rate) {
 }
 
 OSIZE
-bool IRAM_ATTR AudioI2SPort::isClockOwner(uint8_t controller, Direction d) {
+bool AudioI2SPort::isClockOwner(uint8_t controller, Direction d) {
     const int8_t requestedOwner = (d == Direction::None || controller >= MAX_PORTS)
                                       ? -1
                                       : static_cast<int8_t>(controller * 2U + (d == Direction::Rx ? 1U : 0U));
