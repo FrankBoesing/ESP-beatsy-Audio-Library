@@ -1,5 +1,7 @@
 #include "control_es8311.h"
 
+#include <cmath>
+
 #pragma GCC optimize("Os")
 
 namespace {
@@ -152,6 +154,17 @@ bool AudioControlES8311::enable(uint32_t sampleRate) {
     // Analoge Stufen und Signalpfad einschalten
     ok &= writeReg(REG_SYSTEM0D, 0x01); // Analog-Bias einschalten
     ok &= writeReg(REG_SYSTEM0E, 0x02); // Analog-PGA + ADC-Modulator einschalten
+    ok &= writeReg(REG_SYSTEM14, 0x10); // MIC1P/MIC1N wählen, PGA zunächst 0 dB
+
+    // ADC_SCALE fest auf 0 dB setzen: inputLevel() steuert ausschließlich
+    // die analoge PGA-Verstärkung. Andere Registerbits bleiben erhalten.
+    uint8_t adcScale = 0;
+    if (readReg(REG_ADC16, adcScale)) {
+        ok &= writeReg(REG_ADC16, static_cast<uint8_t>(adcScale & 0xF8U));
+    } else {
+        ok = false;
+    }
+
     ok &= writeReg(REG_SYSTEM12, 0x00); // DAC einschalten
     ok &= writeReg(REG_SYSTEM13, 0x10); // Ausgang auf Kopfhoerer-/Line-Treiber schalten
     ok &= writeReg(REG_ADC1C, 0x6A);    // ADC-Equalizer-Bypass, DC-Offset-Korrektur
@@ -207,15 +220,27 @@ bool AudioControlES8311::volume(float level) {
 }
 
 bool AudioControlES8311::inputLevel(float level) {
+    if (!initialized_ || !std::isfinite(level)) {
+        return false;
+    }
+
     if (level < 0.0f) {
         level = 0.0f;
     } else if (level > 1.0f) {
         level = 1.0f;
     }
 
-    // Analog mic PGA gain: 0 (0 dB) .. 8 (42 dB) in 6 dB steps.
-    const uint8_t gain = (uint8_t)(level * 8.0f + 0.5f);
-    return writeReg(REG_ADC16, gain);
+    // Analog PGA: 0..30 dB in 3 dB steps (register 0x14, bits 3:0).
+    const uint8_t gain = static_cast<uint8_t>(level * 10.0f + 0.5f);
+
+    // Preserve DMIC_ON and LINSEL; only replace PGAGAIN.
+    uint8_t reg = 0;
+    if (!readReg(REG_SYSTEM14, reg)) {
+        return false;
+    }
+
+    reg = static_cast<uint8_t>((reg & 0xF0U) | (gain & 0x0FU));
+    return writeReg(REG_SYSTEM14, reg);
 }
 
 bool AudioControlES8311::inputSelect(int) {
