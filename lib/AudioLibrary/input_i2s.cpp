@@ -47,11 +47,8 @@ bool AudioInputI2S::beginInternal() {
         return false;
     }
 
-    portENTER_CRITICAL(&rxMux);
-    writeFrameIndex.store(0, std::memory_order_relaxed);
-    readFrameIndex.store(0, std::memory_order_relaxed);
-    clockFrameRemainder = 0;
-    portEXIT_CRITICAL(&rxMux);
+    writeBlockIndex.store(0, std::memory_order_relaxed);
+    readBlockIndex.store(0, std::memory_order_relaxed);
     rxBlockCountValue.store(0, std::memory_order_relaxed);
     rxErrorCountValue.store(0, std::memory_order_relaxed);
     droppedBlockCountValue.store(0, std::memory_order_relaxed);
@@ -64,11 +61,8 @@ bool AudioInputI2S::beginInternal() {
         AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
         rxHandle = nullptr;
 
-        portENTER_CRITICAL(&rxMux);
-        writeFrameIndex.store(0, std::memory_order_relaxed);
-        readFrameIndex.store(0, std::memory_order_relaxed);
-        clockFrameRemainder = 0;
-        portEXIT_CRITICAL(&rxMux);
+        writeBlockIndex.store(0, std::memory_order_relaxed);
+        readBlockIndex.store(0, std::memory_order_relaxed);
         return false;
     }
 
@@ -90,111 +84,62 @@ void AudioInputI2S::end() {
         rxHandle = nullptr;
     }
 
-    portENTER_CRITICAL(&rxMux);
-    writeFrameIndex.store(0, std::memory_order_relaxed);
-    readFrameIndex.store(0, std::memory_order_relaxed);
-    clockFrameRemainder = 0;
-    portEXIT_CRITICAL(&rxMux);
+    writeBlockIndex.store(0, std::memory_order_relaxed);
+    readBlockIndex.store(0, std::memory_order_relaxed);
 }
 
 OSIZE
-bool IRAM_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
+bool AudioInputI2S::onI2SReceive(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
     auto *input = static_cast<AudioInputI2S *>(userContext);
-    if (input == nullptr || event == nullptr || event->dma_buf == nullptr) {
-        return false;
-    }
-
-    constexpr size_t BYTES_PER_STEREO_FRAME = 2U * sizeof(int16_t);
-    const size_t bytes = event->size;
-    if (bytes == 0 || (bytes % BYTES_PER_STEREO_FRAME) != 0) {
-        if (input->running.load(std::memory_order_acquire) != 0) {
-            input->rxErrorCountValue.fetch_add(1, std::memory_order_relaxed);
-        }
-        return false;
-    }
-
-    const size_t frames = bytes / BYTES_PER_STEREO_FRAME;
-    if (frames > RX_RING_FRAMES) {
-        if (input->running.load(std::memory_order_acquire) != 0) {
-            input->rxErrorCountValue.fetch_add(1, std::memory_order_relaxed);
-        }
-        return false;
-    }
-
-    const auto *src = static_cast<const int16_t *>(event->dma_buf);
+    if (input == nullptr || event == nullptr || event->dma_buf == nullptr) return false;
     if (input->running.load(std::memory_order_acquire) == 0) return false;
 
-    // Normally the ISR is the only writer and publishes the completed sample
-    // range without taking a lock. In the rare overrun case, synchronize with
-    // update() before advancing the consumer index and preserving newest data.
-    uint32_t write = input->writeFrameIndex.load(std::memory_order_relaxed);
-    uint32_t read = input->readFrameIndex.load(std::memory_order_acquire);
-    if ((write - read) + frames > RX_RING_FRAMES) {
-        portENTER_CRITICAL_ISR(&input->rxMux);
-        write = input->writeFrameIndex.load(std::memory_order_relaxed);
-        read = input->readFrameIndex.load(std::memory_order_acquire);
+    // dma_frame_num is AUDIO_BLOCK_SAMPLES and the slots are 16-bit stereo:
+    // one valid RX callback is exactly one interleaved AudioStream block.
+    if (event->size != sizeof(input->rxSampleRing[0])) {
+        input->rxErrorCountValue.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
 
-        if ((write - read) + frames > RX_RING_FRAMES) {
-            input->readFrameIndex.store(write, std::memory_order_release);
-            input->droppedBlockCountValue.fetch_add(1, std::memory_order_relaxed);
-        }
+    const uint32_t write = input->writeBlockIndex.load(std::memory_order_relaxed);
+    const uint32_t read = input->readBlockIndex.load(std::memory_order_acquire);
 
-        for (size_t i = 0; i < frames; ++i) {
-            const uint32_t ringFrame = write % RX_RING_FRAMES;
-            input->rxSampleRing[ringFrame * 2U] = src[i * 2U];
-            input->rxSampleRing[ringFrame * 2U + 1U] = src[i * 2U + 1U];
-            ++write;
-        }
-        input->writeFrameIndex.store(write, std::memory_order_release);
-        portEXIT_CRITICAL_ISR(&input->rxMux);
+    if (write - read >= RX_RING_BLOCKS) {
+        // Never overwrite data the consumer may be copying. Keep queued blocks
+        // and drop this newest DMA block instead.
+        input->droppedBlockCountValue.fetch_add(1, std::memory_order_relaxed);
     } else {
-        for (size_t i = 0; i < frames; ++i) {
-            const uint32_t ringFrame = write % RX_RING_FRAMES;
-            input->rxSampleRing[ringFrame * 2U] = src[i * 2U];
-            input->rxSampleRing[ringFrame * 2U + 1U] = src[i * 2U + 1U];
-            ++write;
-        }
-        input->writeFrameIndex.store(write, std::memory_order_release);
+        const int16_t *src = static_cast<const int16_t *>(event->dma_buf);
+        int16_t *dst = input->rxSampleRing[write & (RX_RING_BLOCKS - 1U)];
+
+        // The destination block is contiguous: no per-frame modulo is needed.
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES * 2U; ++i) dst[i] = src[i];
+
+        input->writeBlockIndex.store(write + 1U, std::memory_order_release);
     }
 
-    input->clockFrameRemainder += static_cast<uint32_t>(frames);
-    const uint32_t completedBlocks = input->clockFrameRemainder / AUDIO_BLOCK_SAMPLES;
-    input->clockFrameRemainder %= AUDIO_BLOCK_SAMPLES;
-    if (completedBlocks != 0) {
-        input->rxBlockCountValue.fetch_add(completedBlocks, std::memory_order_relaxed);
-    }
+    input->rxBlockCountValue.fetch_add(1, std::memory_order_relaxed);
 
-    // Only the shared I2S clock owner may clock the graph. The TX callback
-    // performs this job when TX owns the clock, avoiding duplicate updates.
-    if (completedBlocks != 0 && AudioI2SPort::isClockOwner(input->i2sPins.controller, AudioI2SPort::Direction::Rx)) {
-        bool taskWoken = false;
-        for (uint32_t i = 0; i < completedBlocks; ++i) {
-            taskWoken |= AudioStream::update_all_from_isr();
-        }
-        return taskWoken;
-    }
-    return false;
+    // Clock the graph once per DMA block even when this capture block had to
+    // be dropped, so other streams do not stop advancing.
+    if (!AudioI2SPort::isClockOwner(input->i2sPins.controller, AudioI2SPort::Direction::Rx)) return false;
+    return AudioStream::update_all_from_isr();
 }
 
 void AudioInputI2S::update() {
     alignas(4) int16_t captured[AUDIO_BLOCK_SAMPLES * 2];
 
-    portENTER_CRITICAL(&rxMux);
-    uint32_t read = readFrameIndex.load(std::memory_order_relaxed);
-    const uint32_t write = writeFrameIndex.load(std::memory_order_acquire);
-    if (write - read < AUDIO_BLOCK_SAMPLES) {
-        portEXIT_CRITICAL(&rxMux);
-        return;
-    }
+    const uint32_t read = readBlockIndex.load(std::memory_order_relaxed);
+    const uint32_t write = writeBlockIndex.load(std::memory_order_acquire);
+    if (write == read) return;
 
+    const int16_t *src = rxSampleRing[read & (RX_RING_BLOCKS - 1U)];
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        const uint32_t ringFrame = read % RX_RING_FRAMES;
-        captured[i * 2U] = rxSampleRing[ringFrame * 2U];
-        captured[i * 2U + 1U] = rxSampleRing[ringFrame * 2U + 1U];
-        ++read;
+        captured[i * 2U] = src[i * 2U];
+        captured[i * 2U + 1U] = src[i * 2U + 1U];
     }
-    readFrameIndex.store(read, std::memory_order_release);
-    portEXIT_CRITICAL(&rxMux);
+    // Publish the slot as free only after its samples have been copied.
+    readBlockIndex.store(read + 1U, std::memory_order_release);
 
     // Allocate both channel blocks or neither, so left and right cannot drift
     // when the shared audio memory pool is temporarily exhausted.
