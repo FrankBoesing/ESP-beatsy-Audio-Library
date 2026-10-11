@@ -10,42 +10,72 @@
 namespace {
 using Direction = AudioI2SPort::Direction;
 using Pins = AudioI2SPort::Pins;
+using Format = AudioI2SPort::Format;
 using EventCallback = AudioI2SPort::EventCallback;
+
 constexpr char TAG[] = "AudioI2SPort";
 constexpr uint16_t DMA_DESC_NUM = 6;
 constexpr uint16_t DMA_FRAME_NUM = AUDIO_BLOCK_SAMPLES;
+constexpr uint8_t MAX_PORTS = AudioI2SPort::MAX_CONTROLLERS;
 
-i2s_chan_handle_t txHandle = nullptr;
-i2s_chan_handle_t rxHandle = nullptr;
-Pins sharedPins = {-1, -1, -1, -1, -1};
-Direction physicalMaster = Direction::None;
-volatile Direction clockOwner = Direction::None;
-bool pairCreated = false;
-uint32_t portSampleRate = 0;
-bool txAcquired = false;
-bool rxAcquired = false;
-bool txActive = false;
-bool rxActive = false;
-bool txEnabled = false;
-bool rxEnabled = false;
+struct PortState {
+    i2s_chan_handle_t txHandle = nullptr;
+    i2s_chan_handle_t rxHandle = nullptr;
+    Pins pins = {-1, -1, -1, -1, -1};
+    Format format = {};
+    Direction physicalMaster = Direction::None;
+    uint32_t sampleRate = 0;
+    bool pairCreated = false;
+    bool txAcquired = false;
+    bool rxAcquired = false;
+    bool txActive = false;
+    bool rxActive = false;
+    bool txEnabled = false;
+    bool rxEnabled = false;
 
-portMUX_TYPE callbackMux = portMUX_INITIALIZER_UNLOCKED;
-EventCallback txEventCallback = nullptr;
-void *txEventContext = nullptr;
-EventCallback rxEventCallback = nullptr;
-void *rxEventContext = nullptr;
-volatile uint32_t txCallbacksInFlight = 0;
-volatile uint32_t rxCallbacksInFlight = 0;
+    portMUX_TYPE callbackMux = portMUX_INITIALIZER_UNLOCKED;
+    EventCallback txCallback = nullptr;
+    void *txContext = nullptr;
+    EventCallback rxCallback = nullptr;
+    void *rxContext = nullptr;
+    volatile uint32_t txCallbacksInFlight = 0;
+    volatile uint32_t rxCallbacksInFlight = 0;
+};
 
-static bool sameClockPin(int8_t requested, int8_t configured) {
-    return requested == configured;
+PortState ports[MAX_PORTS]{};
+// AudioStream has one graph clock, irrespective of how many I2S controllers run.
+volatile int8_t schedulerOwner = -1;
+
+PortState *stateFor(uint8_t controller) {
+    return controller < MAX_PORTS ? &ports[controller] : nullptr;
 }
-static bool sameOptionalPin(int8_t requested, int8_t configured) {
+
+uint8_t controllerOf(const PortState *state) {
+    return static_cast<uint8_t>(state - ports);
+}
+
+int8_t ownerCode(uint8_t controller, Direction direction) {
+    if (direction == Direction::None || controller >= MAX_PORTS) return -1;
+    return static_cast<int8_t>(controller * 2U + (direction == Direction::Rx ? 1U : 0U));
+}
+
+bool sameFormat(const Format &a, const Format &b) {
+    return a.mode == b.mode && a.encoding == b.encoding &&
+           a.slots == b.slots && a.slotBits == b.slotBits;
+}
+
+bool formatImplemented(const Format &f) {
+    return f.mode == AudioI2SPort::PeripheralMode::Standard &&
+           f.encoding == AudioI2SPort::DataEncoding::PCM &&
+           f.slots == 2 && f.slotBits == 16;
+}
+
+bool sameOptionalPin(int8_t requested, int8_t configured) {
     return requested < 0 || requested == configured;
 }
 
-static i2s_std_config_t makeStdConfig(const Pins &pins, uint32_t rate,
-                                      bool transmit, bool master) {
+i2s_std_config_t makeStdConfig(const Pins &pins, uint32_t rate,
+                               bool transmit, bool master) {
     i2s_std_config_t cfg = {};
     cfg.clk_cfg.sample_rate_hz = rate;
     cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
@@ -53,397 +83,394 @@ static i2s_std_config_t makeStdConfig(const Pins &pins, uint32_t rate,
     cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
         I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
 
-    cfg.gpio_cfg.mclk = (master && pins.mclk >= 0)
-                            ? static_cast<gpio_num_t>(pins.mclk) : I2S_GPIO_UNUSED;
-    cfg.gpio_cfg.bclk = pins.bclk >= 0 ? static_cast<gpio_num_t>(pins.bclk) : I2S_GPIO_UNUSED;
-    cfg.gpio_cfg.ws = pins.ws >= 0 ? static_cast<gpio_num_t>(pins.ws) : I2S_GPIO_UNUSED;
-    cfg.gpio_cfg.dout = (transmit && pins.dout >= 0)
-                            ? static_cast<gpio_num_t>(pins.dout) : I2S_GPIO_UNUSED;
-    cfg.gpio_cfg.din = (!transmit && pins.din >= 0)
-                           ? static_cast<gpio_num_t>(pins.din) : I2S_GPIO_UNUSED;
+    cfg.gpio_cfg.mclk = master && pins.mclk >= 0
+        ? static_cast<gpio_num_t>(pins.mclk) : I2S_GPIO_UNUSED;
+    cfg.gpio_cfg.bclk = pins.bclk >= 0
+        ? static_cast<gpio_num_t>(pins.bclk) : I2S_GPIO_UNUSED;
+    cfg.gpio_cfg.ws = pins.ws >= 0
+        ? static_cast<gpio_num_t>(pins.ws) : I2S_GPIO_UNUSED;
+    cfg.gpio_cfg.dout = transmit && pins.dout >= 0
+        ? static_cast<gpio_num_t>(pins.dout) : I2S_GPIO_UNUSED;
+    cfg.gpio_cfg.din = !transmit && pins.din >= 0
+        ? static_cast<gpio_num_t>(pins.din) : I2S_GPIO_UNUSED;
     cfg.gpio_cfg.invert_flags.mclk_inv = false;
     cfg.gpio_cfg.invert_flags.bclk_inv = false;
     cfg.gpio_cfg.invert_flags.ws_inv = false;
     return cfg;
 }
 
-static i2s_std_gpio_config_t makeGpioConfig(const Pins &pins,
-                                            bool transmit, bool master) {
+i2s_std_gpio_config_t makeGpioConfig(const Pins &pins, bool transmit, bool master) {
     i2s_std_gpio_config_t cfg = {};
-    cfg.mclk = (master && pins.mclk >= 0)
-                   ? static_cast<gpio_num_t>(pins.mclk) : I2S_GPIO_UNUSED;
+    cfg.mclk = master && pins.mclk >= 0
+        ? static_cast<gpio_num_t>(pins.mclk) : I2S_GPIO_UNUSED;
     cfg.bclk = pins.bclk >= 0 ? static_cast<gpio_num_t>(pins.bclk) : I2S_GPIO_UNUSED;
     cfg.ws = pins.ws >= 0 ? static_cast<gpio_num_t>(pins.ws) : I2S_GPIO_UNUSED;
-    cfg.dout = (transmit && pins.dout >= 0)
-                   ? static_cast<gpio_num_t>(pins.dout) : I2S_GPIO_UNUSED;
-    cfg.din = (!transmit && pins.din >= 0)
-                  ? static_cast<gpio_num_t>(pins.din) : I2S_GPIO_UNUSED;
+    cfg.dout = transmit && pins.dout >= 0
+        ? static_cast<gpio_num_t>(pins.dout) : I2S_GPIO_UNUSED;
+    cfg.din = !transmit && pins.din >= 0
+        ? static_cast<gpio_num_t>(pins.din) : I2S_GPIO_UNUSED;
     cfg.invert_flags.mclk_inv = false;
     cfg.invert_flags.bclk_inv = false;
     cfg.invert_flags.ws_inv = false;
     return cfg;
 }
 
-static bool IRAM_ATTR dispatchTx(i2s_chan_handle_t channel, i2s_event_data_t *event, void *) {
+void resetPortState(PortState &s) {
+    s.txHandle = s.rxHandle = nullptr;
+    s.pins = {-1, -1, -1, -1, -1};
+    s.format = {};
+    s.physicalMaster = Direction::None;
+    s.sampleRate = 0;
+    s.pairCreated = false;
+    s.txAcquired = s.rxAcquired = false;
+    s.txActive = s.rxActive = false;
+    s.txEnabled = s.rxEnabled = false;
+    portENTER_CRITICAL(&s.callbackMux);
+    s.txCallback = s.rxCallback = nullptr;
+    s.txContext = s.rxContext = nullptr;
+    s.txCallbacksInFlight = s.rxCallbacksInFlight = 0;
+    portEXIT_CRITICAL(&s.callbackMux);
+}
+
+bool IRAM_ATTR dispatchTx(i2s_chan_handle_t channel, i2s_event_data_t *event, void *context) {
+    auto *s = static_cast<PortState *>(context);
+    if (!s) return false;
     EventCallback callback;
-    void *context;
-    portENTER_CRITICAL_ISR(&callbackMux);
-    ++txCallbacksInFlight;
-    callback = txEventCallback;
-    context = txEventContext;
-    portEXIT_CRITICAL_ISR(&callbackMux);
-
-    const bool taskWoken = callback != nullptr ? callback(channel, event, context) : false;
-
-    portENTER_CRITICAL_ISR(&callbackMux);
-    --txCallbacksInFlight;
-    portEXIT_CRITICAL_ISR(&callbackMux);
+    void *userContext;
+    portENTER_CRITICAL_ISR(&s->callbackMux);
+    ++s->txCallbacksInFlight;
+    callback = s->txCallback;
+    userContext = s->txContext;
+    portEXIT_CRITICAL_ISR(&s->callbackMux);
+    const bool taskWoken = callback ? callback(channel, event, userContext) : false;
+    portENTER_CRITICAL_ISR(&s->callbackMux);
+    --s->txCallbacksInFlight;
+    portEXIT_CRITICAL_ISR(&s->callbackMux);
     return taskWoken;
 }
 
-static bool IRAM_ATTR dispatchRx(i2s_chan_handle_t channel, i2s_event_data_t *event, void *) {
+bool IRAM_ATTR dispatchRx(i2s_chan_handle_t channel, i2s_event_data_t *event, void *context) {
+    auto *s = static_cast<PortState *>(context);
+    if (!s) return false;
     EventCallback callback;
-    void *context;
-    portENTER_CRITICAL_ISR(&callbackMux);
-    ++rxCallbacksInFlight;
-    callback = rxEventCallback;
-    context = rxEventContext;
-    portEXIT_CRITICAL_ISR(&callbackMux);
-
-    const bool taskWoken = callback != nullptr ? callback(channel, event, context) : false;
-
-    portENTER_CRITICAL_ISR(&callbackMux);
-    --rxCallbacksInFlight;
-    portEXIT_CRITICAL_ISR(&callbackMux);
+    void *userContext;
+    portENTER_CRITICAL_ISR(&s->callbackMux);
+    ++s->rxCallbacksInFlight;
+    callback = s->rxCallback;
+    userContext = s->rxContext;
+    portEXIT_CRITICAL_ISR(&s->callbackMux);
+    const bool taskWoken = callback ? callback(channel, event, userContext) : false;
+    portENTER_CRITICAL_ISR(&s->callbackMux);
+    --s->rxCallbacksInFlight;
+    portEXIT_CRITICAL_ISR(&s->callbackMux);
     return taskWoken;
 }
 
-static void resetPortState() {
-    txHandle = nullptr;
-    rxHandle = nullptr;
-    sharedPins = {-1, -1, -1, -1, -1};
-    physicalMaster = Direction::None;
-    clockOwner = Direction::None;
-    pairCreated = false;
-    portSampleRate = 0;
-    txAcquired = rxAcquired = false;
-    txActive = rxActive = false;
-    txEnabled = rxEnabled = false;
-}
-
-static bool createPair(const Pins &requested, Direction first, uint32_t rate) {
+bool createPair(PortState &s, const Pins &requested, Direction first,
+                uint32_t rate, const Format &format) {
     if (requested.bclk < 0 || requested.ws < 0 ||
         (first == Direction::Tx && requested.dout < 0) ||
         (first == Direction::Rx && requested.din < 0)) {
         ESP_LOGE(TAG, "Invalid initial I2S pins");
         return false;
     }
-
-    sharedPins = {requested.bclk, requested.ws, -1, -1, requested.mclk};
-    if (first == Direction::Tx) sharedPins.dout = requested.dout;
-    else sharedPins.din = requested.din;
-    physicalMaster = first;
-
-    i2s_chan_config_t chanCfg = {};
-    chanCfg.id = I2S_NUM_AUTO;
-    chanCfg.role = I2S_ROLE_MASTER;
-    chanCfg.dma_desc_num = DMA_DESC_NUM;
-    chanCfg.dma_frame_num = DMA_FRAME_NUM;
-    chanCfg.auto_clear_after_cb = true;
-    chanCfg.allow_pd = false;
-    chanCfg.intr_priority = 2;
-
-    esp_err_t err = i2s_new_channel(&chanCfg, &txHandle, &rxHandle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "i2s_new_channel(TX+RX) failed: %s", esp_err_to_name(err));
-        resetPortState();
+    if (!formatImplemented(format)) {
+        ESP_LOGE(TAG, "Requested I2S format is reserved but not implemented yet");
         return false;
     }
 
-    const i2s_std_config_t txCfg = makeStdConfig(sharedPins, rate, true, first == Direction::Tx);
-    const i2s_std_config_t rxCfg = makeStdConfig(sharedPins, rate, false, first == Direction::Rx);
+    s.pins = requested;
+    s.pins.dout = first == Direction::Tx ? requested.dout : -1;
+    s.pins.din = first == Direction::Rx ? requested.din : -1;
+    s.format = format;
+    s.physicalMaster = first;
 
-    // Per ESP-IDF's paired-channel model, initialize the intended master first.
+    i2s_chan_config_t cfg = {};
+    // Explicit controller IDs make independent ports addressable. Casting also
+    // allows this source to compile when a target names fewer enum values.
+    cfg.id = static_cast<i2s_port_t>(controllerOf(&s));
+    cfg.role = I2S_ROLE_MASTER;
+    cfg.dma_desc_num = DMA_DESC_NUM;
+    cfg.dma_frame_num = DMA_FRAME_NUM;
+    cfg.auto_clear_after_cb = true;
+    cfg.allow_pd = false;
+    cfg.intr_priority = 2;
+
+    esp_err_t err = i2s_new_channel(&cfg, &s.txHandle, &s.rxHandle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "I2S%u allocation failed: %s", controllerOf(&s), esp_err_to_name(err));
+        resetPortState(s);
+        return false;
+    }
+
+    const i2s_std_config_t txCfg = makeStdConfig(s.pins, rate, true, first == Direction::Tx);
+    const i2s_std_config_t rxCfg = makeStdConfig(s.pins, rate, false, first == Direction::Rx);
     if (first == Direction::Tx) {
-        err = i2s_channel_init_std_mode(txHandle, &txCfg);
-        if (err == ESP_OK) err = i2s_channel_init_std_mode(rxHandle, &rxCfg);
+        err = i2s_channel_init_std_mode(s.txHandle, &txCfg);
+        if (err == ESP_OK) err = i2s_channel_init_std_mode(s.rxHandle, &rxCfg);
     } else {
-        err = i2s_channel_init_std_mode(rxHandle, &rxCfg);
-        if (err == ESP_OK) err = i2s_channel_init_std_mode(txHandle, &txCfg);
+        err = i2s_channel_init_std_mode(s.rxHandle, &rxCfg);
+        if (err == ESP_OK) err = i2s_channel_init_std_mode(s.txHandle, &txCfg);
     }
 
     if (err == ESP_OK) {
         i2s_event_callbacks_t cb = {};
         cb.on_sent = &dispatchTx;
-        err = i2s_channel_register_event_callback(txHandle, &cb, nullptr);
+        err = i2s_channel_register_event_callback(s.txHandle, &cb, &s);
     }
     if (err == ESP_OK) {
         i2s_event_callbacks_t cb = {};
         cb.on_recv = &dispatchRx;
-        err = i2s_channel_register_event_callback(rxHandle, &cb, nullptr);
+        err = i2s_channel_register_event_callback(s.rxHandle, &cb, &s);
     }
-
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "I2S full-duplex channel initialization failed: %s", esp_err_to_name(err));
-        if (txHandle != nullptr) i2s_del_channel(txHandle);
-        if (rxHandle != nullptr) i2s_del_channel(rxHandle);
-        resetPortState();
+        ESP_LOGE(TAG, "I2S%u setup failed: %s", controllerOf(&s), esp_err_to_name(err));
+        if (s.txHandle) i2s_del_channel(s.txHandle);
+        if (s.rxHandle) i2s_del_channel(s.rxHandle);
+        resetPortState(s);
         return false;
     }
 
-    portSampleRate = rate;
-    pairCreated = true;
+    s.sampleRate = rate;
+    s.pairCreated = true;
     return true;
 }
 
-static bool acquire(Direction direction, const Pins &requested,
-                    i2s_chan_handle_t *outHandle, uint32_t rate) {
-    if (outHandle == nullptr) return false;
-    *outHandle = nullptr;
+bool acquire(Direction d, const Pins &pins, i2s_chan_handle_t *out,
+             uint32_t rate, const Format &format) {
+    PortState *s = stateFor(pins.controller);
+    if (!s || !out || d == Direction::None) return false;
+    *out = nullptr;
 
-    if ((direction == Direction::Tx && txAcquired) ||
-        (direction == Direction::Rx && rxAcquired) || direction == Direction::None) {
-        ESP_LOGE(TAG, "I2S direction already acquired or invalid");
+    if ((d == Direction::Tx && s->txAcquired) || (d == Direction::Rx && s->rxAcquired)) {
+        ESP_LOGE(TAG, "I2S%u direction already acquired", pins.controller);
         return false;
     }
-
-    if (!pairCreated) {
-        if (!createPair(requested, direction, rate)) return false;
+    if (!s->pairCreated) {
+        if (!createPair(*s, pins, d, rate, format)) return false;
     } else {
-        if (rate != portSampleRate) {
-            ESP_LOGE(TAG, "I2S sample rate mismatch (%lu requested, %lu active)",
-                     static_cast<unsigned long>(rate), static_cast<unsigned long>(portSampleRate));
+        if (s->sampleRate != rate || !sameFormat(s->format, format)) {
+            ESP_LOGE(TAG, "I2S%u rate/format conflicts with its existing channel pair", pins.controller);
             return false;
         }
-        if (!sameClockPin(requested.bclk, sharedPins.bclk) ||
-            !sameClockPin(requested.ws, sharedPins.ws) ||
-            !sameOptionalPin(requested.mclk, sharedPins.mclk)) {
-            ESP_LOGE(TAG, "TX/RX BCLK, WS and MCLK pins must match");
-            return false;
-        }
-
-        Pins next = sharedPins;
-        const bool isTx = direction == Direction::Tx;
-        const int8_t requestedDataPin = isTx ? requested.dout : requested.din;
-        if (requestedDataPin < 0) return false;
-
-        const int8_t currentDataPin = isTx ? next.dout : next.din;
-        const bool dataPinChanged = currentDataPin != requestedDataPin;
-        const bool directionEnabled = isTx ? txEnabled : rxEnabled;
-        if (dataPinChanged && directionEnabled) {
-            ESP_LOGE(TAG, "Cannot change I2S data pin while its channel is enabled");
+        if (pins.bclk != s->pins.bclk || pins.ws != s->pins.ws ||
+            !sameOptionalPin(pins.mclk, s->pins.mclk)) {
+            ESP_LOGE(TAG, "I2S%u TX/RX clock pins must match", pins.controller);
             return false;
         }
 
-        if (isTx) next.dout = requestedDataPin;
-        else next.din = requestedDataPin;
-
-        if (dataPinChanged) {
-            const i2s_chan_handle_t h = isTx ? txHandle : rxHandle;
-            const i2s_std_gpio_config_t cfg =
-                makeGpioConfig(next, isTx, direction == physicalMaster);
-            const esp_err_t err = i2s_channel_reconfig_std_gpio(h, &cfg);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "I2S GPIO reconfiguration failed: %s", esp_err_to_name(err));
+        const bool tx = d == Direction::Tx;
+        const int8_t dataPin = tx ? pins.dout : pins.din;
+        if (dataPin < 0) return false;
+        Pins next = s->pins;
+        int8_t &configuredPin = tx ? next.dout : next.din;
+        if (configuredPin != dataPin) {
+            if (tx ? s->txEnabled : s->rxEnabled) {
+                ESP_LOGE(TAG, "Cannot change enabled I2S%u data pin", pins.controller);
                 return false;
             }
-            sharedPins = next;
+            configuredPin = dataPin;
+            const i2s_chan_handle_t h = tx ? s->txHandle : s->rxHandle;
+            const auto gpio = makeGpioConfig(next, tx, d == s->physicalMaster);
+            const esp_err_t err = i2s_channel_reconfig_std_gpio(h, &gpio);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "I2S%u GPIO setup failed: %s", pins.controller, esp_err_to_name(err));
+                return false;
+            }
+            s->pins = next;
         }
     }
 
-    if (direction == Direction::Tx) {
-        txAcquired = true;
-        *outHandle = txHandle;
+    if (d == Direction::Tx) {
+        s->txAcquired = true;
+        *out = s->txHandle;
     } else {
-        rxAcquired = true;
-        *outHandle = rxHandle;
+        s->rxAcquired = true;
+        *out = s->rxHandle;
     }
     return true;
 }
 
-static bool setHandler(Direction d, EventCallback cb, void *ctx) {
-    if (!pairCreated || cb == nullptr || ctx == nullptr) return false;
-    if ((d == Direction::Tx && !txAcquired) ||
-        (d == Direction::Rx && !rxAcquired) || d == Direction::None) return false;
-
-    portENTER_CRITICAL(&callbackMux);
-    EventCallback &current = d == Direction::Tx ? txEventCallback : rxEventCallback;
-    void *&currentContext = d == Direction::Tx ? txEventContext : rxEventContext;
-    const bool free = current == nullptr || currentContext == ctx;
-    if (free) {
-        current = cb;
-        currentContext = ctx;
-    }
-    portEXIT_CRITICAL(&callbackMux);
-    return free;
+bool anyActive() {
+    for (const PortState &s : ports) if (s.txActive || s.rxActive) return true;
+    return false;
 }
 
-static void clearHandler(Direction d, void *ctx) {
-    if (d == Direction::None || ctx == nullptr) return;
-
-    portENTER_CRITICAL(&callbackMux);
-    EventCallback &current = d == Direction::Tx ? txEventCallback : rxEventCallback;
-    void *&currentContext = d == Direction::Tx ? txEventContext : rxEventContext;
-    volatile uint32_t &inFlight = d == Direction::Tx ? txCallbacksInFlight : rxCallbacksInFlight;
-    if (currentContext == ctx) {
-        current = nullptr;
-        currentContext = nullptr;
+int8_t findActiveOwner() {
+    for (uint8_t i = 0; i < MAX_PORTS; ++i) {
+        if (ports[i].txActive) return ownerCode(i, Direction::Tx);
+        if (ports[i].rxActive) return ownerCode(i, Direction::Rx);
     }
-    portEXIT_CRITICAL(&callbackMux);
+    return -1;
+}
 
-    // Do not return while an ISR still holds a pointer to the owning object.
+bool enabled(const PortState &s, Direction d) {
+    return d == Direction::Tx ? s.txEnabled : s.rxEnabled;
+}
+
+bool enableChannel(PortState &s, Direction d) {
+    i2s_chan_handle_t h = d == Direction::Tx ? s.txHandle : s.rxHandle;
+    if (!h) return false;
+    if (enabled(s, d)) return true;
+    const esp_err_t err = i2s_channel_enable(h);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "I2S%u %s enable failed: %s", controllerOf(&s),
+                 d == Direction::Tx ? "TX" : "RX", esp_err_to_name(err));
+        return false;
+    }
+    if (d == Direction::Tx) s.txEnabled = true;
+    else s.rxEnabled = true;
+    return true;
+}
+
+bool disableChannel(PortState &s, Direction d) {
+    bool &isEnabled = d == Direction::Tx ? s.txEnabled : s.rxEnabled;
+    if (!isEnabled) return true;
+    const i2s_chan_handle_t h = d == Direction::Tx ? s.txHandle : s.rxHandle;
+    if (!h) { isEnabled = false; return true; }
+    const esp_err_t err = i2s_channel_disable(h);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "I2S%u %s disable failed: %s", controllerOf(&s),
+                 d == Direction::Tx ? "TX" : "RX", esp_err_to_name(err));
+        return false;
+    }
+    isEnabled = false;
+    return true;
+}
+
+bool restoreEnabled(PortState &s, bool oldTx, bool oldRx) {
+    const Direction master = s.physicalMaster;
+    const Direction slave = master == Direction::Tx ? Direction::Rx : Direction::Tx;
+    if ((master == Direction::Tx ? oldTx : oldRx) && !enableChannel(s, master)) return false;
+    if ((slave == Direction::Tx ? oldTx : oldRx) && !enableChannel(s, slave)) return false;
+    return true;
+}
+
+void clearHandler(PortState &s, Direction d, void *context) {
+    if (d == Direction::None || !context) return;
+    portENTER_CRITICAL(&s.callbackMux);
+    EventCallback &cb = d == Direction::Tx ? s.txCallback : s.rxCallback;
+    void *&registered = d == Direction::Tx ? s.txContext : s.rxContext;
+    if (registered == context) { cb = nullptr; registered = nullptr; }
+    portEXIT_CRITICAL(&s.callbackMux);
+
     for (;;) {
-        portENTER_CRITICAL(&callbackMux);
-        const bool busy = inFlight != 0;
-        portEXIT_CRITICAL(&callbackMux);
+        portENTER_CRITICAL(&s.callbackMux);
+        const bool busy = d == Direction::Tx
+            ? s.txCallbacksInFlight != 0 : s.rxCallbacksInFlight != 0;
+        portEXIT_CRITICAL(&s.callbackMux);
         if (!busy) break;
         vTaskDelay(1);
     }
 }
 
-static bool enableChannel(Direction d) {
-    i2s_chan_handle_t h = d == Direction::Tx ? txHandle : rxHandle;
-    if (h == nullptr) return false;
-    const esp_err_t err = i2s_channel_enable(h);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "I2S %s enable failed: %s",
-                 d == Direction::Tx ? "TX" : "RX", esp_err_to_name(err));
-        return false;
-    }
-    if (d == Direction::Tx) txEnabled = true;
-    else rxEnabled = true;
-    return true;
-}
-
-static bool disableChannel(Direction d) {
-    bool &enabled = d == Direction::Tx ? txEnabled : rxEnabled;
-    if (!enabled) return true;
-    i2s_chan_handle_t h = d == Direction::Tx ? txHandle : rxHandle;
-    const esp_err_t err = i2s_channel_disable(h);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "I2S %s disable failed: %s",
-                 d == Direction::Tx ? "TX" : "RX", esp_err_to_name(err));
-        return false;
-    }
-    enabled = false;
-    return true;
-}
-
-static bool restoreEnabled(bool oldTx, bool oldRx) {
-    const Direction master = physicalMaster;
-    const Direction slave = master == Direction::Tx ? Direction::Rx : Direction::Tx;
-    const bool oldMaster = master == Direction::Tx ? oldTx : oldRx;
-    const bool oldSlave = slave == Direction::Tx ? oldTx : oldRx;
-    if (oldSlave && !(slave == Direction::Tx ? txEnabled : rxEnabled) && !enableChannel(slave)) return false;
-    if (oldMaster && !(master == Direction::Tx ? txEnabled : rxEnabled) && !enableChannel(master)) return false;
-    return true;
-}
-
 } // namespace
 
 bool AudioI2SPort::acquireTx(const Pins &pins, i2s_chan_handle_t *handle) {
-    const uint32_t rate = static_cast<uint32_t>(std::lround(AudioStream::sampleRate()));
-    return acquire(Direction::Tx, pins, handle, rate);
+    return acquireTx(pins, handle, Format{});
 }
-
+bool AudioI2SPort::acquireTx(const Pins &pins, i2s_chan_handle_t *handle, const Format &format) {
+    return acquire(Direction::Tx, pins, handle,
+                   static_cast<uint32_t>(std::lround(AudioStream::sampleRate())), format);
+}
 bool AudioI2SPort::acquireRx(const Pins &pins, i2s_chan_handle_t *handle) {
-    const uint32_t rate = static_cast<uint32_t>(std::lround(AudioStream::sampleRate()));
-    return acquire(Direction::Rx, pins, handle, rate);
+    return acquireRx(pins, handle, Format{});
+}
+bool AudioI2SPort::acquireRx(const Pins &pins, i2s_chan_handle_t *handle, const Format &format) {
+    return acquire(Direction::Rx, pins, handle,
+                   static_cast<uint32_t>(std::lround(AudioStream::sampleRate())), format);
 }
 
-bool AudioI2SPort::setEventHandler(Direction direction, EventCallback callback, void *context) {
-    return setHandler(direction, callback, context);
+bool AudioI2SPort::setEventHandler(uint8_t controller, Direction d,
+                                   EventCallback callback, void *context) {
+    PortState *s = stateFor(controller);
+    if (!s || !s->pairCreated || d == Direction::None || !callback || !context) return false;
+    if ((d == Direction::Tx && !s->txAcquired) || (d == Direction::Rx && !s->rxAcquired)) return false;
+
+    portENTER_CRITICAL(&s->callbackMux);
+    EventCallback &current = d == Direction::Tx ? s->txCallback : s->rxCallback;
+    void *&currentContext = d == Direction::Tx ? s->txContext : s->rxContext;
+    const bool available = current == nullptr || currentContext == context;
+    if (available) { current = callback; currentContext = context; }
+    portEXIT_CRITICAL(&s->callbackMux);
+    return available;
 }
 
-void AudioI2SPort::clearEventHandler(Direction direction, void *context) {
-    clearHandler(direction, context);
+void AudioI2SPort::clearEventHandler(uint8_t controller, Direction d, void *context) {
+    if (PortState *s = stateFor(controller)) clearHandler(*s, d, context);
 }
 
-bool AudioI2SPort::start(Direction direction) {
-    if (!pairCreated || direction == Direction::None) return false;
-    if ((direction == Direction::Tx && (!txAcquired || txHandle == nullptr)) ||
-        (direction == Direction::Rx && (!rxAcquired || rxHandle == nullptr))) return false;
-    if ((direction == Direction::Tx && txActive) || (direction == Direction::Rx && rxActive)) return true;
+bool AudioI2SPort::start(uint8_t controller, Direction d) {
+    PortState *s = stateFor(controller);
+    if (!s || !s->pairCreated || d == Direction::None) return false;
+    if ((d == Direction::Tx && (!s->txAcquired || !s->txHandle)) ||
+        (d == Direction::Rx && (!s->rxAcquired || !s->rxHandle))) return false;
+    if (d == Direction::Tx ? s->txActive : s->rxActive) return true;
 
-    const bool noActive = !txActive && !rxActive;
-    if (noActive && !AudioStream::setExternalUpdateClock(true)) {
-        ESP_LOGE(TAG, "Could not enable the external audio clock");
+    const bool firstActive = !anyActive();
+    if (firstActive && !AudioStream::setExternalUpdateClock(true)) {
+        ESP_LOGE(TAG, "Could not enable external AudioStream clock");
         return false;
     }
 
-    const Direction slave = physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
-    if (noActive && direction != physicalMaster) {
-        const bool masterEnabled = physicalMaster == Direction::Tx ? txEnabled : rxEnabled;
-        if (!masterEnabled && !enableChannel(physicalMaster)) {
-            AudioStream::setExternalUpdateClock(false);
-            return false;
-        }
+    const Direction master = s->physicalMaster;
+    if (d != master && !enabled(*s, master) && !enableChannel(*s, master)) {
+        if (firstActive) AudioStream::setExternalUpdateClock(false);
+        return false;
     }
-
-    const bool alreadyEnabled = direction == Direction::Tx ? txEnabled : rxEnabled;
-    if (!alreadyEnabled && !enableChannel(direction)) {
-        if (noActive) {
-            disableChannel(slave);
-            disableChannel(physicalMaster);
-            AudioStream::setExternalUpdateClock(false);
+    if (!enableChannel(*s, d)) {
+        if (!s->txActive && !s->rxActive) {
+            const Direction slave = master == Direction::Tx ? Direction::Rx : Direction::Tx;
+            disableChannel(*s, slave);
+            disableChannel(*s, master);
         }
+        if (firstActive) AudioStream::setExternalUpdateClock(false);
         return false;
     }
 
-    if (direction == Direction::Tx) txActive = true;
-    else rxActive = true;
-    if (clockOwner == Direction::None || noActive) clockOwner = direction;
+    if (d == Direction::Tx) s->txActive = true;
+    else s->rxActive = true;
+    if (firstActive || schedulerOwner < 0) schedulerOwner = ownerCode(controller, d);
     return true;
 }
 
-void AudioI2SPort::stop(Direction direction) {
-    if (direction == Direction::None) return;
-    const bool wasActive = direction == Direction::Tx ? txActive : rxActive;
+void AudioI2SPort::stop(uint8_t controller, Direction d) {
+    PortState *s = stateFor(controller);
+    if (!s || d == Direction::None) return;
+    const bool wasActive = d == Direction::Tx ? s->txActive : s->rxActive;
     if (!wasActive) return;
+    if (d == Direction::Tx) s->txActive = false;
+    else s->rxActive = false;
 
-    if (direction == Direction::Tx) txActive = false;
-    else rxActive = false;
-
-    const bool otherActive = direction == Direction::Tx ? rxActive : txActive;
-    if (direction != physicalMaster) disableChannel(direction);
-
-    if (clockOwner == direction) {
-        clockOwner = otherActive
-            ? (direction == Direction::Tx ? Direction::Rx : Direction::Tx)
-            : Direction::None;
+    if (d != s->physicalMaster) disableChannel(*s, d);
+    if (!s->txActive && !s->rxActive) {
+        const Direction slave = s->physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
+        disableChannel(*s, slave);
+        disableChannel(*s, s->physicalMaster);
     }
 
-    if (!txActive && !rxActive) {
-        const Direction slave = physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
-        disableChannel(slave);
-        disableChannel(physicalMaster);
-        clockOwner = Direction::None;
+    if (schedulerOwner == ownerCode(controller, d)) schedulerOwner = findActiveOwner();
+    if (!anyActive()) {
+        schedulerOwner = -1;
         if (!AudioStream::setExternalUpdateClock(false)) {
-            ESP_LOGE(TAG, "Could not restore the software audio clock");
+            ESP_LOGE(TAG, "Could not restore software AudioStream clock");
         }
     }
 }
 
-void AudioI2SPort::release(Direction direction) {
-    if (direction == Direction::Tx) txAcquired = false;
-    else if (direction == Direction::Rx) rxAcquired = false;
-    else return;
+void AudioI2SPort::release(uint8_t controller, Direction d) {
+    PortState *s = stateFor(controller);
+    if (!s || d == Direction::None) return;
+    if (d == Direction::Tx) s->txAcquired = false;
+    else s->rxAcquired = false;
+    if (s->txAcquired || s->rxAcquired || s->txActive || s->rxActive ||
+        s->txEnabled || s->rxEnabled) return;
 
-    if (txAcquired || rxAcquired || txActive || rxActive || txEnabled || rxEnabled) return;
-
-    if (txHandle != nullptr) i2s_del_channel(txHandle);
-    if (rxHandle != nullptr) i2s_del_channel(rxHandle);
-
-    portENTER_CRITICAL(&callbackMux);
-    txEventCallback = nullptr;
-    txEventContext = nullptr;
-    rxEventCallback = nullptr;
-    rxEventContext = nullptr;
-    txCallbacksInFlight = 0;
-    rxCallbacksInFlight = 0;
-    portEXIT_CRITICAL(&callbackMux);
-
-    resetPortState();
+    clearHandler(*s, Direction::Tx, s->txContext);
+    clearHandler(*s, Direction::Rx, s->rxContext);
+    if (s->txHandle) i2s_del_channel(s->txHandle);
+    if (s->rxHandle) i2s_del_channel(s->rxHandle);
+    resetPortState(*s);
 }
 
 bool AudioI2SPort::setSampleRate(float rate) {
@@ -451,72 +478,89 @@ bool AudioI2SPort::setSampleRate(float rate) {
     const long rounded = std::lround(rate);
     if (rounded <= 0) return false;
     const uint32_t newRate = static_cast<uint32_t>(rounded);
-
-    if (!pairCreated) return AudioStream::setSampleRate(rate);
-    if (newRate == portSampleRate) return AudioStream::setSampleRate(rate);
-
     const float oldRateFloat = AudioStream::sampleRate();
-    const uint32_t oldRate = portSampleRate;
-    const bool oldTxEnabled = txEnabled;
-    const bool oldRxEnabled = rxEnabled;
-    const Direction slave = physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
-    const i2s_chan_handle_t masterHandle = physicalMaster == Direction::Tx ? txHandle : rxHandle;
-    const i2s_chan_handle_t slaveHandle = slave == Direction::Tx ? txHandle : rxHandle;
+    const uint32_t oldRate = static_cast<uint32_t>(std::lround(oldRateFloat));
+    if (newRate == oldRate) return AudioStream::setSampleRate(rate);
 
-    // Pause both halves of the full-duplex port. Reconfigure both clock
-    // records so that TX/RX still have matching frame timing after the change.
-    if (!disableChannel(slave) || !disableChannel(physicalMaster)) {
-        restoreEnabled(oldTxEnabled, oldRxEnabled);
-        return false;
+    bool oldTx[MAX_PORTS]{}, oldRx[MAX_PORTS]{};
+    for (uint8_t i = 0; i < MAX_PORTS; ++i) {
+        oldTx[i] = ports[i].txEnabled;
+        oldRx[i] = ports[i].rxEnabled;
+    }
+
+    for (PortState &s : ports) {
+        if (!s.pairCreated) continue;
+        const Direction slave = s.physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
+        if (!disableChannel(s, slave) || !disableChannel(s, s.physicalMaster)) {
+            for (uint8_t i = 0; i < MAX_PORTS; ++i) {
+                if (ports[i].pairCreated) restoreEnabled(ports[i], oldTx[i], oldRx[i]);
+            }
+            return false;
+        }
     }
 
     for (;;) {
-        portENTER_CRITICAL(&callbackMux);
-        const bool busy = txCallbacksInFlight != 0 || rxCallbacksInFlight != 0;
-        portEXIT_CRITICAL(&callbackMux);
+        bool busy = false;
+        for (PortState &s : ports) {
+            portENTER_CRITICAL(&s.callbackMux);
+            busy |= s.txCallbacksInFlight != 0 || s.rxCallbacksInFlight != 0;
+            portEXIT_CRITICAL(&s.callbackMux);
+        }
         if (!busy) break;
         vTaskDelay(1);
     }
 
-    auto makeClockConfig = [](uint32_t sampleRate) {
-        i2s_std_clk_config_t clk = I2S_STD_CLK_DEFAULT_CONFIG(sampleRate);
-        clk.clk_src = I2S_CLK_SRC_DEFAULT;
-        clk.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-        return clk;
+    auto clockConfig = [](uint32_t hz) {
+        i2s_std_clk_config_t cfg = I2S_STD_CLK_DEFAULT_CONFIG(hz);
+        cfg.clk_src = I2S_CLK_SRC_DEFAULT;
+        cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+        return cfg;
     };
 
-    const i2s_std_clk_config_t newClock = makeClockConfig(newRate);
-    esp_err_t err = i2s_channel_reconfig_std_clock(masterHandle, &newClock);
-    if (err == ESP_OK) {
-        err = i2s_channel_reconfig_std_clock(slaveHandle, &newClock);
+    esp_err_t err = ESP_OK;
+    for (PortState &s : ports) {
+        if (!s.pairCreated) continue;
+        const Direction slave = s.physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
+        const i2s_chan_handle_t master =
+            s.physicalMaster == Direction::Tx ? s.txHandle : s.rxHandle;
+        const i2s_chan_handle_t slaveHandle = slave == Direction::Tx ? s.txHandle : s.rxHandle;
+        const auto cfg = clockConfig(newRate);
+        err = i2s_channel_reconfig_std_clock(master, &cfg);
+        if (err == ESP_OK) err = i2s_channel_reconfig_std_clock(slaveHandle, &cfg);
+        if (err != ESP_OK) break;
     }
+    if (err == ESP_OK && !AudioStream::setSampleRate(rate)) err = ESP_FAIL;
 
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "I2S sample-rate reconfiguration failed: %s", esp_err_to_name(err));
-        const i2s_std_clk_config_t oldClock = makeClockConfig(oldRate);
-        i2s_channel_reconfig_std_clock(masterHandle, &oldClock);
-        i2s_channel_reconfig_std_clock(slaveHandle, &oldClock);
-        restoreEnabled(oldTxEnabled, oldRxEnabled);
-        return false;
-    }
-
-    if (!AudioStream::setSampleRate(rate)) {
-        const i2s_std_clk_config_t oldClock = makeClockConfig(oldRate);
-        i2s_channel_reconfig_std_clock(masterHandle, &oldClock);
-        i2s_channel_reconfig_std_clock(slaveHandle, &oldClock);
+        const auto oldClock = clockConfig(oldRate);
+        for (PortState &s : ports) {
+            if (!s.pairCreated) continue;
+            const Direction slave = s.physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
+            const i2s_chan_handle_t master =
+                s.physicalMaster == Direction::Tx ? s.txHandle : s.rxHandle;
+            const i2s_chan_handle_t slaveHandle = slave == Direction::Tx ? s.txHandle : s.rxHandle;
+            i2s_channel_reconfig_std_clock(master, &oldClock);
+            i2s_channel_reconfig_std_clock(slaveHandle, &oldClock);
+            s.sampleRate = oldRate;
+        }
         AudioStream::setSampleRate(oldRateFloat);
-        restoreEnabled(oldTxEnabled, oldRxEnabled);
+        for (uint8_t i = 0; i < MAX_PORTS; ++i) {
+            if (ports[i].pairCreated) restoreEnabled(ports[i], oldTx[i], oldRx[i]);
+        }
         return false;
     }
 
-    portSampleRate = newRate;
-    if (!restoreEnabled(oldTxEnabled, oldRxEnabled)) {
-        ESP_LOGE(TAG, "I2S sample rate changed, but a channel could not be re-enabled");
-        return false;
+    for (PortState &s : ports) if (s.pairCreated) s.sampleRate = newRate;
+    for (uint8_t i = 0; i < MAX_PORTS; ++i) {
+        if (ports[i].pairCreated && !restoreEnabled(ports[i], oldTx[i], oldRx[i])) {
+            ESP_LOGE(TAG, "I2S%u sample rate changed but channel re-enable failed", i);
+            return false;
+        }
     }
     return true;
 }
 
-bool IRAM_ATTR AudioI2SPort::isClockOwner(Direction direction) {
-    return clockOwner == direction;
+bool IRAM_ATTR AudioI2SPort::isClockOwner(uint8_t controller, Direction d) {
+    return schedulerOwner == ownerCode(controller, d);
 }
