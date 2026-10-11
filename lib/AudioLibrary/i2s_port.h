@@ -46,6 +46,9 @@ class AudioI2SPort {
         DataEncoding encoding = DataEncoding::PCM;
         uint8_t slots = 2;
         uint8_t slotBits = 16;
+        // Physical serializer rate relative to the AudioStream sample rate.
+        // SPDIF BMC uses 4x with 16-bit stereo slots, yielding 128 bits/frame.
+        uint8_t rateMultiplier = 1;
     };
 
     using EventCallback = bool (*)(i2s_chan_handle_t channel,
