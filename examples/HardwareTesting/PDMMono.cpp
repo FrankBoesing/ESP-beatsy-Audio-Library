@@ -1,8 +1,17 @@
 /*
  * Hardware smoke test for AudioOutputPDM.
  *
- * Wire PDM_DATA_PIN through a simple RC low-pass (for example 1 kOhm + 4.7 nF)
- * to an amplifier input. Do not connect a speaker directly to the ESP32 GPIO.
+ * PDM is a high-frequency 1-bit stream. Do not connect it directly to a
+ * speaker or amplifier input. Use this two-stage passive low-pass:
+ *
+ * DATA -- 1 kOhm --+-- 1 kOhm --+--> amplifier input
+ *                  |             |
+ *                2.2 nF        2.2 nF
+ *                  |             |
+ *                 GND           GND
+ *
+ * Join ESP32 ground to amplifier ground. This is a starting point; a buffer
+ * or active filter may be needed depending on the amplifier input.
  * Change the pin below to a GPIO that is free on your board.
  */
 
@@ -23,7 +32,7 @@ void setup() {
     }
 
     sine.frequency(1000.0f);
-    sine.amplitude(0.25f);
+    sine.amplitude(0.05f);
     AudioMemory(12);
 
     if (!pdmOut.begin()) {
