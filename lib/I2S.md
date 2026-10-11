@@ -64,8 +64,7 @@ high-rate PDM stream; the AudioStream processing loop handles PCM blocks only.
   `AudioOutputPDM`, `AudioOutputI2S`, or `AudioOutputSPDIF1` simultaneously.
 - Accepts PCM sample rates from 16 kHz through 48 kHz.
 - The DAC clock uses `up_sample_fs = 480`, the documented alternative DAC mode
-  in which the PDM bit clock is `128 × PCM sample rate`. This mode sounded
-  clean in the direct hardware comparison at 22.05 kHz; initialization and
+  in which the PDM bit clock is `128 × PCM sample rate`. Initialization and
   runtime sample-rate reconfiguration use the same setting.
 - Runtime sample-rate changes pause AudioStream graph updates, wait for the PDM
   TX writer, discard queued old-rate blocks, and then reconfigure the PDM clock.
