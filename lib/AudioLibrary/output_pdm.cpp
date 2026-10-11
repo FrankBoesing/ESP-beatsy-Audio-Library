@@ -11,7 +11,8 @@ constexpr char TAG[] = "AudioOutputPDM";
 }
 
 AudioOutputPDM::AudioOutputPDM() : AudioStream(2, inputQueueArray) {}
-AudioOutputPDM::AudioOutputPDM(const Pins &pins) : AudioStream(2, inputQueueArray), pdmPins(pins) {}
+AudioOutputPDM::AudioOutputPDM(const Pins &pins)
+    : AudioStream(2, inputQueueArray), pdmPins(pins), numChannels(pins.dataRight >= 0 ? 2U : 1U) {}
 AudioOutputPDM::AudioOutputPDM(int8_t data) : AudioStream(2, inputQueueArray), pdmPins{data, -1} {}
 AudioOutputPDM::~AudioOutputPDM() { end(); }
 
@@ -56,12 +57,18 @@ bool AudioOutputPDM::begin() {
 bool AudioOutputPDM::begin(const Pins &pins) {
     end();
     pdmPins = pins;
-    if (numChannels == 2 && pdmPins.dataRight < 0) return false;
+    // Supplying two DATA pins is the explicit request for stereo mode.
+    numChannels = pdmPins.dataRight >= 0 ? 2U : 1U;
     return beginInternal();
 }
 
 bool AudioOutputPDM::begin(int8_t data) {
     return begin(Pins{data, -1});
+}
+
+bool AudioOutputPDM::begin(int8_t dataLeft, int8_t dataRight) {
+    if (dataRight < 0) return begin(dataLeft);
+    return begin(Pins{dataLeft, dataRight});
 }
 
 bool AudioOutputPDM::beginHardware() {
