@@ -17,7 +17,7 @@
 
 #include <Audio.h>
 
-constexpr int PDM_DATA_PIN = 17; // Select a free output-capable GPIO for your board.
+constexpr int PDM_DATA_PIN = 43; // Same physical DATA pin as the successful direct-IDF test.
 
 AudioSynthWaveformSine sine;
 AudioOutputPDM pdmOut(PDM_DATA_PIN);
@@ -32,7 +32,7 @@ void setup() {
     }
 
     sine.frequency(1000.0f);
-    sine.amplitude(0.05f);
+    sine.amplitude(0.20f);
     AudioMemory(12);
 
     if (!pdmOut.begin()) {
