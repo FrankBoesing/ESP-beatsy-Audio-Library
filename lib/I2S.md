@@ -48,131 +48,42 @@ The I²S input classes expose:
 ## PDM output
 
 `AudioOutputPDM` sends 16-bit PCM blocks to the ESP-IDF PDM TX driver and uses
-the SoC's hardware PCM-to-PDM converter. This does not encode PDM bits in the
-AudioStream processing loop; the I²S/DMA hardware generates the high-rate stream.
+the SoC's hardware PCM-to-PDM converter. The I²S/DMA hardware generates the
+high-rate PDM stream; the AudioStream processing loop handles PCM blocks only.
 
 - Uses I²S0 in PCM-to-PDM direct-DAC mode.
-- Supports mono output on one DATA pin and stereo output on two separate DATA
-  pins, provided the target exposes the PDM two-line DAC mode. The public stereo
-  pin order is `dataLeft, dataRight`; ESP-IDF routes the left PCM slot to DOUT2
-  and the right PCM slot to DOUT, so the class maps these pins explicitly.
-- The PDM DAC mode does not need a PDM CLK pin at the external connector.
+- Supports mono output on one DATA pin and stereo output on two DATA pins when
+  the target exposes the PDM two-line DAC mode. The public stereo pin order is
+  `dataLeft, dataRight`; ESP-IDF routes the left PCM slot to DOUT2 and the
+  right PCM slot to DOUT, so the class maps these pins explicitly.
+- No PDM clock pin is needed at the external connector in direct-DAC mode.
 - PDM is a high-frequency 1-bit stream, not an analog audio voltage. Use a
-  low-pass filter before the amplifier; do not connect a speaker directly to
-  an ESP32 GPIO. A single RC pole (for example 1 kΩ + 4.7 nF) may leave
-  substantial PDM noise. For an initial test, use two cascaded RC stages:
-  DATA → 1 kΩ → node A → 1 kΩ → node B → amplifier input, with 2.2 nF from
-  each node to GND. Connect ESP32 and amplifier grounds. This is a starting
-  point, not a substitute for a filter designed for the chosen amplifier/load.
+  suitable low-pass filter before the amplifier; do not connect a speaker
+  directly to an ESP32 GPIO.
 - PDM controller mode and normal I²S0 TX are mutually exclusive; do not run
   `AudioOutputPDM`, `AudioOutputI2S`, or `AudioOutputSPDIF1` simultaneously.
-- The current class accepts PCM sample rates from 16 kHz through 48 kHz.
-- DAC clock configuration uses the documented fixed up-sampling mode
-  `up_sample_fp = 960`, `up_sample_fs = 480`, giving a PDM bit clock of
-  `128 × PCM sample rate`. The ESP-IDF DAC default instead sets
-  `up_sample_fs = sample_rate / 100` for a fixed 6.144 MHz PDM clock. A direct
-  hardware comparison sounded cleaner with `up_sample_fs = 480` at 22.05 kHz,
-  so both initialization and runtime reconfiguration now use that mode.
-  Runtime sample-rate changes pause AudioStream graph updates, wait for the PDM
+- Accepts PCM sample rates from 16 kHz through 48 kHz.
+- The DAC clock uses `up_sample_fs = 480`, the documented alternative DAC mode
+  in which the PDM bit clock is `128 × PCM sample rate`. This mode sounded
+  clean in the direct hardware comparison at 22.05 kHz; initialization and
+  runtime sample-rate reconfiguration use the same setting.
+- Runtime sample-rate changes pause AudioStream graph updates, wait for the PDM
   TX writer, discard queued old-rate blocks, and then reconfigure the PDM clock.
-- The common ESP32-S3 has PCM-to-PDM on I²S0 and supports two PDM DAC lines.
-  The original ESP32 supports PCM-to-PDM but does not expose the same
-  two-line direct-DAC mode; `AudioOutputPDM` reports unsupported on targets
-  without the required ESP-IDF/SoC feature combination.
+- ESP32-S3 supports PCM-to-PDM on I²S0 and two PDM DAC lines. The original ESP32
+  does not expose the same two-line direct-DAC mode. Targets without the needed
+  ESP-IDF/SoC feature combination are reported as unsupported.
 
-### Direct ESP-IDF diagnostic
-
-Before debugging `AudioOutputPDM`, the independent low-level test
-[`examples/HardwareTesting/PDMDirectIDF.cpp`](../examples/HardwareTesting/PDMDirectIDF.cpp)
-can be used to isolate the ESP-IDF PDM-DAC driver. It outputs the same 1 kHz
-sine on GPIO 43 (left/DOUT2) and GPIO 44 (right/DOUT), without `AudioStream`
-or the library's PDM output task. It requires a target with two-line PDM DAC
-support, such as ESP32-S3. The sketch reports initialization and write errors
-over `Serial`.
-
-Note that GPIO 43 and GPIO 44 are also commonly the ESP32-S3 UART0 TX/RX pins.
-Use a USB CDC/USB Serial-JTAG console or change the DATA pins if the serial
-console is wired to UART0.
-
-### Direct PDM DAC clock-mode comparison at 22.05 kHz
-
-`examples/HardwareTesting/PDMDirectIDF22050AltClock.cpp` uses the direct
-ESP-IDF driver with `up_sample_fs = 480`, which is the documented clock mode
-where the PDM bit clock follows 128 × the PCM sample rate. Compare this output
-with `PDMDirectIDF.cpp` built at 22.05 kHz with the unmodified DAC default
-(`up_sample_fs = rate / 100`). This checks whether the default clock mode's
-integer `rate / 100` setting affects the subjective sound at 22.05 kHz. It is
-a diagnostic experiment only; do not change the library default unless the
-hardware comparison supports the change.
-
-### AudioStream PDM stereo test at 22.05 kHz
-
-The test
-[`examples/HardwareTesting/PDMViaAudioStreamStereo22050.cpp`](../examples/HardwareTesting/PDMViaAudioStreamStereo22050.cpp)
-repeats the known 1 kHz stereo sine test at 22.05 kHz, matching the AAC stream
-rate observed in the radio logs. It separates a sample-rate-specific PDM issue
-from a problem that only appears with radio PCM blocks.
-
-### Mono AudioStream dual-input diagnostic
-
-If native ESP-IDF mono and library stereo both work, but the one-input library
-mono test does not, try
-[`examples/HardwareTesting/PDMViaAudioStreamMonoDualInput.cpp`](../examples/HardwareTesting/PDMViaAudioStreamMonoDualInput.cpp).
-It uses the mono output on GPIO 43 but connects the same sine to both AudioStream
-inputs. The mono path therefore averages two identical blocks. Compare with
-`PDMMono.cpp`, which connects only input 0. This isolates the one-input
-fallback from the two-input mono-mix branch.
-
-### Direct ESP-IDF mono diagnostic
-
-If the stereo tests sound correct but the mono library test does not, run
-[`examples/HardwareTesting/PDMDirectIDFMono.cpp`](../examples/HardwareTesting/PDMDirectIDFMono.cpp).
-It uses the native ESP-IDF PDM DAC in `I2S_SLOT_MODE_MONO` on GPIO 43 and
-sends the same 1 kHz / 44.1 kHz sine without AudioStream. Compare it with
-`PDMDirectIDF.cpp` (stereo) and `PDMMono.cpp` (library mono):
-- If direct mono is noisy too, the issue is isolated to the native mono DAC
-  mode/configuration or its output routing.
-- If direct mono is clean but library mono is noisy, investigate the
-  `AudioOutputPDM` mono PCM transfer path.
-
-### Sample-rate caveat for waveform-synth tests
-
-`AudioSynthWaveformSine::frequency()` calculates its phase increment using
-the compile-time `AUDIO_SAMPLE_RATE_EXACT` constant (default 44.1 kHz), not the
-runtime `AudioStream` sample rate. If the output rate is changed at runtime,
-the generated pitch scales with the ratio
-`runtime sample rate / AUDIO_SAMPLE_RATE_EXACT`. This affects waveform-synth
-test tones, but not PCM samples already decoded at the negotiated sample rate.
-Use `PDMViaAudioStreamStereoRuntimeRateTone.cpp` for a 1 kHz test at 22.05 kHz.
-
-### AudioStream comparison test
-
-After the direct ESP-IDF test succeeds, use
-[`examples/HardwareTesting/PDMViaAudioStreamStereo.cpp`](../examples/HardwareTesting/PDMViaAudioStreamStereo.cpp)
-to test the same two pins and a 1 kHz / 44.1 kHz sine through
-`AudioOutputPDM`. This deliberately uses stereo on GPIO 43 and GPIO 44,
-matching `PDMDirectIDF.cpp`, to separate a mono-mode issue from an
-AudioStream/queue issue. Watch the serial callback counter and compare the
-sound with the direct IDF test.
-
-### Mono example
-
-A runnable hardware smoke test is available at
-[`examples/HardwareTesting/PDMMono.cpp`](../examples/HardwareTesting/PDMMono.cpp).
-Change its DATA GPIO to an output-capable pin that is free on the selected board;
-connect that pin through an RC low-pass filter to an amplifier input.
+### Mono usage
 
 ```cpp
 #include "Audio.h"
 
-AudioSynthWaveformSine sine;
 AudioOutputPDM pdmOut(PDM_DATA_PIN);
-AudioConnection patch(sine, 0, pdmOut, 0);
+
+// Connect an AudioStream source output to input 0 of pdmOut.
 
 void setup() {
     pdmOut.setSampleRate(44100.0f);
-    sine.frequency(1000.0f);
-    sine.amplitude(0.25f);
     AudioMemory(12);
     pdmOut.begin();
 }
@@ -180,25 +91,7 @@ void setup() {
 void loop() {}
 ```
 
-
-```cpp
-#include "Audio.h"
-
-AudioOutputPDM pdmOut(PDM_DATA_PIN);
-// Connect the source's left and right outputs to pdmOut inputs 0 and 1.
-
-void setup() {
-    AudioMemory(12);
-    pdmOut.setSampleRate(44100.0f);
-    // Optional: this is already the default.
-    pdmOut.setChannelCount(1);
-    // The audio graph starts the port when the hardware output is initialized.
-}
-
-void loop() {}
-```
-
-### Stereo example
+### Stereo usage
 
 ```cpp
 #include "Audio.h"
@@ -208,24 +101,17 @@ AudioOutputPDM pdmOut;
 void setup() {
     pdmOut.setSampleRate(44100.0f);
     AudioMemory(12);
-    pdmOut.begin(PDM_DATA_LEFT, PDM_DATA_RIGHT); // Enables stereo automatically.
-    // Connect separate left/right AudioStream outputs to inputs 0 and 1.
+    pdmOut.begin(PDM_DATA_LEFT, PDM_DATA_RIGHT);
+    // Connect left/right AudioStream sources to inputs 0 and 1.
 }
 
 void loop() {}
 ```
 
-The helper class exposes `begin()`, `begin(pin)`, `begin(left, right)`,
-`begin(Pins)`, `end()`, `isRunning()`, `txCallbackCount()`,
-`channels()`, `setChannelCount()`, and `setSampleRate()`. Passing two pins
-to the constructor or to `begin(left, right)` selects stereo automatically.
-
-For transport diagnostics, `txBlockCount()` counts PCM blocks processed by the
-TX task; `lastPcmMin()`, `lastPcmMax()`, and `lastPcmMeanAbs()` expose the
-range and mean absolute sample value of the last PCM block prepared for the
-driver. `txWriteErrorCount()` and `txQueueDropCount()` count failed driver
-writes and dropped queue pairs, respectively. These counters do not inspect
-the sound after the hardware PDM modulator.
+The class exposes `begin()`, `begin(pin)`, `begin(left, right)`,
+`begin(Pins)`, `end()`, `isRunning()`, `channels()`,
+`setChannelCount()`, and `setSampleRate()`. Passing two pins to the
+constructor or to `begin(left, right)` selects stereo automatically.
 
 Reference: [ESP-IDF I²S PDM TX mode](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/peripherals/i2s.html#pdm-tx-mode-in-pcm-format-with-pcm-to-pdm-converter).
 
