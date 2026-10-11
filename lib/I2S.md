@@ -67,6 +67,12 @@ AudioStream processing loop; the I²S/DMA hardware generates the high-rate strea
 - PDM controller mode and normal I²S0 TX are mutually exclusive; do not run
   `AudioOutputPDM`, `AudioOutputI2S`, or `AudioOutputSPDIF1` simultaneously.
 - The current class accepts PCM sample rates from 16 kHz through 48 kHz.
+- DAC clock configuration uses the documented fixed up-sampling mode
+  `up_sample_fp = 960`, `up_sample_fs = 480`, giving a PDM bit clock of
+  `128 × PCM sample rate`. The ESP-IDF DAC default instead sets
+  `up_sample_fs = sample_rate / 100` for a fixed 6.144 MHz PDM clock. A direct
+  hardware comparison sounded cleaner with `up_sample_fs = 480` at 22.05 kHz,
+  so both initialization and runtime reconfiguration now use that mode.
   Runtime sample-rate changes pause AudioStream graph updates, wait for the PDM
   TX writer, discard queued old-rate blocks, and then reconfigure the PDM clock.
 - The common ESP32-S3 has PCM-to-PDM on I²S0 and supports two PDM DAC lines.
