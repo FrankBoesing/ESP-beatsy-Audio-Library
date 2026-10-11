@@ -17,31 +17,19 @@ AudioInputI2S::~AudioInputI2S() {
 }
 
 bool AudioInputI2S::isRunning() const {
-    portENTER_CRITICAL(&rxMux);
-    const bool value = running;
-    portEXIT_CRITICAL(&rxMux);
-    return value;
+    return running.load(std::memory_order_acquire) != 0;
 }
 
 uint32_t AudioInputI2S::rxBlockCount() const {
-    portENTER_CRITICAL(&rxMux);
-    const uint32_t value = rxBlockCountValue;
-    portEXIT_CRITICAL(&rxMux);
-    return value;
+    return rxBlockCountValue.load(std::memory_order_relaxed);
 }
 
 uint32_t AudioInputI2S::rxErrorCount() const {
-    portENTER_CRITICAL(&rxMux);
-    const uint32_t value = rxErrorCountValue;
-    portEXIT_CRITICAL(&rxMux);
-    return value;
+    return rxErrorCountValue.load(std::memory_order_relaxed);
 }
 
 uint32_t AudioInputI2S::droppedBlockCount() const {
-    portENTER_CRITICAL(&rxMux);
-    const uint32_t value = droppedBlockCountValue;
-    portEXIT_CRITICAL(&rxMux);
-    return value;
+    return droppedBlockCountValue.load(std::memory_order_relaxed);
 }
 
 bool AudioInputI2S::begin() {
@@ -85,19 +73,17 @@ bool AudioInputI2S::beginInternal() {
     }
 
     portENTER_CRITICAL(&rxMux);
-    writeFrameIndex = 0;
-    readFrameIndex = 0;
+    writeFrameIndex.store(0, std::memory_order_relaxed);
+    readFrameIndex.store(0, std::memory_order_relaxed);
     clockFrameRemainder = 0;
-    rxBlockCountValue = 0;
-    rxErrorCountValue = 0;
-    droppedBlockCountValue = 0;
-    running = true;
     portEXIT_CRITICAL(&rxMux);
+    rxBlockCountValue.store(0, std::memory_order_relaxed);
+    rxErrorCountValue.store(0, std::memory_order_relaxed);
+    droppedBlockCountValue.store(0, std::memory_order_relaxed);
+    running.store(1, std::memory_order_release);
 
     if (!AudioI2SPort::start(i2sPins.controller, AudioI2SPort::Direction::Rx)) {
-        portENTER_CRITICAL(&rxMux);
-        running = false;
-        portEXIT_CRITICAL(&rxMux);
+        running.store(0, std::memory_order_release);
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Rx, this);
         AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Rx);
         AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
@@ -111,12 +97,9 @@ bool AudioInputI2S::beginInternal() {
 void AudioInputI2S::end() {
     if (!isRunning() && rxHandle == nullptr) return;
 
-    portENTER_CRITICAL(&rxMux);
-    running = false;
-    writeFrameIndex = 0;
-    readFrameIndex = 0;
-    clockFrameRemainder = 0;
-    portEXIT_CRITICAL(&rxMux);
+    // Stop accepting samples, then detach and drain the ISR callback before
+    // resetting the ring. This keeps lifecycle resets out of the hot ISR path.
+    running.store(0, std::memory_order_release);
 
     if (rxHandle != nullptr) {
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Rx, this);
@@ -125,6 +108,11 @@ void AudioInputI2S::end() {
         rxHandle = nullptr;
     }
 
+    portENTER_CRITICAL(&rxMux);
+    writeFrameIndex.store(0, std::memory_order_relaxed);
+    readFrameIndex.store(0, std::memory_order_relaxed);
+    clockFrameRemainder = 0;
+    portEXIT_CRITICAL(&rxMux);
 }
 
 bool IRAM_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t,
@@ -138,9 +126,9 @@ bool IRAM_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t,
     constexpr size_t BYTES_PER_STEREO_FRAME = 2U * sizeof(int16_t);
     const size_t bytes = event->size;
     if (bytes == 0 || (bytes % BYTES_PER_STEREO_FRAME) != 0) {
-        portENTER_CRITICAL_ISR(&input->rxMux);
-        if (input->running) ++input->rxErrorCountValue;
-        portEXIT_CRITICAL_ISR(&input->rxMux);
+        if (input->running.load(std::memory_order_acquire) != 0) {
+            input->rxErrorCountValue.fetch_add(1, std::memory_order_relaxed);
+        }
         return false;
     }
 
@@ -153,36 +141,47 @@ bool IRAM_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t,
     }
 
     const auto *src = static_cast<const int16_t *>(event->dma_buf);
-    uint32_t completedBlocks = 0;
+    if (input->running.load(std::memory_order_acquire) == 0) return false;
 
-    portENTER_CRITICAL_ISR(&input->rxMux);
-    if (!input->running) {
+    // Normally the ISR is the only writer and publishes the completed sample
+    // range without taking a lock. In the rare overrun case, synchronize with
+    // update() before advancing the consumer index and preserving newest data.
+    uint32_t write = input->writeFrameIndex.load(std::memory_order_relaxed);
+    uint32_t read = input->readFrameIndex.load(std::memory_order_acquire);
+    if ((write - read) + frames > RX_RING_FRAMES) {
+        portENTER_CRITICAL_ISR(&input->rxMux);
+        write = input->writeFrameIndex.load(std::memory_order_relaxed);
+        read = input->readFrameIndex.load(std::memory_order_acquire);
+
+        if ((write - read) + frames > RX_RING_FRAMES) {
+            input->readFrameIndex.store(write, std::memory_order_release);
+            input->droppedBlockCountValue.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        for (size_t i = 0; i < frames; ++i) {
+            const uint32_t ringFrame = write % RX_RING_FRAMES;
+            input->rxSampleRing[ringFrame * 2U] = src[i * 2U];
+            input->rxSampleRing[ringFrame * 2U + 1U] = src[i * 2U + 1U];
+            ++write;
+        }
+        input->writeFrameIndex.store(write, std::memory_order_release);
         portEXIT_CRITICAL_ISR(&input->rxMux);
-        return false;
+    } else {
+        for (size_t i = 0; i < frames; ++i) {
+            const uint32_t ringFrame = write % RX_RING_FRAMES;
+            input->rxSampleRing[ringFrame * 2U] = src[i * 2U];
+            input->rxSampleRing[ringFrame * 2U + 1U] = src[i * 2U + 1U];
+            ++write;
+        }
+        input->writeFrameIndex.store(write, std::memory_order_release);
     }
-
-    const uint32_t usedFrames = input->writeFrameIndex - input->readFrameIndex;
-    if (usedFrames + frames > RX_RING_FRAMES) {
-        // Keep the newest samples rather than letting the capture latency grow.
-        input->readFrameIndex = input->writeFrameIndex;
-        ++input->droppedBlockCountValue;
-    }
-
-    uint32_t write = input->writeFrameIndex;
-    for (size_t i = 0; i < frames; ++i) {
-        const uint32_t ringFrame = write % RX_RING_FRAMES;
-        input->rxSampleRing[ringFrame * 2U] = src[i * 2U];
-        input->rxSampleRing[ringFrame * 2U + 1U] = src[i * 2U + 1U];
-        ++write;
-    }
-    input->writeFrameIndex = write;
 
     input->clockFrameRemainder += static_cast<uint32_t>(frames);
-    completedBlocks = input->clockFrameRemainder / AUDIO_BLOCK_SAMPLES;
+    const uint32_t completedBlocks = input->clockFrameRemainder / AUDIO_BLOCK_SAMPLES;
     input->clockFrameRemainder %= AUDIO_BLOCK_SAMPLES;
-    input->rxBlockCountValue += completedBlocks;
-
-    portEXIT_CRITICAL_ISR(&input->rxMux);
+    if (completedBlocks != 0) {
+        input->rxBlockCountValue.fetch_add(completedBlocks, std::memory_order_relaxed);
+    }
 
     // Only the shared I2S clock owner may clock the graph. The TX callback
     // performs this job when TX owns the clock, avoiding duplicate updates.
@@ -200,19 +199,20 @@ void AudioInputI2S::update() {
     alignas(4) int16_t captured[AUDIO_BLOCK_SAMPLES * 2];
 
     portENTER_CRITICAL(&rxMux);
-    if (writeFrameIndex - readFrameIndex < AUDIO_BLOCK_SAMPLES) {
+    uint32_t read = readFrameIndex.load(std::memory_order_relaxed);
+    const uint32_t write = writeFrameIndex.load(std::memory_order_acquire);
+    if (write - read < AUDIO_BLOCK_SAMPLES) {
         portEXIT_CRITICAL(&rxMux);
         return;
     }
 
-    uint32_t read = readFrameIndex;
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const uint32_t ringFrame = read % RX_RING_FRAMES;
         captured[i * 2U] = rxSampleRing[ringFrame * 2U];
         captured[i * 2U + 1U] = rxSampleRing[ringFrame * 2U + 1U];
         ++read;
     }
-    readFrameIndex = read;
+    readFrameIndex.store(read, std::memory_order_release);
     portEXIT_CRITICAL(&rxMux);
 
     // Allocate both channel blocks or neither, so left and right cannot drift
@@ -224,9 +224,7 @@ void AudioInputI2S::update() {
         if (left != nullptr) release(left);
         if (right != nullptr) release(right);
 
-        portENTER_CRITICAL(&rxMux);
-        ++droppedBlockCountValue;
-        portEXIT_CRITICAL(&rxMux);
+        droppedBlockCountValue.fetch_add(1, std::memory_order_relaxed);
         return;
     }
 
