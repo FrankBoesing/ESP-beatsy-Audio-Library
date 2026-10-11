@@ -3,6 +3,7 @@
 #define AUDIO_INPUT_I2S_H
 
 #include <Arduino.h>
+#include <atomic>
 #include <esp_attr.h>
 #include <driver/i2s_std.h>
 #include <driver/i2s_common.h>
@@ -66,15 +67,20 @@ class AudioInputI2S : public AudioStream {
     i2s_chan_handle_t rxHandle = nullptr;
 
     alignas(4) int16_t rxSampleRing[RX_RING_FRAMES * 2] = {};
-    mutable portMUX_TYPE rxMux = portMUX_INITIALIZER_UNLOCKED;
-    uint32_t writeFrameIndex = 0;
-    uint32_t readFrameIndex = 0;
-    uint32_t clockFrameRemainder = 0;
 
-    bool running = false;
-    uint32_t rxBlockCountValue = 0;
-    uint32_t rxErrorCountValue = 0;
-    uint32_t droppedBlockCountValue = 0;
+    // SPSC ring: ISR is the producer, AudioStream::update() the consumer.
+    // Release/acquire index accesses publish samples and reclaimed ring space.
+    // The mux is only needed when an overrun must discard buffered samples
+    // while update() might be copying them.
+    portMUX_TYPE rxMux = portMUX_INITIALIZER_UNLOCKED;
+    std::atomic<uint32_t> writeFrameIndex{0};
+    std::atomic<uint32_t> readFrameIndex{0};
+    uint32_t clockFrameRemainder = 0; // RX ISR only; reset after callback quiescence.
+
+    std::atomic<uint32_t> running{0};
+    std::atomic<uint32_t> rxBlockCountValue{0};
+    std::atomic<uint32_t> rxErrorCountValue{0};
+    std::atomic<uint32_t> droppedBlockCountValue{0};
 
     static bool IRAM_ATTR onI2SReceive(i2s_chan_handle_t channel,
                                        i2s_event_data_t *event,
