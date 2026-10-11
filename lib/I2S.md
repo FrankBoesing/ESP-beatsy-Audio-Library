@@ -69,6 +69,30 @@ AudioStream processing loop; the I²S/DMA hardware generates the high-rate strea
 
 ### Mono example
 
+A runnable hardware smoke test is available at
+[`examples/HardwareTesting/PDMMono.cpp`](../examples/HardwareTesting/PDMMono.cpp).
+Change its DATA GPIO to an output-capable pin that is free on the selected board;
+connect that pin through an RC low-pass filter to an amplifier input.
+
+```cpp
+#include "Audio.h"
+
+AudioSynthWaveformSine sine;
+AudioOutputPDM pdmOut(PDM_DATA_PIN);
+AudioConnection patch(sine, 0, pdmOut, 0);
+
+void setup() {
+    AudioMemory(12);
+    sine.frequency(1000.0f);
+    sine.amplitude(0.25f);
+    pdmOut.setSampleRate(44100.0f);
+    pdmOut.begin();
+}
+
+void loop() {}
+```
+
+
 ```cpp
 #include "Audio.h"
 
