@@ -40,16 +40,6 @@ class AudioOutputPDM : public AudioStream {
     void end();
 
     bool isRunning() const;
-    uint32_t txCallbackCount() const;
-
-    // Last PCM block submitted to the PDM driver, for diagnostics.
-    uint32_t txBlockCount() const { return txBlockCountValue.load(std::memory_order_relaxed); }
-    int32_t lastPcmMin() const { return lastPcmMinValue.load(std::memory_order_relaxed); }
-    int32_t lastPcmMax() const { return lastPcmMaxValue.load(std::memory_order_relaxed); }
-    uint32_t lastPcmMeanAbs() const { return lastPcmMeanAbsValue.load(std::memory_order_relaxed); }
-    uint32_t txWriteErrorCount() const { return txWriteErrorCountValue.load(std::memory_order_relaxed); }
-    uint32_t txQueueDropCount() const { return txQueueDropCountValue.load(std::memory_order_relaxed); }
-
     const Pins &pins() const { return pdmPins; }
 
     // Mono averages AudioStream inputs 0/1 onto dataLeft. Stereo keeps the
@@ -80,13 +70,6 @@ class AudioOutputPDM : public AudioStream {
     TaskHandle_t txTask = nullptr;
 
     std::atomic<uint32_t> running{0};
-    std::atomic<uint32_t> txCallbackCountValue{0};
-    std::atomic<uint32_t> txBlockCountValue{0};
-    std::atomic<int32_t> lastPcmMinValue{0};
-    std::atomic<int32_t> lastPcmMaxValue{0};
-    std::atomic<uint32_t> lastPcmMeanAbsValue{0};
-    std::atomic<uint32_t> txWriteErrorCountValue{0};
-    std::atomic<uint32_t> txQueueDropCountValue{0};
 
     static bool AUDIO_I2S_ISR_ATTR onI2STransmit(i2s_chan_handle_t channel,
                                                  i2s_event_data_t *event,
@@ -97,7 +80,6 @@ class AudioOutputPDM : public AudioStream {
     bool beginInternal();
     void releasePair(BlockPair &pair);
     void setRunning(bool value);
-    void resetTxCallbackCount();
 
     AudioOutputPDM(const AudioOutputPDM &) = delete;
     AudioOutputPDM &operator=(const AudioOutputPDM &) = delete;
