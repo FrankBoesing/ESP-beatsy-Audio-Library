@@ -24,6 +24,18 @@
 #define AUDIO_USB_HAS_ARDUINO_UAC 0
 #endif
 
+#if defined(AUDIO_USB_REQUIRE_ARDUINO_UAC) && AUDIO_USB_REQUIRE_ARDUINO_UAC && !AUDIO_USB_HAS_ARDUINO_UAC
+#error "USB audio requested, but this Arduino core lacks enabled USBAudioCard/TinyUSB Audio support"
+#endif
+
+// CDC-on-boot starts TinyUSB before setup(), which prevents the audio interface
+// from being registered later. In this mode we own the CDC instance and start
+// it before USB.begin(), alongside the audio interface.
+#if AUDIO_USB_HAS_ARDUINO_UAC && (!defined(ARDUINO_USB_CDC_ON_BOOT) || !ARDUINO_USB_CDC_ON_BOOT) && \
+    defined(CONFIG_TINYUSB_CDC_ENABLED) && CONFIG_TINYUSB_CDC_ENABLED
+USBCDC USBSerial;
+#endif
+
 namespace {
 
 constexpr uint32_t USB_AUDIO_RING_FRAMES = 1024;
@@ -288,10 +300,13 @@ class AudioUSBBackend {
             }
         }
 
-        // Register the audio interface before starting TinyUSB. With
-        // ARDUINO_USB_MODE=0 and ARDUINO_USB_CDC_ON_BOOT=1, the core can add
-        // CDC alongside this audio interface to the same USB configuration.
-        // That CDC+UAC combination must still be verified on the target board.
+        // Register CDC only after the audio card has registered its interface,
+        // but before starting the USB stack. Do not use CDC-on-boot here: the
+        // core would call USB.begin() before this runtime-created audio card.
+#if (!defined(ARDUINO_USB_CDC_ON_BOOT) || !ARDUINO_USB_CDC_ON_BOOT) && \
+    defined(CONFIG_TINYUSB_CDC_ENABLED) && CONFIG_TINYUSB_CDC_ENABLED
+        USBSerial.begin();
+#endif
         USB.begin();
 
         started_.store(true, std::memory_order_release);
