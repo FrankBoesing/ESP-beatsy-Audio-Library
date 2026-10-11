@@ -20,16 +20,8 @@ bool AudioOutputPDM::isRunning() const {
     return running.load(std::memory_order_acquire) != 0;
 }
 
-uint32_t AudioOutputPDM::txCallbackCount() const {
-    return txCallbackCountValue.load(std::memory_order_relaxed);
-}
-
 void AudioOutputPDM::setRunning(bool value) {
     running.store(value ? 1U : 0U, std::memory_order_release);
-}
-
-void AudioOutputPDM::resetTxCallbackCount() {
-    txCallbackCountValue.store(0, std::memory_order_relaxed);
 }
 
 bool AudioOutputPDM::setChannelCount(uint channels) {
@@ -155,7 +147,6 @@ bool AudioOutputPDM::beginInternal() {
         return false;
     }
 
-    resetTxCallbackCount();
     setRunning(true);
 
     const BaseType_t result = xTaskCreatePinnedToCore(
@@ -251,11 +242,9 @@ void AudioOutputPDM::update() {
         BlockPair oldPair;
         if (xQueueReceive(txQueue, &oldPair, 0) == pdTRUE) {
             releasePair(oldPair);
-            txQueueDropCountValue.fetch_add(1, std::memory_order_relaxed);
         }
         if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
             releasePair(pair);
-            txQueueDropCountValue.fetch_add(1, std::memory_order_relaxed);
         }
     }
 }
@@ -278,7 +267,6 @@ void AudioOutputPDM::txTaskEntry(void *arg) {
 bool AudioOutputPDM::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
     auto *output = static_cast<AudioOutputPDM *>(userContext);
     if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) return false;
-    output->txCallbackCountValue.fetch_add(1, std::memory_order_relaxed);
     if (!AudioI2SPort::isClockOwner(CONTROLLER, AudioI2SPort::Direction::Tx)) return false;
     return AudioStream::update_all_from_isr();
 }
@@ -333,31 +321,12 @@ void AudioOutputPDM::txTaskLoop() {
             }
         }
 
-        // Capture the actual PCM range immediately before handing it to
-        // ESP-IDF. This is diagnostic only; it does not modify the samples.
-        int32_t minSample = INT16_MAX;
-        int32_t maxSample = INT16_MIN;
-        uint64_t sumAbs = 0;
-        for (size_t i = 0; i < sampleCount; ++i) {
-            const int32_t sample = pcmBuffer[i];
-            if (sample < minSample) minSample = sample;
-            if (sample > maxSample) maxSample = sample;
-            sumAbs += static_cast<uint32_t>(sample < 0 ? -sample : sample);
-        }
-        lastPcmMinValue.store(minSample, std::memory_order_relaxed);
-        lastPcmMaxValue.store(maxSample, std::memory_order_relaxed);
-        lastPcmMeanAbsValue.store(
-            sampleCount ? static_cast<uint32_t>(sumAbs / sampleCount) : 0,
-            std::memory_order_relaxed);
-        txBlockCountValue.fetch_add(1, std::memory_order_relaxed);
-
         size_t bytesWritten = 0;
         const size_t bytesToWrite = sampleCount * sizeof(int16_t);
         const esp_err_t err = i2s_channel_write(txHandle, pcmBuffer, bytesToWrite, &bytesWritten, 100);
 
         if (err != ESP_OK || bytesWritten != bytesToWrite) {
-            txWriteErrorCountValue.fetch_add(1, std::memory_order_relaxed);
-            const uint32_t now = millis();
+                const uint32_t now = millis();
             ++writeErrorCount;
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
                 ESP_LOGE(TAG, "PDM TX error #%lu: %s, bytes=%lu/%lu",
