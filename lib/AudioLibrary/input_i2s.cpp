@@ -134,9 +134,9 @@ bool IRAM_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t,
 
     const size_t frames = bytes / BYTES_PER_STEREO_FRAME;
     if (frames > RX_RING_FRAMES) {
-        portENTER_CRITICAL_ISR(&input->rxMux);
-        if (input->running) ++input->rxErrorCountValue;
-        portEXIT_CRITICAL_ISR(&input->rxMux);
+        if (input->running.load(std::memory_order_acquire) != 0) {
+            input->rxErrorCountValue.fetch_add(1, std::memory_order_relaxed);
+        }
         return false;
     }
 
