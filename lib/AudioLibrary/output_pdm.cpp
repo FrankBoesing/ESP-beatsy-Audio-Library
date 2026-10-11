@@ -42,12 +42,22 @@ bool AudioOutputPDM::setChannelCount(uint channels) {
 bool AudioOutputPDM::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate < 16000.0f || rate > 48000.0f) return false;
 
+    // The decoder may negotiate a new rate while TX is active. Do not let
+    // i2s_channel_write() race with i2s_channel_reconfig_pdm_tx_clock().
+    const bool locked = txWriteMutex != nullptr;
+    if (locked && xSemaphoreTake(txWriteMutex, pdMS_TO_TICKS(500)) != pdTRUE) {
+        ESP_LOGE(TAG, "Timed out waiting for PDM TX writer before rate change");
+        return false;
+    }
+
     if (txQueue != nullptr) {
         BlockPair pair;
         while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
     }
 
-    return AudioI2SPort::setSampleRate(rate);
+    const bool ok = AudioI2SPort::setSampleRate(rate);
+    if (locked) xSemaphoreGive(txWriteMutex);
+    return ok;
 }
 
 bool AudioOutputPDM::begin() {
@@ -92,6 +102,13 @@ bool AudioOutputPDM::beginInternal() {
     txQueue = xQueueCreate(QUEUE_LENGTH, sizeof(BlockPair));
     if (txQueue == nullptr) return false;
 
+    txWriteMutex = xSemaphoreCreateMutex();
+    if (txWriteMutex == nullptr) {
+        vQueueDelete(txQueue);
+        txQueue = nullptr;
+        return false;
+    }
+
     // In ESP-IDF's two-line DAC mode, DOUT emits the second (right) PCM slot
     // and DOUT2 emits the first (left) slot. Keep the public pin order intuitive.
     const int8_t i2sDout = numChannels == 2 ? pdmPins.dataRight : pdmPins.dataLeft;
@@ -109,6 +126,8 @@ bool AudioOutputPDM::beginInternal() {
         ESP_LOGE(TAG, "Could not acquire I2S0 PCM-to-PDM output");
         vQueueDelete(txQueue);
         txQueue = nullptr;
+        vSemaphoreDelete(txWriteMutex);
+        txWriteMutex = nullptr;
         txHandle = nullptr;
         return false;
     }
@@ -120,6 +139,8 @@ bool AudioOutputPDM::beginInternal() {
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
+        vSemaphoreDelete(txWriteMutex);
+        txWriteMutex = nullptr;
         return false;
     }
 
@@ -138,6 +159,8 @@ bool AudioOutputPDM::beginInternal() {
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
+        vSemaphoreDelete(txWriteMutex);
+        txWriteMutex = nullptr;
         return false;
     }
 
@@ -154,6 +177,10 @@ bool AudioOutputPDM::beginInternal() {
         if (txQueue != nullptr) {
             vQueueDelete(txQueue);
             txQueue = nullptr;
+        }
+        if (txWriteMutex != nullptr) {
+            vSemaphoreDelete(txWriteMutex);
+            txWriteMutex = nullptr;
         }
         return false;
     }
@@ -187,6 +214,10 @@ void AudioOutputPDM::end() {
     if (txQueue != nullptr) {
         vQueueDelete(txQueue);
         txQueue = nullptr;
+    }
+    if (txWriteMutex != nullptr) {
+        vSemaphoreDelete(txWriteMutex);
+        txWriteMutex = nullptr;
     }
 }
 
@@ -242,7 +273,19 @@ void AudioOutputPDM::txTaskLoop() {
     BlockPair pair{nullptr, nullptr};
 
     while (isRunning()) {
-        if (xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(100)) != pdTRUE) continue;
+        // Take the writer lock before dequeuing a pair so a sample-rate
+        // change can drain all queued old-rate blocks before reconfiguring.
+        if (txWriteMutex != nullptr &&
+            xSemaphoreTake(txWriteMutex, pdMS_TO_TICKS(10)) != pdTRUE) {
+            continue;
+        }
+
+        if (!isRunning() ||
+            xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) {
+            if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
+            if (!isRunning()) break;
+            continue;
+        }
 
         const int16_t *left = pair.left ? pair.left->data : nullptr;
         const int16_t *right = pair.right ? pair.right->data : nullptr;
@@ -287,6 +330,7 @@ void AudioOutputPDM::txTaskLoop() {
 
         releasePair(pair);
         pair = {nullptr, nullptr};
+        if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
     }
 
     while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
