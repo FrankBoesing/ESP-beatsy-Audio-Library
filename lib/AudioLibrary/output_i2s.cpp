@@ -12,7 +12,7 @@ AudioOutputI2S::AudioOutputI2S(const Pins &pins)
     : AudioStream(2, inputQueueArray), i2sPins(pins) {} // kein Hardware-Init hier
 AudioOutputI2S::~AudioOutputI2S() { end(); }
 
-//bool AudioOutputI2S::begin() { return beginInternal(); }
+bool AudioOutputI2S::begin() { return beginInternal(); }
 bool AudioOutputI2S::begin(const Pins &pins) {
     end();
     i2sPins = pins;
