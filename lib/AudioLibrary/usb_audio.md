@@ -15,7 +15,7 @@
 
 ## FNK0104B / PlatformIO
 
-Use the PioArduino stable PlatformIO platform for the FNK0104B environment. This supplies a recent Arduino-ESP32 3.x core with the `USBAudioCard` API (introduced in 3.3.8). Use USB-OTG/TinyUSB (`ARDUINO_USB_MODE=0`) and set `ARDUINO_USB_CDC_ON_BOOT=0`: auto-starting CDC calls `USB.begin()` before the runtime-created audio interface can register.
+Use the PioArduino platform release `55.03.311`, which supplies Arduino-ESP32 3.3.11 and includes the `USBAudioCard` API introduced in 3.3.8. The project pins this release instead of the moving `stable` URL so an older cached framework package is less likely to be reused. Use USB-OTG/TinyUSB (`ARDUINO_USB_MODE=0`) and set `ARDUINO_USB_CDC_ON_BOOT=0`: auto-starting CDC calls `USB.begin()` before the runtime-created audio interface can register.
 
 The backend registers the explicit `USBCDC USBSerial` instance and the UAC interface before calling `USB.begin()`. Use `USBSerial.print/println/printf()` for logging over the same USB cable. With CDC-on-boot disabled, Arduino's `Serial` maps to UART0 instead.
 
