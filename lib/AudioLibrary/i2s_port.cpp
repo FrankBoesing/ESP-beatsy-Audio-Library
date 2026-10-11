@@ -179,7 +179,11 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
         return false;
     }
     if (!formatImplemented(format)) {
-        ESP_LOGE(TAG, "Requested I2S format is reserved but not implemented yet");
+        ESP_LOGE(TAG, "Requested I2S format is not implemented");
+        return false;
+    }
+    if (spdifBmc && first != Direction::Tx) {
+        ESP_LOGE(TAG, "Software SPDIF BMC is currently TX-only");
         return false;
     }
 
