@@ -35,6 +35,7 @@
 #include "filter_variable.h"
 #include "mixer.h"
 #include "output_i2s.h"
+#include "usb_audio.h"
 #include "play_aac.h"
 #include "play_memory.h"
 #include "play_mp3.h"
