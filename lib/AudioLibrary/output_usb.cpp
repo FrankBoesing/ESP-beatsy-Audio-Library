@@ -1,4 +1,6 @@
-#include "usb_audio.h"
+#include "output_usb.h"
+#include "input_usb.h"
+#include "usb_audio_backend.h"
 
 #include <algorithm>
 #include <cmath>
@@ -176,7 +178,6 @@ class AudioUSBBackend {
         if (input_ == input) {
             inputNodeEnabled_.store(false, std::memory_order_release);
             inputAttached_.store(false, std::memory_order_release);
-            inputStreaming_.store(false, std::memory_order_release);
             input_ = nullptr;
             // Keep inputChannels_ unchanged: the USB descriptor and ring layout
             // cannot be changed after USB startup.
@@ -207,7 +208,6 @@ class AudioUSBBackend {
         if (output_ == output) {
             outputNodeEnabled_.store(false, std::memory_order_release);
             outputAttached_.store(false, std::memory_order_release);
-            outputStreaming_.store(false, std::memory_order_release);
             output_ = nullptr;
             // Preserve the configured channel count until the USB device is reset.
         }
@@ -239,6 +239,9 @@ class AudioUSBBackend {
             return fail();
         }
 
+        lastInputActivityMs_.store(0, std::memory_order_release);
+        lastOutputActivityMs_.store(0, std::memory_order_release);
+
         // Arduino's current USBAudioCard descriptor implementation exposes at
         // most mono/stereo; the API and rings reserve room for future backends.
         if (inputChannels_ > 2 || outputChannels_ > 2) {
@@ -266,7 +269,6 @@ class AudioUSBBackend {
             }
             configuredSampleRate_ = rate;
             card_->onData(&AudioUSBBackend::onHostPlaybackData);
-            card_->onEvent(ARDUINO_USB_AUDIO_CARD_INTERFACE_ENABLE_EVENT, &AudioUSBBackend::onUsbAudioEvent);
         } else if (configuredSampleRate_ != static_cast<uint32_t>(std::lround(sampleRate))) {
             return fail();
         }
@@ -313,11 +315,13 @@ class AudioUSBBackend {
     }
 
     bool inputStreaming() const {
-        return inputStreaming_.load(std::memory_order_acquire);
+        const uint32_t last = lastInputActivityMs_.load(std::memory_order_acquire);
+        return last != 0 && static_cast<uint32_t>(millis() - last) < STREAM_ACTIVITY_TIMEOUT_MS;
     }
 
     bool outputStreaming() const {
-        return outputStreaming_.load(std::memory_order_acquire);
+        const uint32_t last = lastOutputActivityMs_.load(std::memory_order_acquire);
+        return last != 0 && static_cast<uint32_t>(millis() - last) < STREAM_ACTIVITY_TIMEOUT_MS;
     }
 
     size_t readInput(int16_t *interleaved, size_t frames) {
@@ -335,7 +339,6 @@ class AudioUSBBackend {
         AudioUSBBackend &backend = instance();
         if (!backend.inputAttached_.load(std::memory_order_acquire) ||
             !backend.inputNodeEnabled_.load(std::memory_order_acquire) ||
-            !backend.inputStreaming_.load(std::memory_order_acquire) ||
             backend.inputChannels_ == 0 || data == nullptr) {
             return;
         }
@@ -347,22 +350,9 @@ class AudioUSBBackend {
         }
 
         // USBAudioCard supplies interleaved signed 16-bit PCM for UAC_BPS_16.
+        // The receive callback only runs when playback packets have arrived.
+        backend.lastInputActivityMs_.store(static_cast<uint32_t>(millis()), std::memory_order_release);
         (void)backend.hostToDevice_.writeFrames(static_cast<const int16_t *>(data), frames);
-    }
-
-    static void onUsbAudioEvent(void *, esp_event_base_t, int32_t eventId, void *eventData) {
-        if (eventId != ARDUINO_USB_AUDIO_CARD_INTERFACE_ENABLE_EVENT || eventData == nullptr) {
-            return;
-        }
-
-        const auto *event = static_cast<const arduino_usb_audio_card_event_data_t *>(eventData);
-        AudioUSBBackend &backend = instance();
-
-        if (event->interface_enable.interface == UAC_INTERFACE_SPK) {
-            backend.inputStreaming_.store(event->interface_enable.enable, std::memory_order_release);
-        } else if (event->interface_enable.interface == UAC_INTERFACE_MIC) {
-            backend.outputStreaming_.store(event->interface_enable.enable, std::memory_order_release);
-        }
     }
 
     static void txTaskEntry(void *arg) {
@@ -377,7 +367,6 @@ class AudioUSBBackend {
             if (!started_.load(std::memory_order_acquire) ||
                 !outputAttached_.load(std::memory_order_acquire) ||
                 !outputNodeEnabled_.load(std::memory_order_acquire) ||
-                !outputStreaming_.load(std::memory_order_acquire) ||
                 card_ == nullptr || outputChannels_ == 0) {
                 deviceToHost_.discardAll();
                 vTaskDelay(pdMS_TO_TICKS(1));
@@ -404,6 +393,10 @@ class AudioUSBBackend {
 
             if (acceptedFrames > 0) {
                 deviceToHost_.consumeFrames(acceptedFrames);
+                // Indicates recent acceptance by the Arduino/TinyUSB audio
+                // transmit API; exact host interface alt-state is core-version
+                // dependent and intentionally not accessed here.
+                lastOutputActivityMs_.store(static_cast<uint32_t>(millis()), std::memory_order_release);
             } else {
                 vTaskDelay(pdMS_TO_TICKS(1));
             }
@@ -424,8 +417,9 @@ class AudioUSBBackend {
     std::atomic<bool> outputAttached_{false};
     std::atomic<bool> inputNodeEnabled_{false};
     std::atomic<bool> outputNodeEnabled_{false};
-    std::atomic<bool> inputStreaming_{false};
-    std::atomic<bool> outputStreaming_{false};
+    static constexpr uint32_t STREAM_ACTIVITY_TIMEOUT_MS = 250;
+    std::atomic<uint32_t> lastInputActivityMs_{0};
+    std::atomic<uint32_t> lastOutputActivityMs_{0};
     std::atomic<bool> starting_{false};
     std::atomic<bool> started_{false};
 
@@ -635,7 +629,7 @@ void AudioOutputUSB::update() {
         blocks[channel] = receiveReadOnly(channel);
     }
 
-    if (registered_ && enabled_.load(std::memory_order_acquire) && audio_usb_detail::outputStreaming()) {
+    if (registered_ && enabled_.load(std::memory_order_acquire)) {
         alignas(4) int16_t interleaved[AUDIO_BLOCK_SAMPLES * AUDIO_USB_MAX_CHANNELS] = {};
 
         for (size_t frame = 0; frame < AUDIO_BLOCK_SAMPLES; ++frame) {
