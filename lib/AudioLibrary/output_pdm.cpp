@@ -42,21 +42,32 @@ bool AudioOutputPDM::setChannelCount(uint channels) {
 bool AudioOutputPDM::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate < 16000.0f || rate > 48000.0f) return false;
 
-    // The decoder may negotiate a new rate while TX is active. Do not let
-    // i2s_channel_write() race with i2s_channel_reconfig_pdm_tx_clock().
+    // Stop the graph from adding more old-rate blocks while the hardware rate
+    // is being changed. Keep lock order consistent: graph first, TX writer second.
+    AudioStream::disableUpdates();
+
     const bool locked = txWriteMutex != nullptr;
     if (locked && xSemaphoreTake(txWriteMutex, pdMS_TO_TICKS(500)) != pdTRUE) {
         ESP_LOGE(TAG, "Timed out waiting for PDM TX writer before rate change");
+        AudioStream::enableUpdates();
         return false;
     }
 
-    if (txQueue != nullptr) {
+    auto discardQueuedPairs = [this]() {
+        if (txQueue == nullptr) return;
         BlockPair pair;
         while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
-    }
+    };
 
+    discardQueuedPairs();
+    // The TX task cannot call i2s_channel_write() while the manager disables
+    // and reconfigures the PDM channel.
     const bool ok = AudioI2SPort::setSampleRate(rate);
+    // Discard any pair that was already pending as the callback was quiesced.
+    discardQueuedPairs();
+
     if (locked) xSemaphoreGive(txWriteMutex);
+    AudioStream::enableUpdates();
     return ok;
 }
 
