@@ -24,7 +24,7 @@ void AudioOutputI2S::setRunning(bool value) {
     running.store(value ? 1U : 0U, std::memory_order_release);
 }
 
-bool IRAM_ATTR AudioOutputI2S::markTxCallbackFromISR() {
+bool AudioOutputI2S::markTxCallbackFromISR() {
     if (running.load(std::memory_order_acquire) == 0) return false;
     txCallbackCountValue.fetch_add(1, std::memory_order_relaxed);
     return true;
