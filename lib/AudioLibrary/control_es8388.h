@@ -65,4 +65,5 @@ class AudioControlES8388 : public AudioControl {
     TwoWire *wire_;
     uint8_t i2cAddress_;
     bool initialized_;
+    bool adcEnabled_;
 };
