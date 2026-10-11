@@ -2,7 +2,7 @@
 
 ESP-beatsy is an ESP32-oriented port and adaptation of the [Teensy Audio Library](https://www.pjrc.com/teensy/td_libs_Audio.html). The main goal is to retain the familiar Teensy programming model and public APIs wherever practical, while adapting audio scheduling, I/O, memory handling and codec support to ESP32 hardware.
 
-**The project is work in progress.** The inventory below reflects the source files and classes currently present on the \`work\` branch. It is not a claim that every class has full Teensy feature parity or has been tested on every ESP32 target.
+**The project is work in progress.** The inventory below reflects the source files and classes currently present on the `work` branch. It is not a claim that every class has full Teensy feature parity or has been tested on every ESP32 target.
 
 ## Teensy Audio Library compatibility
 
@@ -18,7 +18,7 @@ Compatibility is primarily **source/API-level compatibility**, not binary compat
 ### Important implementation differences
 
 - **Scheduling:** Unlike the Teensy implementation, ESP-beatsy uses FreeRTOS tasks and ESP32 timer/I2S callback mechanisms. When I2S output is active, the TX DMA callback can drive audio updates; otherwise a software timer can provide the update clock. Timing and processor-load numbers therefore cannot be compared directly with Teensy measurements.
-- **I2S hardware:** The ESP32 implementation uses the ESP-IDF I2S driver and explicit pin configuration. AudioStream samples remain signed 16-bit PCM; conversion to the configured I2S slot representation is done in the output path. Mono output can be selected with \`setChannelCount(1)\`.
+- **I2S hardware:** The ESP32 implementation uses the ESP-IDF I2S driver and explicit pin configuration. AudioStream samples remain signed 16-bit PCM; conversion to the configured I2S slot representation is done in the output path. Mono output can be selected with `setChannelCount(1)`.
 - **Memory:** The shared AudioMemory block pool remains, but some ESP-specific objects allocate their own buffers. Delay and reverb implementations can prefer PSRAM and fall back to internal RAM, so memory consumption is not always equivalent to the Teensy implementation.
 - **Mixer extension:** In addition to the familiar four-input AudioMixer4, **AudioMixerN** supports 4–32 inputs. It uses floating-point gains and accumulation, with saturation to 16-bit PCM only at the final output.
 - **Filter implementation:** AudioFilterLadder replaces the Teensy/CMSIS-DSP FIR interpolation path with portable polyphase FIR routines and uses 4× internal oversampling.
