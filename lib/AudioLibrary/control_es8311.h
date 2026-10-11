@@ -41,7 +41,7 @@ class AudioControlES8311 : public AudioControl {
     // level 0.0 .. 1.0, maps to the ES8311 DAC volume register (0..255).
     bool volume(float level) override;
 
-    // level 0.0 .. 1.0, maps to the ES8311 analog mic PGA gain (0..42 dB).
+    // level 0.0 .. 1.0, maps to the ES8311 analog mic PGA gain (0..30 dB).
     bool inputLevel(float level) override;
     bool inputSelect(int n) override;
 
@@ -76,9 +76,9 @@ class AudioControlES8311 : public AudioControl {
     static constexpr uint8_t REG_SYSTEM0E = 0x0E;
     static constexpr uint8_t REG_SYSTEM12 = 0x12;
     static constexpr uint8_t REG_SYSTEM13 = 0x13;
-    static constexpr uint8_t REG_SYSTEM14 = 0x14; // analog PGA gain
+    static constexpr uint8_t REG_SYSTEM14 = 0x14; // input select and analog PGA gain
 
-    static constexpr uint8_t REG_ADC16 = 0x16; // mic gain
+    static constexpr uint8_t REG_ADC16 = 0x16; // ADC digital scale
     static constexpr uint8_t REG_ADC1C = 0x1C; // ADC equalizer/HPF
 
     static constexpr uint8_t REG_DAC31 = 0x31; // mute
