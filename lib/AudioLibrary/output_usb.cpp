@@ -497,7 +497,7 @@ bool writeOutput(const int16_t *interleaved, size_t frames) {
 } // namespace audio_usb_detail
 
 AudioInputUSB::AudioInputUSB(uint8_t channels)
-    : AudioStream(0, nullptr), channels_(normalize(channels)) {
+    : AudioStream(0, nullptr), channels_(audio_usb_detail::normalizeChannelCount(channels)) {
     registered_ = audio_usb_detail::attachInput(this, channels_);
 }
 
