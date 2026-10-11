@@ -88,6 +88,17 @@ Note that GPIO 43 and GPIO 44 are also commonly the ESP32-S3 UART0 TX/RX pins.
 Use a USB CDC/USB Serial-JTAG console or change the DATA pins if the serial
 console is wired to UART0.
 
+### Direct PDM DAC clock-mode comparison at 22.05 kHz
+
+`examples/HardwareTesting/PDMDirectIDF22050AltClock.cpp` uses the direct
+ESP-IDF driver with `up_sample_fs = 480`, which is the documented clock mode
+where the PDM bit clock follows 128 × the PCM sample rate. Compare this output
+with `PDMDirectIDF.cpp` built at 22.05 kHz with the unmodified DAC default
+(`up_sample_fs = rate / 100`). This checks whether the default clock mode's
+integer `rate / 100` setting affects the subjective sound at 22.05 kHz. It is
+a diagnostic experiment only; do not change the library default unless the
+hardware comparison supports the change.
+
 ### AudioStream PDM stereo test at 22.05 kHz
 
 The test
