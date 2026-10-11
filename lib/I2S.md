@@ -88,6 +88,14 @@ Note that GPIO 43 and GPIO 44 are also commonly the ESP32-S3 UART0 TX/RX pins.
 Use a USB CDC/USB Serial-JTAG console or change the DATA pins if the serial
 console is wired to UART0.
 
+### AudioStream PDM stereo test at 22.05 kHz
+
+The test
+[`examples/HardwareTesting/PDMViaAudioStreamStereo22050.cpp`](../examples/HardwareTesting/PDMViaAudioStreamStereo22050.cpp)
+repeats the known 1 kHz stereo sine test at 22.05 kHz, matching the AAC stream
+rate observed in the radio logs. It separates a sample-rate-specific PDM issue
+from a problem that only appears with radio PCM blocks.
+
 ### Mono AudioStream dual-input diagnostic
 
 If native ESP-IDF mono and library stereo both work, but the one-input library
