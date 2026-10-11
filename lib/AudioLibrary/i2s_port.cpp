@@ -59,22 +59,36 @@ int8_t ownerCode(uint8_t controller, Direction direction) {
 }
 
 bool sameFormat(const Format &a, const Format &b) {
-    return a.mode == b.mode && a.encoding == b.encoding && a.slots == b.slots && a.slotBits == b.slotBits;
+    return a.mode == b.mode && a.encoding == b.encoding && a.slots == b.slots && a.slotBits == b.slotBits &&
+           a.rateMultiplier == b.rateMultiplier;
 }
 
 bool formatImplemented(const Format &f) {
-    return f.mode == AudioI2SPort::PeripheralMode::Standard && f.encoding == AudioI2SPort::DataEncoding::PCM &&
-           f.slots == 2 && f.slotBits == 16;
+    if (f.mode != AudioI2SPort::PeripheralMode::Standard || f.slots != 2 || f.slotBits != 16) {
+        return false;
+    }
+
+    if (f.encoding == AudioI2SPort::DataEncoding::PCM) {
+        return f.rateMultiplier == 1;
+    }
+
+    // Software BMC stream: at 4x the PCM frame rate, stereo 16-bit I2S
+    // serializes 128 BMC half-bit states for each stereo PCM frame.
+    return f.encoding == AudioI2SPort::DataEncoding::SpdifBMC && f.rateMultiplier == 4;
 }
 
 bool sameOptionalPin(int8_t requested, int8_t configured) { return requested < 0 || requested == configured; }
 
 OSIZE
-i2s_std_config_t makeStdConfig(const Pins &pins, uint32_t rate, bool transmit, bool master) {
+i2s_std_config_t makeStdConfig(const Pins &pins, uint32_t rate, bool transmit, bool master, const Format &format) {
     i2s_std_config_t cfg = {};
-    cfg.clk_cfg.sample_rate_hz = rate;
+    cfg.clk_cfg.sample_rate_hz = rate * format.rateMultiplier;
     cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
-    cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+    // For SPDIF BMC the serializer rate is 4x Fs; 128x that physical frame
+    // rate gives an MCLK of 512x Fs and an integer MCLK/BCLK ratio of 4.
+    cfg.clk_cfg.mclk_multiple = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC
+                                   ? I2S_MCLK_MULTIPLE_128
+                                   : I2S_MCLK_MULTIPLE_256;
     cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
 
     cfg.gpio_cfg.mclk = master && pins.mclk >= 0 ? static_cast<gpio_num_t>(pins.mclk) : I2S_GPIO_UNUSED;
@@ -157,7 +171,9 @@ bool AUDIO_I2S_ISR_ATTR dispatchRx(i2s_chan_handle_t channel, i2s_event_data_t *
 
 OSIZE
 bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t rate, const Format &format) {
-    if (requested.bclk < 0 || requested.ws < 0 || (first == Direction::Tx && requested.dout < 0) ||
+    const bool spdifBmc = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC;
+    if ((!spdifBmc && (requested.bclk < 0 || requested.ws < 0)) ||
+        (first == Direction::Tx && requested.dout < 0) ||
         (first == Direction::Rx && requested.din < 0)) {
         ESP_LOGE(TAG, "Invalid initial I2S pins");
         return false;
@@ -179,7 +195,7 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
     cfg.id = static_cast<i2s_port_t>(controllerOf(&s));
     cfg.role = I2S_ROLE_MASTER;
     cfg.dma_desc_num = DMA_DESC_NUM;
-    cfg.dma_frame_num = DMA_FRAME_NUM;
+    cfg.dma_frame_num = static_cast<uint16_t>(DMA_FRAME_NUM * format.rateMultiplier);
     cfg.auto_clear_after_cb = true;
     cfg.allow_pd = false;
     cfg.intr_priority = 2;
@@ -191,8 +207,8 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
         return false;
     }
 
-    const i2s_std_config_t txCfg = makeStdConfig(s.pins, rate, true, first == Direction::Tx);
-    const i2s_std_config_t rxCfg = makeStdConfig(s.pins, rate, false, first == Direction::Rx);
+    const i2s_std_config_t txCfg = makeStdConfig(s.pins, rate, true, first == Direction::Tx, format);
+    const i2s_std_config_t rxCfg = makeStdConfig(s.pins, rate, false, first == Direction::Rx, format);
     if (first == Direction::Tx) {
         err = i2s_channel_init_std_mode(s.txHandle, &txCfg);
         if (err == ESP_OK) err = i2s_channel_init_std_mode(s.rxHandle, &rxCfg);
@@ -515,10 +531,12 @@ bool AudioI2SPort::setSampleRate(float rate) {
         vTaskDelay(1);
     }
 
-    auto clockConfig = [](uint32_t hz) {
-        i2s_std_clk_config_t cfg = I2S_STD_CLK_DEFAULT_CONFIG(hz);
+    auto clockConfig = [](uint32_t hz, const Format &format) {
+        i2s_std_clk_config_t cfg = I2S_STD_CLK_DEFAULT_CONFIG(hz * format.rateMultiplier);
         cfg.clk_src = I2S_CLK_SRC_DEFAULT;
-        cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+        cfg.mclk_multiple = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC
+                                ? I2S_MCLK_MULTIPLE_128
+                                : I2S_MCLK_MULTIPLE_256;
         return cfg;
     };
 
@@ -528,7 +546,7 @@ bool AudioI2SPort::setSampleRate(float rate) {
         const Direction slave = s.physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
         const i2s_chan_handle_t master = s.physicalMaster == Direction::Tx ? s.txHandle : s.rxHandle;
         const i2s_chan_handle_t slaveHandle = slave == Direction::Tx ? s.txHandle : s.rxHandle;
-        const auto cfg = clockConfig(newRate);
+        const auto cfg = clockConfig(newRate, s.format);
         err = i2s_channel_reconfig_std_clock(master, &cfg);
         if (err == ESP_OK) err = i2s_channel_reconfig_std_clock(slaveHandle, &cfg);
         if (err != ESP_OK) break;
@@ -537,12 +555,12 @@ bool AudioI2SPort::setSampleRate(float rate) {
 
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "I2S sample-rate reconfiguration failed: %s", esp_err_to_name(err));
-        const auto oldClock = clockConfig(oldRate);
         for (PortState &s : ports) {
             if (!s.pairCreated) continue;
             const Direction slave = s.physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
             const i2s_chan_handle_t master = s.physicalMaster == Direction::Tx ? s.txHandle : s.rxHandle;
             const i2s_chan_handle_t slaveHandle = slave == Direction::Tx ? s.txHandle : s.rxHandle;
+            const auto oldClock = clockConfig(oldRate, s.format);
             i2s_channel_reconfig_std_clock(master, &oldClock);
             i2s_channel_reconfig_std_clock(slaveHandle, &oldClock);
             s.sampleRate = oldRate;
