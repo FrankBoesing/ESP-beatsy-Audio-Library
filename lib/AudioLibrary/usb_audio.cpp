@@ -174,11 +174,18 @@ class AudioUSBBackend {
 
     void detachInput(AudioInputUSB *input) {
         if (input_ == input) {
+            inputNodeEnabled_.store(false, std::memory_order_release);
             inputAttached_.store(false, std::memory_order_release);
             inputStreaming_.store(false, std::memory_order_release);
             input_ = nullptr;
             // Keep inputChannels_ unchanged: the USB descriptor and ring layout
             // cannot be changed after USB startup.
+        }
+    }
+
+    void setInputEnabled(AudioInputUSB *input, bool enabled) {
+        if (input_ == input) {
+            inputNodeEnabled_.store(enabled, std::memory_order_release);
         }
     }
 
@@ -198,10 +205,17 @@ class AudioUSBBackend {
 
     void detachOutput(AudioOutputUSB *output) {
         if (output_ == output) {
+            outputNodeEnabled_.store(false, std::memory_order_release);
             outputAttached_.store(false, std::memory_order_release);
             outputStreaming_.store(false, std::memory_order_release);
             output_ = nullptr;
             // Preserve the configured channel count until the USB device is reset.
+        }
+    }
+
+    void setOutputEnabled(AudioOutputUSB *output, bool enabled) {
+        if (output_ == output) {
+            outputNodeEnabled_.store(enabled, std::memory_order_release);
         }
     }
 
@@ -320,6 +334,7 @@ class AudioUSBBackend {
     static void onHostPlaybackData(void *data, uint16_t len) {
         AudioUSBBackend &backend = instance();
         if (!backend.inputAttached_.load(std::memory_order_acquire) ||
+            !backend.inputNodeEnabled_.load(std::memory_order_acquire) ||
             !backend.inputStreaming_.load(std::memory_order_acquire) ||
             backend.inputChannels_ == 0 || data == nullptr) {
             return;
@@ -361,6 +376,7 @@ class AudioUSBBackend {
         for (;;) {
             if (!started_.load(std::memory_order_acquire) ||
                 !outputAttached_.load(std::memory_order_acquire) ||
+                !outputNodeEnabled_.load(std::memory_order_acquire) ||
                 !outputStreaming_.load(std::memory_order_acquire) ||
                 card_ == nullptr || outputChannels_ == 0) {
                 deviceToHost_.discardAll();
@@ -406,6 +422,8 @@ class AudioUSBBackend {
 
     std::atomic<bool> inputAttached_{false};
     std::atomic<bool> outputAttached_{false};
+    std::atomic<bool> inputNodeEnabled_{false};
+    std::atomic<bool> outputNodeEnabled_{false};
     std::atomic<bool> inputStreaming_{false};
     std::atomic<bool> outputStreaming_{false};
     std::atomic<bool> starting_{false};
@@ -434,12 +452,20 @@ void detachInput(AudioInputUSB *input) {
     AudioUSBBackend::instance().detachInput(input);
 }
 
+void setInputEnabled(AudioInputUSB *input, bool enabled) {
+    AudioUSBBackend::instance().setInputEnabled(input, enabled);
+}
+
 bool attachOutput(AudioOutputUSB *output, uint8_t channels) {
     return AudioUSBBackend::instance().attachOutput(output, channels);
 }
 
 void detachOutput(AudioOutputUSB *output) {
     AudioUSBBackend::instance().detachOutput(output);
+}
+
+void setOutputEnabled(AudioOutputUSB *output, bool enabled) {
+    AudioUSBBackend::instance().setOutputEnabled(output, enabled);
 }
 
 bool start(float sampleRate) {
@@ -483,6 +509,7 @@ AudioInputUSB::AudioInputUSB(uint8_t channels)
 
 AudioInputUSB::~AudioInputUSB() {
     enabled_.store(false, std::memory_order_release);
+    audio_usb_detail::setInputEnabled(this, false);
     audio_usb_detail::detachInput(this);
 }
 
@@ -490,12 +517,14 @@ bool AudioInputUSB::begin() {
     if (!registered_ || !audio_usb_detail::start(AudioStream::sampleRate())) {
         return false;
     }
+    audio_usb_detail::setInputEnabled(this, true);
     enabled_.store(true, std::memory_order_release);
     return true;
 }
 
 void AudioInputUSB::end() {
     enabled_.store(false, std::memory_order_release);
+    audio_usb_detail::setInputEnabled(this, false);
 }
 
 bool AudioInputUSB::isRunning() const {
@@ -558,6 +587,7 @@ AudioOutputUSB::AudioOutputUSB(uint8_t channels)
 
 AudioOutputUSB::~AudioOutputUSB() {
     enabled_.store(false, std::memory_order_release);
+    audio_usb_detail::setOutputEnabled(this, false);
     audio_usb_detail::detachOutput(this);
 }
 
@@ -565,12 +595,14 @@ bool AudioOutputUSB::begin() {
     if (!registered_ || !audio_usb_detail::start(AudioStream::sampleRate())) {
         return false;
     }
+    audio_usb_detail::setOutputEnabled(this, true);
     enabled_.store(true, std::memory_order_release);
     return true;
 }
 
 void AudioOutputUSB::end() {
     enabled_.store(false, std::memory_order_release);
+    audio_usb_detail::setOutputEnabled(this, false);
 }
 
 bool AudioOutputUSB::isRunning() const {
@@ -594,7 +626,7 @@ bool AudioOutputUSB::beginHardware() {
 
 OSPEED
 void AudioOutputUSB::update() {
-    if (!registered_ || channels_ == 0) {
+    if (channels_ == 0) {
         return;
     }
 
@@ -603,7 +635,7 @@ void AudioOutputUSB::update() {
         blocks[channel] = receiveReadOnly(channel);
     }
 
-    if (enabled_.load(std::memory_order_acquire) && audio_usb_detail::outputStreaming()) {
+    if (registered_ && enabled_.load(std::memory_order_acquire) && audio_usb_detail::outputStreaming()) {
         alignas(4) int16_t interleaved[AUDIO_BLOCK_SAMPLES * AUDIO_USB_MAX_CHANNELS] = {};
 
         for (size_t frame = 0; frame < AUDIO_BLOCK_SAMPLES; ++frame) {

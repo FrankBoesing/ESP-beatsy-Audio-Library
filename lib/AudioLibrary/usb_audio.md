@@ -14,7 +14,7 @@
 
 ## FNK0104B / PlatformIO
 
-Use USB-OTG/TinyUSB (`ARDUINO_USB_MODE=0`) and leave `ARDUINO_USB_CDC_ON_BOOT=1` so the sketch can keep using `Serial.println()`. CDC is not an audio-library feature; it is registered by Arduino-ESP32.
+Use the PioArduino stable PlatformIO platform for the FNK0104B environment. This supplies a recent Arduino-ESP32 3.x core with the `USBAudioCard` API (introduced in 3.3.8). Use USB-OTG/TinyUSB (`ARDUINO_USB_MODE=0`) and leave `ARDUINO_USB_CDC_ON_BOOT=1` so the sketch can keep using `Serial.println()`. CDC is not an audio-library feature; it is registered by Arduino-ESP32.
 
 **Unverified compatibility point:** Espressif's stock `AudioCard` example currently requires CDC-on-boot to be disabled. The library configures CDC and audio as separate TinyUSB interfaces before calling `USB.begin()`, but simultaneous CDC + UAC operation must be confirmed on the FNK0104B with the selected Arduino-ESP32 core. This implementation does not claim that composite mode has already passed a hardware test.
 
