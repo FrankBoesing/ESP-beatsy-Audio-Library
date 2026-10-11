@@ -41,6 +41,7 @@
 #include "output_i2s3.h"
 #include "input_i2s3.h"
 #include "output_spdif1.h"
+#include "output_pdm.h"
 //#include "input_usb.h"
 //#include "output_usb.h"
 #include "play_aac.h"
