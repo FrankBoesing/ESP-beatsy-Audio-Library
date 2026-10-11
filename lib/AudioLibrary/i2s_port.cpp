@@ -1,6 +1,7 @@
 #include "i2s_port.h"
 
 #include <cmath>
+#include <atomic>
 #include <esp_err.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
@@ -44,20 +45,15 @@ struct PortState {
 
 PortState ports[MAX_PORTS]{};
 // AudioStream has one graph clock, irrespective of how many I2S controllers run.
-int8_t schedulerOwner = -1;
-portMUX_TYPE schedulerMux = portMUX_INITIALIZER_UNLOCKED;
+// A single task-side writer publishes the owner to the I2S callback ISRs.
+std::atomic<int32_t> schedulerOwner{-1};
 
 int8_t getSchedulerOwner() {
-    portENTER_CRITICAL(&schedulerMux);
-    const int8_t owner = schedulerOwner;
-    portEXIT_CRITICAL(&schedulerMux);
-    return owner;
+    return static_cast<int8_t>(schedulerOwner.load(std::memory_order_acquire));
 }
 
 void setSchedulerOwner(int8_t owner) {
-    portENTER_CRITICAL(&schedulerMux);
-    schedulerOwner = owner;
-    portEXIT_CRITICAL(&schedulerMux);
+    schedulerOwner.store(static_cast<int32_t>(owner), std::memory_order_release);
 }
 
 PortState *stateFor(uint8_t controller) {
@@ -583,8 +579,5 @@ bool IRAM_ATTR AudioI2SPort::isClockOwner(uint8_t controller, Direction d) {
         (d == Direction::None || controller >= MAX_PORTS)
             ? -1
             : static_cast<int8_t>(controller * 2U + (d == Direction::Rx ? 1U : 0U));
-    portENTER_CRITICAL_ISR(&schedulerMux);
-    const bool isOwner = schedulerOwner == requestedOwner;
-    portEXIT_CRITICAL_ISR(&schedulerMux);
-    return isOwner;
+    return schedulerOwner.load(std::memory_order_acquire) == requestedOwner;
 }
