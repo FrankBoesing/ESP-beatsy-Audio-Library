@@ -226,8 +226,11 @@ void AudioOutputPDM::update() {
     pair.left = receiveReadOnly(0);
     pair.right = receiveReadOnly(1);
 
-    // Also queue zero PCM when no source is connected. This keeps a stable
-    // PDM stream during silence instead of stopping DMA submissions.
+    // Match AudioOutputI2S: don't enqueue a pair when neither input delivered
+    // a block. The enabled I2S/PDM DMA keeps running and auto-clears DMA buffers
+    // to silence; avoiding empty queue entries prevents them delaying real audio.
+    if (pair.left == nullptr && pair.right == nullptr) return;
+
     if (txQueue == nullptr) {
         releasePair(pair);
         return;
