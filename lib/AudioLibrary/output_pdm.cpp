@@ -33,7 +33,7 @@ void AudioOutputPDM::resetTxCallbackCount() {
 
 bool AudioOutputPDM::setChannelCount(uint channels) {
     if (isRunning() || channels < 1 || channels > 2) return false;
-    if (channels == 2 && pdmPins.data2 < 0) return false;
+    if (channels == 2 && pdmPins.dataRight < 0) return false;
     numChannels = channels;
     return true;
 }
@@ -56,7 +56,7 @@ bool AudioOutputPDM::begin() {
 bool AudioOutputPDM::begin(const Pins &pins) {
     end();
     pdmPins = pins;
-    if (numChannels == 2 && pdmPins.data2 < 0) return false;
+    if (numChannels == 2 && pdmPins.dataRight < 0) return false;
     return beginInternal();
 }
 
@@ -70,9 +70,9 @@ bool AudioOutputPDM::beginHardware() {
 
 bool AudioOutputPDM::beginInternal() {
     if (isRunning()) return true;
-    if (pdmPins.data < 0 || (numChannels == 2 && pdmPins.data2 < 0)) {
-        ESP_LOGE(TAG, "Invalid PDM DATA pins: data=%d data2=%d channels=%u",
-                 pdmPins.data, pdmPins.data2, static_cast<unsigned>(numChannels));
+    if (pdmPins.dataLeft < 0 || (numChannels == 2 && pdmPins.dataRight < 0)) {
+        ESP_LOGE(TAG, "Invalid PDM DATA pins: left=%d right=%d channels=%u",
+                 pdmPins.dataLeft, pdmPins.dataRight, static_cast<unsigned>(numChannels));
         return false;
     }
 
@@ -85,7 +85,11 @@ bool AudioOutputPDM::beginInternal() {
     txQueue = xQueueCreate(QUEUE_LENGTH, sizeof(BlockPair));
     if (txQueue == nullptr) return false;
 
-    const AudioI2SPort::Pins portPins{-1, -1, pdmPins.data, -1, -1, CONTROLLER, pdmPins.data2};
+    // In ESP-IDF's two-line DAC mode, DOUT emits the second (right) PCM slot
+    // and DOUT2 emits the first (left) slot. Keep the public pin order intuitive.
+    const int8_t i2sDout = numChannels == 2 ? pdmPins.dataRight : pdmPins.dataLeft;
+    const int8_t i2sDout2 = numChannels == 2 ? pdmPins.dataLeft : -1;
+    const AudioI2SPort::Pins portPins{-1, -1, i2sDout, -1, -1, CONTROLLER, i2sDout2};
     const AudioI2SPort::Format format{
         AudioI2SPort::PeripheralMode::PDM,
         AudioI2SPort::DataEncoding::PCM,
