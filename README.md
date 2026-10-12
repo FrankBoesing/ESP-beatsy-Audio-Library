@@ -95,7 +95,7 @@ These examples are present in the repository. Their board-specific pin and codec
 | **AudioOutputI2S2** | Convenience wrapper selecting the second I2S controller. Board-specific pins must be supplied. |
 | **AudioOutputI2S3** | Convenience wrapper selecting the third I2S controller, where supported by the SoC. |
 | **AudioOutputPDM** | Hardware PCM-to-PDM DAC output on I2S0; supports mono or stereo data lines on compatible targets. |
-| **AudioOutputSPDIF** | Software IEC 60958 consumer S/PDIF output using a fixed BMC lookup table and I2S0; provides the Teensy-compatible `mute_PCM(bool)` validity-bit mute. Requires an optical transmitter or a suitable coaxial line driver; do not connect GPIO directly to coax. |
+| **AudioOutputSPDIF** | Software IEC 60958 consumer S/PDIF output using a fixed BMC lookup table and I2S0. Requires an optical transmitter or a suitable coaxial line driver; do not connect GPIO directly to coax. |
 | **AudioOutputSPDIF2** | Same software S/PDIF encoder routed through I2S controller 1; availability and pins depend on the SoC and board. |
 | **AudioOutputSPDIF3** | Same software S/PDIF encoder routed through I2S controller 2; available only on SoCs that provide a third I2S controller. |
 
