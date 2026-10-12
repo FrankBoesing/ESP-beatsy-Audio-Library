@@ -77,10 +77,14 @@ high-rate PDM stream; the AudioStream processing loop handles PCM blocks only.
   integer-divider path. The correction is guarded by the relevant SoC capability
   macros, but **is not currently gated by an ESP-IDF version check**.
 - This workaround is experimental and tied to observed ESP-IDF implementation
-  behavior, not a documented API guarantee. Re-check the upstream `i2s_pdm.c`
-  clock calculation when upgrading ESP-IDF. If Espressif stops overwriting the
-  fractional divider, remove or disable the correction rather than adding an
-  arbitrary version cutoff. Validate the actual PCM timing and listen for PDM
+  behavior, not a documented API guarantee. The current upstream ESP-IDF
+  `master` source was checked on 2026-10-12 and still contains an explicit
+  integer-divider override described by Espressif as a way to reduce PDM TX
+  background noise. This suggests a deliberate noise-versus-clock-accuracy
+  trade-off, not yet a confirmed regression. Re-check upstream `i2s_pdm.c`
+  when upgrading ESP-IDF. If Espressif changes or removes the override, remove
+  or disable this correction rather than adding an arbitrary version cutoff.
+  Validate the actual PCM timing and listen for PDM
   noise after any change. The current validation is limited to the ESP32-S3
   setup and sample rates tested during development; other targets/rates are not
   guaranteed.
