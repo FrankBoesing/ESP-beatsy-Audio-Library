@@ -208,17 +208,10 @@ void setup() {
 void loop() {}
 ```
 
-`AudioOutputSPDIF` also accepts `AudioOutputSPDIF::Pins{PIN_SPDIF_OUT}` and
-provides `begin()`, `begin(pin)`, `end()`, `isRunning()`,
-`setSampleRate()`, and the Teensy-compatible static
-`AudioOutputSPDIF::mute_PCM(bool)`. Calling `mute_PCM(true)` marks each emitted
-PCM subframe invalid using the IEC 60958 V bit and recalculates parity; calling
-`mute_PCM(false)` restores normal validity. Like the Teensy API, this is a
-static control and affects S/PDIF output instances globally. The mute state is
-sampled once per audio block, and the unmuted encoder is compile-time specialized
-so the per-sample hot loop has no extra mute check. The `AudioOutputSPDIF2` and
-`AudioOutputSPDIF3` wrappers inherit the same controls and use I²S controller 1
-and 2 respectively.
+`AudioOutputSPDIF` accepts `AudioOutputSPDIF::Pins{PIN_SPDIF_OUT}` and
+provides `begin()`, `begin(pin)`, `end()`, `isRunning()`, and
+`setSampleRate()`. `AudioOutputSPDIF2` and `AudioOutputSPDIF3` use I²S
+controller 1 and 2 respectively and inherit the same API.
 
 ### Electrical interface
 
