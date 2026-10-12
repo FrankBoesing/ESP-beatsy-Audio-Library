@@ -94,18 +94,6 @@ void AudioOutputSPDIF::updateChannelStatus(float rate) {
     sampleRateCode.store(spdifSampleRateCode(rate), std::memory_order_release);
 }
 
-uint8_t AudioOutputSPDIF::channelStatusBit(uint16_t frame) const {
-    // IEC 60958 consumer status byte 3 is sample rate; byte 4 declares 16-bit
-    // audio (maximum 20-bit word length). Status bits are transmitted LSB-first.
-    if (frame >= 24U && frame < 28U) {
-        return static_cast<uint8_t>((sampleRateCode.load(std::memory_order_relaxed) >> (frame - 24U)) & 1U);
-    }
-    if (frame >= 32U && frame < 40U) {
-        return static_cast<uint8_t>((CHANNEL_STATUS_WORD_LENGTH_16BIT >> (frame - 32U)) & 1U);
-    }
-    return 0;
-}
-
 bool AudioOutputSPDIF::begin() {
     return beginInternal();
 }
