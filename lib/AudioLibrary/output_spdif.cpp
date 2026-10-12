@@ -225,12 +225,12 @@ void AudioOutputSPDIF::txTaskLoop() {
     while (isRunning()) {
         if (xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(100)) != pdTRUE) continue;
 
-        const int16_t *__restrict left = pair.left ? pair.left->data : nullptr;
-        const int16_t *__restrict right = pair.right ? pair.right->data : nullptr;
+        const int16_t *left = pair.left ? pair.left->data : audio_zeroblock;
+        const int16_t *right = pair.right ? pair.right->data : audio_zeroblock;
 
         for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            const int16_t leftSample = left ? left[i] : 0;
-            const int16_t rightSample = right ? right[i] : 0;
+            const int16_t leftSample = left[i];
+            const int16_t rightSample = right[i];
             const uint8_t statusBit = channelStatusBit(frameInBlock);
             const uint8_t leftPreamble = frameInBlock == 0 ? PREAMBLE_B : PREAMBLE_M;
 
