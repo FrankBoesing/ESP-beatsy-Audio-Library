@@ -58,6 +58,7 @@ void AudioAnalyzeRMS::update(void) {
     int64_t sum = accum;
     const int16_t *p = block->data;
 
+    GCC_UNROLL
     for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const int32_t sample = p[i];
 
