@@ -224,13 +224,12 @@ void AudioOutputI2S::txTaskLoop() {
             continue;
         }
 
-        const int16_t *__restrict left = pair.left ? pair.left->data : nullptr;
-        const int16_t *__restrict right = pair.right ? pair.right->data : nullptr;
-
         if (numChannels == 1) {
+            const int16_t *__restrict left = pair.left ? pair.left->data : nullptr;
+            const int16_t *__restrict right = pair.right ? pair.right->data : nullptr;
             // Mono: L/R mitteln und dasselbe Sample auf beide Slots legen.
             //TODO: Check this in godbolt. Is it optimized?
-GCC_UNROLL
+            GCC_UNROLL
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
                 int32_t mono;
 
@@ -251,26 +250,15 @@ GCC_UNROLL
             }
         } else {
             // Stereo: linker und rechter Kanal bleiben getrennt.
-            if (left && right) {
-GCC_UNROLL
-                for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                    const uint32_t l = static_cast<uint16_t>(left[i]);
-                    const uint32_t r = static_cast<uint16_t>(right[i]);
+            const int16_t *left = pair.left ? pair.left->data : audio_zeroblock;
+            const int16_t *right = pair.right ? pair.right->data : audio_zeroblock;
 
-                    buffer[i] = l | (r << 16);
-                }
-            } else if (left) {
-GCC_UNROLL
-                for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                    buffer[i] = static_cast<uint16_t>(left[i]);
-                }
-            } else if (right) {
-GCC_UNROLL
-                for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                    buffer[i] = static_cast<uint32_t>(static_cast<uint16_t>(right[i])) << 16;
-                }
-            } else {
-                memset(buffer, 0, sizeof(buffer));
+            GCC_UNROLL
+            for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                const uint32_t l = static_cast<uint16_t>(left[i]);
+                const uint32_t r = static_cast<uint16_t>(right[i]);
+
+                buffer[i] = l | (r << 16);
             }
         }
 
