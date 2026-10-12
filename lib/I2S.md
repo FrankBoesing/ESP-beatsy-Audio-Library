@@ -199,8 +199,18 @@ void loop() {}
 
 `AudioOutputSPDIF1` also accepts `AudioOutputSPDIF1::Pins{PIN_SPDIF_OUT}` and
 provides `begin()`, `begin(pin)`, `end()`, `isRunning()`,
-`txCallbackCount()`, and `setSampleRate()`. The output uses I²S controller 0
+`txCallbackCount()`, and `setSampleRate()`. For diagnostics it also exposes
+`txEncodedBlockCount()`, `txQueueDropCount()`, `txWriteErrorCount()`,
+`maxEncodeTimeUs()`, and `maxWriteTimeUs()`. The output uses I²S controller 0
 and is not an independent sample-rate graph.
+
+A non-zero `txQueueDropCount()` means the TX task did not consume blocks fast
+enough and the queue discarded audio. A non-zero `txWriteErrorCount()` records
+a failed or partial I²S write. Compare `txCallbackCount()` and
+`txEncodedBlockCount()` over the same interval; at a stable 44.1 kHz setup,
+both should increase at approximately 345 blocks per second. Maximum encode
+time should remain comfortably below one audio-block period (about 2.9 ms at
+44.1 kHz).
 
 ### Electrical interface
 
