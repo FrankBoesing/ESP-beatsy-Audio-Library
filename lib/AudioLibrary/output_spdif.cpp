@@ -9,9 +9,6 @@ constexpr uint8_t PREAMBLE_B = 0x17; // B preamble polarity for a preceding HIGH
 constexpr uint8_t PREAMBLE_M = 0x1D; // M preamble polarity for a preceding HIGH level
 constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH level
 
-// Shared state intentionally matches the static mute_PCM() API of Teensy.
-std::atomic<bool> pcmMuted{false};
-
 uint8_t spdifSampleRateCode(float rate) {
     const uint32_t hz = static_cast<uint32_t>(std::lround(rate));
     switch (hz) {
@@ -63,10 +60,6 @@ bool AudioOutputSPDIF::begin(int8_t dout) {
 
 bool AudioOutputSPDIF::beginHardware() {
     return beginInternal();
-}
-
-void AudioOutputSPDIF::mute_PCM(const bool mute) {
-    pcmMuted.store(mute, std::memory_order_relaxed);
 }
 
 OSIZE
@@ -225,7 +218,6 @@ void AudioOutputSPDIF::releasePair(BlockPair &pair) {
 }
 
 
-template <bool Muted>
 OSPEED void AudioOutputSPDIF::encodeBlock(const int16_t *left, const int16_t *right) {
     GCC_UNROLL
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
@@ -234,9 +226,9 @@ OSPEED void AudioOutputSPDIF::encodeBlock(const int16_t *left, const int16_t *ri
         const uint8_t statusBit = channelStatusBit(frameInBlock);
 
         const uint8_t leftPreamble = frameInBlock == 0 ? PREAMBLE_B : PREAMBLE_M;
-        spdif_bmc::encodeSubframe<Muted>(leftSample, statusBit != 0, leftPreamble,
+        spdif_bmc::encodeSubframe(leftSample, statusBit != 0, leftPreamble,
                                          &encodedBuffer[i * 8U]);
-        spdif_bmc::encodeSubframe<Muted>(rightSample, statusBit != 0, PREAMBLE_W,
+        spdif_bmc::encodeSubframe(rightSample, statusBit != 0, PREAMBLE_W,
                                          &encodedBuffer[i * 8U + 4U]);
 
         if (++frameInBlock >= 192U) frameInBlock = 0;
@@ -264,13 +256,7 @@ void AudioOutputSPDIF::txTaskLoop() {
         const int16_t *left = pair.left ? pair.left->data : nullptr;
         const int16_t *right = pair.right ? pair.right->data : nullptr;
 
-        // Select a compile-time-specialized encoder once per block. The normal
-        // path has no mute check or additional parity work inside the sample loop.
-        if (pcmMuted.load(std::memory_order_relaxed)) {
-            encodeBlock<true>(left, right);
-        } else {
-            encodeBlock<false>(left, right);
-        }
+        encodeBlock(left, right);
 
         size_t bytesWritten = 0;
         (void)i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);
