@@ -39,12 +39,6 @@ class AudioOutputSPDIF : public AudioStream {
     void end();
 
     bool isRunning() const;
-    uint32_t txCallbackCount() const;
-    uint32_t txEncodedBlockCount() const;
-    uint32_t txQueueDropCount() const;
-    uint32_t txWriteErrorCount() const;
-    uint32_t maxEncodeTimeUs() const;
-    uint32_t maxWriteTimeUs() const;
     const Pins &pins() const { return spdifPins; }
     bool setSampleRate(float sampleRate);
 
@@ -75,12 +69,6 @@ class AudioOutputSPDIF : public AudioStream {
     TaskHandle_t txTask = nullptr;
 
     std::atomic<uint32_t> running{0};
-    std::atomic<uint32_t> txCallbackCountValue{0};
-    std::atomic<uint32_t> txEncodedBlockCountValue{0};
-    std::atomic<uint32_t> txQueueDropCountValue{0};
-    std::atomic<uint32_t> txWriteErrorCountValue{0};
-    std::atomic<uint32_t> maxEncodeTimeUsValue{0};
-    std::atomic<uint32_t> maxWriteTimeUsValue{0};
     std::atomic<uint8_t> sampleRateCode{0};
 
     // Reused exclusively by the TX task: four 16-bit I2S frames per PCM
@@ -101,7 +89,6 @@ class AudioOutputSPDIF : public AudioStream {
     bool beginInternal();
     void releasePair(BlockPair &pair);
     void setRunning(bool value);
-    void resetTxCallbackCount();
     // This runs once for each PCM sample frame (128 times per block), so
     // keep it inline and avoid a function call in the real-time encoder loop.
     uint8_t channelStatusBit(uint16_t frame) const {
