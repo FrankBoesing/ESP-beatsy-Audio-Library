@@ -3,6 +3,7 @@
 #include <cmath>
 #include <atomic>
 #include <esp_err.h>
+#include <esp_clk_tree.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -19,6 +20,66 @@ constexpr char TAG[] = "AudioI2SPort";
 constexpr uint16_t DMA_DESC_NUM = 6;
 constexpr uint16_t DMA_FRAME_NUM = AUDIO_BLOCK_SAMPLES;
 constexpr uint8_t MAX_PORTS = AudioI2SPort::MAX_CONTROLLERS;
+
+uint32_t choosePdmDacBclkDivider(uint32_t rate, i2s_clock_src_t clockSource) {
+    constexpr uint32_t DEFAULT_BCLK_DIV = 13;
+    constexpr uint32_t MIN_BCLK_DIV = 8;
+    constexpr uint32_t MAX_BCLK_DIV = 255;
+    constexpr uint32_t PDM_BCLK_FACTOR = 64;
+    constexpr uint32_t PDM_OVERSAMPLE_RATIO = 2; // fp=960, fs=480
+
+    if (rate == 0) return DEFAULT_BCLK_DIV;
+
+    uint32_t sourceHz = 0;
+    const auto source = static_cast<soc_module_clk_t>(clockSource);
+    if (esp_clk_tree_src_get_freq_hz(
+            source, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &sourceHz) != ESP_OK ||
+        sourceHz == 0) {
+        // Keep the IDF default if the clock tree cannot report the source.
+        return DEFAULT_BCLK_DIV;
+    }
+
+    // ESP-IDF 5.5's ESP32-S3 PDM driver replaces its fractional MCLK divider
+    // with an integer divider to reduce PDM noise. Choose BCLK_DIV to minimize
+    // the resulting PCM sample-rate error while keeping fp/fs = 2.
+    uint32_t bestDivider = DEFAULT_BCLK_DIV;
+    uint32_t bestDistance = MAX_BCLK_DIV;
+    double bestError = INFINITY;
+
+    for (uint32_t bclkDiv = MIN_BCLK_DIV; bclkDiv <= MAX_BCLK_DIV; ++bclkDiv) {
+        const uint64_t targetMclk =
+            static_cast<uint64_t>(rate) * PDM_BCLK_FACTOR *
+            PDM_OVERSAMPLE_RATIO * bclkDiv;
+        const uint32_t mclkDiv = static_cast<uint32_t>(sourceHz / targetMclk);
+        if (mclkDiv < 2 || mclkDiv >= 256) continue;
+        if (static_cast<double>(sourceHz) <= static_cast<double>(targetMclk) * 1.99) continue;
+
+        const uint64_t totalDivider = static_cast<uint64_t>(mclkDiv) *
+            PDM_BCLK_FACTOR * PDM_OVERSAMPLE_RATIO * bclkDiv;
+        const double actualRate = static_cast<double>(sourceHz) / totalDivider;
+        const double error = std::fabs(actualRate - static_cast<double>(rate));
+        const uint32_t distance = bclkDiv > DEFAULT_BCLK_DIV
+            ? bclkDiv - DEFAULT_BCLK_DIV
+            : DEFAULT_BCLK_DIV - bclkDiv;
+
+        if (error < bestError - 1e-9 ||
+            (std::fabs(error - bestError) <= 1e-9 && distance < bestDistance)) {
+            bestError = error;
+            bestDivider = bclkDiv;
+            bestDistance = distance;
+        }
+    }
+
+    return bestDivider;
+}
+
+i2s_pdm_tx_clk_config_t makePdmDacClockConfig(uint32_t rate) {
+    i2s_pdm_tx_clk_config_t cfg = I2S_PDM_TX_CLK_DAC_DEFAULT_CONFIG(rate);
+    // Preserve the tested DAC mode: fp=960, fs=480, OSR=2.
+    cfg.up_sample_fs = 480;
+    cfg.bclk_div = choosePdmDacBclkDivider(rate, cfg.clk_src);
+    return cfg;
+}
 
 struct PortState {
     i2s_chan_handle_t txHandle = nullptr;
@@ -228,11 +289,7 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
         }
 
         i2s_pdm_tx_config_t pdmCfg = {};
-        pdmCfg.clk_cfg = I2S_PDM_TX_CLK_DAC_DEFAULT_CONFIG(rate);
-        // Use the documented DAC mode fp=960, fs=480, where Fpdm is
-        // 128 times the PCM sample rate. Runtime reconfiguration uses the
-        // same up_sample_fs value.
-        pdmCfg.clk_cfg.up_sample_fs = 480;
+        pdmCfg.clk_cfg = makePdmDacClockConfig(rate);
         pdmCfg.slot_cfg = I2S_PDM_TX_SLOT_PCM_FMT_DAC_DEFAULT_CONFIG(
             I2S_DATA_BIT_WIDTH_16BIT,
             format.slots == 1 ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO);
@@ -619,9 +676,7 @@ bool AudioI2SPort::setSampleRate(float rate) {
         if (s.format.mode == AudioI2SPort::PeripheralMode::PDM) {
 #if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && \
     defined(SOC_I2S_HW_VERSION_2) && SOC_I2S_HW_VERSION_2
-            i2s_pdm_tx_clk_config_t cfg = I2S_PDM_TX_CLK_DAC_DEFAULT_CONFIG(hz);
-            // Keep runtime sample-rate changes in the same clock mode as init.
-            cfg.up_sample_fs = 480;
+            i2s_pdm_tx_clk_config_t cfg = makePdmDacClockConfig(hz);
             return i2s_channel_reconfig_pdm_tx_clock(s.txHandle, &cfg);
 #else
             (void)hz;
