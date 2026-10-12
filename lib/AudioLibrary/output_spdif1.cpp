@@ -5,6 +5,7 @@
 #include <cstring>
 #include <esp_err.h>
 #include <esp_log.h>
+#include <esp_timer.h>
 #include "i2s_port.h"
 
 namespace {
@@ -13,6 +14,15 @@ constexpr uint8_t PREAMBLE_B = 0x17; // B preamble polarity for a preceding HIGH
 constexpr uint8_t PREAMBLE_M = 0x1D; // M preamble polarity for a preceding HIGH level
 constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH level
 constexpr uint8_t CHANNEL_STATUS_WORD_LENGTH_16BIT = 0x02;
+
+void updateAtomicMax(std::atomic<uint32_t> &target, uint32_t value) {
+    uint32_t current = target.load(std::memory_order_relaxed);
+    while (current < value &&
+           !target.compare_exchange_weak(current, value,
+                                         std::memory_order_relaxed,
+                                         std::memory_order_relaxed)) {
+    }
+}
 
 uint8_t spdifSampleRateCode(float rate) {
     const uint32_t hz = static_cast<uint32_t>(std::lround(rate));
@@ -92,7 +102,7 @@ bool oddParity8(uint8_t value) {
 uint64_t encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble) {
     // 16-bit PCM is MSB-aligned in the 20-bit audio field (subframe bits 12..27).
     uint32_t raw = static_cast<uint32_t>(static_cast<uint16_t>(sample)) << 12U;
-    if (channelStatus) raw |= 1UL << 30U; // C bit; V and U remain zero.
+    if (channelStatus) raw |= 1UL << 6U; // C bit (subframe bit 6); V and U remain zero.
 
     // P makes bits 4..31 have even parity; the preamble is excluded from parity.
     raw |= static_cast<uint32_t>(parity32(raw & 0x7FFFFFF0UL)) << 31U;
@@ -137,12 +147,37 @@ uint32_t AudioOutputSPDIF1::txCallbackCount() const {
     return txCallbackCountValue.load(std::memory_order_relaxed);
 }
 
+uint32_t AudioOutputSPDIF1::txEncodedBlockCount() const {
+    return txEncodedBlockCountValue.load(std::memory_order_relaxed);
+}
+
+uint32_t AudioOutputSPDIF1::txQueueDropCount() const {
+    return txQueueDropCountValue.load(std::memory_order_relaxed);
+}
+
+uint32_t AudioOutputSPDIF1::txWriteErrorCount() const {
+    return txWriteErrorCountValue.load(std::memory_order_relaxed);
+}
+
+uint32_t AudioOutputSPDIF1::maxEncodeTimeUs() const {
+    return maxEncodeTimeUsValue.load(std::memory_order_relaxed);
+}
+
+uint32_t AudioOutputSPDIF1::maxWriteTimeUs() const {
+    return maxWriteTimeUsValue.load(std::memory_order_relaxed);
+}
+
 void AudioOutputSPDIF1::setRunning(bool value) {
     running.store(value ? 1U : 0U, std::memory_order_release);
 }
 
 void AudioOutputSPDIF1::resetTxCallbackCount() {
     txCallbackCountValue.store(0, std::memory_order_relaxed);
+    txEncodedBlockCountValue.store(0, std::memory_order_relaxed);
+    txQueueDropCountValue.store(0, std::memory_order_relaxed);
+    txWriteErrorCountValue.store(0, std::memory_order_relaxed);
+    maxEncodeTimeUsValue.store(0, std::memory_order_relaxed);
+    maxWriteTimeUsValue.store(0, std::memory_order_relaxed);
 }
 
 void AudioOutputSPDIF1::updateChannelStatus(float rate) {
@@ -312,8 +347,14 @@ void AudioOutputSPDIF1::update() {
 
     if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
         BlockPair oldPair;
-        if (xQueueReceive(txQueue, &oldPair, 0) == pdTRUE) releasePair(oldPair);
-        if (xQueueSend(txQueue, &pair, 0) != pdTRUE) releasePair(pair);
+        if (xQueueReceive(txQueue, &oldPair, 0) == pdTRUE) {
+            txQueueDropCountValue.fetch_add(1, std::memory_order_relaxed);
+            releasePair(oldPair);
+        }
+        if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
+            txQueueDropCountValue.fetch_add(1, std::memory_order_relaxed);
+            releasePair(pair);
+        }
     }
 }
 
@@ -341,7 +382,6 @@ bool AudioOutputSPDIF1::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, voi
 }
 
 void AudioOutputSPDIF1::txTaskLoop() {
-    static uint32_t writeErrorCount = 0;
     static uint32_t lastErrorLogMs = 0;
 
     BlockPair pair{nullptr, nullptr};
@@ -351,6 +391,7 @@ void AudioOutputSPDIF1::txTaskLoop() {
         const int16_t *left = pair.left ? pair.left->data : nullptr;
         const int16_t *right = pair.right ? pair.right->data : nullptr;
 
+        const int64_t encodeStartUs = esp_timer_get_time();
         for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
             const int16_t leftSample = left ? left[i] : 0;
             const int16_t rightSample = right ? right[i] : 0;
@@ -363,17 +404,29 @@ void AudioOutputSPDIF1::txTaskLoop() {
             if (++frameInBlock >= 192U) frameInBlock = 0;
         }
 
+        const uint32_t encodeElapsedUs =
+            static_cast<uint32_t>(esp_timer_get_time() - encodeStartUs);
+        updateAtomicMax(maxEncodeTimeUsValue, encodeElapsedUs);
+
         size_t bytesWritten = 0;
+        const int64_t writeStartUs = esp_timer_get_time();
         const esp_err_t err = i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);
+        const uint32_t writeElapsedUs =
+            static_cast<uint32_t>(esp_timer_get_time() - writeStartUs);
+        updateAtomicMax(maxWriteTimeUsValue, writeElapsedUs);
+
         if (err != ESP_OK || bytesWritten != sizeof(encodedBuffer)) {
+            const uint32_t errorCount =
+                txWriteErrorCountValue.fetch_add(1, std::memory_order_relaxed) + 1;
             const uint32_t now = millis();
-            ++writeErrorCount;
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
                 ESP_LOGE(TAG, "TX error #%lu: %s, bytes=%lu/%lu",
-                         static_cast<unsigned long>(writeErrorCount), esp_err_to_name(err),
+                         static_cast<unsigned long>(errorCount), esp_err_to_name(err),
                          static_cast<unsigned long>(bytesWritten), static_cast<unsigned long>(sizeof(encodedBuffer)));
                 lastErrorLogMs = now;
             }
+        } else {
+            txEncodedBlockCountValue.fetch_add(1, std::memory_order_relaxed);
         }
 
         releasePair(pair);
