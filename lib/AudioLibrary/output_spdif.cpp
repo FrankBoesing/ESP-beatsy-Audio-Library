@@ -1,12 +1,10 @@
 #include "output_spdif.h"
 
 #include <cmath>
-#include <esp_log.h>
 #include "i2s_port.h"
 #include "spdif_bmc_encoder.h"
 
 namespace {
-constexpr char TAG[] = "AudioOutputSPDIF";
 constexpr uint8_t PREAMBLE_B = 0x17; // B preamble polarity for a preceding HIGH level
 constexpr uint8_t PREAMBLE_M = 0x1D; // M preamble polarity for a preceding HIGH level
 constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH level
@@ -89,7 +87,6 @@ OSIZE
 bool AudioOutputSPDIF::beginInternal() {
     if (isRunning()) return true;
     if (spdifPins.dout < 0) {
-        ESP_LOGE(TAG, "Invalid S/PDIF DATA pin: %d", spdifPins.dout);
         return false;
     }
 
@@ -115,7 +112,6 @@ bool AudioOutputSPDIF::beginInternal() {
 
     if (!AudioI2SPort::setEventHandler(controller_, AudioI2SPort::Direction::Tx,
                                        &AudioOutputSPDIF::onI2STransmit, this)) {
-        ESP_LOGE(TAG, "Could not register S/PDIF TX callback");
         AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
         vQueueDelete(txQueue);
