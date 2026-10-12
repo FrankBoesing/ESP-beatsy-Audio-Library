@@ -184,12 +184,12 @@ That uses about 1 KiB of flash for the byte table (versus 512 bytes for a
 16-bit-only table), trading a small amount of flash for fewer run-time parity
 operations while preserving this implementation's existing wire bitstream.
 
-**Validation status:** The earlier direct-GPIO-to-coax test had frequent dropouts.
-After replacing that connection with an optical transmitter, the user reported
-that the dropouts disappeared; the diagnostic run showed zero queue drops and
-zero I²S write errors. The fixed-table encoder refactor preserves the former
-encoder's generated bitstream in offline equivalence checks, but this refactored
-version still needs to be rebuilt and retested on hardware.
+**Validation status:** The user reports that S/PDIF playback through the
+optical transmitter is now continuously clean. The latest diagnostic run showed
+344 callbacks and encoded blocks/s, zero queue drops, zero I²S write errors,
+151 µs maximum encode time and 31 µs maximum write time. Offline equivalence
+checks also confirmed that the fixed-table encoder preserves the former
+unmuted encoder's generated bitstream.
 
 Use 44.1 kHz or 48 kHz for the first hardware tests. Channel status frequency
 codes are provided for common IEC 60958 rates; other rates are marked as
@@ -213,8 +213,14 @@ void loop() {}
 
 `AudioOutputSPDIF` also accepts `AudioOutputSPDIF::Pins{PIN_SPDIF_OUT}` and
 provides `begin()`, `begin(pin)`, `end()`, `isRunning()`,
-`txCallbackCount()`, and `setSampleRate()`. For diagnostics it also exposes
-`txEncodedBlockCount()`, `txQueueDropCount()`, `txWriteErrorCount()`,
+`txCallbackCount()`, `setSampleRate()`, and the Teensy-compatible static
+`AudioOutputSPDIF::mute_PCM(bool)`. Calling `mute_PCM(true)` marks each emitted
+PCM subframe invalid using the IEC 60958 V bit and recalculates parity; calling
+`mute_PCM(false)` restores normal validity. Like the Teensy API, this is a
+static control and affects S/PDIF output instances globally. The mute state is
+sampled once per audio block, and the unmuted encoder is compile-time specialized
+so the per-sample hot loop has no extra mute check. For diagnostics the class
+also exposes `txEncodedBlockCount()`, `txQueueDropCount()`, `txWriteErrorCount()`,
 `maxEncodeTimeUs()`, and `maxWriteTimeUs()`. The output uses I²S controller 0
 and is not an independent sample-rate graph.
 
