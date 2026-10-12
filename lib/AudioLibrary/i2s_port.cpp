@@ -4,6 +4,8 @@
 #include <atomic>
 #include <esp_err.h>
 #include <esp_clk_tree.h>
+#include <hal/i2s_hal.h>
+#include <hal/i2s_ll.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -80,6 +82,94 @@ i2s_pdm_tx_clk_config_t makePdmDacClockConfig(uint32_t rate) {
     cfg.bclk_div = choosePdmDacBclkDivider(rate, cfg.clk_src);
     return cfg;
 }
+
+#if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && \
+    defined(SOC_I2S_HW_VERSION_2) && SOC_I2S_HW_VERSION_2
+void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &cfg) {
+    constexpr uint32_t PDM_BCLK_FACTOR = 64;
+
+    const uint32_t rate = cfg.sample_rate_hz;
+    const uint32_t oversampleRatio =
+        cfg.up_sample_fs != 0 ? cfg.up_sample_fp / cfg.up_sample_fs : 0;
+    if (rate == 0 || oversampleRatio == 0 || cfg.bclk_div < 8) {
+        ESP_LOGW(TAG, "Skipping experimental PDM MCLK correction: invalid clock config");
+        return;
+    }
+
+    uint32_t sourceHz = 0;
+    const auto source = static_cast<soc_module_clk_t>(cfg.clk_src);
+    if (esp_clk_tree_src_get_freq_hz(
+            source, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &sourceHz) != ESP_OK ||
+        sourceHz == 0) {
+        ESP_LOGW(TAG, "Skipping experimental PDM MCLK correction: source clock unavailable");
+        return;
+    }
+
+    const uint64_t mclk64 = static_cast<uint64_t>(rate) * PDM_BCLK_FACTOR *
+                            oversampleRatio * cfg.bclk_div;
+    if (mclk64 == 0 || mclk64 > 0xFFFFFFFFULL) {
+        ESP_LOGW(TAG, "Skipping experimental PDM MCLK correction: target MCLK out of range");
+        return;
+    }
+    const uint32_t targetMclk = static_cast<uint32_t>(mclk64);
+    const uint32_t integerDivider = sourceHz / targetMclk;
+    if (integerDivider < 2 || integerDivider >= 256 ||
+        static_cast<double>(sourceHz) <= static_cast<double>(targetMclk) * 1.99) {
+        ESP_LOGW(TAG, "Skipping experimental PDM MCLK correction: invalid integer divider");
+        return;
+    }
+
+    const uint64_t rateDivider = static_cast<uint64_t>(integerDivider) *
+                                 PDM_BCLK_FACTOR * oversampleRatio * cfg.bclk_div;
+    const double integerRate = static_cast<double>(sourceHz) / rateDivider;
+    const double errorPercent =
+        100.0 * std::fabs(integerRate - static_cast<double>(rate)) / rate;
+
+    // Keep the ESP-IDF low-noise integer divider when its rate error is already
+    // small. This leaves the currently working 48 kHz configuration untouched.
+    constexpr double MAX_INTEGER_RATE_ERROR_PERCENT = 0.5;
+    if (errorPercent <= MAX_INTEGER_RATE_ERROR_PERCENT) {
+        ESP_LOGI(TAG,
+                 "PDM clock %lu Hz: keep IDF integer divider; predicted rate %.2f Hz (error %.3f%%)",
+                 static_cast<unsigned long>(rate), integerRate, errorPercent);
+        return;
+    }
+
+    // Diagnostic experiment: ESP-IDF 5.5 computes a fractional divider and
+    // then overwrites it with an integer-only divider to reduce PDM noise.
+    // Restore the HAL-calculated fractional divider for rates where that
+    // integer-only divider would cause a significant sample-rate error.
+    hal_utils_clk_div_t divider = {};
+    i2s_hal_calc_mclk_precise_division(sourceHz, targetMclk, &divider);
+    if (divider.integer < 2 || divider.denominator == 0) {
+        ESP_LOGW(TAG, "Could not calculate fractional PDM MCLK divider for %lu Hz",
+                 static_cast<unsigned long>(rate));
+        return;
+    }
+
+    i2s_dev_t *hw = I2S_LL_GET_HW(0);
+    i2s_ll_tx_set_mclk(hw, &divider);
+    i2s_ll_tx_update(hw);
+
+    const uint64_t dividerNumerator =
+        static_cast<uint64_t>(divider.integer) * divider.denominator + divider.numerator;
+    const double actualMclk = static_cast<double>(sourceHz) * divider.denominator /
+                              static_cast<double>(dividerNumerator);
+    const double predictedRate =
+        actualMclk / (PDM_BCLK_FACTOR * oversampleRatio * cfg.bclk_div);
+    ESP_LOGW(TAG,
+             "EXPERIMENTAL fractional PDM MCLK: source=%lu Hz, requested=%lu Hz, BCLK divider=%lu, "
+             "integer-divider estimate=%.2f Hz, divider=%lu+%lu/%lu, predicted=%.2f Hz. "
+             "Listen for added PDM noise.",
+             static_cast<unsigned long>(sourceHz), static_cast<unsigned long>(rate),
+             static_cast<unsigned long>(cfg.bclk_div), integerRate,
+             static_cast<unsigned long>(divider.integer),
+             static_cast<unsigned long>(divider.numerator),
+             static_cast<unsigned long>(divider.denominator), predictedRate);
+}
+#else
+void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &) {}
+#endif
 
 struct PortState {
     i2s_chan_handle_t txHandle = nullptr;
@@ -311,6 +401,7 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
 
         err = i2s_channel_init_pdm_tx_mode(s.txHandle, &pdmCfg);
         if (err == ESP_OK) {
+            applyPrecisePdmMclkIfNeeded(pdmCfg.clk_cfg);
             i2s_event_callbacks_t cb = {};
             cb.on_sent = &dispatchTx;
             err = i2s_channel_register_event_callback(s.txHandle, &cb, &s);
@@ -677,7 +768,9 @@ bool AudioI2SPort::setSampleRate(float rate) {
 #if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && \
     defined(SOC_I2S_HW_VERSION_2) && SOC_I2S_HW_VERSION_2
             i2s_pdm_tx_clk_config_t cfg = makePdmDacClockConfig(hz);
-            return i2s_channel_reconfig_pdm_tx_clock(s.txHandle, &cfg);
+            const esp_err_t err = i2s_channel_reconfig_pdm_tx_clock(s.txHandle, &cfg);
+            if (err == ESP_OK) applyPrecisePdmMclkIfNeeded(cfg);
+            return err;
 #else
             (void)hz;
             return ESP_ERR_NOT_SUPPORTED;
