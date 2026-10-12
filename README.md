@@ -42,6 +42,7 @@ These examples are present in the repository. Their board-specific pin and codec
 | [Guitar synthesis](examples/Synthesis/Guitar/Guitar.cpp) | Uses six Karplus–Strong string generators, mixers and chord data to synthesize strummed chords. |
 | [Polyphonic synth music](examples/Synthesis/PlaySynthMusic/main.cpp) | Plays a score stored in memory using 16 waveform voices, envelopes and left/right AudioMixerN instances. |
 | [Simple Drum](examples/Synthesis/SimpleDrum/SimpleDrum.cpp) | Triggers four simple-drum synthesizers and mixes them to stereo output. |
+| [S/PDIF Diagnostics](examples/SPDIF_Diagnostics.cpp) | Generates a 1 kHz sine at 44.1 kHz and reports S/PDIF queue, encoding and I²S write diagnostics. |
 
 
 
@@ -94,7 +95,8 @@ These examples are present in the repository. Their board-specific pin and codec
 | **AudioOutputI2S** | I2S master output using the ESP-IDF driver. Supports explicit BCLK/WS/DOUT/MCLK pins and stereo-to-mono output selection. |
 | **AudioOutputI2S2** | Convenience wrapper selecting the second I2S controller. Board-specific pins must be supplied. |
 | **AudioOutputI2S3** | Convenience wrapper selecting the third I2S controller, where supported by the SoC. |
-| **AudioOutputPDM** | Hardware PCM-to-PDM DAC output on I2S0; supports mono or stereo data lines on compatible targets. |\n| **AudioOutputSPDIF** | Software IEC 60958 consumer S/PDIF output using a fixed BMC lookup table and I2S0. Requires an optical transmitter or a suitable coaxial line driver; do not connect GPIO directly to coax. |
+| **AudioOutputPDM** | Hardware PCM-to-PDM DAC output on I2S0; supports mono or stereo data lines on compatible targets. |
+| **AudioOutputSPDIF** | Software IEC 60958 consumer S/PDIF output using a fixed BMC lookup table and I2S0. Requires an optical transmitter or a suitable coaxial line driver; do not connect GPIO directly to coax. |
 
 
 The I2S2/I2S3 wrappers do not add extra hardware: they select a controller index. Whether those controllers exist, can be used concurrently and expose suitable pins depends on the particular ESP32 variant and board. AudioControlES8311 and AudioControlES8388 are available as codec-control classes, not as audio-stream inputs or outputs themselves. PDM direct-DAC output requires a compatible SoC/ESP-IDF combination; see [I2S.md](lib/I2S.md) for pin mapping and clock configuration.
