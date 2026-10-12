@@ -102,7 +102,7 @@ bool oddParity8(uint8_t value) {
 uint64_t encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble) {
     // 16-bit PCM is MSB-aligned in the 20-bit audio field (subframe bits 12..27).
     uint32_t raw = static_cast<uint32_t>(static_cast<uint16_t>(sample)) << 12U;
-    if (channelStatus) raw |= 1UL << 6U; // C bit (subframe bit 6); V and U remain zero.
+    if (channelStatus) raw |= 1UL << 30U; // IEC 60958 C bit; V and U remain zero.
 
     // P makes bits 4..31 have even parity; the preamble is excluded from parity.
     raw |= static_cast<uint32_t>(parity32(raw & 0x7FFFFFF0UL)) << 31U;
