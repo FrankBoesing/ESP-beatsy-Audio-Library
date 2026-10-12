@@ -40,7 +40,7 @@
 #include "input_i2s2.h"
 #include "output_i2s3.h"
 #include "input_i2s3.h"
-#include "output_spdif1.h"
+#include "output_spdif.h"
 #include "output_pdm.h"
 //#include "input_usb.h"
 //#include "output_usb.h"
