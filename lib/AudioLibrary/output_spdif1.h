@@ -41,6 +41,11 @@ class AudioOutputSPDIF1 : public AudioStream {
 
     bool isRunning() const;
     uint32_t txCallbackCount() const;
+    uint32_t txEncodedBlockCount() const;
+    uint32_t txQueueDropCount() const;
+    uint32_t txWriteErrorCount() const;
+    uint32_t maxEncodeTimeUs() const;
+    uint32_t maxWriteTimeUs() const;
     const Pins &pins() const { return spdifPins; }
     bool setSampleRate(float sampleRate);
 
@@ -63,6 +68,11 @@ class AudioOutputSPDIF1 : public AudioStream {
 
     std::atomic<uint32_t> running{0};
     std::atomic<uint32_t> txCallbackCountValue{0};
+    std::atomic<uint32_t> txEncodedBlockCountValue{0};
+    std::atomic<uint32_t> txQueueDropCountValue{0};
+    std::atomic<uint32_t> txWriteErrorCountValue{0};
+    std::atomic<uint32_t> maxEncodeTimeUsValue{0};
+    std::atomic<uint32_t> maxWriteTimeUsValue{0};
     std::atomic<uint8_t> sampleRateCode{0};
 
     // Reused exclusively by the TX task: four 16-bit I2S frames per PCM
