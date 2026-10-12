@@ -154,7 +154,7 @@ void AudioSynthKarplusStrong::update() {
 
     int16_t prior = localBufferIndex > 0 ? buffer[localBufferIndex - 1U] : buffer[localBufferLen - 1U];
 
-#pragma GCC unroll 4
+GCC_UNROLL
     for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const int16_t input = buffer[localBufferIndex];
 

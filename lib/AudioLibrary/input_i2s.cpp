@@ -135,7 +135,7 @@ void AudioInputI2S::update() {
     if (write == read) return;
 
     const int16_t *src = rxSampleRing[read & (RX_RING_BLOCKS - 1U)];
-#pragma GCC unroll 4
+GCC_UNROLL
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         captured[i * 2U] = src[i * 2U];
         captured[i * 2U + 1U] = src[i * 2U + 1U];
@@ -156,7 +156,7 @@ void AudioInputI2S::update() {
         return;
     }
 
-#pragma GCC unroll 4
+GCC_UNROLL
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         left->data[i] = captured[i * 2U];
         right->data[i] = captured[i * 2U + 1U];

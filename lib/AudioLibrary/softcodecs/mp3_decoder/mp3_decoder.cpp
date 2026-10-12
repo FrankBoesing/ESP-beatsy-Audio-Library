@@ -833,9 +833,13 @@ int32_t MP3Decoder::MP3GetNextFrameInfo(uint8_t *buf) {
  * Return:      none
  **********************************************************************************************************************/
 void MP3Decoder::MP3ClearBadFrame(int16_t *outbuf) {
+    /*
     int32_t i;
     for (i = 0; i < m_MP3DecInfo->nGrans * m_MP3DecInfo->nGranSamps * m_MP3DecInfo->nChans; i++)
         outbuf[i] = 0;
+    */
+    int32_t totalBytes = m_MP3DecInfo->nGrans * m_MP3DecInfo->nGranSamps * m_MP3DecInfo->nChans * sizeof(int16_t);
+    memset(outbuf, 0, totalBytes);
 }
 /***********************************************************************************************************************
  * Function:    MP3Decode
@@ -1248,10 +1252,12 @@ int32_t MP3Decoder::DecodeHuffmanPairs(int32_t *xy, int32_t nVals, int32_t tabId
 
     if (tabType == noBits) {
         /* table 0, no data, x = y = 0 */
+        /*
         for (i = 0; i < nVals; i += 2) {
             xy[i + 0] = 0;
             xy[i + 1] = 0;
-        }
+        }*/ //fb
+        memset(xy, 0, nVals * sizeof(int32_t));
         return 0;
     } else if (tabType == oneShot) {
         /* single lookup, no escapes */
@@ -1623,8 +1629,14 @@ int32_t MP3Decoder::DecodeHuffman(uint8_t *buf, int32_t *bitOffset, int32_t huff
                            bitsLeft, buf, *bitOffset);
 
     assert(m_HuffmanInfo->nonZeroBound[ch] <= m_MAX_NSAMP);
+    /*
     for (i = m_HuffmanInfo->nonZeroBound[ch]; i < m_MAX_NSAMP; i++)
         m_HuffmanInfo->huffDecBuf[ch][i] = 0;
+    */ //fb
+    size_t clearSamps = m_MAX_NSAMP - m_HuffmanInfo->nonZeroBound[ch];
+    if (clearSamps > 0) {
+        memset(&m_HuffmanInfo->huffDecBuf[ch][m_HuffmanInfo->nonZeroBound[ch]], 0, clearSamps * sizeof(int32_t));
+    }
 
     /* If bits used for 576 samples < huffBlockBits, then the extras are considered
      *  to be stuffing bits (throw away, but need to return correct bitstream position)
@@ -2410,6 +2422,7 @@ void MP3Decoder::WinPrevious(int32_t *xPrev, int32_t *xPrevWin, int32_t btPrev) 
         wpHi = wpLo + 17;
         xpwLo = xPrevWin;
         xpwHi = xPrevWin + 17;
+#pragma GCC unroll 3
         for (i = 9; i > 0; i--) {
             x = *xp++;
             wLo = *wpLo++;
@@ -2939,6 +2952,7 @@ int32_t MP3Decoder::HybridTransform(int32_t *xCurr, int32_t *xPrev, int32_t y[m_
 
     /* clear rest of blocks */
     for (; i < 32; i++) {
+#pragma GCC unroll 2
         for (j = 0; j < 18; j++)
             y[j][i] = 0;
     }

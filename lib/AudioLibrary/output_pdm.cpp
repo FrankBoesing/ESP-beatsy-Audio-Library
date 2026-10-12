@@ -23,6 +23,7 @@ void AudioOutputPDM::setRunning(bool value) {
     running.store(value ? 1U : 0U, std::memory_order_release);
 }
 
+OSIZE
 bool AudioOutputPDM::setChannelCount(uint channels) {
     if (isRunning() || channels < 1 || channels > 2) return false;
     if (channels == 2 && pdmPins.dataRight < 0) return false;
@@ -30,6 +31,7 @@ bool AudioOutputPDM::setChannelCount(uint channels) {
     return true;
 }
 
+OSIZE
 bool AudioOutputPDM::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate < 16000.0f || rate > 48000.0f) return false;
 
@@ -66,6 +68,7 @@ bool AudioOutputPDM::begin() {
     return beginInternal();
 }
 
+OSIZE
 bool AudioOutputPDM::begin(const Pins &pins) {
     end();
     pdmPins = pins;
@@ -78,15 +81,18 @@ bool AudioOutputPDM::begin(int8_t data) {
     return begin(Pins{data, -1});
 }
 
+OSIZE
 bool AudioOutputPDM::begin(int8_t dataLeft, int8_t dataRight) {
     if (dataRight < 0) return begin(dataLeft);
     return begin(Pins{dataLeft, dataRight});
 }
 
+OSIZE
 bool AudioOutputPDM::beginHardware() {
     return beginInternal();
 }
 
+OSIZE
 bool AudioOutputPDM::beginInternal() {
     if (isRunning()) return true;
     if (pdmPins.dataLeft < 0 || (numChannels == 2 && pdmPins.dataRight < 0)) {
@@ -189,6 +195,7 @@ bool AudioOutputPDM::beginInternal() {
     return true;
 }
 
+OSIZE
 void AudioOutputPDM::end() {
     if (!isRunning() && txQueue == nullptr && txHandle == nullptr) return;
 
@@ -222,6 +229,7 @@ void AudioOutputPDM::end() {
     }
 }
 
+OSPEED
 void AudioOutputPDM::update() {
     BlockPair pair;
     pair.left = receiveReadOnly(0);
@@ -248,6 +256,7 @@ void AudioOutputPDM::update() {
     }
 }
 
+OSPEED
 void AudioOutputPDM::releasePair(BlockPair &pair) {
     if (pair.left != nullptr) {
         release(pair.left);
@@ -259,10 +268,12 @@ void AudioOutputPDM::releasePair(BlockPair &pair) {
     }
 }
 
+OSPEED
 void AudioOutputPDM::txTaskEntry(void *arg) {
     static_cast<AudioOutputPDM *>(arg)->txTaskLoop();
 }
 
+OSPEED
 bool AudioOutputPDM::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
     auto *output = static_cast<AudioOutputPDM *>(userContext);
     if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) return false;
@@ -270,6 +281,7 @@ bool AudioOutputPDM::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *
     return AudioStream::update_all_from_isr();
 }
 
+OSPEED
 void AudioOutputPDM::txTaskLoop() {
     static uint32_t writeErrorCount = 0;
     static uint32_t lastErrorLogMs = 0;

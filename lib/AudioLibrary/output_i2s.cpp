@@ -230,7 +230,7 @@ void AudioOutputI2S::txTaskLoop() {
         if (numChannels == 1) {
             // Mono: L/R mitteln und dasselbe Sample auf beide Slots legen.
             //TODO: Check this in godbolt. Is it optimized?
-#pragma GCC unroll 4
+GCC_UNROLL
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
                 int32_t mono;
 
@@ -252,7 +252,7 @@ void AudioOutputI2S::txTaskLoop() {
         } else {
             // Stereo: linker und rechter Kanal bleiben getrennt.
             if (left && right) {
-#pragma GCC unroll 4
+GCC_UNROLL
                 for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
                     const uint32_t l = static_cast<uint16_t>(left[i]);
                     const uint32_t r = static_cast<uint16_t>(right[i]);
@@ -260,12 +260,12 @@ void AudioOutputI2S::txTaskLoop() {
                     buffer[i] = l | (r << 16);
                 }
             } else if (left) {
-#pragma GCC unroll 4
+GCC_UNROLL
                 for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
                     buffer[i] = static_cast<uint16_t>(left[i]);
                 }
             } else if (right) {
-#pragma GCC unroll 4
+GCC_UNROLL
                 for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
                     buffer[i] = static_cast<uint32_t>(static_cast<uint16_t>(right[i])) << 16;
                 }
