@@ -61,7 +61,7 @@ high-rate PDM stream; the AudioStream processing loop handles PCM blocks only.
   suitable low-pass filter before the amplifier; do not connect a speaker
   directly to an ESP32 GPIO.
 - PDM controller mode and normal I²S0 TX are mutually exclusive; do not run
-  `AudioOutputPDM`, `AudioOutputI2S`, or `AudioOutputSPDIF1` simultaneously.
+  `AudioOutputPDM`, `AudioOutputI2S`, or `AudioOutputSPDIF` simultaneously.
 - Accepts PCM sample rates from 16 kHz through 48 kHz.
 - The DAC clock uses `up_sample_fs = 480`, the documented alternative DAC mode
   in which the PDM bit clock is `128 × PCM sample rate`. Initialization and
@@ -139,7 +139,7 @@ Reference: [ESP-IDF I²S PDM TX mode](https://docs.espressif.com/projects/esp-id
 
 ## S/PDIF output 1
 
-`AudioOutputSPDIF1` is an output-only IEC 60958 / consumer S/PDIF encoder. It
+`AudioOutputSPDIF` is an output-only IEC 60958 / consumer S/PDIF encoder. It
 uses the I²S controller 0 serializer but performs the S/PDIF Biphase Mark Code
 (BMC) encoding in software. It is separate from normal `AudioOutputI2S` mode;
 both cannot use I²S controller 0 simultaneously.
@@ -186,7 +186,7 @@ unspecified, and the physical I²S clock must still be supported by the target.
 ```cpp
 #include "Audio.h"
 
-AudioOutputSPDIF1 spdifOut(PIN_SPDIF_OUT);
+AudioOutputSPDIF spdifOut(PIN_SPDIF_OUT);
 // Connect a stereo AudioStream source to spdifOut inputs 0 and 1.
 
 void setup() {
@@ -197,7 +197,7 @@ void setup() {
 void loop() {}
 ```
 
-`AudioOutputSPDIF1` also accepts `AudioOutputSPDIF1::Pins{PIN_SPDIF_OUT}` and
+`AudioOutputSPDIF` also accepts `AudioOutputSPDIF::Pins{PIN_SPDIF_OUT}` and
 provides `begin()`, `begin(pin)`, `end()`, `isRunning()`,
 `txCallbackCount()`, and `setSampleRate()`. For diagnostics it also exposes
 `txEncodedBlockCount()`, `txQueueDropCount()`, `txWriteErrorCount()`,
