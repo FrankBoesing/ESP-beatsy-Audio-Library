@@ -143,7 +143,7 @@ Reference: [ESP-IDF I²S PDM TX mode](https://docs.espressif.com/projects/esp-id
 uses the I²S controller 0 serializer but performs the S/PDIF Biphase Mark Code
 (BMC) encoding in software. `AudioOutputSPDIF2` and `AudioOutputSPDIF3` are thin
 wrappers selecting controller index 1 and 2 respectively; they reuse the same
-encoder and diagnostics implementation. Each S/PDIF instance requires exclusive
+encoder implementation. Each S/PDIF instance requires exclusive
 TX use of its selected controller, so do not run an S/PDIF output and a normal
 `AudioOutputI2S` output on the same controller simultaneously. Controller 2
 exists only on targets that implement a third I²S peripheral.
@@ -188,13 +188,6 @@ That uses about 1 KiB of flash for the byte table (versus 512 bytes for a
 16-bit-only table), trading a small amount of flash for fewer run-time parity
 operations while preserving this implementation's existing wire bitstream.
 
-**Validation status:** The user reports that S/PDIF playback through the
-optical transmitter is now continuously clean. The latest diagnostic run showed
-344 callbacks and encoded blocks/s, zero queue drops, zero I²S write errors,
-151 µs maximum encode time and 31 µs maximum write time. Offline equivalence
-checks also confirmed that the fixed-table encoder preserves the former
-unmuted encoder's generated bitstream.
-
 Use 44.1 kHz or 48 kHz for the first hardware tests. Channel status frequency
 codes are provided for common IEC 60958 rates; other rates are marked as
 unspecified, and the physical I²S clock must still be supported by the target.
@@ -217,24 +210,15 @@ void loop() {}
 
 `AudioOutputSPDIF` also accepts `AudioOutputSPDIF::Pins{PIN_SPDIF_OUT}` and
 provides `begin()`, `begin(pin)`, `end()`, `isRunning()`,
-`txCallbackCount()`, `setSampleRate()`, and the Teensy-compatible static
+`setSampleRate()`, and the Teensy-compatible static
 `AudioOutputSPDIF::mute_PCM(bool)`. Calling `mute_PCM(true)` marks each emitted
 PCM subframe invalid using the IEC 60958 V bit and recalculates parity; calling
 `mute_PCM(false)` restores normal validity. Like the Teensy API, this is a
 static control and affects S/PDIF output instances globally. The mute state is
 sampled once per audio block, and the unmuted encoder is compile-time specialized
-so the per-sample hot loop has no extra mute check. For diagnostics the class
-also exposes `txEncodedBlockCount()`, `txQueueDropCount()`, `txWriteErrorCount()`,
-`maxEncodeTimeUs()`, and `maxWriteTimeUs()`. The output uses I²S controller 0
-and is not an independent sample-rate graph.
-
-A non-zero `txQueueDropCount()` means the TX task did not consume blocks fast
-enough and the queue discarded audio. A non-zero `txWriteErrorCount()` records
-a failed or partial I²S write. Compare `txCallbackCount()` and
-`txEncodedBlockCount()` over the same interval; at a stable 44.1 kHz setup,
-both should increase at approximately 345 blocks per second. Maximum encode
-time should remain comfortably below one audio-block period (about 2.9 ms at
-44.1 kHz).
+so the per-sample hot loop has no extra mute check. The `AudioOutputSPDIF2` and
+`AudioOutputSPDIF3` wrappers inherit the same controls and use I²S controller 1
+and 2 respectively.
 
 ### Electrical interface
 
@@ -247,4 +231,3 @@ GPIO's logic level and the approximately 5.64 MHz bit clock at 44.1 kHz audio.
 
 - S/PDIF input / receiver.
 - TDM.
-- Automated hardware validation across ESP32 variants.
