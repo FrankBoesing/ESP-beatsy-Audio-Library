@@ -12,7 +12,6 @@ constexpr char TAG[] = "AudioOutputSPDIF";
 constexpr uint8_t PREAMBLE_B = 0x17; // B preamble polarity for a preceding HIGH level
 constexpr uint8_t PREAMBLE_M = 0x1D; // M preamble polarity for a preceding HIGH level
 constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH level
-constexpr uint8_t CHANNEL_STATUS_WORD_LENGTH_16BIT = 0x02;
 
 // Shared state intentionally matches the static mute_PCM() API of Teensy.
 std::atomic<bool> pcmMuted{false};
