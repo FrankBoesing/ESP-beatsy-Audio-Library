@@ -1,8 +1,6 @@
 #include "spdif_bmc_encoder.h"
 
 namespace spdif_bmc {
-namespace {
-
 // Fixed BMC byte lookup in read-only .rodata (flash-mapped on ESP32).
 // Bits 0..15 contain the encoded BMC half-bit levels for a byte, MSB-first.
 // Bit 16 contains the byte's data parity, folded into the same table entry.
@@ -74,60 +72,9 @@ alignas(32) const uint32_t BMC_BYTE_TABLE[256] = {
     0x00003555UL, 0x00014AAAUL, 0x00012AAAUL, 0x00005555UL,
 };
 
-// Four input bits encoded as eight BMC half-bit levels, starting from HIGH.
 const uint8_t BMC_NIBBLE_TABLE[16] = {
     0x33, 0x4C, 0x2C, 0x53, 0x34, 0x4B, 0x2B, 0x54,
     0x32, 0x4D, 0x2D, 0x52, 0x35, 0x4A, 0x2A, 0x55,
 };
-
-// The eight auxiliary bits preceding the 16-bit PCM sample are zero. With
-// this encoder's polarity and HIGH starting phase, their fixed BMC encoding
-// is 0x3333 and they do not change the phase for the following sample byte.
-constexpr uint16_t BMC_ZERO_BYTE = 0x3333;
-
-} // namespace
-
-void encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble,
-                    uint16_t *destination) {
-    if (destination == nullptr) return;
-
-    const uint16_t sampleBits = static_cast<uint16_t>(sample);
-    const uint32_t lowEntry = BMC_BYTE_TABLE[sampleBits & 0xFFU];
-    const uint32_t highEntry = BMC_BYTE_TABLE[sampleBits >> 8U];
-
-    const bool lowParity = ((lowEntry >> 16U) & 1U) != 0;
-    const bool highParity = ((highEntry >> 16U) & 1U) != 0;
-
-    // IEC 60958 bits 4..31 require even parity. The zero auxiliary field adds
-    // no parity, so the parity bit is the XOR of the two sample-byte parities
-    // and the C bit. This replaces the former 32-bit parity-folding routine.
-    const bool parityBit = lowParity ^ highParity ^ channelStatus;
-    const uint8_t statusNibble = static_cast<uint8_t>(
-        (channelStatus ? 0x04U : 0U) | (parityBit ? 0x08U : 0U));
-
-    const uint16_t lowCode = static_cast<uint16_t>(lowEntry);
-    uint16_t highCode = static_cast<uint16_t>(highEntry);
-
-    // Table entries assume a HIGH phase at byte start. Each odd-parity byte
-    // flips the ending BMC phase; complement the next table word when needed.
-    bool phaseHigh = true;
-    phaseHigh ^= lowParity;
-    if (!phaseHigh) highCode = static_cast<uint16_t>(~highCode);
-    phaseHigh ^= highParity;
-
-    uint8_t tail = BMC_NIBBLE_TABLE[statusNibble];
-    if (!phaseHigh) tail = static_cast<uint8_t>(~tail);
-
-    // Assemble directly into the DMA buffer. This avoids building a 64-bit
-    // temporary and then splitting it into four 16-bit words.
-    destination[0] = static_cast<uint16_t>(
-        (static_cast<uint16_t>(preamble) << 8U) | (BMC_ZERO_BYTE >> 8U));
-    destination[1] = static_cast<uint16_t>(
-        ((BMC_ZERO_BYTE & 0xFFU) << 8U) | (lowCode >> 8U));
-    destination[2] = static_cast<uint16_t>(
-        (lowCode << 8U) | (highCode >> 8U));
-    destination[3] = static_cast<uint16_t>(
-        (highCode << 8U) | tail);
-}
 
 } // namespace spdif_bmc
