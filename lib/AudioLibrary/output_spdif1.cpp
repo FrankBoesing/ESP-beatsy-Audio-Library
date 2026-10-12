@@ -9,9 +9,9 @@
 
 namespace {
 constexpr char TAG[] = "AudioOutputSPDIF1";
-constexpr uint8_t PREAMBLE_B = 0xE8; // IEC 60958 block-start preamble
-constexpr uint8_t PREAMBLE_M = 0xE2; // IEC 60958 left-channel preamble
-constexpr uint8_t PREAMBLE_W = 0xE4; // IEC 60958 right-channel preamble
+constexpr uint8_t PREAMBLE_B = 0x17; // B preamble polarity for a preceding HIGH level
+constexpr uint8_t PREAMBLE_M = 0x1D; // M preamble polarity for a preceding HIGH level
+constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH level
 constexpr uint8_t CHANNEL_STATUS_WORD_LENGTH_16BIT = 0x02;
 
 uint8_t spdifSampleRateCode(float rate) {
@@ -86,9 +86,9 @@ bool oddParity8(uint8_t value) {
     return (value & 1U) != 0;
 }
 
-// Build one 64-half-bit subframe. The IEC 60958 preambles end LOW, so the
-// first normal BMC data bit starts from a LOW phase. Bits 4..31 are transmitted
-// LSB first; parity makes their total number of 1 bits even, preserving phase.
+// Build one 64-half-bit subframe. These preamble polarities are selected for
+// a preceding HIGH level; even parity keeps the final BMC phase HIGH. Bits
+// 4..31 are transmitted LSB first.
 uint64_t encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble) {
     // 16-bit PCM is MSB-aligned in the 20-bit audio field (subframe bits 12..27).
     uint32_t raw = static_cast<uint32_t>(static_cast<uint16_t>(sample)) << 12U;
@@ -98,7 +98,7 @@ uint64_t encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble) {
     raw |= static_cast<uint32_t>(parity32(raw & 0x7FFFFFF0UL)) << 31U;
 
     uint64_t encoded = preamble;
-    bool phaseHigh = false;
+    bool phaseHigh = true;
     for (uint8_t shift = 4; shift < 28; shift += 8) {
         const uint8_t byte = static_cast<uint8_t>(raw >> shift);
         uint16_t chunk = BMC_BYTE[byte];
