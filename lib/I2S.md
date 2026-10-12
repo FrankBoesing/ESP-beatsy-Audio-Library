@@ -66,6 +66,7 @@ high-rate PDM stream; the AudioStream processing loop handles PCM blocks only.
 - The DAC clock uses `up_sample_fs = 480`, the documented alternative DAC mode
   in which the PDM bit clock is `128 × PCM sample rate`. Initialization and
   runtime sample-rate reconfiguration use the same setting.
+- Tracking issue: [ESP-IDF #19227 — sample-rate accuracy versus noise-reduction clock divider](https://github.com/espressif/esp-idf/issues/19227), opened to clarify the intended behavior and discuss an official configuration option.
 - **Experimental clock-divider workaround:** In the tested ESP-IDF 5.5
   ESP32-S3 PDM TX path, the driver calculates a precise fractional MCLK divider
   and then replaces it with an integer divider to reduce PDM noise. Depending
