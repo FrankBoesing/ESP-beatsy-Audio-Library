@@ -1,4 +1,4 @@
-# AudioOutputSPDIF1 diagnostic test
+# AudioOutputSPDIF diagnostic test
 
 This isolated test removes radio/player/network activity from the signal path.
 It generates a continuous 1 kHz sine wave at 44.1 kHz and reports TX diagnostics
