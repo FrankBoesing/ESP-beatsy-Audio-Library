@@ -6,7 +6,7 @@
  * S/PDIF transmitter/interface.
  *
  * The program generates a continuous 1 kHz sine at 44.1 kHz and reports
- * AudioOutputSPDIF1 queue, DMA-callback, encoding and write diagnostics.
+ * AudioOutputSPDIF queue, DMA-callback, encoding and write diagnostics.
  */
 
 #include <Arduino.h>
@@ -22,7 +22,7 @@ constexpr float TEST_TONE_HZ = 1000.0f;
 constexpr float TEST_AMPLITUDE = 0.25f;
 
 AudioSynthWaveformSine testTone;
-AudioOutputSPDIF1 spdifOut(static_cast<int8_t>(SPDIF_DATA_PIN));
+AudioOutputSPDIF spdifOut(static_cast<int8_t>(SPDIF_DATA_PIN));
 AudioConnection patchLeft(testTone, 0, spdifOut, 0);
 AudioConnection patchRight(testTone, 0, spdifOut, 1);
 
@@ -86,7 +86,7 @@ void setup() {
     }
 
     Serial.println();
-    Serial.println("AudioOutputSPDIF1 diagnostic");
+    Serial.println("AudioOutputSPDIF diagnostic");
     Serial.printf("DATA GPIO: %d\n", SPDIF_DATA_PIN);
     Serial.printf("PCM rate: %.0f Hz; test tone: %.0f Hz\n",
                   TEST_SAMPLE_RATE_HZ, TEST_TONE_HZ);
