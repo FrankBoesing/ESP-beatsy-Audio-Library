@@ -22,8 +22,7 @@ extern const uint8_t BMC_NIBBLE_TABLE[16];
 #define SPDIF_BMC_ALWAYS_INLINE inline
 #endif
 SPDIF_BMC_ALWAYS_INLINE
-void encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble,
-                    uint16_t *destination) {
+void encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble, uint16_t *destination) {
     if (destination == nullptr) return;
 
     const uint16_t sampleBits = static_cast<uint16_t>(sample);
@@ -36,8 +35,7 @@ void encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble,
     // IEC 60958 bits 4..31 require even parity. The zero auxiliary field adds
     // no parity, so P is the XOR of the two sample-byte parities and C.
     const bool parityBit = lowParity ^ highParity ^ channelStatus;
-    const uint8_t statusNibble = static_cast<uint8_t>(
-        (channelStatus ? 0x04U : 0U) | (parityBit ? 0x08U : 0U));
+    const uint8_t statusNibble = static_cast<uint8_t>((channelStatus ? 0x04U : 0U) | (parityBit ? 0x08U : 0U));
 
     const uint16_t lowCode = static_cast<uint16_t>(lowEntry);
     uint16_t highCode = static_cast<uint16_t>(highEntry);
@@ -55,14 +53,10 @@ void encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble,
     // Pack directly into the DMA buffer: no per-bit loop and no 64-bit
     // temporary followed by a separate split/store pass.
     constexpr uint16_t zeroAuxBmc = 0x3333;
-    destination[0] = static_cast<uint16_t>(
-        (static_cast<uint16_t>(preamble) << 8U) | (zeroAuxBmc >> 8U));
-    destination[1] = static_cast<uint16_t>(
-        ((zeroAuxBmc & 0xFFU) << 8U) | (lowCode >> 8U));
-    destination[2] = static_cast<uint16_t>(
-        (lowCode << 8U) | (highCode >> 8U));
-    destination[3] = static_cast<uint16_t>(
-        (highCode << 8U) | tail);
+    destination[0] = static_cast<uint16_t>((static_cast<uint16_t>(preamble) << 8U) | (zeroAuxBmc >> 8U));
+    destination[1] = static_cast<uint16_t>(((zeroAuxBmc & 0xFFU) << 8U) | (lowCode >> 8U));
+    destination[2] = static_cast<uint16_t>((lowCode << 8U) | (highCode >> 8U));
+    destination[3] = static_cast<uint16_t>((highCode << 8U) | tail);
 }
 #undef SPDIF_BMC_ALWAYS_INLINE
 

@@ -12,14 +12,22 @@ constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH
 uint8_t spdifSampleRateCode(float rate) {
     const uint32_t hz = static_cast<uint32_t>(std::lround(rate));
     switch (hz) {
-        case 32000:  return 0x3;
-        case 44100:  return 0x0;
-        case 48000:  return 0x2;
-        case 88200:  return 0x8;
-        case 96000:  return 0xA;
-        case 176400: return 0xC;
-        case 192000: return 0xE;
-        default:     return 0x1; // Sample frequency not indicated
+    case 32000:
+        return 0x3;
+    case 44100:
+        return 0x0;
+    case 48000:
+        return 0x2;
+    case 88200:
+        return 0x8;
+    case 96000:
+        return 0xA;
+    case 176400:
+        return 0xC;
+    case 192000:
+        return 0xE;
+    default:
+        return 0x1; // Sample frequency not indicated
     }
 }
 
@@ -32,21 +40,15 @@ AudioOutputSPDIF::AudioOutputSPDIF(uint8_t controller, const Pins &pins)
     : AudioStream(2, inputQueueArray), spdifPins(pins), controller_(controller) {}
 AudioOutputSPDIF::~AudioOutputSPDIF() { end(); }
 
-bool AudioOutputSPDIF::isRunning() const {
-    return running.load(std::memory_order_acquire) != 0;
-}
+bool AudioOutputSPDIF::isRunning() const { return running.load(std::memory_order_acquire) != 0; }
 
-void AudioOutputSPDIF::setRunning(bool value) {
-    running.store(value ? 1U : 0U, std::memory_order_release);
-}
+void AudioOutputSPDIF::setRunning(bool value) { running.store(value ? 1U : 0U, std::memory_order_release); }
 
 void AudioOutputSPDIF::updateChannelStatus(float rate) {
     sampleRateCode.store(spdifSampleRateCode(rate), std::memory_order_release);
 }
 
-bool AudioOutputSPDIF::begin() {
-    return beginInternal();
-}
+bool AudioOutputSPDIF::begin() { return beginInternal(); }
 
 bool AudioOutputSPDIF::begin(const Pins &pins) {
     end();
@@ -54,13 +56,9 @@ bool AudioOutputSPDIF::begin(const Pins &pins) {
     return beginInternal();
 }
 
-bool AudioOutputSPDIF::begin(int8_t dout) {
-    return begin(Pins{dout});
-}
+bool AudioOutputSPDIF::begin(int8_t dout) { return begin(Pins{dout}); }
 
-bool AudioOutputSPDIF::beginHardware() {
-    return beginInternal();
-}
+bool AudioOutputSPDIF::beginHardware() { return beginInternal(); }
 
 OSIZE
 bool AudioOutputSPDIF::setSampleRate(float rate) {
@@ -88,13 +86,8 @@ bool AudioOutputSPDIF::beginInternal() {
 
     // SPDIF uses only DATA externally. BCLK and WS remain internal to I2S0.
     const AudioI2SPort::Pins portPins{-1, -1, spdifPins.dout, -1, -1, controller_};
-    const AudioI2SPort::Format format{
-        AudioI2SPort::PeripheralMode::Standard,
-        AudioI2SPort::DataEncoding::SpdifBMC,
-        2,
-        16,
-        4
-    };
+    const AudioI2SPort::Format format{AudioI2SPort::PeripheralMode::Standard, AudioI2SPort::DataEncoding::SpdifBMC, 2,
+                                      16, 4};
 
     if (!AudioI2SPort::acquireTx(portPins, &txHandle, format)) {
         vQueueDelete(txQueue);
@@ -103,8 +96,8 @@ bool AudioOutputSPDIF::beginInternal() {
         return false;
     }
 
-    if (!AudioI2SPort::setEventHandler(controller_, AudioI2SPort::Direction::Tx,
-                                       &AudioOutputSPDIF::onI2STransmit, this)) {
+    if (!AudioI2SPort::setEventHandler(controller_, AudioI2SPort::Direction::Tx, &AudioOutputSPDIF::onI2STransmit,
+                                       this)) {
         AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
         vQueueDelete(txQueue);
@@ -116,9 +109,8 @@ bool AudioOutputSPDIF::beginInternal() {
     updateChannelStatus(AudioStream::sampleRate());
     setRunning(true);
 
-    const BaseType_t result = xTaskCreatePinnedToCore(
-        txTaskEntry, "AudioSPDIF", 4096, this, configMAX_PRIORITIES - 2,
-        &txTask, AUDIO_PROCESSING_CORE);
+    const BaseType_t result = xTaskCreatePinnedToCore(txTaskEntry, "AudioSPDIF", 4096, this, configMAX_PRIORITIES - 2,
+                                                      &txTask, AUDIO_PROCESSING_CORE);
 
     if (result != pdPASS) {
         setRunning(false);
@@ -205,7 +197,6 @@ void AudioOutputSPDIF::update() {
     }
 }
 
-
 void AudioOutputSPDIF::releasePair(BlockPair &pair) {
     if (pair.left != nullptr) {
         release(pair.left);
@@ -218,26 +209,7 @@ void AudioOutputSPDIF::releasePair(BlockPair &pair) {
 }
 
 
-OSPEED void AudioOutputSPDIF::encodeBlock(const int16_t *left, const int16_t *right) {
-    GCC_UNROLL
-    for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        const int16_t leftSample = left ? left[i] : 0;
-        const int16_t rightSample = right ? right[i] : 0;
-        const uint8_t statusBit = channelStatusBit(frameInBlock);
-
-        const uint8_t leftPreamble = frameInBlock == 0 ? PREAMBLE_B : PREAMBLE_M;
-        spdif_bmc::encodeSubframe(leftSample, statusBit != 0, leftPreamble,
-                                         &encodedBuffer[i * 8U]);
-        spdif_bmc::encodeSubframe(rightSample, statusBit != 0, PREAMBLE_W,
-                                         &encodedBuffer[i * 8U + 4U]);
-
-        if (++frameInBlock >= 192U) frameInBlock = 0;
-    }
-}
-
-void AudioOutputSPDIF::txTaskEntry(void *arg) {
-    static_cast<AudioOutputSPDIF *>(arg)->txTaskLoop();
-}
+void AudioOutputSPDIF::txTaskEntry(void *arg) { static_cast<AudioOutputSPDIF *>(arg)->txTaskLoop(); }
 
 OSPEED
 bool AudioOutputSPDIF::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
@@ -253,10 +225,20 @@ void AudioOutputSPDIF::txTaskLoop() {
     while (isRunning()) {
         if (xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(100)) != pdTRUE) continue;
 
-        const int16_t *left = pair.left ? pair.left->data : nullptr;
-        const int16_t *right = pair.right ? pair.right->data : nullptr;
+        const int16_t *__restrict left = pair.left ? pair.left->data : nullptr;
+        const int16_t *__restrict right = pair.right ? pair.right->data : nullptr;
 
-        encodeBlock(left, right);
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            const int16_t leftSample = left ? left[i] : 0;
+            const int16_t rightSample = right ? right[i] : 0;
+            const uint8_t statusBit = channelStatusBit(frameInBlock);
+            const uint8_t leftPreamble = frameInBlock == 0 ? PREAMBLE_B : PREAMBLE_M;
+
+            spdif_bmc::encodeSubframe(leftSample, statusBit != 0, leftPreamble, &encodedBuffer[i * 8U]);
+            spdif_bmc::encodeSubframe(rightSample, statusBit != 0, PREAMBLE_W, &encodedBuffer[i * 8U + 4U]);
+
+            if (++frameInBlock >= 192U) frameInBlock = 0;
+        }
 
         size_t bytesWritten = 0;
         (void)i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);

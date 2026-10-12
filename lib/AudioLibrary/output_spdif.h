@@ -78,13 +78,12 @@ class AudioOutputSPDIF : public AudioStream {
 
     void txTaskLoop();
 
-    void encodeBlock(const int16_t *left, const int16_t *right);
     bool beginInternal();
     void releasePair(BlockPair &pair);
     void setRunning(bool value);
     // This runs once for each PCM sample frame (128 times per block), so
     // keep it inline and avoid a function call in the real-time encoder loop.
-    uint8_t channelStatusBit(uint16_t frame) const {
+    inline uint8_t channelStatusBit(uint16_t frame) const {
         if (frame >= 24U && frame < 28U) {
             const uint8_t rateCode = sampleRateCode.load(std::memory_order_relaxed);
             return static_cast<uint8_t>((rateCode >> (frame - 24U)) & 1U);
