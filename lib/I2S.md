@@ -66,6 +66,24 @@ high-rate PDM stream; the AudioStream processing loop handles PCM blocks only.
 - The DAC clock uses `up_sample_fs = 480`, the documented alternative DAC mode
   in which the PDM bit clock is `128 × PCM sample rate`. Initialization and
   runtime sample-rate reconfiguration use the same setting.
+- **Experimental clock-divider workaround:** In the tested ESP-IDF 5.5
+  ESP32-S3 PDM TX path, the driver calculates a precise fractional MCLK divider
+  and then replaces it with an integer divider to reduce PDM noise. Depending
+  on the requested PCM rate, that can introduce a substantial sample-rate
+  error. `i2s_port.cpp` selects a BCLK divider to minimize that error and only
+  restores the HAL-calculated fractional MCLK divider when the predicted error
+  from the integer divider exceeds 0.5%. This intentionally leaves configurations
+  with a small predicted error (including the tested 48 kHz case) on the IDF
+  integer-divider path. The correction is guarded by the relevant SoC capability
+  macros, but **is not currently gated by an ESP-IDF version check**.
+- This workaround is experimental and tied to observed ESP-IDF implementation
+  behavior, not a documented API guarantee. Re-check the upstream `i2s_pdm.c`
+  clock calculation when upgrading ESP-IDF. If Espressif stops overwriting the
+  fractional divider, remove or disable the correction rather than adding an
+  arbitrary version cutoff. Validate the actual PCM timing and listen for PDM
+  noise after any change. The current validation is limited to the ESP32-S3
+  setup and sample rates tested during development; other targets/rates are not
+  guaranteed.
 - Runtime sample-rate changes pause AudioStream graph updates, wait for the PDM
   TX writer, discard queued old-rate blocks, and then reconfigure the PDM clock.
 - ESP32-S3 supports PCM-to-PDM on I²S0 and two PDM DAC lines. The original ESP32
