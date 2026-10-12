@@ -14,6 +14,9 @@ constexpr uint8_t PREAMBLE_M = 0x1D; // M preamble polarity for a preceding HIGH
 constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH level
 constexpr uint8_t CHANNEL_STATUS_WORD_LENGTH_16BIT = 0x02;
 
+// Shared state intentionally matches the static mute_PCM() API of Teensy.
+std::atomic<bool> pcmMuted{false};
+
 void updateAtomicMax(std::atomic<uint32_t> &target, uint32_t value) {
     uint32_t current = target.load(std::memory_order_relaxed);
     while (current < value &&
@@ -119,6 +122,10 @@ bool AudioOutputSPDIF::begin(int8_t dout) {
 
 bool AudioOutputSPDIF::beginHardware() {
     return beginInternal();
+}
+
+void AudioOutputSPDIF::mute_PCM(const bool mute) {
+    pcmMuted.store(mute, std::memory_order_relaxed);
 }
 
 bool AudioOutputSPDIF::setSampleRate(float rate) {
@@ -276,6 +283,23 @@ void AudioOutputSPDIF::releasePair(BlockPair &pair) {
     }
 }
 
+template <bool Muted>
+void AudioOutputSPDIF::encodeBlock(const int16_t *left, const int16_t *right) {
+    for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        const int16_t leftSample = left ? left[i] : 0;
+        const int16_t rightSample = right ? right[i] : 0;
+        const uint8_t statusBit = channelStatusBit(frameInBlock);
+
+        const uint8_t leftPreamble = frameInBlock == 0 ? PREAMBLE_B : PREAMBLE_M;
+        spdif_bmc::encodeSubframe<Muted>(leftSample, statusBit != 0, leftPreamble,
+                                         &encodedBuffer[i * 8U]);
+        spdif_bmc::encodeSubframe<Muted>(rightSample, statusBit != 0, PREAMBLE_W,
+                                         &encodedBuffer[i * 8U + 4U]);
+
+        if (++frameInBlock >= 192U) frameInBlock = 0;
+    }
+}
+
 void AudioOutputSPDIF::txTaskEntry(void *arg) {
     static_cast<AudioOutputSPDIF *>(arg)->txTaskLoop();
 }
@@ -299,18 +323,13 @@ void AudioOutputSPDIF::txTaskLoop() {
         const int16_t *right = pair.right ? pair.right->data : nullptr;
 
         const int64_t encodeStartUs = esp_timer_get_time();
-        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            const int16_t leftSample = left ? left[i] : 0;
-            const int16_t rightSample = right ? right[i] : 0;
-            const uint8_t statusBit = channelStatusBit(frameInBlock);
-
-            const uint8_t leftPreamble = frameInBlock == 0 ? PREAMBLE_B : PREAMBLE_M;
-            spdif_bmc::encodeSubframe(leftSample, statusBit != 0, leftPreamble,
-                                      &encodedBuffer[i * 8U]);
-            spdif_bmc::encodeSubframe(rightSample, statusBit != 0, PREAMBLE_W,
-                                      &encodedBuffer[i * 8U + 4U]);
-
-            if (++frameInBlock >= 192U) frameInBlock = 0;
+        // Select a compile-time-specialized encoder once per block. In the
+        // normal path, no mute branch or extra parity operation remains inside
+        // the per-sample encoding loop.
+        if (pcmMuted.load(std::memory_order_relaxed)) {
+            encodeBlock<true>(left, right);
+        } else {
+            encodeBlock<false>(left, right);
         }
 
         const uint32_t encodeElapsedUs =
