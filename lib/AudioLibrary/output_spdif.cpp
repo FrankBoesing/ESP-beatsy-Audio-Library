@@ -211,7 +211,6 @@ void AudioOutputSPDIF::update() {
             releasePair(oldPair);
         }
         if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
-            txQueueDropCountValue.fetch_add(1, std::memory_order_relaxed);
             releasePair(pair);
         }
     }
