@@ -244,7 +244,11 @@ i2s_std_config_t makeStdConfig(const Pins &pins, uint32_t rate, bool transmit, b
     cfg.clk_cfg.mclk_multiple = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC
                                    ? I2S_MCLK_MULTIPLE_128
                                    : I2S_MCLK_MULTIPLE_256;
-    cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    // S/PDIF is already a complete serialized BMC bitstream. Use MSB/left-
+    // justified slots (no Philips one-bit WS-to-data shift); WS is not routed.
+    cfg.slot_cfg = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC
+                       ? I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO)
+                       : I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
 
     cfg.gpio_cfg.mclk = master && pins.mclk >= 0 ? static_cast<gpio_num_t>(pins.mclk) : I2S_GPIO_UNUSED;
     cfg.gpio_cfg.bclk = pins.bclk >= 0 ? static_cast<gpio_num_t>(pins.bclk) : I2S_GPIO_UNUSED;
