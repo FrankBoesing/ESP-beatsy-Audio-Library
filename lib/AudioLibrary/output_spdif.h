@@ -102,7 +102,18 @@ class AudioOutputSPDIF : public AudioStream {
     void releasePair(BlockPair &pair);
     void setRunning(bool value);
     void resetTxCallbackCount();
-    uint8_t channelStatusBit(uint16_t frame) const;
+    // This runs once for each PCM sample frame (128 times per block), so
+    // keep it inline and avoid a function call in the real-time encoder loop.
+    uint8_t channelStatusBit(uint16_t frame) const {
+        if (frame >= 24U && frame < 28U) {
+            const uint8_t rateCode = sampleRateCode.load(std::memory_order_relaxed);
+            return static_cast<uint8_t>((rateCode >> (frame - 24U)) & 1U);
+        }
+
+        // The 16-bit word-length status code is 0x02, LSB-first: only frame
+        // 33 carries a one. Avoid a variable shift for the other seven frames.
+        return frame == 33U ? 1U : 0U;
+    }
     void updateChannelStatus(float sampleRate);
 
     AudioOutputSPDIF(const AudioOutputSPDIF &) = delete;
