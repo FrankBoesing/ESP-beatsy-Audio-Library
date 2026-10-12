@@ -1,9 +1,7 @@
 #include "output_spdif.h"
 
 #include <cmath>
-#include <esp_err.h>
 #include <esp_log.h>
-#include <esp_timer.h>
 #include "i2s_port.h"
 #include "spdif_bmc_encoder.h"
 
@@ -15,15 +13,6 @@ constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH
 
 // Shared state intentionally matches the static mute_PCM() API of Teensy.
 std::atomic<bool> pcmMuted{false};
-
-void updateAtomicMax(std::atomic<uint32_t> &target, uint32_t value) {
-    uint32_t current = target.load(std::memory_order_relaxed);
-    while (current < value &&
-           !target.compare_exchange_weak(current, value,
-                                         std::memory_order_relaxed,
-                                         std::memory_order_relaxed)) {
-    }
-}
 
 uint8_t spdifSampleRateCode(float rate) {
     const uint32_t hz = static_cast<uint32_t>(std::lround(rate));
@@ -52,42 +41,8 @@ bool AudioOutputSPDIF::isRunning() const {
     return running.load(std::memory_order_acquire) != 0;
 }
 
-uint32_t AudioOutputSPDIF::txCallbackCount() const {
-    return txCallbackCountValue.load(std::memory_order_relaxed);
-}
-
-uint32_t AudioOutputSPDIF::txEncodedBlockCount() const {
-    return txEncodedBlockCountValue.load(std::memory_order_relaxed);
-}
-
-uint32_t AudioOutputSPDIF::txQueueDropCount() const {
-    return txQueueDropCountValue.load(std::memory_order_relaxed);
-}
-
-uint32_t AudioOutputSPDIF::txWriteErrorCount() const {
-    return txWriteErrorCountValue.load(std::memory_order_relaxed);
-}
-
-uint32_t AudioOutputSPDIF::maxEncodeTimeUs() const {
-    return maxEncodeTimeUsValue.load(std::memory_order_relaxed);
-}
-
-uint32_t AudioOutputSPDIF::maxWriteTimeUs() const {
-    return maxWriteTimeUsValue.load(std::memory_order_relaxed);
-}
-
 void AudioOutputSPDIF::setRunning(bool value) {
     running.store(value ? 1U : 0U, std::memory_order_release);
-}
-
-OSIZE
-void AudioOutputSPDIF::resetTxCallbackCount() {
-    txCallbackCountValue.store(0, std::memory_order_relaxed);
-    txEncodedBlockCountValue.store(0, std::memory_order_relaxed);
-    txQueueDropCountValue.store(0, std::memory_order_relaxed);
-    txWriteErrorCountValue.store(0, std::memory_order_relaxed);
-    maxEncodeTimeUsValue.store(0, std::memory_order_relaxed);
-    maxWriteTimeUsValue.store(0, std::memory_order_relaxed);
 }
 
 void AudioOutputSPDIF::updateChannelStatus(float rate) {
@@ -168,7 +123,6 @@ bool AudioOutputSPDIF::beginInternal() {
         return false;
     }
 
-    resetTxCallbackCount();
     frameInBlock = 0;
     updateChannelStatus(AudioStream::sampleRate());
     setRunning(true);
@@ -254,7 +208,6 @@ void AudioOutputSPDIF::update() {
     if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
         BlockPair oldPair;
         if (xQueueReceive(txQueue, &oldPair, 0) == pdTRUE) {
-            txQueueDropCountValue.fetch_add(1, std::memory_order_relaxed);
             releasePair(oldPair);
         }
         if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
@@ -303,15 +256,12 @@ OSPEED
 bool AudioOutputSPDIF::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
     auto *output = static_cast<AudioOutputSPDIF *>(userContext);
     if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) return false;
-    output->txCallbackCountValue.fetch_add(1, std::memory_order_relaxed);
     if (!AudioI2SPort::isClockOwner(output->controller_, AudioI2SPort::Direction::Tx)) return false;
     return AudioStream::update_all_from_isr();
 }
 
 OSPEED
 void AudioOutputSPDIF::txTaskLoop() {
-    static uint32_t lastErrorLogMs = 0;
-
     BlockPair pair{nullptr, nullptr};
     while (isRunning()) {
         if (xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(100)) != pdTRUE) continue;
@@ -319,40 +269,16 @@ void AudioOutputSPDIF::txTaskLoop() {
         const int16_t *left = pair.left ? pair.left->data : nullptr;
         const int16_t *right = pair.right ? pair.right->data : nullptr;
 
-        const int64_t encodeStartUs = esp_timer_get_time();
-        // Select a compile-time-specialized encoder once per block. In the
-        // normal path, no mute branch or extra parity operation remains inside
-        // the per-sample encoding loop.
+        // Select a compile-time-specialized encoder once per block. The normal
+        // path has no mute check or additional parity work inside the sample loop.
         if (pcmMuted.load(std::memory_order_relaxed)) {
             encodeBlock<true>(left, right);
         } else {
             encodeBlock<false>(left, right);
         }
 
-        const uint32_t encodeElapsedUs =
-            static_cast<uint32_t>(esp_timer_get_time() - encodeStartUs);
-        updateAtomicMax(maxEncodeTimeUsValue, encodeElapsedUs);
-
         size_t bytesWritten = 0;
-        const int64_t writeStartUs = esp_timer_get_time();
-        const esp_err_t err = i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);
-        const uint32_t writeElapsedUs =
-            static_cast<uint32_t>(esp_timer_get_time() - writeStartUs);
-        updateAtomicMax(maxWriteTimeUsValue, writeElapsedUs);
-
-        if (err != ESP_OK || bytesWritten != sizeof(encodedBuffer)) {
-            const uint32_t errorCount =
-                txWriteErrorCountValue.fetch_add(1, std::memory_order_relaxed) + 1;
-            const uint32_t now = millis();
-            if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
-                ESP_LOGE(TAG, "TX error #%lu: %s, bytes=%lu/%lu",
-                         static_cast<unsigned long>(errorCount), esp_err_to_name(err),
-                         static_cast<unsigned long>(bytesWritten), static_cast<unsigned long>(sizeof(encodedBuffer)));
-                lastErrorLogMs = now;
-            }
-        } else {
-            txEncodedBlockCountValue.fetch_add(1, std::memory_order_relaxed);
-        }
+        (void)i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);
 
         releasePair(pair);
         pair = {nullptr, nullptr};
