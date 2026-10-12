@@ -176,9 +176,13 @@ or constructs and splits a temporary 64-bit subframe.
 
 This follows the table-driven optimization principle of the Teensy Audio Library
 ([encoder](https://github.com/PaulStoffregen/Audio/blob/master/output_spdif.cpp),
-[lookup table](https://github.com/PaulStoffregen/Audio/blob/master/data_spdif.c)),
-but the table values are generated for this implementation's current subframe
-packing and polarity, so the Teensy table is not copied verbatim.
+[lookup table](https://github.com/PaulStoffregen/Audio/blob/master/data_spdif.c)).
+The Teensy's exact auxiliary/parity trick is coupled to its own 32-bit packed
+subframe and DMA layout, so its expression is not copied verbatim into this
+16-bit-slot encoder. Instead, parity is packed into each wider lookup entry.
+That uses about 1 KiB of flash for the byte table (versus 512 bytes for a
+16-bit-only table), trading a small amount of flash for fewer run-time parity
+operations while preserving this implementation's existing wire bitstream.
 
 **Validation status:** The earlier direct-GPIO-to-coax test had frequent dropouts.
 After replacing that connection with an optical transmitter, the user reported
