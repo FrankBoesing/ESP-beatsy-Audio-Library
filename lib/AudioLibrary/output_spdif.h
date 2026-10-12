@@ -42,10 +42,6 @@ class AudioOutputSPDIF : public AudioStream {
     const Pins &pins() const { return spdifPins; }
     bool setSampleRate(float sampleRate);
 
-    // Teensy-compatible mute: marks PCM subframes invalid via the IEC 60958
-    // validity bit. Static by design, matching the Teensy AudioOutputSPDIF API.
-    static void mute_PCM(const bool mute);
-
   protected:
     // Shared controller-aware implementation point for future SPDIF2/3
     // wrappers. The public AudioOutputSPDIF constructors always select I2S0.
@@ -82,9 +78,6 @@ class AudioOutputSPDIF : public AudioStream {
 
     void txTaskLoop();
 
-    // Compile-time-specialized block encoders keep the unmuted hot loop free
-    // of validity-bit work. Runtime mute selection happens once per block.
-    template <bool Muted>
     void encodeBlock(const int16_t *left, const int16_t *right);
     bool beginInternal();
     void releasePair(BlockPair &pair);
