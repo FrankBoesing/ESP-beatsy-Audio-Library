@@ -11,7 +11,8 @@
 
 /*
  * IEC 60958 / S/PDIF consumer PCM output, implemented by software BMC
- * encoding and the I2S0 standard-mode serializer.
+ * encoding and the selected I2S standard-mode serializer. Public constructors
+ * use I2S0; the protected controller-aware constructor enables future wrappers.
  *
  * One 16-bit stereo AudioStream block is encoded as 128 BMC half-bit states
  * per stereo sample frame. I2S therefore runs at 4x the AudioStream rate with
