@@ -80,6 +80,7 @@ void AudioOutputSPDIF::setRunning(bool value) {
     running.store(value ? 1U : 0U, std::memory_order_release);
 }
 
+OSIZE
 void AudioOutputSPDIF::resetTxCallbackCount() {
     txCallbackCountValue.store(0, std::memory_order_relaxed);
     txEncodedBlockCountValue.store(0, std::memory_order_relaxed);
@@ -115,6 +116,7 @@ void AudioOutputSPDIF::mute_PCM(const bool mute) {
     pcmMuted.store(mute, std::memory_order_relaxed);
 }
 
+OSIZE
 bool AudioOutputSPDIF::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate <= 0.0f) return false;
 
@@ -128,6 +130,7 @@ bool AudioOutputSPDIF::setSampleRate(float rate) {
     return true;
 }
 
+OSIZE
 bool AudioOutputSPDIF::beginInternal() {
     if (isRunning()) return true;
     if (spdifPins.dout < 0) {
@@ -205,6 +208,7 @@ bool AudioOutputSPDIF::beginInternal() {
     return true;
 }
 
+OSIZE
 void AudioOutputSPDIF::end() {
     if (!isRunning() && txQueue == nullptr && txHandle == nullptr) return;
 
@@ -234,6 +238,7 @@ void AudioOutputSPDIF::end() {
     }
 }
 
+OSPEED
 void AudioOutputSPDIF::update() {
     BlockPair pair;
     pair.left = receiveReadOnly(0);
@@ -259,6 +264,7 @@ void AudioOutputSPDIF::update() {
     }
 }
 
+
 void AudioOutputSPDIF::releasePair(BlockPair &pair) {
     if (pair.left != nullptr) {
         release(pair.left);
@@ -270,8 +276,10 @@ void AudioOutputSPDIF::releasePair(BlockPair &pair) {
     }
 }
 
+
 template <bool Muted>
-void AudioOutputSPDIF::encodeBlock(const int16_t *left, const int16_t *right) {
+OSPEED void AudioOutputSPDIF::encodeBlock(const int16_t *left, const int16_t *right) {
+    GCC_UNROLL
     for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const int16_t leftSample = left ? left[i] : 0;
         const int16_t rightSample = right ? right[i] : 0;
@@ -291,6 +299,7 @@ void AudioOutputSPDIF::txTaskEntry(void *arg) {
     static_cast<AudioOutputSPDIF *>(arg)->txTaskLoop();
 }
 
+OSPEED
 bool AudioOutputSPDIF::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
     auto *output = static_cast<AudioOutputSPDIF *>(userContext);
     if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) return false;
@@ -299,6 +308,7 @@ bool AudioOutputSPDIF::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void
     return AudioStream::update_all_from_isr();
 }
 
+OSPEED
 void AudioOutputSPDIF::txTaskLoop() {
     static uint32_t lastErrorLogMs = 0;
 
