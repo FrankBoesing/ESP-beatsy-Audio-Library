@@ -141,8 +141,12 @@ Reference: [ESP-IDF I²S PDM TX mode](https://docs.espressif.com/projects/esp-id
 
 `AudioOutputSPDIF` is an output-only IEC 60958 / consumer S/PDIF encoder. It
 uses the I²S controller 0 serializer but performs the S/PDIF Biphase Mark Code
-(BMC) encoding in software. It is separate from normal `AudioOutputI2S` mode;
-both cannot use I²S controller 0 simultaneously.
+(BMC) encoding in software. `AudioOutputSPDIF2` and `AudioOutputSPDIF3` are thin
+wrappers selecting controller index 1 and 2 respectively; they reuse the same
+encoder and diagnostics implementation. Each S/PDIF instance requires exclusive
+TX use of its selected controller, so do not run an S/PDIF output and a normal
+`AudioOutputI2S` output on the same controller simultaneously. Controller 2
+exists only on targets that implement a third I²S peripheral.
 
 ### Data format and timing
 
@@ -242,8 +246,5 @@ GPIO's logic level and the approximately 5.64 MHz bit clock at 44.1 kHz audio.
 ### Not implemented yet
 
 - S/PDIF input / receiver.
-- `AudioOutputSPDIF2` / `AudioOutputSPDIF3` wrappers for I²S controller 1 and 2.
-  The shared encoder is prepared for reuse, but those public wrapper classes are
-  not implemented yet.
 - TDM.
 - Automated hardware validation across ESP32 variants.
