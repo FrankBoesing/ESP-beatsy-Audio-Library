@@ -39,31 +39,16 @@ uint8_t parity32(uint32_t value) {
 // The table stores each byte's BMC encoding in wire order (MSB first).
 // It is generated at compile time from the BMC rules, avoiding a per-bit loop
 // in the real-time encoder while keeping the table definition auditable.
-constexpr uint16_t reverse16(uint16_t x) {
-    x = static_cast<uint16_t>(((x & 0x5555U) << 1U) | ((x >> 1U) & 0x5555U));
-    x = static_cast<uint16_t>(((x & 0x3333U) << 2U) | ((x >> 2U) & 0x3333U));
-    x = static_cast<uint16_t>(((x & 0x0F0FU) << 4U) | ((x >> 4U) & 0x0F0FU));
-    return static_cast<uint16_t>((x << 8U) | (x >> 8U));
-}
-
-constexpr uint8_t reverse8(uint8_t x) {
-    x = static_cast<uint8_t>(((x & 0x55U) << 1U) | ((x >> 1U) & 0x55U));
-    x = static_cast<uint8_t>(((x & 0x33U) << 2U) | ((x >> 2U) & 0x33U));
-    return static_cast<uint8_t>((x << 4U) | (x >> 4U));
-}
-
 constexpr uint16_t makeBmcByte(uint8_t value) {
     uint16_t encoded = 0;
     bool phaseHigh = true;
     for (uint8_t i = 0; i < 8; ++i) {
         const bool bit = ((value >> i) & 1U) != 0;
-        const bool firstHalf = !phaseHigh;
-        const bool secondHalf = bit ? phaseHigh : !phaseHigh;
-        encoded |= static_cast<uint16_t>(firstHalf) << (2U * i + 1U);
-        encoded |= static_cast<uint16_t>(secondHalf) << (2U * i);
+        const uint8_t pair = phaseHigh ? (bit ? 0b01 : 0b00) : (bit ? 0b10 : 0b11);
+        encoded = static_cast<uint16_t>((encoded << 2U) | pair);
         if (!bit) phaseHigh = !phaseHigh;
     }
-    return reverse16(encoded);
+    return encoded;
 }
 
 constexpr uint8_t makeBmcNibble(uint8_t value) {
@@ -71,13 +56,11 @@ constexpr uint8_t makeBmcNibble(uint8_t value) {
     bool phaseHigh = true;
     for (uint8_t i = 0; i < 4; ++i) {
         const bool bit = ((value >> i) & 1U) != 0;
-        const bool firstHalf = !phaseHigh;
-        const bool secondHalf = bit ? phaseHigh : !phaseHigh;
-        encoded |= static_cast<uint8_t>(firstHalf) << (2U * i + 1U);
-        encoded |= static_cast<uint8_t>(secondHalf) << (2U * i);
+        const uint8_t pair = phaseHigh ? (bit ? 0b01 : 0b00) : (bit ? 0b10 : 0b11);
+        encoded = static_cast<uint8_t>((encoded << 2U) | pair);
         if (!bit) phaseHigh = !phaseHigh;
     }
-    return reverse8(encoded);
+    return encoded;
 }
 
 constexpr std::array<uint16_t, 256> makeBmcByteTable() {
