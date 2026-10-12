@@ -1,6 +1,7 @@
 #include "output_spdif1.h"
 
 #include <cmath>
+#include <array>
 #include <cstring>
 #include <esp_err.h>
 #include <esp_log.h>
@@ -8,9 +9,9 @@
 
 namespace {
 constexpr char TAG[] = "AudioOutputSPDIF1";
-constexpr uint8_t PREAMBLE_B = 0x17; // Left channel, first frame in a 192-frame block
-constexpr uint8_t PREAMBLE_M = 0x1D; // Left channel, other frames
-constexpr uint8_t PREAMBLE_W = 0x1B; // Right channel
+constexpr uint8_t PREAMBLE_B = 0xE8; // IEC 60958 block-start preamble
+constexpr uint8_t PREAMBLE_M = 0xE2; // IEC 60958 left-channel preamble
+constexpr uint8_t PREAMBLE_W = 0xE4; // IEC 60958 right-channel preamble
 constexpr uint8_t CHANNEL_STATUS_WORD_LENGTH_16BIT = 0x02;
 
 uint8_t spdifSampleRateCode(float rate) {
@@ -35,8 +36,76 @@ uint8_t parity32(uint32_t value) {
     return static_cast<uint8_t>((0x6996U >> value) & 1U);
 }
 
-// Build one 64-half-bit S/PDIF subframe. The four preamble patterns below are
-// selected for a preceding HIGH level; even parity makes the final BMC phase HIGH.
+// The table stores each byte's BMC encoding in wire order (MSB first).
+// It is generated at compile time from the BMC rules, avoiding a per-bit loop
+// in the real-time encoder while keeping the table definition auditable.
+constexpr uint16_t reverse16(uint16_t x) {
+    x = static_cast<uint16_t>(((x & 0x5555U) << 1U) | ((x >> 1U) & 0x5555U));
+    x = static_cast<uint16_t>(((x & 0x3333U) << 2U) | ((x >> 2U) & 0x3333U));
+    x = static_cast<uint16_t>(((x & 0x0F0FU) << 4U) | ((x >> 4U) & 0x0F0FU));
+    return static_cast<uint16_t>((x << 8U) | (x >> 8U));
+}
+
+constexpr uint8_t reverse8(uint8_t x) {
+    x = static_cast<uint8_t>(((x & 0x55U) << 1U) | ((x >> 1U) & 0x55U));
+    x = static_cast<uint8_t>(((x & 0x33U) << 2U) | ((x >> 2U) & 0x33U));
+    return static_cast<uint8_t>((x << 4U) | (x >> 4U));
+}
+
+constexpr uint16_t makeBmcByte(uint8_t value) {
+    uint16_t encoded = 0;
+    bool phaseHigh = true;
+    for (uint8_t i = 0; i < 8; ++i) {
+        const bool bit = ((value >> i) & 1U) != 0;
+        const bool firstHalf = !phaseHigh;
+        const bool secondHalf = bit ? phaseHigh : !phaseHigh;
+        encoded |= static_cast<uint16_t>(firstHalf) << (2U * i + 1U);
+        encoded |= static_cast<uint16_t>(secondHalf) << (2U * i);
+        if (!bit) phaseHigh = !phaseHigh;
+    }
+    return reverse16(encoded);
+}
+
+constexpr uint8_t makeBmcNibble(uint8_t value) {
+    uint8_t encoded = 0;
+    bool phaseHigh = true;
+    for (uint8_t i = 0; i < 4; ++i) {
+        const bool bit = ((value >> i) & 1U) != 0;
+        const bool firstHalf = !phaseHigh;
+        const bool secondHalf = bit ? phaseHigh : !phaseHigh;
+        encoded |= static_cast<uint8_t>(firstHalf) << (2U * i + 1U);
+        encoded |= static_cast<uint8_t>(secondHalf) << (2U * i);
+        if (!bit) phaseHigh = !phaseHigh;
+    }
+    return reverse8(encoded);
+}
+
+constexpr std::array<uint16_t, 256> makeBmcByteTable() {
+    std::array<uint16_t, 256> table{};
+    for (uint16_t i = 0; i < table.size(); ++i)
+        table[i] = makeBmcByte(static_cast<uint8_t>(i));
+    return table;
+}
+
+constexpr std::array<uint8_t, 16> makeBmcNibbleTable() {
+    std::array<uint8_t, 16> table{};
+    for (uint8_t i = 0; i < table.size(); ++i) table[i] = makeBmcNibble(i);
+    return table;
+}
+
+constexpr auto BMC_BYTE = makeBmcByteTable();
+constexpr auto BMC_NIBBLE = makeBmcNibbleTable();
+
+bool oddParity8(uint8_t value) {
+    value ^= value >> 4U;
+    value ^= value >> 2U;
+    value ^= value >> 1U;
+    return (value & 1U) != 0;
+}
+
+// Build one 64-half-bit subframe. The IEC 60958 preambles end LOW, so the
+// first normal BMC data bit starts from a LOW phase. Bits 4..31 are transmitted
+// LSB first; parity makes their total number of 1 bits even, preserving phase.
 uint64_t encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble) {
     // 16-bit PCM is MSB-aligned in the 20-bit audio field (subframe bits 12..27).
     uint32_t raw = static_cast<uint32_t>(static_cast<uint16_t>(sample)) << 12U;
@@ -45,20 +114,20 @@ uint64_t encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble) {
     // P makes bits 4..31 have even parity; the preamble is excluded from parity.
     raw |= static_cast<uint32_t>(parity32(raw & 0x7FFFFFF0UL)) << 31U;
 
-    uint64_t encoded = 0;
-    for (int bit = 7; bit >= 0; --bit) {
-        encoded = (encoded << 1U) | ((preamble >> bit) & 1U);
+    uint64_t encoded = preamble;
+    bool phaseHigh = false;
+    for (uint8_t shift = 4; shift < 28; shift += 8) {
+        const uint8_t byte = static_cast<uint8_t>(raw >> shift);
+        uint16_t chunk = BMC_BYTE[byte];
+        if (!phaseHigh) chunk = static_cast<uint16_t>(~chunk);
+        encoded = (encoded << 16U) | chunk;
+        phaseHigh ^= oddParity8(byte);
     }
 
-    // Data bits are sent LSB first. Each bit cell starts with a transition;
-    // a data 1 additionally transitions in the middle of the cell.
-    bool phaseHigh = true;
-    for (uint8_t bitIndex = 4; bitIndex < 32; ++bitIndex) {
-        const bool bit = ((raw >> bitIndex) & 1U) != 0;
-        const uint8_t pair = phaseHigh ? (bit ? 0b01 : 0b00) : (bit ? 0b10 : 0b11);
-        encoded = (encoded << 2U) | pair;
-        if (!bit) phaseHigh = !phaseHigh;
-    }
+    const uint8_t nibble = static_cast<uint8_t>((raw >> 28U) & 0x0FU);
+    uint8_t tail = BMC_NIBBLE[nibble];
+    if (!phaseHigh) tail = static_cast<uint8_t>(~tail);
+    encoded = (encoded << 8U) | tail;
 
     return encoded;
 }
