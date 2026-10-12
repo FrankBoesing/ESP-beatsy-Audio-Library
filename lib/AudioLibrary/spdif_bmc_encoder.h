@@ -21,6 +21,7 @@ extern const uint8_t BMC_NIBBLE_TABLE[16];
 #else
 #define SPDIF_BMC_ALWAYS_INLINE inline
 #endif
+template <bool Muted = false>
 SPDIF_BMC_ALWAYS_INLINE
 void encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble,
                     uint16_t *destination) {
@@ -36,9 +37,13 @@ void encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble,
     // IEC 60958 bits 4..31 require even parity. The zero auxiliary field adds
     // no parity, so P is the XOR of the two sample-byte parities and C. This
     // replaces the previous 32-bit parity-folding routine.
-    const bool parityBit = lowParity ^ highParity ^ channelStatus;
+    // IEC 60958 V=1 marks this PCM sample as invalid (mute); even parity
+    // must include V as well as C. Since Muted is a template parameter, the
+    // normal <false> path compiles exactly like the original encoder here.
+    const bool parityBit = lowParity ^ highParity ^ channelStatus ^ Muted;
     const uint8_t statusNibble = static_cast<uint8_t>(
-        (channelStatus ? 0x04U : 0U) | (parityBit ? 0x08U : 0U));
+        (Muted ? 0x01U : 0U) | (channelStatus ? 0x04U : 0U) |
+        (parityBit ? 0x08U : 0U));
 
     const uint16_t lowCode = static_cast<uint16_t>(lowEntry);
     uint16_t highCode = static_cast<uint16_t>(highEntry);
