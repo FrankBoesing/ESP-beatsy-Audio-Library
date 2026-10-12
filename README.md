@@ -42,7 +42,6 @@ These examples are present in the repository. Their board-specific pin and codec
 | [Guitar synthesis](examples/Synthesis/Guitar/Guitar.cpp) | Uses six Karplus–Strong string generators, mixers and chord data to synthesize strummed chords. |
 | [Polyphonic synth music](examples/Synthesis/PlaySynthMusic/main.cpp) | Plays a score stored in memory using 16 waveform voices, envelopes and left/right AudioMixerN instances. |
 | [Simple Drum](examples/Synthesis/SimpleDrum/SimpleDrum.cpp) | Triggers four simple-drum synthesizers and mixes them to stereo output. |
-| [S/PDIF Diagnostics](examples/SPDIF_Diagnostics.cpp) | Generates a 1 kHz sine at 44.1 kHz and reports S/PDIF queue, encoding and I²S write diagnostics. |
 
 
 
