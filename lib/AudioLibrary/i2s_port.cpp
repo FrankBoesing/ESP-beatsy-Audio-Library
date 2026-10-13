@@ -214,7 +214,7 @@ PortState ports[MAX_PORTS]{};
 // close the gate to new writers and wait for all current writes to finish.
 SemaphoreHandle_t portWriteGate = nullptr;
 SemaphoreHandle_t portWriteCountMutex = nullptr;
-SemaphoreHandle_t portWriteResourceMutex = nullptr;
+SemaphoreHandle_t portWriteResourceSemaphore = nullptr;
 uint32_t activePortWriters = 0;
 // AudioStream has one graph clock, irrespective of how many I2S controllers run.
 // A single task-side writer publishes the owner to the I2S callback ISRs.
@@ -223,24 +223,27 @@ std::atomic<uint32_t> currentRateGeneration{0};
 
 bool ensurePortWriteLocks() {
     if (portWriteGate != nullptr && portWriteCountMutex != nullptr &&
-        portWriteResourceMutex != nullptr) {
+        portWriteResourceSemaphore != nullptr) {
         return true;
     }
 
     portWriteGate = xSemaphoreCreateMutex();
     portWriteCountMutex = xSemaphoreCreateMutex();
-    portWriteResourceMutex = xSemaphoreCreateMutex();
-    if (portWriteGate != nullptr && portWriteCountMutex != nullptr &&
-        portWriteResourceMutex != nullptr) {
+    // A binary semaphore, not a mutex: the first writer takes it and the last
+    // writer may be a different task that gives it back.
+    portWriteResourceSemaphore = xSemaphoreCreateBinary();
+    const bool resourceReady = portWriteResourceSemaphore != nullptr &&
+                               xSemaphoreGive(portWriteResourceSemaphore) == pdTRUE;
+    if (portWriteGate != nullptr && portWriteCountMutex != nullptr && resourceReady) {
         return true;
     }
 
     if (portWriteGate != nullptr) vSemaphoreDelete(portWriteGate);
     if (portWriteCountMutex != nullptr) vSemaphoreDelete(portWriteCountMutex);
-    if (portWriteResourceMutex != nullptr) vSemaphoreDelete(portWriteResourceMutex);
+    if (portWriteResourceSemaphore != nullptr) vSemaphoreDelete(portWriteResourceSemaphore);
     portWriteGate = nullptr;
     portWriteCountMutex = nullptr;
-    portWriteResourceMutex = nullptr;
+    portWriteResourceSemaphore = nullptr;
     ESP_LOGE(TAG, "Could not create shared I2S writer locks");
     return false;
 }
@@ -250,7 +253,7 @@ class AudioPortWriteLock {
     AudioPortWriteLock() {
         // Before the first port is allocated, only AudioStream's sample rate
         // changes; there are no hardware writers to exclude.
-        if (portWriteGate == nullptr && portWriteResourceMutex == nullptr) {
+        if (portWriteGate == nullptr && portWriteResourceSemaphore == nullptr) {
             locked_ = true;
             return;
         }
@@ -258,7 +261,7 @@ class AudioPortWriteLock {
         gateLocked_ = xSemaphoreTake(portWriteGate, portMAX_DELAY) == pdTRUE;
         if (!gateLocked_) return;
 
-        resourceLocked_ = xSemaphoreTake(portWriteResourceMutex, portMAX_DELAY) == pdTRUE;
+        resourceLocked_ = xSemaphoreTake(portWriteResourceSemaphore, portMAX_DELAY) == pdTRUE;
         locked_ = resourceLocked_;
         if (!locked_) {
             xSemaphoreGive(portWriteGate);
@@ -267,7 +270,7 @@ class AudioPortWriteLock {
     }
 
     ~AudioPortWriteLock() {
-        if (resourceLocked_) xSemaphoreGive(portWriteResourceMutex);
+        if (resourceLocked_) xSemaphoreGive(portWriteResourceSemaphore);
         if (gateLocked_) xSemaphoreGive(portWriteGate);
     }
 
@@ -972,7 +975,7 @@ uint32_t AudioI2SPort::currentSampleRateGeneration() {
 OSIZE
 bool AudioI2SPort::lockForWrite(TickType_t timeoutTicks) {
     if (portWriteGate == nullptr || portWriteCountMutex == nullptr ||
-        portWriteResourceMutex == nullptr) {
+        portWriteResourceSemaphore == nullptr) {
         return false;
     }
 
@@ -985,7 +988,7 @@ bool AudioI2SPort::lockForWrite(TickType_t timeoutTicks) {
     }
 
     if (activePortWriters == 0 &&
-        xSemaphoreTake(portWriteResourceMutex, portMAX_DELAY) != pdTRUE) {
+        xSemaphoreTake(portWriteResourceSemaphore, portMAX_DELAY) != pdTRUE) {
         xSemaphoreGive(portWriteCountMutex);
         xSemaphoreGive(portWriteGate);
         return false;
@@ -998,11 +1001,11 @@ bool AudioI2SPort::lockForWrite(TickType_t timeoutTicks) {
 }
 
 void AudioI2SPort::unlockAfterWrite() {
-    if (portWriteCountMutex == nullptr || portWriteResourceMutex == nullptr) return;
+    if (portWriteCountMutex == nullptr || portWriteResourceSemaphore == nullptr) return;
     if (xSemaphoreTake(portWriteCountMutex, portMAX_DELAY) != pdTRUE) return;
 
     if (activePortWriters > 0 && --activePortWriters == 0) {
-        xSemaphoreGive(portWriteResourceMutex);
+        xSemaphoreGive(portWriteResourceSemaphore);
     }
     xSemaphoreGive(portWriteCountMutex);
 }
