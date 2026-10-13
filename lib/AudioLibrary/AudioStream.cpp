@@ -28,13 +28,16 @@ bool AudioStream::update_scheduled = false;
 bool AudioStream::external_update_clock = false;
 float AudioStream::audio_sample_rate = AUDIO_SAMPLE_RATE_EXACT;
 
-// True while the realtime audio task is traversing the static graph.
-// Used only to make update_stop() safe before deleting the task.
-static bool audio_processing = false;
+// Conversion factor for the per-stream cycle counters collected in AudioTask.
 static uint32_t cpu_cycles_per_us = 0;
 
 float AudioStream::processorUsage(uint8_t core) {
-#if defined(CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS) && (!defined(CONFIG_FREERTOS_SMP) || !CONFIG_FREERTOS_SMP)
+// ESP Timer runtime statistics use microseconds, matching esp_timer_get_time().
+// CPU-clock runtime statistics count cycles and are frequency-dependent, so the
+// wall-time ratio below would be incorrect for that configuration.
+#if defined(CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS) && CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS && \
+    defined(CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER) && CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER && \
+    (!defined(CONFIG_FREERTOS_SMP) || !CONFIG_FREERTOS_SMP)
     if (core >= portNUM_PROCESSORS) {
         return -1.0f;
     }
@@ -279,9 +282,10 @@ bool AudioStream::setExternalUpdateClock(bool enabled) {
     }
 
     if (!selecting_clock) {
-        // Starting a hardware output after the software clock was selected
-        // would create two competing clocks. Refuse that unsupported transition.
-        return enabled ? current_clock : true;
+        // After AudioMemory() the source is fixed. Accept idempotent requests,
+        // but report a real source change as unsupported rather than pretending
+        // a software-clock fallback was enabled when no such switch took place.
+        return current_clock == enabled;
     }
 
     portENTER_CRITICAL(&audio_mux);
@@ -424,55 +428,77 @@ bool AudioStream::stop_software_timer(void) {
 
 OSIZE
 void AudioStream::update_stop(void) {
+    // Do not delete the scheduler from inside its own update() call.
+    portENTER_CRITICAL(&audio_mux);
+    TaskHandle_t task = audio_task_handle;
+    SemaphoreHandle_t mutex = audio_update_mutex;
+    portEXIT_CRITICAL(&audio_mux);
+
+    if (task != nullptr && task == xTaskGetCurrentTaskHandle()) {
+        ESP_LOGE("Audio", "update_stop() cannot be called from AudioTask");
+        return;
+    }
+
+    // Taking the graph mutex waits for an in-flight process_all_now() to finish.
+    // Once held, the scheduler cannot start another graph traversal. The caller
+    // must stop/quiesce any external hardware clock before calling update_stop().
+    const bool locked = mutex != nullptr;
+    if (locked && xSemaphoreTakeRecursive(mutex, portMAX_DELAY) != pdTRUE) {
+        return;
+    }
+
     portENTER_CRITICAL(&audio_mux);
     update_scheduled = false;
     external_update_clock = false;
-    TaskHandle_t task = audio_task_handle;
+    software_clock_deferred = false;
+    task = audio_task_handle;
+    esp_timer_handle_t timer = software_timer;
     portEXIT_CRITICAL(&audio_mux);
 
-    stop_software_timer();
+    // Stop and delete the software timer before deleting the task it can notify.
+    if (timer != nullptr) {
+        const esp_err_t stop_err = esp_timer_stop(timer);
+        if (stop_err != ESP_OK && stop_err != ESP_ERR_INVALID_STATE) {
+            ESP_LOGE("Audio", "Could not stop software audio clock: %s", esp_err_to_name(stop_err));
+        }
+
+        const esp_err_t delete_err = esp_timer_delete(timer);
+        if (delete_err != ESP_OK) {
+            ESP_LOGE("Audio", "Could not delete software audio clock: %s", esp_err_to_name(delete_err));
+            if (locked) {
+                xSemaphoreGiveRecursive(mutex);
+            }
+            return;
+        }
+
+        portENTER_CRITICAL(&audio_mux);
+        if (software_timer == timer) {
+            software_timer = nullptr;
+        }
+        portEXIT_CRITICAL(&audio_mux);
+    }
 
     if (task != nullptr) {
-        // Wake the task in case it is blocked in ulTaskNotifyTake().
-        xTaskNotifyGive(task);
-
-        // A running process_all_now() must finish before the task is deleted.
-        // Graph changes use the same recursive mutex as the processing task, so
-        // they cannot race with a running graph traversal.
-        bool processing;
-
-        do {
-            portENTER_CRITICAL(&audio_mux);
-            processing = audio_processing;
-            portEXIT_CRITICAL(&audio_mux);
-            if (processing) {
-                taskYIELD();
-            }
-        } while (processing);
-
-        vTaskDelete(task);
-
         portENTER_CRITICAL(&audio_mux);
         if (audio_task_handle == task) {
             audio_task_handle = nullptr;
         }
         portEXIT_CRITICAL(&audio_mux);
+
+        // The task either waits for a notification or is blocked trying to take
+        // the mutex held by this function; no graph traversal is still running.
+        vTaskDelete(task);
     }
 
-    if (software_timer != nullptr) {
-        esp_timer_delete(software_timer);
-        software_timer = nullptr;
+    if (locked) {
+        xSemaphoreGiveRecursive(mutex);
     }
-
-    portENTER_CRITICAL(&audio_mux);
-    software_clock_deferred = false;
-    portEXIT_CRITICAL(&audio_mux);
 }
 
 OSPEED
 void AudioStream::software_timer_callback(void *) {
     portENTER_CRITICAL(&audio_mux);
-    const bool useSoftwareClock = !software_clock_deferred && !external_update_clock;
+    const bool useSoftwareClock = update_scheduled && !software_clock_deferred && !external_update_clock;
     portEXIT_CRITICAL(&audio_mux);
 
     if (useSoftwareClock) {
@@ -482,7 +508,10 @@ void AudioStream::software_timer_callback(void *) {
 
 OSPEED
 void AudioStream::update_all(void) {
-    TaskHandle_t task = audio_task_handle;
+    portENTER_CRITICAL(&audio_mux);
+    TaskHandle_t task = update_scheduled ? audio_task_handle : nullptr;
+    portEXIT_CRITICAL(&audio_mux);
+
     if (task != nullptr) {
         xTaskNotifyGive(task);
     }
@@ -504,7 +533,10 @@ void AudioStream::enableUpdates(void) {
 
 OSPEED
 bool IRAM_ATTR AudioStream::update_all_from_isr(void) {
-    TaskHandle_t task = audio_task_handle;
+    portENTER_CRITICAL_ISR(&audio_mux);
+    TaskHandle_t task = update_scheduled ? audio_task_handle : nullptr;
+    portEXIT_CRITICAL_ISR(&audio_mux);
+
     if (task != nullptr) {
         BaseType_t higher_priority_task_woken = pdFALSE;
         vTaskNotifyGiveFromISR(task, &higher_priority_task_woken);
@@ -539,7 +571,6 @@ void AudioStream::process_all_now(void) {
         return;
     }
 
-    audio_processing = true;
     AudioStream *stream = first_update;
 
     portEXIT_CRITICAL(&audio_mux);
@@ -576,7 +607,7 @@ void AudioStream::process_all_now(void) {
     // -------------------------------------------------------------------------
 
     const uint32_t total_elapsed_cycles = esp_cpu_get_cycle_count() - total_start;
-    const uint32_t total_elapsed = total_elapsed_cycles / cpu_cycles_per_us;
+    const uint32_t total_elapsed = cpu_cycles_per_us != 0 ? total_elapsed_cycles / cpu_cycles_per_us : 0;
 
     portENTER_CRITICAL(&audio_mux);
 
@@ -585,8 +616,6 @@ void AudioStream::process_all_now(void) {
     if (total_elapsed > cpu_time_total_max_us) {
         cpu_time_total_max_us = total_elapsed;
     }
-
-    audio_processing = false;
 
     portEXIT_CRITICAL(&audio_mux);
 
@@ -712,23 +741,23 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num, uint3
 // Check whether a block belongs to our configured pool
 // =============================================================================
 
+#ifdef AUDIOSTREAM_ENABLE_POOL_POINTER_CHECKS
 bool AudioStream::is_block_from_pool(const audio_block_t *block) {
     if (block == nullptr || memory_pool == nullptr || memory_pool_size == 0) {
         return false;
     }
 
-    uintptr_t block_address = (uintptr_t)(block);
-    uintptr_t pool_address = (uintptr_t)(memory_pool);
-    uintptr_t pool_end = pool_address + sizeof(audio_block_t) * memory_pool_size;
+    const uintptr_t block_address = reinterpret_cast<uintptr_t>(block);
+    const uintptr_t pool_address = reinterpret_cast<uintptr_t>(memory_pool);
+    const uintptr_t pool_end = pool_address + sizeof(audio_block_t) * memory_pool_size;
 
     if (block_address < pool_address || block_address >= pool_end) {
         return false;
     }
 
-    uintptr_t offset = block_address - pool_address;
-
-    return (offset % sizeof(audio_block_t)) == 0;
+    return ((block_address - pool_address) % sizeof(audio_block_t)) == 0;
 }
+#endif
 
 // =============================================================================
 // Allocate block - internal
@@ -802,9 +831,11 @@ void AudioStream::release_locked(audio_block_t *block) {
         return;
     }
 
+#ifdef AUDIOSTREAM_ENABLE_POOL_POINTER_CHECKS
     if (!is_block_from_pool(block)) {
         return;
     }
+#endif
 
     if (block->ref_count == 0) {
         // Invalid ownership state. Do not modify the pool.
@@ -1074,19 +1105,17 @@ int AudioConnection::connect_locked(void) {
         return 2;
     }
 
-    portENTER_CRITICAL(&AudioStream::audio_mux);
-
-    // Check whether the destination input is already used. The update mutex
-    // held by the caller prevents the realtime scheduler from traversing the
-    // graph while this search and modification are in progress.
+    // The caller holds the graph mutex, so the graph is stable while this
+    // control-plane search runs. Keep the spinlock only around list mutation.
     for (AudioStream *s = AudioStream::first_update; s != nullptr; s = s->next_update) {
         for (AudioConnection *p = s->destination_list; p != nullptr; p = p->next_dest) {
             if (p->dst == dst && p->dest_index == dest_index) {
-                portEXIT_CRITICAL(&AudioStream::audio_mux);
                 return 4;
             }
         }
     }
+
+    portENTER_CRITICAL(&AudioStream::audio_mux);
 
     // Insert into source destination list.
     AudioConnection *p = src->destination_list;
@@ -1166,20 +1195,27 @@ int AudioConnection::disconnect_locked(void) {
     // Remove this connection from the source list.
     AudioConnection *p = src->destination_list;
 
-    if (p == nullptr) {
-        portEXIT_CRITICAL(&AudioStream::audio_mux);
-        return 3;
-    } else if (p == this) {
+    bool found = false;
+    if (p == this) {
         src->destination_list = next_dest;
+        found = true;
     } else {
         while (p != nullptr) {
             if (p->next_dest == this) {
                 p->next_dest = next_dest;
+                found = true;
                 break;
             }
 
             p = p->next_dest;
         }
+    }
+
+    // Do not alter counters or destination queues if the connection was not
+    // actually present in the source list.
+    if (!found) {
+        portEXIT_CRITICAL(&AudioStream::audio_mux);
+        return 3;
     }
 
     // Release any block that is still queued at the destination.
