@@ -9,8 +9,8 @@ constexpr char TAG[] = "AudioInputI2S";
 // Serialize ring-buffer lifecycle changes with AudioInputI2S::update().
 class AudioGraphUpdateLock {
   public:
-    AudioGraphUpdateLock() { AudioStream::disableUpdates(); }
-    ~AudioGraphUpdateLock() { AudioStream::enableUpdates(); }
+    AudioGraphUpdateLock() { AudioNoInterrupts(); }
+    ~AudioGraphUpdateLock() { AudioInterrupts(); }
 
     AudioGraphUpdateLock(const AudioGraphUpdateLock &) = delete;
     AudioGraphUpdateLock &operator=(const AudioGraphUpdateLock &) = delete;
