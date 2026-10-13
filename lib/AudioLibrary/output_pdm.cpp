@@ -134,7 +134,10 @@ bool AudioOutputPDM::beginInternal() {
     if (!AudioI2SPort::setEventHandler(CONTROLLER, AudioI2SPort::Direction::Tx,
                                        &AudioOutputPDM::onI2STransmit, this)) {
         ESP_LOGE(TAG, "Could not register PDM TX callback");
-        AudioI2SPort::release(CONTROLLER, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::release(CONTROLLER, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE(TAG, "Could not release PDM port after callback registration failure; retaining handle");
+            return false;
+        }
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
@@ -153,7 +156,10 @@ bool AudioOutputPDM::beginInternal() {
         setRunning(false);
         txTask.store(nullptr, std::memory_order_release);
         AudioI2SPort::clearEventHandler(CONTROLLER, AudioI2SPort::Direction::Tx, this);
-        AudioI2SPort::release(CONTROLLER, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::release(CONTROLLER, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE(TAG, "Could not release PDM port after task creation failure; retaining resources");
+            return false;
+        }
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
@@ -172,7 +178,10 @@ bool AudioOutputPDM::beginInternal() {
             ESP_LOGE(TAG, "PDM TX channel could not be stopped after startup failure; retaining port resources");
             return false;
         }
-        AudioI2SPort::release(CONTROLLER, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::release(CONTROLLER, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE(TAG, "Could not release PDM port after startup failure; retaining resources");
+            return false;
+        }
         txHandle = nullptr;
         if (txQueue != nullptr) {
             vQueueDelete(txQueue);
@@ -209,7 +218,10 @@ void AudioOutputPDM::end() {
             ESP_LOGE(TAG, "PDM TX channel could not be stopped; retaining port resources for retry");
             return;
         }
-        AudioI2SPort::release(CONTROLLER, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::release(CONTROLLER, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE(TAG, "Could not release PDM port; retaining resources for retry");
+            return;
+        }
         txHandle = nullptr;
     }
 
