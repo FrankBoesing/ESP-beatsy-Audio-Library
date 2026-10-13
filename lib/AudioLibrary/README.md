@@ -88,8 +88,8 @@ Die folgende Tabelle unterscheidet den globalen Audio-Blockpool von separaten I2
 | --- | --- | --- |
 | `AudioMemory(n)` / Audio-Blockpool | `n` Blöcke; standardmäßig 128 Mono-Samples pro Block | `AudioMemory(n)` legt den Pool statisch an; `n` wird vom Anwendungsprogramm festgelegt. Ein Block enthält bei 128 Samples 256 Byte PCM sowie 4 Byte Verwaltungsfelder, insgesamt 260 Byte für `audio_block_t`. Hinzu kommt die Verfügbarkeitsmaske des Pools. |
 | I2S-Stereo-Queue | 4 Stereo-Blockpaare | Enthält Zeiger auf Blöcke, keine zusätzlichen PCM-Kopien. |
-| I2S-Ausgabepuffer | 1024 Byte pro Block | Temporärer Puffer für 128 Stereo-Frames mit je zwei 32-Bit-Samples vor der Übergabe an den Treiber. |
-| I2S-DMA | 16 Deskriptoren mit jeweils 128 Stereo-Frames | Bei zwei 32-Bit-Slots pro Frame ergibt das ungefähr 16 KiB DMA-Nutzdaten. |
+| I2S-Ausgabepuffer | Kein separater PCM-Puffer | `AudioOutputI2S::update()` packt PCM direkt in den vom TX-Callback gemeldeten DMA-Puffer. |
+| I2S-DMA (Standard-PCM) | 2 Deskriptoren mit jeweils 128 Stereo-Frames | 512 Byte pro Deskriptor, insgesamt 1 KiB DMA-Nutzdaten. Dieselbe Deskriptorzahl gilt für TX und RX. |
 | MP3-Eingabepuffer | 2 KiB pro `AudioPlayMp3`-Objekt | Enthält komprimierte Daten im internen RAM. Wird auch beim dateibasierten MP3-Pfad verwendet. |
 | MP3-PCM-Puffer | 2 Puffer mit je 2304 `int16_t`-Samples | 4608 Byte pro Puffer, insgesamt 9216 Byte pro MP3-Objekt. Die Puffer werden abwechselnd verwendet. |
 | `AudioInputBuffer` | standardmäßig 32 KiB | Eigenständige, generische Buffer-Klasse. Die Größe ist über den Konstruktor oder `AUDIO_INPUT_BUFFER_SIZE` konfigurierbar; auf ESP32 wird PSRAM bevorzugt, sofern verfügbar. Der beschriebene MP3-Wiedergabepfad verwendet diese Klasse derzeit nicht. |
