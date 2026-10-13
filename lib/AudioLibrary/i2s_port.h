@@ -75,15 +75,6 @@ class AudioI2SPort {
     // AudioStream has one global sample rate, so all allocated controllers
     // are reconfigured together.
     static bool setSampleRate(float sampleRate);
-    // Generation changes whenever a new global sample rate is committed.
-    // Queued TX/RX blocks stamped with an older generation must be discarded.
-    static uint32_t AUDIO_I2S_ISR_ATTR currentSampleRateGeneration();
-
-    // Allows concurrent writes on separate controllers while making a global
-    // sample-rate reconfiguration wait for existing writes and block new ones.
-    static bool lockForWrite(TickType_t timeoutTicks = portMAX_DELAY);
-    static void unlockAfterWrite();
-
     static bool AUDIO_I2S_ISR_ATTR isClockOwner(uint8_t controller, Direction direction);
 };
 
