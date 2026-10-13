@@ -46,7 +46,6 @@ class AudioOutputI2S : public AudioStream {
     void end();
 
     bool isRunning() const;
-    uint32_t txCallbackCount() const;
     const Pins &pins() const { return i2sPins; }
     bool setSampleRate(float sampleRate);
     bool setChannelCount(uint channels); //Set to one if codec supports mono only (automatic stereo->mono conversion)
@@ -72,15 +71,12 @@ class AudioOutputI2S : public AudioStream {
 
     // 32-bit atomics avoid an ISR/task spinlock for these independent values.
     std::atomic<uint32_t> running{0};
-    std::atomic<uint32_t> txCallbackCountValue{0};
 
     static bool AUDIO_I2S_ISR_ATTR onI2STransmit(i2s_chan_handle_t channel, i2s_event_data_t *event, void *userContext);
 
     bool beginInternal();
     void releasePair(BlockPair &pair);
     void setRunning(bool value);
-    bool AUDIO_I2S_ISR_ATTR markTxCallbackFromISR();
-    void resetTxCallbackCount();
 
     // Non-copyable
     AudioOutputI2S(const AudioOutputI2S &) = delete;
