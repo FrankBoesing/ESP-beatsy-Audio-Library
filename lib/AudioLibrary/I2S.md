@@ -36,6 +36,20 @@ Active I²S controllers therefore share the same configured sample rate. A
 single active I²S direction owns the external scheduler clock; other I²S
 callbacks transfer data without advancing the global graph a second time.
 
+### Synchronization and IRAM-safe callbacks
+
+Sample-rate changes and output lifecycle operations use the global AudioStream
+graph-update lock instead of per-output TX mutexes. The port manager has a
+separate shared writer gate for the actual `i2s_channel_write()` calls; this
+lock must not be replaced by the graph lock. Queue entries carry a sample-rate
+generation and stale blocks are discarded before hardware output.
+
+When `CONFIG_I2S_ISR_IRAM_SAFE` is enabled, callback code and everything it calls
+must be available while the flash cache is disabled. The implementation therefore
+marks the sample-rate-generation accessor for IRAM and checks that I²S input/output
+objects are in internal RAM before registering callbacks. Do not allocate these
+objects in PSRAM under this configuration.
+
 ### RX diagnostics
 
 The I²S input classes expose:
@@ -89,8 +103,11 @@ high-rate PDM stream; the AudioStream processing loop handles PCM blocks only.
   noise after any change. The current validation is limited to the ESP32-S3
   setup and sample rates tested during development; other targets/rates are not
   guaranteed.
-- Runtime sample-rate changes pause AudioStream graph updates, wait for the PDM
-  TX writer, discard queued old-rate blocks, and then reconfigure the PDM clock.
+- Runtime sample-rate changes take the global AudioStream graph lock and the
+  shared I2S writer gate. The graph lock prevents new queue entries while the
+  port manager waits for in-flight hardware writes and reconfigures the clock.
+  Queued blocks carry a rate-generation number, so any old-rate block already
+  dequeued by a TX task is discarded before it can be written.
 - ESP32-S3 supports PCM-to-PDM on I²S0 and two PDM DAC lines. The original ESP32
   does not expose the same two-line direct-DAC mode. Targets without the needed
   ESP-IDF/SoC feature combination are reported as unsupported.
