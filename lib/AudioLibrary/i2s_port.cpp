@@ -19,6 +19,18 @@ using Format = AudioI2SPort::Format;
 using EventCallback = AudioI2SPort::EventCallback;
 
 constexpr char TAG[] = "AudioI2SPort";
+
+// Reconfiguration pauses graph traversal while clocks and channel states
+// are changed. AudioStream's mutex is recursive, so nested sample-rate calls
+// remain safe.
+class AudioGraphUpdateLock {
+  public:
+    AudioGraphUpdateLock() { AudioStream::disableUpdates(); }
+    ~AudioGraphUpdateLock() { AudioStream::enableUpdates(); }
+
+    AudioGraphUpdateLock(const AudioGraphUpdateLock &) = delete;
+    AudioGraphUpdateLock &operator=(const AudioGraphUpdateLock &) = delete;
+};
 constexpr uint16_t DMA_DESC_NUM = 6;
 constexpr uint16_t DMA_FRAME_NUM = AUDIO_BLOCK_SAMPLES;
 constexpr uint8_t MAX_PORTS = AudioI2SPort::MAX_CONTROLLERS;
@@ -728,6 +740,7 @@ void AudioI2SPort::release(uint8_t controller, Direction d) {
 OSIZE
 bool AudioI2SPort::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate <= 0.0f) return false;
+    AudioGraphUpdateLock graphLock;
     const long rounded = std::lround(rate);
     if (rounded <= 0) return false;
     const uint32_t newRate = static_cast<uint32_t>(rounded);
