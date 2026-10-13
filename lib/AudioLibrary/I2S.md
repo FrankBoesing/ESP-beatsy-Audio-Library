@@ -38,11 +38,11 @@ callbacks transfer data without advancing the global graph a second time.
 
 ### Synchronization and IRAM-safe callbacks
 
-Sample-rate changes and output lifecycle operations use the global AudioStream
-graph-update lock rather than per-output TX mutexes. Rate changes stop configured
-channels, update their clock settings, and restart the active channels. Brief
-audio disturbances can occur during reconfiguration; gapless output is not
-guaranteed.
+Output lifecycle operations use the global AudioStream graph-update lock.
+Sample-rate changes do not acquire that lock automatically. They stop configured
+channels, update their clock settings, and restart active channels. Brief audio
+disturbances can occur during reconfiguration. Callers that need the graph paused
+should hold `AudioNoInterrupts()` / `AudioInterrupts()` around the change.
 
 When `CONFIG_I2S_ISR_IRAM_SAFE` is enabled, callback code and everything it calls
 must be available while the flash cache is disabled. The implementation therefore
@@ -103,10 +103,10 @@ high-rate PDM stream; the AudioStream processing loop handles PCM blocks only.
   noise after any change. The current validation is limited to the ESP32-S3
   setup and sample rates tested during development; other targets/rates are not
   guaranteed.
-- Runtime sample-rate changes use the global AudioStream graph lock, stop
-  configured channels, update the clock settings, and restart the channels
-  that were active. Brief audio disturbances are possible; queued blocks are
-  not specially discarded solely because the sample rate changed.
+- Runtime sample-rate changes do not acquire the global graph lock
+  automatically. The port manager stops configured channels, updates the clock
+  settings, and restarts active channels. Brief audio disturbances are possible.
+  Applications that need the graph paused should hold the global update lock.
 - ESP32-S3 supports PCM-to-PDM on I²S0 and two PDM DAC lines. The original ESP32
   does not expose the same two-line direct-DAC mode. Targets without the needed
   ESP-IDF/SoC feature combination are reported as unsupported.
