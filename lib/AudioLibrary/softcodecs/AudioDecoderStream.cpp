@@ -6,6 +6,7 @@
 
 constexpr const char *TAG = "AudioDecoderStream";
 
+OSIZE
 AudioDecoderStream::AudioDecoderStream(size_t pcmBufferSamples)
     : AudioPlayer(), _pcmBufferSamples(pcmBufferSamples) {
     /*
@@ -13,6 +14,7 @@ AudioDecoderStream::AudioDecoderStream(size_t pcmBufferSamples)
      */
 }
 
+OSIZE
 AudioDecoderStream::~AudioDecoderStream() { stopDecoderTask(); }
 
 OSIZE
@@ -204,7 +206,7 @@ void AudioDecoderStream::stopDecoderTask() {
     clearDecoderState();
 }
 
-OSIZE
+OSPEED
 int AudioDecoderStream::claimFreeBuffer() {
     portENTER_CRITICAL(&_decoderMux);
 
@@ -222,7 +224,7 @@ int AudioDecoderStream::claimFreeBuffer() {
     return -1;
 }
 
-OSIZE
+OSPEED
 void AudioDecoderStream::releaseFilledBuffer(uint8_t index) {
     if (index >= PCM_BUFFER_COUNT) {
         return;
@@ -234,7 +236,7 @@ void AudioDecoderStream::releaseFilledBuffer(uint8_t index) {
     portEXIT_CRITICAL(&_decoderMux);
 }
 
-OSIZE
+OSPEED
 void AudioDecoderStream::publishReadyBuffer(uint8_t index, size_t samples) {
     if (index >= PCM_BUFFER_COUNT) {
         return;
@@ -247,6 +249,7 @@ void AudioDecoderStream::publishReadyBuffer(uint8_t index, size_t samples) {
     portEXIT_CRITICAL(&_decoderMux);
 }
 
+OSPEED
 int AudioDecoderStream::acquireReadyBuffer() {
     portENTER_CRITICAL(&_decoderMux);
 
@@ -274,7 +277,7 @@ int AudioDecoderStream::acquireReadyBuffer() {
     return best;
 }
 
-OSIZE
+OSPEED
 void AudioDecoderStream::releaseReadBuffer(uint8_t index) {
     if (index >= PCM_BUFFER_COUNT) {
         return;
@@ -296,12 +299,16 @@ void AudioDecoderStream::setDecoderFinished(int errorCode) {
     portEXIT_CRITICAL(&_decoderMux);
 }
 
+OSIZE
 bool AudioDecoderStream::decoderTaskRunning() const { return _decoderTaskRunning; }
 
+OSIZE
 bool AudioDecoderStream::decoderFinished() const { return _decoderFinished; }
 
+OSIZE
 int AudioDecoderStream::decoderError() const { return _decoderError; }
 
+OSIZE
 void AudioDecoderStream::decoderTaskEntry(void *arg) { ((AudioDecoderStream *)arg)->decoderTaskLoop(); }
 
 OSPEED
