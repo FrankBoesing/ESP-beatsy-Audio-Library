@@ -6,6 +6,7 @@
 #include <esp_attr.h>
 #include <driver/i2s_std.h>
 #include <driver/i2s_common.h>
+#include <soc/soc_caps.h>
 #include <freertos/FreeRTOS.h>
 
 #if defined(CONFIG_I2S_ISR_IRAM_SAFE) && CONFIG_I2S_ISR_IRAM_SAFE
@@ -17,8 +18,8 @@
 /*
  * Owns one physical ESP-IDF I2S controller and its optional TX/RX pair.
  *
- * Four software controller IDs (0..3) are reserved. The SoC/ESP-IDF driver
- * decides which IDs physically exist; unsupported IDs fail in i2s_new_channel.
+ * The controller array is sized from the SoC's I2S peripheral count.
+ * ESP-IDF 6 removed SOC_I2S_NUM, so supported targets use a hardware-count fallback.
  *
  * Controller lifetime is separate from wire format. Standard stereo PCM,
  * software-encoded SPDIF_BMC TX and hardware PCM-to-PDM DAC TX are implemented.
@@ -26,7 +27,15 @@
  */
 class AudioI2SPort {
   public:
-    static constexpr uint8_t MAX_CONTROLLERS = 4;
+#if defined(SOC_I2S_NUM)
+    static constexpr uint8_t MAX_CONTROLLERS = SOC_I2S_NUM;
+#elif defined(CONFIG_IDF_TARGET_ESP32P4)
+    static constexpr uint8_t MAX_CONTROLLERS = 3;
+#elif defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S31)
+    static constexpr uint8_t MAX_CONTROLLERS = 2;
+#else
+    static constexpr uint8_t MAX_CONTROLLERS = 1;
+#endif
 
     struct Pins {
         int8_t bclk;
