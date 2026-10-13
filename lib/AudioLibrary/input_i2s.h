@@ -62,8 +62,6 @@ class AudioInputI2S : public AudioStream {
     i2s_chan_handle_t rxHandle = nullptr;
 
     alignas(4) int16_t rxSampleRing[RX_RING_BLOCKS][AUDIO_BLOCK_SAMPLES * 2] = {};
-    // Reject queued samples captured under a previous global I2S sample rate.
-    uint32_t rxRateGeneration[RX_RING_BLOCKS] = {};
     std::atomic<uint32_t> writeBlockIndex{0};
     std::atomic<uint32_t> readBlockIndex{0};
 
