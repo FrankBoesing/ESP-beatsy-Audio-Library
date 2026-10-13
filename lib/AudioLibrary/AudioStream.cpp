@@ -289,11 +289,17 @@ bool AudioStream::setExternalUpdateClock(bool enabled) {
 
     bool ok = true;
     if (enabled) {
+        // Publish external-clock ownership first, so a timer callback that
+        // has not started yet will not submit another software-clock update.
+        portENTER_CRITICAL(&audio_mux);
+        external_update_clock = true;
+        portEXIT_CRITICAL(&audio_mux);
+
         // The software timer may deliberately not have been started yet.
         ok = stop_software_timer();
-        if (ok) {
+        if (!ok) {
             portENTER_CRITICAL(&audio_mux);
-            external_update_clock = true;
+            external_update_clock = false;
             portEXIT_CRITICAL(&audio_mux);
         }
     } else if (defer_start) {
@@ -513,7 +519,15 @@ void AudioStream::update_stop(void) {
 }
 
 OSPEED
-void AudioStream::software_timer_callback(void *) { update_all(); }
+void AudioStream::software_timer_callback(void *) {
+    portENTER_CRITICAL(&audio_mux);
+    const bool useSoftwareClock = !software_clock_deferred && !external_update_clock;
+    portEXIT_CRITICAL(&audio_mux);
+
+    if (useSoftwareClock) {
+        update_all();
+    }
+}
 
 OSPEED
 void AudioStream::update_all(void) {
