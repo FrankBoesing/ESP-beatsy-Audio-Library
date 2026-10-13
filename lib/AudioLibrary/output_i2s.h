@@ -5,8 +5,6 @@
 #include <Arduino.h>
 #include <atomic>
 #include "i2s_port.h"
-#include <freertos/FreeRTOS.h>
-#include <freertos/queue.h>
 #include "AudioStream.h"
 
 /*
@@ -66,7 +64,10 @@ class AudioOutputI2S : public AudioStream {
     uint numChannels = 2;
 
     i2s_chan_handle_t txHandle = nullptr;
-    QueueHandle_t txQueue = nullptr;
+    BlockPair txQueue[QUEUE_LENGTH]{};
+    size_t txQueueHead = 0;
+    size_t txQueueTail = 0;
+    size_t txQueueCount = 0;
     std::atomic<uint32_t *> pendingDmaBuffer{nullptr};
 
     // 32-bit atomics avoid an ISR/task spinlock for these independent values.
@@ -76,6 +77,8 @@ class AudioOutputI2S : public AudioStream {
 
     bool beginInternal();
     void releasePair(BlockPair &pair);
+    bool enqueuePair(const BlockPair &pair);
+    bool dequeuePair(BlockPair &pair);
     void setRunning(bool value);
 
     // Non-copyable
