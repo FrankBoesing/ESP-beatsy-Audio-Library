@@ -2,7 +2,7 @@
 
 ESP-beatsy is an ESP32-oriented port and adaptation of the [Teensy Audio Library](https://www.pjrc.com/teensy/td_libs_Audio.html). The main goal is to retain the familiar Teensy programming model and public APIs wherever practical, while adapting audio scheduling, I/O, memory handling and codec support to ESP32 hardware.
 
-**The project is work in progress.** The inventory below reflects the source files and classes currently present on the `work` branch. It is not a claim that every class has full Teensy feature parity or has been tested on every ESP32 target.
+**The project is work in progress.**  It is not a claim that every class has full Teensy feature parity or has been tested on every ESP32 target.
 
 ## Teensy Audio Library compatibility
 
@@ -143,7 +143,6 @@ A 513 entry sine table replaces the Teensy 257 entry table.
 - **AudioAnalyzeFFT1024** — 1024-point FFT analysis.
 - **AudioAnalyzePeak** — peak-level measurement.
 - **AudioAnalyzeRMS** — RMS-level measurement.
-- **AudioAnalyzePrint** — diagnostic/print-oriented analyzer.
 
 ## Build and board configuration
 

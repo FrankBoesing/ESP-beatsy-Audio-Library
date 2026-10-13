@@ -444,7 +444,7 @@ void AudioSourceStream::producerTaskLoop() {
          * Because freeBytes is already limited to the contiguous
          * region up to BUFFER_SIZE, no wrap-around write can occur here.
          */
-        const size_t availableBytes = static_cast<size_t>(available);
+        const size_t availableBytes = available;
         size_t requested = std::min(freeBytes, availableBytes);
         if (_icy.MetaInt > 0) {
             const size_t icyAudioRemaining = _icy.AudioRemaining;
