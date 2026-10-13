@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include "i2s_port.h"
+#include "audio_graph_update_lock.h"
 #include "spdif_bmc_encoder.h"
 
 namespace {
@@ -9,15 +10,6 @@ constexpr uint8_t PREAMBLE_B = 0x17; // B preamble polarity for a preceding HIGH
 constexpr uint8_t PREAMBLE_M = 0x1D; // M preamble polarity for a preceding HIGH level
 constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH level
 
-// Serialize graph/queue lifecycle changes with AudioOutputSPDIF::update().
-class AudioGraphUpdateLock {
-  public:
-    AudioGraphUpdateLock() { AudioNoInterrupts(); }
-    ~AudioGraphUpdateLock() { AudioInterrupts(); }
-
-    AudioGraphUpdateLock(const AudioGraphUpdateLock &) = delete;
-    AudioGraphUpdateLock &operator=(const AudioGraphUpdateLock &) = delete;
-};
 
 uint8_t spdifSampleRateCode(float rate) {
     const uint32_t hz = static_cast<uint32_t>(std::lround(rate));
@@ -74,7 +66,7 @@ bool AudioOutputSPDIF::beginHardware() { return beginInternal(); }
 OSIZE
 bool AudioOutputSPDIF::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate <= 0.0f) return false;
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
 
     const bool writerLocked = txWriteMutex != nullptr;
     if (writerLocked && xSemaphoreTake(txWriteMutex, pdMS_TO_TICKS(500)) != pdTRUE) {
@@ -98,7 +90,7 @@ bool AudioOutputSPDIF::setSampleRate(float rate) {
 
 OSIZE
 bool AudioOutputSPDIF::beginInternal() {
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
     if (isRunning()) return true;
     if (spdifPins.dout < 0) {
         return false;
@@ -188,7 +180,7 @@ bool AudioOutputSPDIF::beginInternal() {
 
 OSIZE
 void AudioOutputSPDIF::end() {
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
     if (!isRunning() && txQueue == nullptr && txHandle == nullptr &&
         txTask.load(std::memory_order_acquire) == nullptr && txWriteMutex == nullptr) return;
 
