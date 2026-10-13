@@ -19,7 +19,7 @@ public:
         }
 
         phase_increment =
-            static_cast<uint32_t>(
+            (uint32_t)(
                 freq * (4294967296.0f / AUDIO_SAMPLE_RATE_EXACT));
     }
 
@@ -35,7 +35,7 @@ public:
         }
 
         phase_accumulator =
-            static_cast<uint32_t>(
+            (uint32_t)(
                 angle * (4294967296.0 / 360.0));
     }
 
@@ -74,7 +74,7 @@ public:
             freq = AUDIO_SAMPLE_RATE_EXACT / 2.0f;
         }
 
-        phase_increment = static_cast<uint32_t>(
+        phase_increment = (uint32_t)(
             freq * (4294967296.0f / AUDIO_SAMPLE_RATE_EXACT));
     }
 
@@ -89,7 +89,7 @@ public:
             }
         }
 
-        phase_accumulator = static_cast<uint32_t>(
+        phase_accumulator = (uint32_t)(
             angle * (4294967296.0 / 360.0));
     }
 

@@ -1,6 +1,5 @@
-#include "spdif_bmc_encoder.h"
-
-namespace spdif_bmc {
+#include <stdint.h>
+#include <stdalign.h>
 // Fixed BMC byte lookup in read-only .rodata (flash-mapped on ESP32).
 // Bits 0..15 contain the encoded BMC half-bit levels for a byte, MSB-first.
 // Bit 16 contains the byte's data parity, folded into the same table entry.
@@ -77,4 +76,4 @@ const uint8_t BMC_NIBBLE_TABLE[16] = {
     0x32, 0x4D, 0x2D, 0x52, 0x35, 0x4A, 0x2A, 0x55,
 };
 
-} // namespace spdif_bmc
+

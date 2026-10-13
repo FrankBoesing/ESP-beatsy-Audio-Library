@@ -59,8 +59,8 @@ struct TwiddleTable {
     TwiddleTable() {
         // Forward-FFT twiddles: exp(-j * 2*pi*k/N).
         for (uint16_t k = 0; k < kMaxTwiddles; ++k) {
-            const float angle = -2.0f * kPi * static_cast<float>(k) /
-                                static_cast<float>(kMaxFFTSize);
+            const float angle = -2.0f * kPi * (float)(k) /
+                                (float)(kMaxFFTSize);
             re[k] = cosf(angle);
             im[k] = sinf(angle);
         }
@@ -111,16 +111,16 @@ static bool transformPortable(float *data, uint16_t n) {
     // numbers, so each swap moves both real and imaginary components.
     uint16_t j = 0;
     for (uint16_t i = 1; i < n; ++i) {
-        uint16_t bit = static_cast<uint16_t>(n >> 1);
+        uint16_t bit = (uint16_t)(n >> 1);
         while ((j & bit) != 0) {
-            j = static_cast<uint16_t>(j ^ bit);
-            bit = static_cast<uint16_t>(bit >> 1);
+            j = (uint16_t)(j ^ bit);
+            bit = (uint16_t)(bit >> 1);
         }
-        j = static_cast<uint16_t>(j ^ bit);
+        j = (uint16_t)(j ^ bit);
 
         if (i < j) {
-            const uint16_t ii = static_cast<uint16_t>(2U * i);
-            const uint16_t jj = static_cast<uint16_t>(2U * j);
+            const uint16_t ii = (uint16_t)(2U * i);
+            const uint16_t jj = (uint16_t)(2U * j);
             float tmp = data[ii];
             data[ii] = data[jj];
             data[jj] = tmp;
@@ -132,18 +132,18 @@ static bool transformPortable(float *data, uint16_t n) {
 
     // Iterative radix-2 decimation-in-time FFT. Twiddles are precomputed for
     // N=1024; smaller transforms stride through the same table.
-    for (uint16_t len = 2; len <= n; len = static_cast<uint16_t>(len << 1)) {
-        const uint16_t half = static_cast<uint16_t>(len >> 1);
-        const uint16_t twiddleStep = static_cast<uint16_t>(kMaxFFTSize / len);
+    for (uint16_t len = 2; len <= n; len = (uint16_t)(len << 1)) {
+        const uint16_t half = (uint16_t)(len >> 1);
+        const uint16_t twiddleStep = (uint16_t)(kMaxFFTSize / len);
 
-        for (uint16_t base = 0; base < n; base = static_cast<uint16_t>(base + len)) {
+        for (uint16_t base = 0; base < n; base = (uint16_t)(base + len)) {
             for (uint16_t k = 0; k < half; ++k) {
-                const uint16_t tw = static_cast<uint16_t>(k * twiddleStep);
+                const uint16_t tw = (uint16_t)(k * twiddleStep);
                 const float wr = table.re[tw];
                 const float wi = table.im[tw];
 
-                const uint16_t ia = static_cast<uint16_t>(2U * (base + k));
-                const uint16_t ib = static_cast<uint16_t>(2U * (base + k + half));
+                const uint16_t ia = (uint16_t)(2U * (base + k));
+                const uint16_t ib = (uint16_t)(2U * (base + k + half));
 
                 const float ar = data[ia];
                 const float ai = data[ia + 1];
@@ -216,7 +216,7 @@ uint32_t magnitudeSquaredScaled(const float *data, uint16_t bin,
         return 0;
     }
 
-    const uint16_t index = static_cast<uint16_t>(2U * bin);
+    const uint16_t index = (uint16_t)(2U * bin);
     const float re = data[index];
     const float im = data[index + 1];
     const float power = (re * re + im * im) * powerScale;
@@ -231,7 +231,7 @@ uint32_t magnitudeSquaredScaled(const float *data, uint16_t bin,
         return UINT32_MAX;
     }
 
-    return static_cast<uint32_t>(power + 0.5f);
+    return (uint32_t)(power + 0.5f);
 }
 
 uint16_t magnitudeFromSquared(uint32_t power) {
@@ -243,7 +243,7 @@ uint16_t magnitudeFromSquared(uint32_t power) {
 
     const uint32_t magnitude = sqrt_uint32_approx(power);
     return (magnitude > UINT16_MAX) ? UINT16_MAX :
-           static_cast<uint16_t>(magnitude);
+           (uint16_t)(magnitude);
 }
 
 } // namespace AudioFFT

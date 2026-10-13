@@ -64,9 +64,9 @@ AudioConnection *patchCordRight = nullptr;
 // ============================================================================
 
 bool onStreamSampleRate(uint32_t rate, void *) {
-    ESP_LOGI(TAG, "Switching output sample rate to %u Hz", static_cast<unsigned>(rate));
+    ESP_LOGI(TAG, "Switching output sample rate to %u Hz", (unsigned)(rate));
 
-    return i2s.setSampleRate(static_cast<float>(rate));
+    return i2s.setSampleRate((float)(rate));
 }
 
 // ============================================================================
@@ -176,10 +176,10 @@ void configStream(HTTPClient &client, bool useIcy = false, followRedirects_t red
 
 void printFreeRam() {
     ESP_LOGI(TAG, "Free heap: internal %u B (largest block %u B, min ever %u B), PSRAM %u B",
-             static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
-             static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
-             static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
-             static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)));
+             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+             (unsigned)(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)));
 }
 
 void printStatus(AudioPlayer &player) {

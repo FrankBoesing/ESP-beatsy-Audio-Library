@@ -32,11 +32,7 @@
 #include "utility/audio_fft_backend.h"
 
 AudioAnalyzeFFT256::AudioAnalyzeFFT256()
-    : AudioStream(1, inputQueueArray),
-      window(AudioWindowHanning256),
-      samplesCollected(0),
-      naverage(8),
-      averageCount(0),
+    : AudioStream(1, inputQueueArray), window(AudioWindowHanning256), samplesCollected(0), naverage(8), averageCount(0),
       outputflag(false) {
     memset(frameSamples, 0, sizeof(frameSamples));
     memset(fftBuffer, 0, sizeof(fftBuffer));
@@ -57,7 +53,7 @@ float AudioAnalyzeFFT256::read(unsigned int binNumber) {
     if (binNumber >= NUM_BINS) {
         return 0.0f;
     }
-    return static_cast<float>(output[binNumber]) * (1.0f / 16384.0f);
+    return (float)(output[binNumber]) * (1.0f / 16384.0f);
 }
 
 float AudioAnalyzeFFT256::read(unsigned int binFirst, unsigned int binLast) {
@@ -77,7 +73,7 @@ float AudioAnalyzeFFT256::read(unsigned int binFirst, unsigned int binLast) {
     for (unsigned int bin = binFirst; bin <= binLast; ++bin) {
         sum += output[bin];
     }
-    return static_cast<float>(sum) * (1.0f / 16384.0f);
+    return (float)(sum) * (1.0f / 16384.0f);
 }
 
 void AudioAnalyzeFFT256::averageTogether(uint8_t n) {
@@ -106,9 +102,9 @@ void AudioAnalyzeFFT256::processFrame(void) {
     // Load real input in interleaved complex form; the imaginary components
     // are zero. Window coefficients are Q15, as in the Teensy API.
     for (uint16_t i = 0; i < FFT_SIZE; ++i) {
-        float sample = static_cast<float>(frameSamples[i]) * q15Scale;
+        float sample = (float)(frameSamples[i]) * q15Scale;
         if (window != nullptr) {
-            sample *= static_cast<float>(window[i]) * q15Scale;
+            sample *= (float)(window[i]) * q15Scale;
         }
         fftBuffer[2U * i] = sample;
         fftBuffer[2U * i + 1U] = 0.0f;
@@ -126,8 +122,7 @@ void AudioAnalyzeFFT256::processFrame(void) {
     // As recommended for spectral averaging, average magnitude squared and
     // take the square root only after the averaging interval has completed.
     for (uint16_t bin = 0; bin < NUM_BINS; ++bin) {
-        accumulatedPower[bin] +=
-            AudioFFT::magnitudeSquaredScaled(fftBuffer, bin, powerScale);
+        accumulatedPower[bin] += AudioFFT::magnitudeSquaredScaled(fftBuffer, bin, powerScale);
     }
 
     ++averageCount;
@@ -137,9 +132,7 @@ void AudioAnalyzeFFT256::processFrame(void) {
 
     for (uint16_t bin = 0; bin < NUM_BINS; ++bin) {
         const uint64_t meanPower = accumulatedPower[bin] / averageCount;
-        const uint32_t boundedPower =
-            (meanPower > UINT32_MAX) ? UINT32_MAX :
-            static_cast<uint32_t>(meanPower);
+        const uint32_t boundedPower = (meanPower > UINT32_MAX) ? UINT32_MAX : (uint32_t)(meanPower);
 
         output[bin] = AudioFFT::magnitudeFromSquared(boundedPower);
         accumulatedPower[bin] = 0;
@@ -162,8 +155,7 @@ void AudioAnalyzeFFT256::update(void) {
 
         if (samplesCollected == FFT_SIZE) {
             processFrame();
-            memmove(frameSamples, frameSamples + (FFT_SIZE / 2),
-                    (FFT_SIZE / 2) * sizeof(frameSamples[0]));
+            memmove(frameSamples, frameSamples + (FFT_SIZE / 2), (FFT_SIZE / 2) * sizeof(frameSamples[0]));
             samplesCollected = FFT_SIZE / 2;
         }
     }

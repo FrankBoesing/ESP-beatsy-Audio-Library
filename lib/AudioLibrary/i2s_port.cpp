@@ -12,7 +12,7 @@
 #include <freertos/task.h>
 #include <driver/i2s_pdm.h>
 #include "AudioStream.h"
-#include "audio_graph_update_lock.h"
+
 
 namespace {
 using Direction = AudioI2SPort::Direction;
@@ -53,13 +53,13 @@ uint32_t choosePdmDacBclkDivider(uint32_t rate, i2s_clock_src_t clockSource) {
 
     for (uint32_t bclkDiv = MIN_BCLK_DIV; bclkDiv <= MAX_BCLK_DIV; ++bclkDiv) {
         const uint64_t targetMclk =
-            static_cast<uint64_t>(rate) * PDM_BCLK_FACTOR *
+            (uint64_t)(rate) * PDM_BCLK_FACTOR *
             PDM_OVERSAMPLE_RATIO * bclkDiv;
-        const uint32_t mclkDiv = static_cast<uint32_t>(sourceHz / targetMclk);
+        const uint32_t mclkDiv = (uint32_t)(sourceHz / targetMclk);
         if (mclkDiv < 2 || mclkDiv >= 256) continue;
         if (static_cast<double>(sourceHz) <= static_cast<double>(targetMclk) * 1.99) continue;
 
-        const uint64_t totalDivider = static_cast<uint64_t>(mclkDiv) *
+        const uint64_t totalDivider = (uint64_t)(mclkDiv) *
             PDM_BCLK_FACTOR * PDM_OVERSAMPLE_RATIO * bclkDiv;
         const double actualRate = static_cast<double>(sourceHz) / totalDivider;
         const double error = std::fabs(actualRate - static_cast<double>(rate));
@@ -108,13 +108,13 @@ void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &cfg) {
         return;
     }
 
-    const uint64_t mclk64 = static_cast<uint64_t>(rate) * PDM_BCLK_FACTOR *
+    const uint64_t mclk64 = (uint64_t)(rate) * PDM_BCLK_FACTOR *
                             oversampleRatio * cfg.bclk_div;
     if (mclk64 == 0 || mclk64 > 0xFFFFFFFFULL) {
         ESP_LOGW(TAG, "Skipping experimental PDM MCLK correction: target MCLK out of range");
         return;
     }
-    const uint32_t targetMclk = static_cast<uint32_t>(mclk64);
+    const uint32_t targetMclk = (uint32_t)(mclk64);
     const uint32_t integerDivider = sourceHz / targetMclk;
     if (integerDivider < 2 || integerDivider >= 256 ||
         static_cast<double>(sourceHz) <= static_cast<double>(targetMclk) * 1.99) {
@@ -122,7 +122,7 @@ void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &cfg) {
         return;
     }
 
-    const uint64_t rateDivider = static_cast<uint64_t>(integerDivider) *
+    const uint64_t rateDivider = (uint64_t)(integerDivider) *
                                  PDM_BCLK_FACTOR * oversampleRatio * cfg.bclk_div;
     const double integerRate = static_cast<double>(sourceHz) / rateDivider;
     const double errorPercent =
@@ -155,7 +155,7 @@ void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &cfg) {
     i2s_ll_tx_update(hw);
 
     const uint64_t dividerNumerator =
-        static_cast<uint64_t>(divider.integer) * divider.denominator + divider.numerator;
+        (uint64_t)(divider.integer) * divider.denominator + divider.numerator;
     const double actualMclk = static_cast<double>(sourceHz) * divider.denominator /
                               static_cast<double>(dividerNumerator);
     const double predictedRate =
@@ -372,7 +372,7 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
     cfg.id = static_cast<i2s_port_t>(controllerOf(&s));
     cfg.role = I2S_ROLE_MASTER;
     cfg.dma_desc_num = DMA_DESC_NUM;
-    cfg.dma_frame_num = static_cast<uint16_t>(DMA_FRAME_NUM * format.rateMultiplier);
+    cfg.dma_frame_num = (uint16_t)(DMA_FRAME_NUM * format.rateMultiplier);
     cfg.auto_clear_after_cb = true;
     cfg.allow_pd = false;
     cfg.intr_priority = 2;
@@ -621,11 +621,11 @@ void clearHandler(PortState &s, Direction d, void *context) {
 
 bool AudioI2SPort::acquireTx(const Pins &pins, i2s_chan_handle_t *handle) { return acquireTx(pins, handle, Format{}); }
 bool AudioI2SPort::acquireTx(const Pins &pins, i2s_chan_handle_t *handle, const Format &format) {
-    return acquire(Direction::Tx, pins, handle, static_cast<uint32_t>(std::lround(AudioStream::sampleRate())), format);
+    return acquire(Direction::Tx, pins, handle, (uint32_t)(std::lround(AudioStream::sampleRate())), format);
 }
 bool AudioI2SPort::acquireRx(const Pins &pins, i2s_chan_handle_t *handle) { return acquireRx(pins, handle, Format{}); }
 bool AudioI2SPort::acquireRx(const Pins &pins, i2s_chan_handle_t *handle, const Format &format) {
-    return acquire(Direction::Rx, pins, handle, static_cast<uint32_t>(std::lround(AudioStream::sampleRate())), format);
+    return acquire(Direction::Rx, pins, handle, (uint32_t)(std::lround(AudioStream::sampleRate())), format);
 }
 
 OSIZE
@@ -823,11 +823,11 @@ bool AudioI2SPort::setSampleRate(float rate) {
     }
 
     const long rounded = std::lround(rate);
-    if (rounded <= 0 || static_cast<uint64_t>(rounded) > UINT32_MAX / 4U) return false;
-    const uint32_t newRate = static_cast<uint32_t>(rounded);
+    if (rounded <= 0 || (uint64_t)(rounded) > UINT32_MAX / 4U) return false;
+    const uint32_t newRate = (uint32_t)(rounded);
     const float oldRateFloat = AudioStream::sampleRate();
-    const uint32_t oldRate = static_cast<uint32_t>(std::lround(oldRateFloat));
-    const float effectiveRate = static_cast<float>(newRate);
+    const uint32_t oldRate = (uint32_t)(std::lround(oldRateFloat));
+    const float effectiveRate = (float)(newRate);
     if (newRate == oldRate) {
         // Hardware rates are integer Hz. Keep AudioStream's rate identical to
         // the value used to configure I2S, even if the caller supplied a

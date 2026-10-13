@@ -24,6 +24,11 @@ typedef struct audio_block_struct {
     int16_t data[AUDIO_BLOCK_SAMPLES];
 } audio_block_t;
 
+// Shared immutable silence block. Defined once in common.cpp and stored in
+// read-only flash-mapped data on ESP32 targets.
+extern const int16_t audio_zeroblock[AUDIO_BLOCK_SAMPLES];
+
+
 // -----------------------------------------------------------------------------
 // Forward declarations
 // -----------------------------------------------------------------------------
@@ -324,5 +329,20 @@ inline void AudioInterrupts() {
 inline void AudioNoInterrupts() {
     AudioStream::disableUpdates();
 }
+
+namespace audio_detail {
+
+// Serializes graph/lifecycle operations with AudioTask::update().
+// The underlying AudioStream mutex is recursive, so nested calls are safe.
+class GraphUpdateLock {
+  public:
+    GraphUpdateLock() { AudioNoInterrupts(); }
+    ~GraphUpdateLock() { AudioInterrupts(); }
+
+    GraphUpdateLock(const GraphUpdateLock &) = delete;
+    GraphUpdateLock &operator=(const GraphUpdateLock &) = delete;
+};
+
+} // namespace audio_detail
 
 #endif // AudioStream_h
