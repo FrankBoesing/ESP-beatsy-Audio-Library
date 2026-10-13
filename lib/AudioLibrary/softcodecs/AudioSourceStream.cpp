@@ -121,7 +121,7 @@ void AudioSourceStream::parseIcyMetadata(const uint8_t *buffer, size_t size) {
         }
 
         // Search for "StreamTitle='"
-        if (c == static_cast<uint8_t>(KEY[_icy.KeyMatch])) {
+        if (c == (uint8_t)(KEY[_icy.KeyMatch])) {
             ++_icy.KeyMatch;
 
             if (_icy.KeyMatch == KEY_LENGTH) {
@@ -131,7 +131,7 @@ void AudioSourceStream::parseIcyMetadata(const uint8_t *buffer, size_t size) {
         } else {
             // The key starts with 'S'. If the current byte is an 'S',
             // it can be the beginning of a new match.
-            _icy.KeyMatch = (c == static_cast<uint8_t>(KEY[0])) ? 1 : 0;
+            _icy.KeyMatch = (c == (uint8_t)(KEY[0])) ? 1 : 0;
         }
     }
 }

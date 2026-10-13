@@ -106,7 +106,7 @@ bool AudioOutputPDM::beginInternal() {
     const AudioI2SPort::Format format{
         AudioI2SPort::PeripheralMode::PDM,
         AudioI2SPort::DataEncoding::PCM,
-        static_cast<uint8_t>(numChannels),
+        (uint8_t)(numChannels),
         16,
         1
     };
@@ -299,7 +299,7 @@ void AudioOutputPDM::txTaskLoop() {
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
                 int32_t mono;
                 if (left && right) {
-                    mono = (static_cast<int32_t>(left[i]) + static_cast<int32_t>(right[i])) / 2;
+                    mono = ((int32_t)(left[i]) + (int32_t)(right[i])) / 2;
                 } else if (left) {
                     mono = left[i];
                 } else if (right) {
@@ -330,8 +330,8 @@ void AudioOutputPDM::txTaskLoop() {
             ++writeErrorCount;
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
                 ESP_LOGE(TAG, "PDM TX error #%lu: %s, bytes=%lu/%lu",
-                         static_cast<unsigned long>(writeErrorCount), esp_err_to_name(err),
-                         static_cast<unsigned long>(bytesWritten), static_cast<unsigned long>(bytesToWrite));
+                         (ulong)(writeErrorCount), esp_err_to_name(err),
+                         (ulong)(bytesWritten), (ulong)(bytesToWrite));
                 lastErrorLogMs = now;
             }
         }

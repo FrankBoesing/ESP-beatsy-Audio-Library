@@ -13,7 +13,6 @@
 #include <driver/i2s_pdm.h>
 #include "AudioStream.h"
 
-
 namespace {
 using Direction = AudioI2SPort::Direction;
 using Pins = AudioI2SPort::Pins;
@@ -37,8 +36,7 @@ uint32_t choosePdmDacBclkDivider(uint32_t rate, i2s_clock_src_t clockSource) {
 
     uint32_t sourceHz = 0;
     const auto source = static_cast<soc_module_clk_t>(clockSource);
-    if (esp_clk_tree_src_get_freq_hz(
-            source, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &sourceHz) != ESP_OK ||
+    if (esp_clk_tree_src_get_freq_hz(source, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &sourceHz) != ESP_OK ||
         sourceHz == 0) {
         // Keep the IDF default if the clock tree cannot report the source.
         return DEFAULT_BCLK_DIV;
@@ -52,23 +50,17 @@ uint32_t choosePdmDacBclkDivider(uint32_t rate, i2s_clock_src_t clockSource) {
     double bestError = INFINITY;
 
     for (uint32_t bclkDiv = MIN_BCLK_DIV; bclkDiv <= MAX_BCLK_DIV; ++bclkDiv) {
-        const uint64_t targetMclk =
-            (uint64_t)(rate) * PDM_BCLK_FACTOR *
-            PDM_OVERSAMPLE_RATIO * bclkDiv;
+        const uint64_t targetMclk = (uint64_t)(rate)*PDM_BCLK_FACTOR * PDM_OVERSAMPLE_RATIO * bclkDiv;
         const uint32_t mclkDiv = (uint32_t)(sourceHz / targetMclk);
         if (mclkDiv < 2 || mclkDiv >= 256) continue;
-        if (static_cast<double>(sourceHz) <= static_cast<double>(targetMclk) * 1.99) continue;
+        if ((double)(sourceHz) <= (double)(targetMclk) * 1.99) continue;
 
-        const uint64_t totalDivider = (uint64_t)(mclkDiv) *
-            PDM_BCLK_FACTOR * PDM_OVERSAMPLE_RATIO * bclkDiv;
-        const double actualRate = static_cast<double>(sourceHz) / totalDivider;
-        const double error = std::fabs(actualRate - static_cast<double>(rate));
-        const uint32_t distance = bclkDiv > DEFAULT_BCLK_DIV
-            ? bclkDiv - DEFAULT_BCLK_DIV
-            : DEFAULT_BCLK_DIV - bclkDiv;
+        const uint64_t totalDivider = (uint64_t)(mclkDiv)*PDM_BCLK_FACTOR * PDM_OVERSAMPLE_RATIO * bclkDiv;
+        const double actualRate = (double)(sourceHz) / totalDivider;
+        const double error = std::fabs(actualRate - (double)(rate));
+        const uint32_t distance = bclkDiv > DEFAULT_BCLK_DIV ? bclkDiv - DEFAULT_BCLK_DIV : DEFAULT_BCLK_DIV - bclkDiv;
 
-        if (error < bestError - 1e-9 ||
-            (std::fabs(error - bestError) <= 1e-9 && distance < bestDistance)) {
+        if (error < bestError - 1e-9 || (std::fabs(error - bestError) <= 1e-9 && distance < bestDistance)) {
             bestError = error;
             bestDivider = bclkDiv;
             bestDistance = distance;
@@ -86,14 +78,13 @@ i2s_pdm_tx_clk_config_t makePdmDacClockConfig(uint32_t rate) {
     return cfg;
 }
 
-#if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && \
-    defined(SOC_I2S_HW_VERSION_2) && SOC_I2S_HW_VERSION_2
+#if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && defined(SOC_I2S_HW_VERSION_2) &&                  \
+    SOC_I2S_HW_VERSION_2
 void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &cfg) {
     constexpr uint32_t PDM_BCLK_FACTOR = 64;
 
     const uint32_t rate = cfg.sample_rate_hz;
-    const uint32_t oversampleRatio =
-        cfg.up_sample_fs != 0 ? cfg.up_sample_fp / cfg.up_sample_fs : 0;
+    const uint32_t oversampleRatio = cfg.up_sample_fs != 0 ? cfg.up_sample_fp / cfg.up_sample_fs : 0;
     if (rate == 0 || oversampleRatio == 0 || cfg.bclk_div < 8) {
         ESP_LOGW(TAG, "Skipping experimental PDM MCLK correction: invalid clock config");
         return;
@@ -101,15 +92,13 @@ void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &cfg) {
 
     uint32_t sourceHz = 0;
     const auto source = static_cast<soc_module_clk_t>(cfg.clk_src);
-    if (esp_clk_tree_src_get_freq_hz(
-            source, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &sourceHz) != ESP_OK ||
+    if (esp_clk_tree_src_get_freq_hz(source, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &sourceHz) != ESP_OK ||
         sourceHz == 0) {
         ESP_LOGW(TAG, "Skipping experimental PDM MCLK correction: source clock unavailable");
         return;
     }
 
-    const uint64_t mclk64 = (uint64_t)(rate) * PDM_BCLK_FACTOR *
-                            oversampleRatio * cfg.bclk_div;
+    const uint64_t mclk64 = (uint64_t)(rate)*PDM_BCLK_FACTOR * oversampleRatio * cfg.bclk_div;
     if (mclk64 == 0 || mclk64 > 0xFFFFFFFFULL) {
         ESP_LOGW(TAG, "Skipping experimental PDM MCLK correction: target MCLK out of range");
         return;
@@ -117,24 +106,21 @@ void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &cfg) {
     const uint32_t targetMclk = (uint32_t)(mclk64);
     const uint32_t integerDivider = sourceHz / targetMclk;
     if (integerDivider < 2 || integerDivider >= 256 ||
-        static_cast<double>(sourceHz) <= static_cast<double>(targetMclk) * 1.99) {
+        (double)(sourceHz) <= (double)(targetMclk) * 1.99) {
         ESP_LOGW(TAG, "Skipping experimental PDM MCLK correction: invalid integer divider");
         return;
     }
 
-    const uint64_t rateDivider = (uint64_t)(integerDivider) *
-                                 PDM_BCLK_FACTOR * oversampleRatio * cfg.bclk_div;
-    const double integerRate = static_cast<double>(sourceHz) / rateDivider;
-    const double errorPercent =
-        100.0 * std::fabs(integerRate - static_cast<double>(rate)) / rate;
+    const uint64_t rateDivider = (uint64_t)(integerDivider)*PDM_BCLK_FACTOR * oversampleRatio * cfg.bclk_div;
+    const double integerRate = (double)(sourceHz) / rateDivider;
+    const double errorPercent = 100.0 * std::fabs(integerRate - (double)(rate)) / rate;
 
     // Keep the ESP-IDF low-noise integer divider when its rate error is already
     // small. This leaves the currently working 48 kHz configuration untouched.
     constexpr double MAX_INTEGER_RATE_ERROR_PERCENT = 0.5;
     if (errorPercent <= MAX_INTEGER_RATE_ERROR_PERCENT) {
-        ESP_LOGI(TAG,
-                 "PDM clock %lu Hz: keep IDF integer divider; predicted rate %.2f Hz (error %.3f%%)",
-                 static_cast<unsigned long>(rate), integerRate, errorPercent);
+        ESP_LOGI(TAG, "PDM clock %lu Hz: keep IDF integer divider; predicted rate %.2f Hz (error %.3f%%)",
+                 (ulong)(rate), integerRate, errorPercent);
         return;
     }
 
@@ -145,8 +131,7 @@ void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &cfg) {
     hal_utils_clk_div_t divider = {};
     i2s_hal_calc_mclk_precise_division(sourceHz, targetMclk, &divider);
     if (divider.integer < 2 || divider.denominator == 0) {
-        ESP_LOGW(TAG, "Could not calculate fractional PDM MCLK divider for %lu Hz",
-                 static_cast<unsigned long>(rate));
+        ESP_LOGW(TAG, "Could not calculate fractional PDM MCLK divider for %lu Hz", (ulong)(rate));
         return;
     }
 
@@ -154,21 +139,16 @@ void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &cfg) {
     i2s_ll_tx_set_mclk(hw, &divider);
     i2s_ll_tx_update(hw);
 
-    const uint64_t dividerNumerator =
-        (uint64_t)(divider.integer) * divider.denominator + divider.numerator;
-    const double actualMclk = static_cast<double>(sourceHz) * divider.denominator /
-                              static_cast<double>(dividerNumerator);
-    const double predictedRate =
-        actualMclk / (PDM_BCLK_FACTOR * oversampleRatio * cfg.bclk_div);
+    const uint64_t dividerNumerator = (uint64_t)(divider.integer) * divider.denominator + divider.numerator;
+    const double actualMclk =
+        (double)(sourceHz) * divider.denominator / (double)(dividerNumerator);
+    const double predictedRate = actualMclk / (PDM_BCLK_FACTOR * oversampleRatio * cfg.bclk_div);
     ESP_LOGW(TAG,
              "EXPERIMENTAL fractional PDM MCLK: source=%lu Hz, requested=%lu Hz, BCLK divider=%lu, "
              "integer-divider estimate=%.2f Hz, divider=%lu+%lu/%lu, predicted=%.2f Hz. "
              "Listen for added PDM noise.",
-             static_cast<unsigned long>(sourceHz), static_cast<unsigned long>(rate),
-             static_cast<unsigned long>(cfg.bclk_div), integerRate,
-             static_cast<unsigned long>(divider.integer),
-             static_cast<unsigned long>(divider.numerator),
-             static_cast<unsigned long>(divider.denominator), predictedRate);
+             (ulong)(sourceHz), (ulong)(rate), (ulong)(cfg.bclk_div), integerRate, (ulong)(divider.integer),
+             (ulong)(divider.numerator), (ulong)(divider.denominator), predictedRate);
 }
 #else
 void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &) {}
@@ -204,9 +184,9 @@ PortState ports[MAX_PORTS]{};
 std::atomic<int32_t> schedulerOwner{-1};
 
 int8_t getSchedulerOwner() { return static_cast<int8_t>(schedulerOwner.load(std::memory_order_acquire)); }
-void setSchedulerOwner(int8_t owner) { schedulerOwner.store(static_cast<int32_t>(owner), std::memory_order_release); }
+void setSchedulerOwner(int8_t owner) { schedulerOwner.store((int32_t)(owner), std::memory_order_release); }
 PortState *stateFor(uint8_t controller) { return controller < MAX_PORTS ? &ports[controller] : nullptr; }
-uint8_t controllerOf(const PortState *state) { return static_cast<uint8_t>(state - ports); }
+uint8_t controllerOf(const PortState *state) { return (uint8_t)(state - ports); }
 
 int8_t ownerCode(uint8_t controller, Direction direction) {
     if (direction == Direction::None || controller >= MAX_PORTS) return -1;
@@ -222,8 +202,7 @@ bool formatImplemented(const Format &f) {
     if (f.slotBits != 16) return false;
 
     if (f.mode == AudioI2SPort::PeripheralMode::PDM) {
-        return f.encoding == AudioI2SPort::DataEncoding::PCM && f.rateMultiplier == 1 &&
-               (f.slots == 1 || f.slots == 2);
+        return f.encoding == AudioI2SPort::DataEncoding::PCM && f.rateMultiplier == 1 && (f.slots == 1 || f.slots == 2);
     }
 
     if (f.mode != AudioI2SPort::PeripheralMode::Standard || f.slots != 2) return false;
@@ -244,15 +223,13 @@ i2s_std_config_t makeStdConfig(const Pins &pins, uint32_t rate, bool transmit, b
     cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     // For SPDIF BMC the serializer rate is 4x Fs; 128x that physical frame
     // rate gives an MCLK of 512x Fs and an integer MCLK/BCLK ratio of 4.
-    cfg.clk_cfg.mclk_multiple = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC
-                                   ? I2S_MCLK_MULTIPLE_128
-                                   : I2S_MCLK_MULTIPLE_256;
+    cfg.clk_cfg.mclk_multiple =
+        format.encoding == AudioI2SPort::DataEncoding::SpdifBMC ? I2S_MCLK_MULTIPLE_128 : I2S_MCLK_MULTIPLE_256;
     // S/PDIF is already a complete serialized BMC bitstream. Start with the
     // usual stereo slot settings and disable the Philips one-bit data shift
     // for BMC. The IDF helper macros expand to brace initializers, so they
     // cannot be used as operands of a conditional expression.
-    i2s_std_slot_config_t slotCfg =
-        I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    i2s_std_slot_config_t slotCfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
     if (format.encoding == AudioI2SPort::DataEncoding::SpdifBMC) {
         slotCfg.bit_shift = false;
     }
@@ -341,8 +318,7 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
     const bool spdifBmc = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC;
     const bool pdmDac = format.mode == AudioI2SPort::PeripheralMode::PDM;
     if ((!spdifBmc && !pdmDac && (requested.bclk < 0 || requested.ws < 0)) ||
-        (first == Direction::Tx && requested.dout < 0) ||
-        (first == Direction::Rx && requested.din < 0) ||
+        (first == Direction::Tx && requested.dout < 0) || (first == Direction::Rx && requested.din < 0) ||
         (pdmDac && format.slots == 2 && requested.dout2 < 0)) {
         ESP_LOGE(TAG, "Invalid initial I2S pins");
         return false;
@@ -378,8 +354,8 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
     cfg.intr_priority = 2;
 
     if (pdmDac) {
-#if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && \
-    defined(SOC_I2S_HW_VERSION_2) && SOC_I2S_HW_VERSION_2
+#if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && defined(SOC_I2S_HW_VERSION_2) &&                  \
+    SOC_I2S_HW_VERSION_2
         // Direct-to-filter DAC mode: PCM is modulated by I2S hardware.
         // Controller 0 is allocated TX-only because PDM mode is not compatible
         // with this manager's standard-mode full-duplex channel pair.
@@ -393,14 +369,11 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
         i2s_pdm_tx_config_t pdmCfg = {};
         pdmCfg.clk_cfg = makePdmDacClockConfig(rate);
         pdmCfg.slot_cfg = I2S_PDM_TX_SLOT_PCM_FMT_DAC_DEFAULT_CONFIG(
-            I2S_DATA_BIT_WIDTH_16BIT,
-            format.slots == 1 ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO);
+            I2S_DATA_BIT_WIDTH_16BIT, format.slots == 1 ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO);
         pdmCfg.gpio_cfg.clk = I2S_GPIO_UNUSED;
         pdmCfg.gpio_cfg.dout = static_cast<gpio_num_t>(requested.dout);
 #if defined(SOC_I2S_PDM_MAX_TX_LINES) && SOC_I2S_PDM_MAX_TX_LINES > 1
-        pdmCfg.gpio_cfg.dout2 = format.slots == 2
-                                    ? static_cast<gpio_num_t>(requested.dout2)
-                                    : I2S_GPIO_UNUSED;
+        pdmCfg.gpio_cfg.dout2 = format.slots == 2 ? static_cast<gpio_num_t>(requested.dout2) : I2S_GPIO_UNUSED;
 #else
         if (format.slots == 2) {
             ESP_LOGE(TAG, "This target does not support two-line PDM DAC output");
@@ -734,8 +707,8 @@ bool AudioI2SPort::stop(uint8_t controller, Direction d) {
     }
 
     if (!stopped) {
-        ESP_LOGE(TAG, "I2S%u %s stop incomplete; retaining channel resources for a retry",
-                 controller, d == Direction::Tx ? "TX" : "RX");
+        ESP_LOGE(TAG, "I2S%u %s stop incomplete; retaining channel resources for a retry", controller,
+                 d == Direction::Tx ? "TX" : "RX");
     }
     return stopped;
 }
@@ -788,8 +761,8 @@ bool AudioI2SPort::release(uint8_t controller, Direction d) {
         const esp_err_t err = i2s_del_channel(*requestedHandle);
         if (err != ESP_OK) {
             acquired = true;
-            ESP_LOGE(TAG, "I2S%u %s channel release failed: %s", controller,
-                     d == Direction::Tx ? "TX" : "RX", esp_err_to_name(err));
+            ESP_LOGE(TAG, "I2S%u %s channel release failed: %s", controller, d == Direction::Tx ? "TX" : "RX",
+                     esp_err_to_name(err));
             return false;
         }
         *requestedHandle = nullptr;
@@ -804,8 +777,7 @@ bool AudioI2SPort::setSampleRate(float rate) {
     // lround() returns long and every configured serializer may multiply the
     // PCM rate by up to four (software SPDIF BMC). Reject values that would
     // overflow either representation before touching timer or hardware state.
-    if (!std::isfinite(rate) || rate <= 0.0f ||
-        static_cast<double>(rate) > static_cast<double>(LONG_MAX)) {
+    if (!std::isfinite(rate) || rate <= 0.0f || (double)(rate) > (double)(LONG_MAX)) {
         return false;
     }
     // The caller may hold AudioNoInterrupts()/AudioInterrupts() if the graph
@@ -883,16 +855,15 @@ bool AudioI2SPort::setSampleRate(float rate) {
     auto clockConfig = [](uint32_t hz, const Format &format) {
         i2s_std_clk_config_t cfg = I2S_STD_CLK_DEFAULT_CONFIG(hz * format.rateMultiplier);
         cfg.clk_src = I2S_CLK_SRC_DEFAULT;
-        cfg.mclk_multiple = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC
-                                ? I2S_MCLK_MULTIPLE_128
-                                : I2S_MCLK_MULTIPLE_256;
+        cfg.mclk_multiple =
+            format.encoding == AudioI2SPort::DataEncoding::SpdifBMC ? I2S_MCLK_MULTIPLE_128 : I2S_MCLK_MULTIPLE_256;
         return cfg;
     };
 
     auto reconfigurePortClock = [&](PortState &s, uint32_t hz) -> esp_err_t {
         if (s.format.mode == AudioI2SPort::PeripheralMode::PDM) {
-#if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && \
-    defined(SOC_I2S_HW_VERSION_2) && SOC_I2S_HW_VERSION_2
+#if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && defined(SOC_I2S_HW_VERSION_2) &&                  \
+    SOC_I2S_HW_VERSION_2
             i2s_pdm_tx_clk_config_t cfg = makePdmDacClockConfig(hz);
             const esp_err_t err = i2s_channel_reconfig_pdm_tx_clock(s.txHandle, &cfg);
             if (err == ESP_OK) applyPrecisePdmMclkIfNeeded(cfg);

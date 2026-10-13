@@ -52,7 +52,7 @@ static inline int32_t sineHiresFloatToQ31(float value) {
         return INT32_MIN;
     }
 
-    return static_cast<int32_t>(value * 2147483648.0f);
+    return (int32_t)(value * 2147483648.0f);
 }
 
 OSPEED

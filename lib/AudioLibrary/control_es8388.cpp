@@ -210,8 +210,8 @@ bool AudioControlES8388::inputLevel(float level) {
 
     // ES8388 ADC PGA gain: register 0x09, each channel uses a 4-bit
     // gain value. 0..8 maps to 0..24 dB in 3 dB steps.
-    const uint8_t gain = static_cast<uint8_t>(level * 8.0f + 0.5f);
-    const uint8_t reg = static_cast<uint8_t>((gain << 4) | gain);
+    const uint8_t gain = (uint8_t)(level * 8.0f + 0.5f);
+    const uint8_t reg = (uint8_t)((gain << 4) | gain);
     return writeReg(REG_ADCCONTROL1, reg);
 }
 
