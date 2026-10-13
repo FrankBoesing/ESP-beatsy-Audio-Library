@@ -283,7 +283,7 @@ void AudioOutputPDM::txTaskEntry(void *arg) {
 }
 
 OSPEED
-bool AudioOutputPDM::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
+bool AUDIO_I2S_ISR_ATTR AudioOutputPDM::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
     auto *output = static_cast<AudioOutputPDM *>(userContext);
     if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) return false;
     if (!AudioI2SPort::isClockOwner(CONTROLLER, AudioI2SPort::Direction::Tx)) return false;
