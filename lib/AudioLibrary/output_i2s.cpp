@@ -226,7 +226,7 @@ void AudioOutputI2S::releasePair(BlockPair &pair) {
 
 bool AUDIO_I2S_ISR_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
     auto *output = static_cast<AudioOutputI2S *>(userContext);
-    if (output == nullptr || !output->isRunning()) return false;
+    if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) return false;
 
     uint32_t *dmaBuffer = nullptr;
     if (event != nullptr && event->dma_buf != nullptr &&
