@@ -19,7 +19,7 @@ bool AudioOutputI2S::isRunning() const { return running.load(std::memory_order_a
 uint32_t AudioOutputI2S::txCallbackCount() const { return txCallbackCountValue.load(std::memory_order_relaxed); }
 void AudioOutputI2S::setRunning(bool value) { running.store(value ? 1U : 0U, std::memory_order_release); }
 
-bool AUDIO_I2S_ISR_ATTR AudioOutputI2S::markTxCallbackFromISR() {
+bool AudioOutputI2S::markTxCallbackFromISR() {
     if (running.load(std::memory_order_acquire) == 0) return false;
     txCallbackCountValue.fetch_add(1, std::memory_order_relaxed);
     return true;
