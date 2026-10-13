@@ -314,8 +314,14 @@ void AudioOutputPDM::txTaskLoop() {
             continue;
         }
 
+        if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
+            if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
+            continue;
+        }
+
         if (!isRunning() ||
             xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) {
+            AudioI2SPort::unlockAfterWrite();
             if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
             if (!isRunning()) break;
             continue;
@@ -364,6 +370,7 @@ void AudioOutputPDM::txTaskLoop() {
 
         releasePair(pair);
         pair = {nullptr, nullptr};
+        AudioI2SPort::unlockAfterWrite();
         if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
     }
 
