@@ -92,7 +92,10 @@ bool AudioOutputI2S::beginInternal() {
     if (!AudioI2SPort::setEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, &AudioOutputI2S::onI2STransmit,
                                        this)) {
         ESP_LOGE(TAG, "Could not register TX event handler");
-        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE(TAG, "Could not release TX port after callback registration failure; retaining handle");
+            return false;
+        }
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
@@ -111,7 +114,10 @@ bool AudioOutputI2S::beginInternal() {
         setRunning(false);
         txTask.store(nullptr, std::memory_order_release);
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, this);
-        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE(TAG, "Could not release TX port after task creation failure; retaining resources");
+            return false;
+        }
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
@@ -131,7 +137,10 @@ bool AudioOutputI2S::beginInternal() {
             ESP_LOGE(TAG, "TX channel could not be stopped after startup failure; retaining port resources");
             return false;
         }
-        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE(TAG, "Could not release TX port after startup failure; retaining resources");
+            return false;
+        }
         txHandle = nullptr;
         if (txQueue != nullptr) {
             vQueueDelete(txQueue);
@@ -171,7 +180,10 @@ void AudioOutputI2S::end() {
             ESP_LOGE(TAG, "TX channel could not be stopped; retaining port resources for retry");
             return;
         }
-        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE(TAG, "Could not release TX port; retaining resources for retry");
+            return;
+        }
         txHandle = nullptr;
     }
 
