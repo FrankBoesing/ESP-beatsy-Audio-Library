@@ -121,8 +121,12 @@ bool AudioInputI2S::onI2SReceive(i2s_chan_handle_t, i2s_event_data_t *event, voi
         // and drop this newest DMA block instead.
         input->droppedBlockCountValue.fetch_add(1, std::memory_order_relaxed);
     } else {
+        const uint32_t ringIndex = write & (RX_RING_BLOCKS - 1U);
         const int16_t *src = static_cast<const int16_t *>(event->dma_buf);
-        int16_t *dst = input->rxSampleRing[write & (RX_RING_BLOCKS - 1U)];
+        int16_t *dst = input->rxSampleRing[ringIndex];
+
+        // Stamp this SPSC slot before publishing it to the consumer.
+        input->rxRateGeneration[ringIndex] = AudioI2SPort::currentSampleRateGeneration();
 
         // The destination block is contiguous: no per-frame modulo is needed.
         for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES * 2U; ++i) dst[i] = src[i];
@@ -142,8 +146,18 @@ OSPEED
 void AudioInputI2S::update() {
     alignas(4) int16_t captured[AUDIO_BLOCK_SAMPLES * 2];
 
-    const uint32_t read = readBlockIndex.load(std::memory_order_relaxed);
+    uint32_t read = readBlockIndex.load(std::memory_order_relaxed);
     const uint32_t write = writeBlockIndex.load(std::memory_order_acquire);
+    const uint32_t currentGeneration = AudioI2SPort::currentSampleRateGeneration();
+
+    // A rate change can leave captured blocks in the RX ring. Drop those blocks
+    // before returning samples to the graph at the new rate.
+    while (read != write) {
+        const uint32_t ringIndex = read & (RX_RING_BLOCKS - 1U);
+        if (rxRateGeneration[ringIndex] == currentGeneration) break;
+        ++read;
+        readBlockIndex.store(read, std::memory_order_release);
+    }
     if (write == read) return;
 
     const int16_t *src = rxSampleRing[read & (RX_RING_BLOCKS - 1U)];
