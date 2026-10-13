@@ -62,10 +62,15 @@ bool AudioOutputPDM::setSampleRate(float rate) {
         while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
     };
 
-    discardQueuedPairs();
     // The graph lock stops new pairs being enqueued and txWriteMutex prevents
     // an in-flight PCM write while the manager disables/reconfigures the channel.
+    // Keep queued blocks on a clean rejection/rollback; flush only if the global
+    // rate generation changed, including an incomplete rollback.
+    const uint32_t oldGeneration = AudioI2SPort::currentSampleRateGeneration();
     const bool ok = AudioI2SPort::setSampleRate(rate);
+    if (AudioI2SPort::currentSampleRateGeneration() != oldGeneration) {
+        discardQueuedPairs();
+    }
 
     if (locked) xSemaphoreGive(txWriteMutex);
     return ok;
