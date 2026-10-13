@@ -243,7 +243,7 @@ AudioStream::enableUpdates();
 // output bleibt als fester Hardware-Taktgeber bestehen.
 ```
 
-Die Reihenfolge ist bewusst gewählt: Zuerst wird die Verbindung gelöscht, dann werden Quelle und Ziel freigegeben. `disableUpdates()`/`enableUpdates()` schützen den zusammenhängenden Umbau vor einer gleichzeitigen Traversierung des Audio-Graphs. Die Aufrufe müssen paarig und in derselben Kontrollstrecke erfolgen.
+Die Reihenfolge ist bewusst gewählt: Zuerst wird die Verbindung gelöscht, danach die dynamische Quelle freigegeben. Das Ziel und insbesondere der clockgebende Hardware-Ausgang bleiben bestehen. `disableUpdates()`/`enableUpdates()` schützen den zusammenhängenden Umbau vor einer gleichzeitigen Traversierung des Audio-Graphs. Die Aufrufe müssen paarig und in derselben Kontrollstrecke erfolgen.
 
 Ohne `AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME` würden bei `delete` die Einträge der `AudioStream`-Objekte in der Update-Liste nicht automatisch entfernt. Der Scheduler könnte dann später auf freigegebenen Speicher zugreifen. Dynamische Audio-Objekte sollten daher nur verwendet werden, wenn die entsprechende Unterstützung für die gesamte Build-Konfiguration aktiviert ist.
 
