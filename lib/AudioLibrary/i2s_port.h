@@ -6,6 +6,7 @@
 #include <esp_attr.h>
 #include <driver/i2s_std.h>
 #include <driver/i2s_common.h>
+#include <freertos/FreeRTOS.h>
 
 #if defined(CONFIG_I2S_ISR_IRAM_SAFE) && CONFIG_I2S_ISR_IRAM_SAFE
 #define AUDIO_I2S_ISR_ATTR IRAM_ATTR
@@ -70,6 +71,12 @@ class AudioI2SPort {
     // AudioStream has one global sample rate, so all allocated controllers
     // are reconfigured together.
     static bool setSampleRate(float sampleRate);
+
+    // Serializes DMA-writer tasks against global clock reconfiguration, which
+    // changes every configured controller together.
+    static bool lockForWrite(TickType_t timeoutTicks = portMAX_DELAY);
+    static void unlockAfterWrite();
+
     static bool AUDIO_I2S_ISR_ATTR isClockOwner(uint8_t controller, Direction direction);
 };
 
