@@ -48,9 +48,6 @@ bool AudioOutputI2S::setChannelCount(uint num) {
 OSIZE
 bool AudioOutputI2S::setSampleRate(float hz) {
     if (!std::isfinite(hz) || hz <= 0.0f) return false;
-    audio_detail::GraphUpdateLock graphLock;
-    if (hz == AudioStream::sampleRate()) return true;
-
     return AudioI2SPort::setSampleRate(hz);
 }
 
