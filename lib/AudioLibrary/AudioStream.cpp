@@ -352,18 +352,27 @@ bool AudioStream::update_setup_internal(bool deferSoftwareClock) {
     software_clock_deferred = deferSoftwareClock;
     portEXIT_CRITICAL(&audio_mux);
 
-    if (!deferSoftwareClock && !start_software_timer()) {
-        portENTER_CRITICAL(&audio_mux);
-        update_scheduled = false;
-        external_update_clock = false;
-        software_clock_deferred = false;
-        portEXIT_CRITICAL(&audio_mux);
+    if (!deferSoftwareClock) {
+        const bool clockLocked =
+            xSemaphoreTakeRecursive(audio_update_mutex, portMAX_DELAY) == pdTRUE;
+        const bool timerStarted = clockLocked && start_software_timer();
+        if (clockLocked) {
+            xSemaphoreGiveRecursive(audio_update_mutex);
+        }
 
-        esp_timer_delete(software_timer);
-        software_timer = nullptr;
-        vTaskDelete(audio_task_handle);
-        audio_task_handle = nullptr;
-        return false;
+        if (!timerStarted) {
+            portENTER_CRITICAL(&audio_mux);
+            update_scheduled = false;
+            external_update_clock = false;
+            software_clock_deferred = false;
+            portEXIT_CRITICAL(&audio_mux);
+
+            esp_timer_delete(software_timer);
+            software_timer = nullptr;
+            vTaskDelete(audio_task_handle);
+            audio_task_handle = nullptr;
+            return false;
+        }
     }
 
     return true;
@@ -371,11 +380,8 @@ bool AudioStream::update_setup_internal(bool deferSoftwareClock) {
 
 OSIZE
 bool AudioStream::start_software_timer(void) {
-    const bool locked = audio_update_mutex != nullptr;
-    if (locked && xSemaphoreTakeRecursive(audio_update_mutex, portMAX_DELAY) != pdTRUE) {
-        return false;
-    }
-
+    // Every call site already owns audio_update_mutex when it exists. Keeping
+    // lock ownership at the caller avoids recursive take/give pairs here.
     portENTER_CRITICAL(&audio_mux);
     const bool valid = update_scheduled && software_timer != nullptr;
     const bool shouldStart = valid && !external_update_clock && !software_clock_deferred;
@@ -383,11 +389,9 @@ bool AudioStream::start_software_timer(void) {
     portEXIT_CRITICAL(&audio_mux);
 
     if (!valid) {
-        if (locked) xSemaphoreGiveRecursive(audio_update_mutex);
         return false;
     }
     if (!shouldStart || esp_timer_is_active(timer)) {
-        if (locked) xSemaphoreGiveRecursive(audio_update_mutex);
         return true;
     }
 
@@ -397,23 +401,17 @@ bool AudioStream::start_software_timer(void) {
         ESP_LOGE("Audio", "Could not start software audio clock: %s", esp_err_to_name(err));
     }
 
-    if (locked) xSemaphoreGiveRecursive(audio_update_mutex);
     return err == ESP_OK;
 }
 
 OSIZE
 bool AudioStream::stop_software_timer(void) {
-    const bool locked = audio_update_mutex != nullptr;
-    if (locked && xSemaphoreTakeRecursive(audio_update_mutex, portMAX_DELAY) != pdTRUE) {
-        return false;
-    }
-
+    // As with start_software_timer(), the caller owns audio_update_mutex.
     portENTER_CRITICAL(&audio_mux);
     esp_timer_handle_t timer = software_timer;
     portEXIT_CRITICAL(&audio_mux);
 
     if (timer == nullptr || !esp_timer_is_active(timer)) {
-        if (locked) xSemaphoreGiveRecursive(audio_update_mutex);
         return true;
     }
 
@@ -422,7 +420,6 @@ bool AudioStream::stop_software_timer(void) {
         ESP_LOGE("Audio", "Could not stop software audio clock: %s", esp_err_to_name(err));
     }
 
-    if (locked) xSemaphoreGiveRecursive(audio_update_mutex);
     return err == ESP_OK || err == ESP_ERR_INVALID_STATE;
 }
 
