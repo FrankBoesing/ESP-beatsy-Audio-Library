@@ -20,6 +20,7 @@ uint32_t AudioInputI2S::droppedBlockCount() const { return droppedBlockCountValu
 bool AudioInputI2S::begin() { return beginInternal(); }
 bool AudioInputI2S::begin(const Pins &pins) {
     end();
+    if (rxHandle != nullptr) return false; // Previous shutdown did not complete.
     i2sPins = pins;
     return beginInternal();
 }
@@ -29,6 +30,10 @@ OSIZE
 bool AudioInputI2S::beginInternal() {
     audio_detail::GraphUpdateLock graphLock;
     if (isRunning()) return true;
+    if (rxHandle != nullptr) {
+        ESP_LOGE(TAG, "Previous I2S input shutdown did not complete");
+        return false;
+    }
 
     if (i2sPins.bclk < 0 || i2sPins.ws < 0 || i2sPins.din < 0) {
         ESP_LOGE(TAG, "Invalid I2S pins: BCLK=%d WS=%d DIN=%d", i2sPins.bclk, i2sPins.ws, i2sPins.din);
@@ -60,7 +65,10 @@ bool AudioInputI2S::beginInternal() {
     if (!AudioI2SPort::start(i2sPins.controller, AudioI2SPort::Direction::Rx)) {
         running.store(0, std::memory_order_release);
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Rx, this);
-        AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Rx);
+        if (!AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Rx)) {
+            ESP_LOGE(TAG, "RX channel could not be stopped after startup failure; retaining port handle");
+            return false;
+        }
         AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
         rxHandle = nullptr;
 
@@ -83,7 +91,10 @@ void AudioInputI2S::end() {
 
     if (rxHandle != nullptr) {
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Rx, this);
-        AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Rx);
+        if (!AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Rx)) {
+            ESP_LOGE(TAG, "RX channel could not be stopped; retaining port handle for retry");
+            return;
+        }
         AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
         rxHandle = nullptr;
     }
