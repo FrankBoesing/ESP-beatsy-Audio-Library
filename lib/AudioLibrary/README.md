@@ -19,7 +19,7 @@ Diese Datei dokumentiert die Task-Architektur, das Timing, die wesentlichen Puff
 
 ## 1. Architektur und Tasks
 
-Die Bibliothek trennt die Echtzeitverarbeitung des Audio-Graphs von Decoder- und Netzwerk-I/O. Mixer, Filter und andere `AudioStream`-Objekte werden durch `AudioTask` verarbeitet. Bei aktiver I2S-Ausgabe übernimmt `AudioI2STx` die Übergabe der Stereo-Daten an den I2S-Treiber.
+Die Bibliothek trennt die Echtzeitverarbeitung des Audio-Graphs von Decoder- und Netzwerk-I/O. Mixer, Filter und andere `AudioStream`-Objekte werden durch `AudioTask` verarbeitet. Bei normaler PCM-I²S-Ausgabe befüllt `AudioOutputI2S::update()` den vom TX-Callback gemeldeten DMA-Puffer direkt. SPDIF- und PDM-Ausgabe verwenden weiterhin eigene TX-Tasks.
 
 ```text
 HTTP-Stream
@@ -37,7 +37,7 @@ Software-Timer oder I2S-TX-DMA-Callback
 SPDIF- und PDM-Ausgabe behalten ihren separaten TX-Task-Pfad.
 ```
 
-Die Netzwerk- und Decoder-Pfade sind nur aktiv, wenn die entsprechende Quelle beziehungsweise Wiedergabe verwendet wird. Die I2S-Ausgabe-Task wird nur bei aktivierter I2S-Ausgabe gestartet.
+Die Netzwerk- und Decoder-Pfade sind nur aktiv, wenn die entsprechende Quelle beziehungsweise Wiedergabe verwendet wird. Separate TX-Tasks werden für SPDIF- und PDM-Ausgabe gestartet; die normale PCM-I²S-Ausgabe benötigt keinen eigenen TX-Task.
 
 ### Tasks im Überblick
 
@@ -47,9 +47,8 @@ Die Stack-Größen beziehen sich auf die in dieser Arbeitsversion verwendeten We
 | --- | --- | --- | ---: | --- | --- |
 | `loopTask` | Arduino-Framework | `1` | standardmäßig 8192 Byte, konfigurierbar | `ARDUINO_RUNNING_CORE` | Führt `setup()` und anschließend wiederholt `loop()` aus. Beispielprogramme warten hier etwa auf den Stream-Prebuffer und geben Diagnosedaten aus. |
 | `AudioTask` | `AudioStream::update_setup()` | `configMAX_PRIORITIES - 2` | 4096 Byte | `AUDIO_PROCESSING_CORE` (Standard: Core 1) | Verarbeitet aktive `AudioStream`-Objekte, darunter Mixer und Effekte. Wartet auf Benachrichtigungen und führt selbst kein blockierendes Audio-I/O aus. |
-| `AudioDecoder` | `AudioDecoderStream::startDecoderTask()` | `configMAX_PRIORITIES - 3` | 8192 Byte | `AUDIO_DECODER_CORE` (Standard: Core 0) | Dekodiert MP3-/AAC-Daten und füllt die abwechselnd verwendeten PCM-Puffer im internen RAM. Wird bei entsprechender Wiedergabe gestartet. |
-| `AudioI2STx` | `AudioOutputI2S::beginInternal()` | `configMAX_PRIORITIES - 2` | 4096 Byte | `AUDIO_PROCESSING_CORE` (Standard: Core 1) | Entnimmt Stereo-Blöcke aus der Queue, konvertiert sie in I2S-Daten und übergibt sie an den I2S-Treiber. |
-| `AudioStreamRx` | `AudioSourceStream::open()` | `configMAX_PRIORITIES - 5` | 8192 Byte | nicht fest zugeordnet | Liest Netzwerkdaten aus dem HTTP-Stream in einen temporären Chunk und kopiert diese in den Ringpuffer im PSRAM. Wird nur für Netzwerk-Streams benötigt. |
+| `AudioDecoder` | `AudioDecoderStream::startDecoderTask()` | `configMAX_PRIORITIES - 3` | 3072 Byte | `AUDIO_DECODER_CORE` (Standard: Core 0) | Dekodiert MP3-/AAC-Daten und füllt die abwechselnd verwendeten PCM-Puffer im PSRAM. Wird bei entsprechender Wiedergabe gestartet. |
+| `AudioStreamRx` | `AudioSourceStream::open()` | `configMAX_PRIORITIES - 5` | 3840 Byte | nicht fest zugeordnet | Liest Netzwerkdaten aus dem HTTP-Stream in einen temporären Chunk und kopiert diese in den Ringpuffer im PSRAM. Wird nur für Netzwerk-Streams benötigt. |
 
 Bei der normalen PCM-I²S-Ausgabe gibt es keinen separaten `AudioI2STx`-Task mehr: `AudioOutputI2S::update()` schreibt die Samples direkt in den DMA-Puffer, den der TX-Callback veröffentlicht. Die kleine Blockpaar-Queue bleibt als Puffer zwischen Graph-Update und DMA-Ereignis bestehen. SPDIF und PDM verwenden weiterhin ihre separaten TX-Tasks.
 
@@ -110,7 +109,7 @@ Bei der Netzwerk-Wiedergabe verläuft der Datenweg vereinfacht wie folgt:
 2. Der Chunk wird in den 128-KiB-Ringpuffer von `AudioSourceStream` im PSRAM kopiert.
 3. Der Decoder übernimmt verfügbare Daten aus diesem Ringpuffer in seinen 2-KiB-Eingabepuffer im internen RAM.
 4. `MP3Decode()` verarbeitet die komprimierten Daten und schreibt dekodiertes PCM in die beiden wechselnden Decoder-Puffer.
-5. Der Audio-Graph verarbeitet die PCM-Daten im Takt von `AudioTask`; anschließend gelangen Stereo-Blöcke über die I2S-Queue zu `AudioI2STx`.
+5. Der Audio-Graph verarbeitet die PCM-Daten im Takt von `AudioTask`. Bei normaler PCM-I²S-Ausgabe werden die Samples direkt in den vom TX-Callback gemeldeten DMA-Puffer gepackt; SPDIF und PDM behalten ihre separaten TX-Tasks.
 
 **Datei-Wiedergabe:** Dateibasierte MP3-Wiedergabe umgeht den `AudioSourceStream`-Ringpuffer und verwendet weiterhin den 2-KiB-MP3-Eingabepuffer.
 
