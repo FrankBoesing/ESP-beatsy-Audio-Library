@@ -22,7 +22,7 @@ using EventCallback = AudioI2SPort::EventCallback;
 
 constexpr char TAG[] = "AudioI2SPort";
 
-constexpr uint16_t DMA_DESC_NUM = 6;
+constexpr uint16_t DMA_DESC_NUM = 2;
 constexpr uint16_t DMA_FRAME_NUM = AUDIO_BLOCK_SAMPLES;
 constexpr uint8_t MAX_PORTS = AudioI2SPort::MAX_CONTROLLERS;
 
