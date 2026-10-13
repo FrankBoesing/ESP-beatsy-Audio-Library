@@ -1,4 +1,5 @@
 #include "input_i2s.h"
+#include <esp_memory_utils.h>
 
 #include <esp_log.h>
 #include "i2s_port.h"
@@ -30,6 +31,12 @@ OSIZE
 bool AudioInputI2S::beginInternal() {
     audio_detail::GraphUpdateLock graphLock;
     if (isRunning()) return true;
+#if defined(CONFIG_I2S_ISR_IRAM_SAFE) && CONFIG_I2S_ISR_IRAM_SAFE
+    if (!esp_ptr_internal(this)) {
+        ESP_LOGE(TAG, "IRAM-safe I2S callbacks require AudioInputI2S in internal RAM");
+        return false;
+    }
+#endif
     if (rxHandle != nullptr) {
         ESP_LOGE(TAG, "Previous I2S input shutdown did not complete");
         return false;
