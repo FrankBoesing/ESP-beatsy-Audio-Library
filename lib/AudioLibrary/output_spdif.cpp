@@ -10,6 +10,7 @@ static constexpr uint8_t PREAMBLE_B = 0x17; // B preamble polarity for a precedi
 static constexpr uint8_t PREAMBLE_M = 0x1D; // M preamble polarity for a preceding HIGH level
 static constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH level
 
+OSPEED
 static uint8_t spdifSampleRateCode(float rate) {
     const uint32_t hz = (uint32_t)(std::lround(rate));
     switch (hz) {
@@ -32,20 +33,30 @@ static uint8_t spdifSampleRateCode(float rate) {
     }
 }
 
+OSIZE
 AudioOutputSPDIF::AudioOutputSPDIF() : AudioOutputSPDIF(0, Pins{-1}) {}
+OSIZE
 AudioOutputSPDIF::AudioOutputSPDIF(const Pins &pins) : AudioOutputSPDIF(0, pins) {}
+OSIZE
 AudioOutputSPDIF::AudioOutputSPDIF(int8_t dout) : AudioOutputSPDIF(0, Pins{dout}) {}
+OSIZE
 AudioOutputSPDIF::AudioOutputSPDIF(uint8_t controller, const Pins &pins)
     : AudioStream(2, inputQueueArray), spdifPins(pins), controller_(controller) {}
+OSIZE
 AudioOutputSPDIF::~AudioOutputSPDIF() { end(); }
+OSPEED
 bool AudioOutputSPDIF::isRunning() const { return running.load(std::memory_order_acquire) != 0; }
+OSIZE
 void AudioOutputSPDIF::setRunning(bool value) { running.store(value ? 1U : 0U, std::memory_order_release); }
 
+OSPEED
 void AudioOutputSPDIF::updateChannelStatus(float rate) {
     sampleRateCode.store(spdifSampleRateCode(rate), std::memory_order_release);
 }
 
+OSIZE
 bool AudioOutputSPDIF::begin() { return beginInternal(); }
+OSIZE
 bool AudioOutputSPDIF::begin(const Pins &pins) {
     end();
     if (txHandle != nullptr || txQueue != nullptr) return false;
@@ -53,7 +64,9 @@ bool AudioOutputSPDIF::begin(const Pins &pins) {
     return beginInternal();
 }
 
+OSIZE
 bool AudioOutputSPDIF::begin(int8_t dout) { return begin(Pins{dout}); }
+OSIZE
 bool AudioOutputSPDIF::beginHardware() { return beginInternal(); }
 
 OSIZE
@@ -218,6 +231,7 @@ void AudioOutputSPDIF::update() {
     }
 }
 
+OSPEED
 void AudioOutputSPDIF::releasePair(BlockPair &pair) {
     if (pair.left != nullptr) {
         release(pair.left);
@@ -230,6 +244,7 @@ void AudioOutputSPDIF::releasePair(BlockPair &pair) {
 }
 
 
+OSIZE
 void AudioOutputSPDIF::txTaskEntry(void *arg) { static_cast<AudioOutputSPDIF *>(arg)->txTaskLoop(); }
 
 OSPEED
