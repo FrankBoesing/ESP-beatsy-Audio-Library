@@ -349,6 +349,12 @@ void AudioOutputSPDIF::txTaskLoop() {
 
         const esp_err_t err = i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);
         if (err != ESP_OK || bytesWritten != sizeof(encodedBuffer)) {
+            // Keep the status-frame index aligned to complete stereo subframes
+            // accepted by the driver, rather than counting an unwritten tail.
+            constexpr size_t BYTES_PER_SPDIF_FRAME = 8U * sizeof(uint16_t);
+            frameInBlock = static_cast<uint16_t>(
+                (frameInBlockStart + (bytesWritten / BYTES_PER_SPDIF_FRAME)) % 192U);
+
             const uint32_t now = millis();
             ++writeErrorCount;
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
