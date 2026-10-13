@@ -92,36 +92,13 @@ bool AudioOutputI2S::beginInternal() {
     }
 
     resetTxCallbackCount();
+    pendingDmaBuffer.store(nullptr, std::memory_order_relaxed);
     setRunning(true);
-
-    TaskHandle_t createdTask = nullptr;
-    const BaseType_t result = xTaskCreatePinnedToCore(txTaskEntry, "AudioI2STx", 2048, this, configMAX_PRIORITIES - 2,
-                                                      &createdTask, AUDIO_PROCESSING_CORE);
-    if (result == pdPASS) txTask.store(createdTask, std::memory_order_release);
-
-    if (result != pdPASS) {
-        setRunning(false);
-        txTask.store(nullptr, std::memory_order_release);
-        AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, this);
-        if (!AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
-            ESP_LOGE(TAG, "Could not release TX port after task creation failure; retaining resources");
-            return false;
-        }
-        txHandle = nullptr;
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
-        return false;
-    }
 
     if (!AudioI2SPort::start(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
         setRunning(false);
-        // The task's finite queue/write timeouts guarantee that it can exit
-        // without racing a notification against its own deletion.
-        while (txTask.load(std::memory_order_acquire) != nullptr) {
-            vTaskDelay(1);
-        }
-
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, this);
+        pendingDmaBuffer.store(nullptr, std::memory_order_relaxed);
         if (!AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
             ESP_LOGE(TAG, "TX channel could not be stopped after startup failure; retaining port resources");
             return false;
@@ -144,17 +121,9 @@ bool AudioOutputI2S::beginInternal() {
 OSIZE
 void AudioOutputI2S::end() {
     audio_detail::GraphUpdateLock graphLock;
-    if (!isRunning() && txQueue == nullptr && txHandle == nullptr &&
-        txTask.load(std::memory_order_acquire) == nullptr) return;
+    if (!isRunning() && txQueue == nullptr && txHandle == nullptr) return;
 
     setRunning(false);
-
-    if (txTask.load(std::memory_order_acquire) != nullptr) {
-        // Do not race a notification against task self-deletion.
-        while (txTask.load(std::memory_order_acquire) != nullptr) {
-            vTaskDelay(1);
-        }
-    }
 
     if (txQueue != nullptr) {
         BlockPair pair;
@@ -165,6 +134,7 @@ void AudioOutputI2S::end() {
 
     if (txHandle != nullptr) {
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, this);
+        pendingDmaBuffer.store(nullptr, std::memory_order_relaxed);
         if (!AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
             ESP_LOGE(TAG, "TX channel could not be stopped; retaining port resources for retry");
             return;
@@ -184,33 +154,72 @@ void AudioOutputI2S::end() {
 
 OSPEED
 void AudioOutputI2S::update() {
-    BlockPair pair;
+    BlockPair pair{receiveReadOnly(0), receiveReadOnly(1)};
 
-    pair.left = receiveReadOnly(0);
-    pair.right = receiveReadOnly(1);
+    if (pair.left != nullptr || pair.right != nullptr) {
+        if (!isRunning() || txQueue == nullptr) {
+            releasePair(pair);
+        } else if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
+            BlockPair oldPair;
 
-    if (pair.left == nullptr && pair.right == nullptr) return;
-    if (!isRunning() || txQueue == nullptr) {
-        releasePair(pair);
+            // Keep the newest audio if the output falls behind.
+            if (xQueueReceive(txQueue, &oldPair, 0) == pdTRUE) {
+                releasePair(oldPair);
+            }
+
+            if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
+                releasePair(pair);
+            }
+        }
+    }
+
+    // The callback publishes the DMA buffer that just finished transmitting.
+    // If multiple callbacks arrive before this update, the latest buffer wins;
+    // older buffers remain silent rather than risking writes to a reused buffer.
+    uint32_t *dmaBuffer = pendingDmaBuffer.exchange(nullptr, std::memory_order_acq_rel);
+    if (dmaBuffer == nullptr || !isRunning() || txQueue == nullptr) {
         return;
     }
 
-    /*
-     * The AudioStream scheduler must never wait for I2S hardware.
-     * If the queue is full, discard the oldest pair and enqueue the
-     * newest one.
-     */
-    if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
-        BlockPair oldPair;
+    BlockPair ready{nullptr, nullptr};
+    if (xQueueReceive(txQueue, &ready, 0) != pdTRUE) {
+        // auto_clear_after_cb leaves this DMA buffer silent when no PCM is ready.
+        return;
+    }
 
-        if (xQueueReceive(txQueue, &oldPair, 0) == pdTRUE) {
-            releasePair(oldPair);
+    if (numChannels == 1) {
+        const int16_t *__restrict left = ready.left ? ready.left->data : nullptr;
+        const int16_t *__restrict right = ready.right ? ready.right->data : nullptr;
+        GCC_UNROLL
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            int32_t mono;
+
+            if (left && right) {
+                mono = ((int32_t)left[i] + (int32_t)right[i]) / 2;
+            } else if (left) {
+                mono = left[i];
+            } else if (right) {
+                mono = right[i];
+            } else {
+                mono = 0;
+            }
+
+            const uint32_t sample = (uint16_t)((int16_t)(mono));
+            dmaBuffer[i] = sample | (sample << 16);
         }
+    } else {
+        const int16_t *left = ready.left ? ready.left->data : audio_zeroblock;
+        const int16_t *right = ready.right ? ready.right->data : audio_zeroblock;
 
-        if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
-            releasePair(pair);
+        GCC_UNROLL
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            const uint32_t l = (uint16_t)(left[i]);
+            const uint32_t r = (uint16_t)(right[i]);
+            dmaBuffer[i] = l | (r << 16);
         }
     }
+
+    releasePair(ready);
 }
 
 void AudioOutputI2S::releasePair(BlockPair &pair) {
@@ -225,108 +234,17 @@ void AudioOutputI2S::releasePair(BlockPair &pair) {
     }
 }
 
-void AudioOutputI2S::txTaskEntry(void *arg) { static_cast<AudioOutputI2S *>(arg)->txTaskLoop(); }
-
-bool AUDIO_I2S_ISR_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
+bool AUDIO_I2S_ISR_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
     auto *output = static_cast<AudioOutputI2S *>(userContext);
     if (output == nullptr || !output->markTxCallbackFromISR()) return false;
+
+    uint32_t *dmaBuffer = nullptr;
+    if (event != nullptr && event->dma_buf != nullptr &&
+        event->size == sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES) {
+        dmaBuffer = static_cast<uint32_t *>(event->dma_buf);
+    }
+    output->pendingDmaBuffer.store(dmaBuffer, std::memory_order_release);
+
     if (!AudioI2SPort::isClockOwner(output->i2sPins.controller, AudioI2SPort::Direction::Tx)) return false;
     return AudioStream::update_all_from_isr();
-}
-
-OSPEED
-void AudioOutputI2S::txTaskLoop() {
-    uint32_t writeErrorCount = 0;
-    uint32_t lastErrorLogMs = 0;
-
-    // Ein uint32_t enthält ein I2S-Frame:
-    // linker Slot: 16 Bit, rechter Slot: 16 Bit.
-    uint32_t buffer[AUDIO_BLOCK_SAMPLES];
-    BlockPair pair;
-
-    while (isRunning()) {
-        if (!isRunning() || xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) {
-            if (!isRunning()) break;
-            continue;
-        }
-
-        if (!isRunning()) {
-            releasePair(pair);
-            break;
-        }
-
-        if (numChannels == 1) {
-            const int16_t *__restrict left = pair.left ? pair.left->data : nullptr;
-            const int16_t *__restrict right = pair.right ? pair.right->data : nullptr;
-            // Mono: L/R mitteln und dasselbe Sample auf beide Slots legen.
-            //TODO: Check this in godbolt. Is it optimized?
-            GCC_UNROLL
-            for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                int32_t mono;
-
-                if (left && right) {
-                    mono = ((int32_t)left[i] + (int32_t)right[i]) / 2;
-                } else if (left) {
-                    mono = left[i];
-                } else if (right) {
-                    mono = right[i];
-                } else {
-                    mono = 0;
-                }
-
-                // Zweierkomplement-Sample als 16-Bit-Wert übernehmen.
-                const uint32_t sample = (uint16_t)((int16_t)(mono));
-
-                buffer[i] = sample | (sample << 16);
-            }
-        } else {
-            // Stereo: linker und rechter Kanal bleiben getrennt.
-            const int16_t *left = pair.left ? pair.left->data : audio_zeroblock;
-            const int16_t *right = pair.right ? pair.right->data : audio_zeroblock;
-
-            GCC_UNROLL
-            for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                const uint32_t l = (uint16_t)(left[i]);
-                const uint32_t r = (uint16_t)(right[i]);
-
-                buffer[i] = l | (r << 16);
-            }
-        }
-
-        size_t bytesWritten = 0;
-
-        /*
-         * Der blockierende I2S-Aufruf bleibt ausschließlich im TX-Task.
-         * Ein Timeout verhindert, dass das Beenden dauerhaft blockiert,
-         * falls der I2S-Treiber keine Daten mehr annimmt.
-         */
-        if (!isRunning()) {
-            releasePair(pair);
-            break;
-        }
-        const esp_err_t err = i2s_channel_write(txHandle, buffer, sizeof(buffer), &bytesWritten, 100);
-
-        if (err != ESP_OK || bytesWritten != sizeof(buffer)) {
-            const uint32_t now = millis();
-            ++writeErrorCount;
-
-            if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
-                ESP_LOGE(TAG, "TX error #%lu: %s, bytes=%lu/%lu", (unsigned long)writeErrorCount, esp_err_to_name(err),
-                         (unsigned long)bytesWritten, (unsigned long)sizeof(buffer));
-
-                lastErrorLogMs = now;
-            }
-        }
-
-        releasePair(pair);
-    }
-
-    // Beim Beenden alle noch ausstehenden Blöcke freigeben.
-    while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) {
-        releasePair(pair);
-    }
-
-    txTask.store(nullptr, std::memory_order_release);
-
-    vTaskDelete(nullptr);
 }
