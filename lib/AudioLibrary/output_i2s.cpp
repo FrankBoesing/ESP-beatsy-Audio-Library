@@ -1,7 +1,6 @@
 #include "output_i2s.h"
 #include <esp_memory_utils.h>
 
-#include <cstring>
 #include <esp_err.h>
 #include <cmath>
 #include "i2s_port.h"
