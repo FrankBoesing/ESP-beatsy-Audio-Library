@@ -37,6 +37,7 @@ float AudioStream::audio_sample_rate = AUDIO_SAMPLE_RATE_EXACT;
 static bool software_timer_callback_running = false;
 static uint32_t cpu_cycles_per_us = 0;
 
+OSIZE
 float AudioStream::processorUsage(uint8_t core) {
 // ESP Timer runtime statistics use microseconds, matching esp_timer_get_time().
 // CPU-clock runtime statistics count cycles and are frequency-dependent, so the
@@ -247,7 +248,7 @@ bool AudioStream::setSampleRate(float rate) {
     return ok;
 }
 
-OSIZE
+OSPEED
 float AudioStream::sampleRate(void) {
     portENTER_CRITICAL(&audio_mux);
     const float rate = audio_sample_rate;
@@ -767,6 +768,7 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num, uint3
 // =============================================================================
 
 #ifdef AUDIOSTREAM_ENABLE_POOL_POINTER_CHECKS
+OSPEED
 bool AudioStream::is_block_from_pool(const audio_block_t *block) {
     if (block == nullptr || memory_pool == nullptr || memory_pool_size == 0) {
         return false;
@@ -790,6 +792,7 @@ bool AudioStream::is_block_from_pool(const audio_block_t *block) {
 // The caller MUST hold audio_mux.
 // =============================================================================
 
+OSPEED
 audio_block_t *AudioStream::allocate_locked(void) {
     if (memory_pool == nullptr || memory_pool_available_mask == nullptr || memory_pool_mask_words == 0) {
         return nullptr;
@@ -837,6 +840,7 @@ audio_block_t *AudioStream::allocate_locked(void) {
 // Allocate block
 // =============================================================================
 
+OSPEED
 audio_block_t *AudioStream::allocate(void) {
     portENTER_CRITICAL(&audio_mux);
     audio_block_t *block = allocate_locked();
@@ -851,6 +855,7 @@ audio_block_t *AudioStream::allocate(void) {
 // The caller MUST hold audio_mux.
 // =============================================================================
 
+OSPEED
 void AudioStream::release_locked(audio_block_t *block) {
     if (block == nullptr) {
         return;
@@ -899,6 +904,7 @@ void AudioStream::release_locked(audio_block_t *block) {
 // Release block
 // =============================================================================
 
+OSPEED
 void AudioStream::release(audio_block_t *block) {
     portENTER_CRITICAL(&audio_mux);
     release_locked(block);
@@ -1013,14 +1019,14 @@ audio_block_t *AudioStream::receiveWritable(unsigned int index) {
 // =============================================================================
 // Processor usage
 // =============================================================================
-OSPEED
+OSIZE
 float AudioStream::AudioProcessorUsage(void) const {
     const float period = (float)(blockPeriodUs());
     if (period <= 0.0f) return 0.0f;
     return ((float)(cpu_time_us) * 100.0f) / period;
 }
 
-OSPEED
+OSIZE
 float AudioStream::AudioProcessorUsageMax(void) const {
     const float period = (float)(blockPeriodUs());
     if (period <= 0.0f) return 0.0f;
@@ -1037,6 +1043,7 @@ void AudioStream::AudioProcessorUsageMaxReset(void) {
     portEXIT_CRITICAL(&audio_mux);
 }
 
+OSIZE
 float AudioStream::AudioProcessorUsageTotal(void) {
     const uint32_t period = blockPeriodUs();
     if (period == 0) return 0.0f;
@@ -1048,6 +1055,7 @@ float AudioStream::AudioProcessorUsageTotal(void) {
     return (float)(elapsed) * 100.0f / (float)(period);
 }
 
+OSIZE
 float AudioStream::AudioProcessorUsageTotalMax(void) {
     const uint32_t period = blockPeriodUs();
     if (period == 0) return 0.0f;
@@ -1059,6 +1067,7 @@ float AudioStream::AudioProcessorUsageTotalMax(void) {
     return (float)(elapsed) * 100.0f / (float)(period);
 }
 
+OSIZE
 void AudioStream::AudioProcessorUsageTotalMaxReset(void) {
     portENTER_CRITICAL(&audio_mux);
     cpu_time_total_max_us = cpu_time_total_us;
@@ -1069,6 +1078,7 @@ void AudioStream::AudioProcessorUsageTotalMaxReset(void) {
 // Memory usage
 // =============================================================================
 
+OSIZE
 uint16_t AudioStream::AudioMemoryUsage(void) {
     portENTER_CRITICAL(&audio_mux);
     uint16_t value = memory_used;
@@ -1077,6 +1087,7 @@ uint16_t AudioStream::AudioMemoryUsage(void) {
     return value;
 }
 
+OSIZE
 uint16_t AudioStream::AudioMemoryUsageMax(void) {
     portENTER_CRITICAL(&audio_mux);
     uint16_t value = memory_used_max;
@@ -1085,6 +1096,7 @@ uint16_t AudioStream::AudioMemoryUsageMax(void) {
     return value;
 }
 
+OSIZE
 void AudioStream::AudioMemoryUsageMaxReset(void) {
     portENTER_CRITICAL(&audio_mux);
     memory_used_max = memory_used;
@@ -1095,6 +1107,7 @@ void AudioStream::AudioMemoryUsageMaxReset(void) {
 // AudioConnection constructor
 // =============================================================================
 
+OSIZE
 AudioConnection::AudioConnection()
     : src(nullptr), dst(nullptr), src_index(0), dest_index(0), next_dest(nullptr), isConnected(false) {}
 
@@ -1102,12 +1115,14 @@ AudioConnection::AudioConnection()
 // AudioConnection destructor
 // =============================================================================
 
+OSIZE
 AudioConnection::~AudioConnection() { disconnect(); }
 
 // =============================================================================
 // connect()
 // =============================================================================
 
+OSIZE
 int AudioConnection::connect(void) {
     // Match the Teensy API model: a single connection operation is safe on its
     // own, while callers can wrap several graph changes in AudioNoInterrupts().
@@ -1117,6 +1132,7 @@ int AudioConnection::connect(void) {
     return result;
 }
 
+OSIZE
 int AudioConnection::connect_locked(void) {
     if (isConnected) {
         return 1;
@@ -1174,6 +1190,7 @@ int AudioConnection::connect_locked(void) {
 // connect(source, ...)
 // =============================================================================
 
+OSIZE
 int AudioConnection::connect(AudioStream &source, unsigned char sourceOutput, AudioStream &destination,
                              unsigned char destinationInput) {
     if (isConnected) {
@@ -1193,6 +1210,7 @@ int AudioConnection::connect(AudioStream &source, unsigned char sourceOutput, Au
 // disconnect()
 // =============================================================================
 
+OSIZE
 int AudioConnection::disconnect(void) {
     // A single disconnect is safe by itself. For several related changes, the
     // caller can hold AudioNoInterrupts() across all operations.
@@ -1202,6 +1220,7 @@ int AudioConnection::disconnect(void) {
     return result;
 }
 
+OSIZE
 int AudioConnection::disconnect_locked(void) {
     if (!isConnected) {
         return 1;
