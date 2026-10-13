@@ -257,7 +257,7 @@ void AudioOutputSPDIF::releasePair(BlockPair &pair) {
 void AudioOutputSPDIF::txTaskEntry(void *arg) { static_cast<AudioOutputSPDIF *>(arg)->txTaskLoop(); }
 
 OSPEED
-bool AudioOutputSPDIF::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
+bool AUDIO_I2S_ISR_ATTR AudioOutputSPDIF::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
     auto *output = static_cast<AudioOutputSPDIF *>(userContext);
     if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) return false;
     if (!AudioI2SPort::isClockOwner(output->controller_, AudioI2SPort::Direction::Tx)) return false;
