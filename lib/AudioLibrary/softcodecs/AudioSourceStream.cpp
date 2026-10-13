@@ -314,10 +314,12 @@ OSIZE
 bool AudioSourceStream::checkNetworkTimeout() {
     const uint32_t now = millis();
 
-    portENTER_CRITICAL(&_bufferMux);
     const bool timedOut = now - _lastDataMs >= NETWORK_IDLE_TIMEOUT_MS;
-    if (timedOut) _streamError = true;
-    portEXIT_CRITICAL(&_bufferMux);
+    if (timedOut) {
+        portENTER_CRITICAL(&_bufferMux);
+        _streamError = true;
+        portEXIT_CRITICAL(&_bufferMux);
+    }
     return timedOut;
 }
 
@@ -390,10 +392,7 @@ void AudioSourceStream::producerTaskLoop() {
                     continue;
                 }
 
-                const uint32_t now = millis();
-                portENTER_CRITICAL(&_bufferMux);
-                _lastDataMs = now;
-                portEXIT_CRITICAL(&_bufferMux);
+                _lastDataMs = millis();
 
                 _icy.MetadataExpected = lengthUnits * 16U;
                 _icy.MetadataReceived = 0;
@@ -423,10 +422,7 @@ void AudioSourceStream::producerTaskLoop() {
                 continue;
             }
 
-            const uint32_t now = millis();
-            portENTER_CRITICAL(&_bufferMux);
-            _lastDataMs = now;
-            portEXIT_CRITICAL(&_bufferMux);
+            _lastDataMs = millis();
 
             parseIcyMetadata(metadataBuffer, received);
             _icy.MetadataReceived += received;
