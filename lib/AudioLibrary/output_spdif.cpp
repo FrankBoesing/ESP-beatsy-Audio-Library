@@ -296,7 +296,20 @@ void AudioOutputSPDIF::txTaskLoop() {
 
         if (sampleRateCodeGeneration.load(std::memory_order_acquire) !=
             AudioI2SPort::currentSampleRateGeneration()) {
-            updateChannelStatus(AudioStream::sampleRate());
+            if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
+                releasePair(pair);
+                pair = {nullptr, nullptr, 0};
+                if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
+                continue;
+            }
+
+            // Read both the sample rate and its generation while reconfiguration
+            // is excluded, so the status code cannot be stamped with a stale rate.
+            if (sampleRateCodeGeneration.load(std::memory_order_acquire) !=
+                AudioI2SPort::currentSampleRateGeneration()) {
+                updateChannelStatus(AudioStream::sampleRate());
+            }
+            AudioI2SPort::unlockAfterWrite();
         }
 
         const uint16_t frameInBlockStart = frameInBlock;
@@ -317,6 +330,7 @@ void AudioOutputSPDIF::txTaskLoop() {
 
         size_t bytesWritten = 0;
         if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
+            frameInBlock = frameInBlockStart;
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
             if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
