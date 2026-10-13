@@ -13,16 +13,7 @@ AudioOutputI2S::AudioOutputI2S(const Pins &pins)
     : AudioStream(2, inputQueueArray), i2sPins(pins) {} // kein Hardware-Init hier
 AudioOutputI2S::~AudioOutputI2S() { end(); }
 bool AudioOutputI2S::isRunning() const { return running.load(std::memory_order_acquire) != 0; }
-uint32_t AudioOutputI2S::txCallbackCount() const { return txCallbackCountValue.load(std::memory_order_relaxed); }
 void AudioOutputI2S::setRunning(bool value) { running.store(value ? 1U : 0U, std::memory_order_release); }
-
-bool AudioOutputI2S::markTxCallbackFromISR() {
-    if (running.load(std::memory_order_acquire) == 0) return false;
-    txCallbackCountValue.fetch_add(1, std::memory_order_relaxed);
-    return true;
-}
-
-void AudioOutputI2S::resetTxCallbackCount() { txCallbackCountValue.store(0, std::memory_order_relaxed); }
 
 bool AudioOutputI2S::begin() { return beginInternal(); }
 bool AudioOutputI2S::begin(const Pins &pins) {
@@ -91,7 +82,6 @@ bool AudioOutputI2S::beginInternal() {
         return false;
     }
 
-    resetTxCallbackCount();
     pendingDmaBuffer.store(nullptr, std::memory_order_relaxed);
     setRunning(true);
 
@@ -236,7 +226,7 @@ void AudioOutputI2S::releasePair(BlockPair &pair) {
 
 bool AUDIO_I2S_ISR_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
     auto *output = static_cast<AudioOutputI2S *>(userContext);
-    if (output == nullptr || !output->markTxCallbackFromISR()) return false;
+    if (output == nullptr || !output->isRunning()) return false;
 
     uint32_t *dmaBuffer = nullptr;
     if (event != nullptr && event->dma_buf != nullptr &&
