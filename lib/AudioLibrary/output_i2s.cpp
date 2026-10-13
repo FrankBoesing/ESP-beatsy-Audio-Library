@@ -210,7 +210,7 @@ void AudioOutputI2S::update() {
     if (pair.left == nullptr && pair.right == nullptr) return;
     pair.rateGeneration = AudioI2SPort::currentSampleRateGeneration();
 
-    if (txQueue == nullptr) {
+    if (!isRunning() || txQueue == nullptr) {
         releasePair(pair);
         return;
     }
