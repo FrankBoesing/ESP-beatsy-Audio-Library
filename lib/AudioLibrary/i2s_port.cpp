@@ -909,15 +909,30 @@ bool AudioI2SPort::setSampleRate(float rate) {
 
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "I2S sample-rate reconfiguration failed: %s", esp_err_to_name(err));
+        bool rollbackOk = true;
         for (PortState &s : ports) {
             if (!s.pairCreated) continue;
-            reconfigurePortClock(s, oldRate);
+            const esp_err_t rollbackErr = reconfigurePortClock(s, oldRate);
+            if (rollbackErr != ESP_OK) {
+                ESP_LOGE(TAG, "I2S%u clock rollback failed: %s", controllerOf(&s), esp_err_to_name(rollbackErr));
+                rollbackOk = false;
+            }
             s.sampleRate = oldRate;
         }
-        AudioStream::setSampleRate(oldRateFloat);
-        for (uint8_t i = 0; i < MAX_PORTS; ++i) {
-            if (ports[i].pairCreated) restoreEnabled(ports[i], oldTx[i], oldRx[i]);
+        if (!AudioStream::setSampleRate(oldRateFloat)) {
+            ESP_LOGE(TAG, "AudioStream sample-rate rollback failed");
+            rollbackOk = false;
         }
+        for (uint8_t i = 0; i < MAX_PORTS; ++i) {
+            if (ports[i].pairCreated && !restoreEnabled(ports[i], oldTx[i], oldRx[i])) {
+                ESP_LOGE(TAG, "I2S%u channel restore after rollback failed", i);
+                rollbackOk = false;
+            }
+        }
+
+        // If rollback was incomplete, invalidate buffered audio rather than
+        // allowing pre-failure blocks to play across a possibly mixed clock state.
+        if (!rollbackOk) currentRateGeneration.fetch_add(1, std::memory_order_release);
         return false;
     }
 
