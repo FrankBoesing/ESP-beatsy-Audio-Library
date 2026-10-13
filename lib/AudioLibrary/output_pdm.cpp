@@ -314,17 +314,27 @@ void AudioOutputPDM::txTaskLoop() {
             continue;
         }
 
-        if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
-            if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
-            continue;
-        }
-
         if (!isRunning() ||
             xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) {
-            AudioI2SPort::unlockAfterWrite();
             if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
             if (!isRunning()) break;
             continue;
+        }
+
+        // Acquire the shared port lock only after dequeueing. Never hold the
+        // global lock while idle waiting for an audio block from this output.
+        if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
+            releasePair(pair);
+            pair = {nullptr, nullptr};
+            if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
+            continue;
+        }
+        if (!isRunning()) {
+            releasePair(pair);
+            pair = {nullptr, nullptr};
+            AudioI2SPort::unlockAfterWrite();
+            if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
+            break;
         }
 
         const int16_t *left = pair.left ? pair.left->data : nullptr;
