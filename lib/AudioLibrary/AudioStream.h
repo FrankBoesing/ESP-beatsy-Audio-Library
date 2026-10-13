@@ -275,7 +275,7 @@ class AudioStream {
     static void scheduler_task(void *parameter);
     static void software_timer_callback(void *parameter);
     static bool update_setup_internal(bool deferSoftwareClock);
-    static bool start_software_timer(bool allowExternalClock = false);
+    static bool start_software_timer(void);
     static bool stop_software_timer(void);
 
     static TaskHandle_t audio_task_handle;
