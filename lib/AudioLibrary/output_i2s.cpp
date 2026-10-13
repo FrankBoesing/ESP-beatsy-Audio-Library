@@ -215,6 +215,7 @@ void AudioOutputI2S::update() {
     pair.right = receiveReadOnly(1);
 
     if (pair.left == nullptr && pair.right == nullptr) return;
+    pair.rateGeneration = AudioI2SPort::currentSampleRateGeneration();
 
     if (txQueue == nullptr) {
         releasePair(pair);
@@ -291,12 +292,14 @@ void AudioOutputI2S::txTaskLoop() {
             if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             continue;
         }
-        if (!isRunning()) {
+        if (!isRunning() ||
+            pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
             releasePair(pair);
-            pair = {nullptr, nullptr};
+            pair = {nullptr, nullptr, 0};
             AudioI2SPort::unlockAfterWrite();
             if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
-            break;
+            if (!isRunning()) break;
+            continue;
         }
 
         if (numChannels == 1) {
