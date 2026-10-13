@@ -804,10 +804,11 @@ bool AudioI2SPort::stop(uint8_t controller, Direction d) {
     s->rxActive = nextRxActive;
 
     const int8_t owner = getSchedulerOwner();
-    if (owner == ownerCode(controller, d) || owner < 0 || !anyActive()) {
+    if (!anyActive()) {
+        setSchedulerOwner(-1);
+    } else if (owner == ownerCode(controller, d) || owner < 0) {
         setSchedulerOwner(findActiveOwner());
     }
-    if (!anyActive()) setSchedulerOwner(-1);
 
     if (!stopped) {
         ESP_LOGE(TAG, "I2S%u %s stop incomplete; retaining channel resources for a retry",
