@@ -9,6 +9,7 @@
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/semphr.h>
 #include <driver/i2s_pdm.h>
 #include "AudioStream.h"
 
@@ -208,9 +209,42 @@ struct PortState {
 };
 
 PortState ports[MAX_PORTS]{};
+// Clock reconfiguration affects every controller. Hold this mutex for each
+// complete DMA write and across reconfiguration of all controller clocks.
+SemaphoreHandle_t portWriteMutex = nullptr;
 // AudioStream has one graph clock, irrespective of how many I2S controllers run.
 // A single task-side writer publishes the owner to the I2S callback ISRs.
 std::atomic<int32_t> schedulerOwner{-1};
+
+bool ensurePortWriteMutex() {
+    if (portWriteMutex != nullptr) return true;
+    portWriteMutex = xSemaphoreCreateMutex();
+    if (portWriteMutex == nullptr) {
+        ESP_LOGE(TAG, "Could not create shared I2S write mutex");
+        return false;
+    }
+    return true;
+}
+
+class AudioPortWriteLock {
+  public:
+    AudioPortWriteLock() : mutex_(portWriteMutex) {
+        locked_ = mutex_ == nullptr || xSemaphoreTake(mutex_, portMAX_DELAY) == pdTRUE;
+    }
+
+    ~AudioPortWriteLock() {
+        if (mutex_ != nullptr && locked_) xSemaphoreGive(mutex_);
+    }
+
+    bool locked() const { return locked_; }
+
+    AudioPortWriteLock(const AudioPortWriteLock &) = delete;
+    AudioPortWriteLock &operator=(const AudioPortWriteLock &) = delete;
+
+  private:
+    SemaphoreHandle_t mutex_;
+    bool locked_;
+};
 
 int8_t getSchedulerOwner() { return static_cast<int8_t>(schedulerOwner.load(std::memory_order_acquire)); }
 void setSchedulerOwner(int8_t owner) { schedulerOwner.store(static_cast<int32_t>(owner), std::memory_order_release); }
@@ -347,6 +381,11 @@ bool AUDIO_I2S_ISR_ATTR dispatchRx(i2s_chan_handle_t channel, i2s_event_data_t *
 
 OSIZE
 bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t rate, const Format &format) {
+    if (!ensurePortWriteMutex()) {
+        resetPortState(s);
+        return false;
+    }
+
     const bool spdifBmc = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC;
     const bool pdmDac = format.mode == AudioI2SPort::PeripheralMode::PDM;
     if ((!spdifBmc && !pdmDac && (requested.bclk < 0 || requested.ws < 0)) ||
@@ -741,6 +780,9 @@ OSIZE
 bool AudioI2SPort::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate <= 0.0f) return false;
     AudioGraphUpdateLock graphLock;
+    AudioPortWriteLock writerLock;
+    if (!writerLock.locked()) return false;
+
     const long rounded = std::lround(rate);
     if (rounded <= 0) return false;
     const uint32_t newRate = static_cast<uint32_t>(rounded);
@@ -842,6 +884,16 @@ bool AudioI2SPort::setSampleRate(float rate) {
 }
 
 OSIZE
+bool AudioI2SPort::lockForWrite(TickType_t timeoutTicks) {
+    SemaphoreHandle_t mutex = portWriteMutex;
+    return mutex != nullptr && xSemaphoreTake(mutex, timeoutTicks) == pdTRUE;
+}
+
+void AudioI2SPort::unlockAfterWrite() {
+    SemaphoreHandle_t mutex = portWriteMutex;
+    if (mutex != nullptr) xSemaphoreGive(mutex);
+}
+
 bool AudioI2SPort::isClockOwner(uint8_t controller, Direction d) {
     const int8_t requestedOwner = (d == Direction::None || controller >= MAX_PORTS)
                                       ? -1
