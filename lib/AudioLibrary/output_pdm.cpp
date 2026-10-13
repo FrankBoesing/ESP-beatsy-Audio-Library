@@ -178,10 +178,6 @@ bool AudioOutputPDM::beginInternal() {
             vQueueDelete(txQueue);
             txQueue = nullptr;
         }
-        if (txWriteMutex != nullptr) {
-            vSemaphoreDelete(txWriteMutex);
-            txWriteMutex = nullptr;
-        }
         return false;
     }
 
