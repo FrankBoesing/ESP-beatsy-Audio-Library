@@ -36,37 +36,36 @@
 // its radix-4 FFT (including the ESP32-S3 implementation when enabled by the
 // component's build configuration). Otherwise use the portable fallback below.
 #if defined(__has_include)
-#  if __has_include("dsps_fft4r.h")
-#    include "dsps_fft4r.h"
-#    define AUDIO_FFT_HAVE_ESP_DSP 1
-#  endif
+#if __has_include("dsps_fft4r.h")
+#include "dsps_fft4r.h"
+#define AUDIO_FFT_HAVE_ESP_DSP 1
+#endif
 #endif
 #ifndef AUDIO_FFT_HAVE_ESP_DSP
-#  define AUDIO_FFT_HAVE_ESP_DSP 0
+#define AUDIO_FFT_HAVE_ESP_DSP 0
 #endif
 
+#if 0
 #if AUDIO_FFT_HAVE_ESP_DSP
 #pragma message("AudioFFT: ESP-DSP headers found")
 
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
-  #if defined(dsps_fft4r_fc32_aes3_enabled) && \
-      (dsps_fft4r_fc32_aes3_enabled == 1)
-    #pragma message("AudioFFT: ESP32-S3 AES3 FFT optimization enabled")
-  #else
-    #pragma message("AudioFFT: ESP32-S3 AES3 FFT optimization NOT enabled")
-  #endif
+#if defined(dsps_fft4r_fc32_aes3_enabled) && (dsps_fft4r_fc32_aes3_enabled == 1)
+#pragma message("AudioFFT: ESP32-S3 AES3 FFT optimization enabled")
+#else
+#pragma message("AudioFFT: ESP32-S3 AES3 FFT optimization NOT enabled")
+#endif
 #elif defined(CONFIG_IDF_TARGET_ESP32P4)
-  #if CONFIG_DSP_OPTIMIZED && \
-      defined(dsps_fft4r_fc32_arp4_enabled) && \
-      (dsps_fft4r_fc32_arp4_enabled == 1)
-    #pragma message("AudioFFT: ESP32-P4 ARP4 FFT optimization enabled")
-  #else
-    #pragma message("AudioFFT: ESP32-P4 ARP4 FFT optimization NOT enabled")
-  #endif
+#if CONFIG_DSP_OPTIMIZED && defined(dsps_fft4r_fc32_arp4_enabled) && (dsps_fft4r_fc32_arp4_enabled == 1)
+#pragma message("AudioFFT: ESP32-P4 ARP4 FFT optimization enabled")
+#else
+#pragma message("AudioFFT: ESP32-P4 ARP4 FFT optimization NOT enabled")
+#endif
 #endif
 
 #else
 #pragma message("AudioFFT: portable FFT fallback")
+#endif
 #endif
 
 namespace AudioFFT {
@@ -83,8 +82,7 @@ struct TwiddleTable {
     TwiddleTable() {
         // Forward-FFT twiddles: exp(-j * 2*pi*k/N).
         for (uint16_t k = 0; k < kMaxTwiddles; ++k) {
-            const float angle = -2.0f * kPi * (float)(k) /
-                                (float)(kMaxFFTSize);
+            const float angle = -2.0f * kPi * (float)(k) / (float)(kMaxFFTSize);
             re[k] = cosf(angle);
             im[k] = sinf(angle);
         }
@@ -111,14 +109,12 @@ static bool initializeEspDSP() {
     // ESP-DSP's radix-4 table_size is expressed in float words and is 2*N
     // for a table initialized for an N-point FFT.
     if (dsps_fft4r_initialized != 0) {
-        espDspReady = (dsps_fft4r_w_table_fc32 != nullptr) &&
-                      (dsps_fft4r_w_table_size >= (2 * kMaxFFTSize));
+        espDspReady = (dsps_fft4r_w_table_fc32 != nullptr) && (dsps_fft4r_w_table_size >= (2 * kMaxFFTSize));
         return espDspReady;
     }
 
     const esp_err_t err = dsps_fft4r_init_fc32(nullptr, kMaxFFTSize);
-    espDspReady = (err == ESP_OK) && (dsps_fft4r_initialized != 0) &&
-                  (dsps_fft4r_w_table_fc32 != nullptr) &&
+    espDspReady = (err == ESP_OK) && (dsps_fft4r_initialized != 0) && (dsps_fft4r_w_table_fc32 != nullptr) &&
                   (dsps_fft4r_w_table_size >= (2 * kMaxFFTSize));
     return espDspReady;
 }
@@ -207,14 +203,10 @@ bool transform(float *data, uint16_t length) {
 #if AUDIO_FFT_HAVE_ESP_DSP
     if (initializeEspDSP()) {
         esp_err_t result;
-#if defined(CONFIG_IDF_TARGET_ESP32S3) && \
-    defined(dsps_fft4r_fc32_aes3_enabled) && \
-    (dsps_fft4r_fc32_aes3_enabled == 1)
+#if defined(CONFIG_IDF_TARGET_ESP32S3) && defined(dsps_fft4r_fc32_aes3_enabled) && (dsps_fft4r_fc32_aes3_enabled == 1)
         // Explicitly use the S3 kernel when ESP-DSP was built with optimized
         // kernels enabled. Its table_size argument is in float words.
-        result = dsps_fft4r_fc32_aes3_(data, length,
-                                       dsps_fft4r_w_table_fc32,
-                                       dsps_fft4r_w_table_size);
+        result = dsps_fft4r_fc32_aes3_(data, length, dsps_fft4r_w_table_fc32, dsps_fft4r_w_table_size);
 #else
         // ESP-DSP uses a DIF-style radix-4 transform: perform its bit-reversal
         // permutation AFTER the FFT to return bins to natural order.
@@ -234,8 +226,7 @@ bool transform(float *data, uint16_t length) {
     return transformPortable(data, length);
 }
 
-uint32_t magnitudeSquaredScaled(const float *data, uint16_t bin,
-                                float powerScale) {
+uint32_t magnitudeSquaredScaled(const float *data, uint16_t bin, float powerScale) {
     if (data == nullptr) {
         return 0;
     }
@@ -266,8 +257,7 @@ uint16_t magnitudeFromSquared(uint32_t power) {
     }
 
     const uint32_t magnitude = sqrt_uint32_approx(power);
-    return (magnitude > UINT16_MAX) ? UINT16_MAX :
-           (uint16_t)(magnitude);
+    return (magnitude > UINT16_MAX) ? UINT16_MAX : (uint16_t)(magnitude);
 }
 
 } // namespace AudioFFT
