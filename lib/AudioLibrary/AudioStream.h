@@ -36,6 +36,10 @@ extern const int16_t audio_zeroblock[AUDIO_BLOCK_SAMPLES];
 class AudioStream;
 class AudioConnection;
 
+namespace audio_detail {
+class GraphUpdateLock;
+}
+
 // -----------------------------------------------------------------------------
 // AudioConnection
 // -----------------------------------------------------------------------------
@@ -209,6 +213,7 @@ class AudioStream {
 
     friend class AudioConnection;
     friend class AudioI2SPort;
+    friend class audio_detail::GraphUpdateLock;
     friend void AudioInterrupts();
     friend void AudioNoInterrupts();
 
@@ -333,11 +338,12 @@ inline void AudioNoInterrupts() {
 namespace audio_detail {
 
 // Serializes graph/lifecycle operations with AudioTask::update().
-// The underlying AudioStream mutex is recursive, so nested calls are safe.
+// Uses the internal API directly; AudioNoInterrupts()/AudioInterrupts() remain
+// compatibility wrappers for Teensy sketches.
 class GraphUpdateLock {
   public:
-    GraphUpdateLock() { AudioNoInterrupts(); }
-    ~GraphUpdateLock() { AudioInterrupts(); }
+    GraphUpdateLock() { AudioStream::disableUpdates(); }
+    ~GraphUpdateLock() { AudioStream::enableUpdates(); }
 
     GraphUpdateLock(const GraphUpdateLock &) = delete;
     GraphUpdateLock &operator=(const GraphUpdateLock &) = delete;
