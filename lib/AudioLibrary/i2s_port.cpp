@@ -923,15 +923,32 @@ bool AudioI2SPort::setSampleRate(float rate) {
         oldRx[i] = ports[i].rxEnabled;
     }
 
+    bool channelsDisabled = true;
     for (PortState &s : ports) {
         if (!s.pairCreated) continue;
         const Direction slave = s.physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
-        if (!disableChannel(s, slave) || !disableChannel(s, s.physicalMaster)) {
-            for (uint8_t i = 0; i < MAX_PORTS; ++i) {
-                if (ports[i].pairCreated) restoreEnabled(ports[i], oldTx[i], oldRx[i]);
-            }
-            return false;
+        // Attempt both operations. A failed slave disable must not skip the
+        // master disable or leave previously stopped controllers unrestored.
+        const bool slaveStopped = disableChannel(s, slave);
+        const bool masterStopped = disableChannel(s, s.physicalMaster);
+        if (!slaveStopped || !masterStopped) {
+            channelsDisabled = false;
+            break;
         }
+    }
+
+    if (!channelsDisabled) {
+        bool restored = true;
+        for (uint8_t i = 0; i < MAX_PORTS; ++i) {
+            if (ports[i].pairCreated && !restoreEnabled(ports[i], oldTx[i], oldRx[i])) {
+                ESP_LOGE(TAG, "I2S%u channel restore after disable failure failed", i);
+                restored = false;
+            }
+        }
+        if (!restored) {
+            ESP_LOGE(TAG, "I2S sample-rate change aborted, but prior channel state was not fully restored");
+        }
+        return false;
     }
 
     for (;;) {
