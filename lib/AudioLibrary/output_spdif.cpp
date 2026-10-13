@@ -112,7 +112,10 @@ bool AudioOutputSPDIF::beginInternal() {
 
     if (!AudioI2SPort::setEventHandler(controller_, AudioI2SPort::Direction::Tx, &AudioOutputSPDIF::onI2STransmit,
                                        this)) {
-        AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE("AudioOutputSPDIF", "Could not release SPDIF port after callback registration failure; retaining handle");
+            return false;
+        }
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
@@ -132,7 +135,10 @@ bool AudioOutputSPDIF::beginInternal() {
         setRunning(false);
         txTask.store(nullptr, std::memory_order_release);
         AudioI2SPort::clearEventHandler(controller_, AudioI2SPort::Direction::Tx, this);
-        AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE("AudioOutputSPDIF", "Could not release SPDIF port after task creation failure; retaining resources");
+            return false;
+        }
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
@@ -151,7 +157,10 @@ bool AudioOutputSPDIF::beginInternal() {
             ESP_LOGE("AudioOutputSPDIF", "TX channel could not be stopped after startup failure; retaining port resources");
             return false;
         }
-        AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE("AudioOutputSPDIF", "Could not release SPDIF port after startup failure; retaining resources");
+            return false;
+        }
         txHandle = nullptr;
         if (txQueue != nullptr) {
             vQueueDelete(txQueue);
@@ -188,7 +197,10 @@ void AudioOutputSPDIF::end() {
             ESP_LOGE("AudioOutputSPDIF", "TX channel could not be stopped; retaining port resources for retry");
             return;
         }
-        AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE("AudioOutputSPDIF", "Could not release SPDIF port; retaining resources for retry");
+            return;
+        }
         txHandle = nullptr;
     }
 
