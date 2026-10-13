@@ -177,9 +177,9 @@ class AudioStream {
     static float sampleRate(void);
     static uint32_t blockPeriodUs(void);
 
-    // Initializes the scheduler infrastructure. The current implementation
-    // uses a FreeRTOS task notification as the hand-off from the clock source
-    // to the audio processing task.
+    // Initializes the scheduler and starts its software-clock fallback.
+    // AudioMemory() uses an internal deferred-start path while hardware streams
+    // initialize, so an available I2S/DMA clock can take over first.
     static bool update_setup(void);
     static void update_stop(void);
     static bool setExternalUpdateClock(bool enabled);
@@ -272,10 +272,15 @@ class AudioStream {
 
     static void scheduler_task(void *parameter);
     static void software_timer_callback(void *parameter);
+    static bool update_setup_internal(bool deferSoftwareClock);
+    static bool start_software_timer(bool allowExternalClock = false);
+    static bool stop_software_timer(void);
 
     static TaskHandle_t audio_task_handle;
     static SemaphoreHandle_t audio_update_mutex;
     static esp_timer_handle_t software_timer;
+    static bool software_timer_running;
+    static bool software_clock_deferred;
     static bool update_scheduled;
     static bool external_update_clock;
     static float audio_sample_rate;
