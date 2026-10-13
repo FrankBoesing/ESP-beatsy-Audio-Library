@@ -45,6 +45,30 @@
 #  define AUDIO_FFT_HAVE_ESP_DSP 0
 #endif
 
+#if AUDIO_FFT_HAVE_ESP_DSP
+#pragma message("AudioFFT: ESP-DSP headers found")
+
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+  #if defined(dsps_fft4r_fc32_aes3_enabled) && \
+      (dsps_fft4r_fc32_aes3_enabled == 1)
+    #pragma message("AudioFFT: ESP32-S3 AES3 FFT optimization enabled")
+  #else
+    #pragma message("AudioFFT: ESP32-S3 AES3 FFT optimization NOT enabled")
+  #endif
+#elif defined(CONFIG_IDF_TARGET_ESP32P4)
+  #if CONFIG_DSP_OPTIMIZED && \
+      defined(dsps_fft4r_fc32_arp4_enabled) && \
+      (dsps_fft4r_fc32_arp4_enabled == 1)
+    #pragma message("AudioFFT: ESP32-P4 ARP4 FFT optimization enabled")
+  #else
+    #pragma message("AudioFFT: ESP32-P4 ARP4 FFT optimization NOT enabled")
+  #endif
+#endif
+
+#else
+#pragma message("AudioFFT: portable FFT fallback")
+#endif
+
 namespace AudioFFT {
 namespace {
 
