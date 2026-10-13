@@ -29,6 +29,7 @@ void AudioOutputI2S::resetTxCallbackCount() { txCallbackCountValue.store(0, std:
 bool AudioOutputI2S::begin() { return beginInternal(); }
 bool AudioOutputI2S::begin(const Pins &pins) {
     end();
+    if (txHandle != nullptr || txQueue != nullptr) return false;
     i2sPins = pins;
     return beginInternal();
 }
@@ -49,15 +50,9 @@ bool AudioOutputI2S::setSampleRate(float hz) {
     audio_detail::GraphUpdateLock graphLock;
     if (hz == AudioStream::sampleRate()) return true;
 
-    const bool writerLocked = txWriteMutex != nullptr;
-    if (writerLocked && xSemaphoreTake(txWriteMutex, pdMS_TO_TICKS(500)) != pdTRUE) {
-        ESP_LOGE(TAG, "Timed out waiting for I2S TX writer before rate change");
-        return false;
-    }
-
-    // The port manager validates and applies the global rate first. Only flush
-    // queued data if a new rate generation was committed; a rejected request
-    // with a successful rollback should not discard valid old-rate audio.
+    // GraphUpdateLock prevents new blocks from being queued during the change.
+    // The shared port writer lock excludes in-flight DMA writes, while the
+    // generation stamp makes any old pair already dequeued/queued harmless.
     const uint32_t oldGeneration = AudioI2SPort::currentSampleRateGeneration();
     const bool ok = AudioI2SPort::setSampleRate(hz);
     if (txQueue != nullptr &&
@@ -67,8 +62,6 @@ bool AudioOutputI2S::setSampleRate(float hz) {
             releasePair(pair);
         }
     }
-
-    if (writerLocked) xSemaphoreGive(txWriteMutex);
     return ok;
 }
 
@@ -76,6 +69,10 @@ OSIZE
 bool AudioOutputI2S::beginInternal() {
     audio_detail::GraphUpdateLock graphLock;
     if (isRunning()) return true;
+    if (txHandle != nullptr || txQueue != nullptr) {
+        ESP_LOGE(TAG, "Previous I2S output shutdown did not complete");
+        return false;
+    }
     if (i2sPins.bclk < 0 || i2sPins.ws < 0 || i2sPins.dout < 0) {
         ESP_LOGE(TAG, "Invalid I2S output pins");
         return false;
@@ -84,19 +81,10 @@ bool AudioOutputI2S::beginInternal() {
     txQueue = xQueueCreate(QUEUE_LENGTH, sizeof(BlockPair));
     if (txQueue == nullptr) return false;
 
-    txWriteMutex = xSemaphoreCreateMutex();
-    if (txWriteMutex == nullptr) {
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
-        return false;
-    }
-
     const AudioI2SPort::Pins portPins{i2sPins.bclk, i2sPins.ws, i2sPins.dout, -1, i2sPins.mclk, i2sPins.controller};
     if (!AudioI2SPort::acquireTx(portPins, &txHandle)) {
         vQueueDelete(txQueue);
         txQueue = nullptr;
-        vSemaphoreDelete(txWriteMutex);
-        txWriteMutex = nullptr;
         txHandle = nullptr;
         return false;
     }
@@ -108,8 +96,6 @@ bool AudioOutputI2S::beginInternal() {
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
-        vSemaphoreDelete(txWriteMutex);
-        txWriteMutex = nullptr;
         return false;
     }
 
@@ -129,8 +115,6 @@ bool AudioOutputI2S::beginInternal() {
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
-        vSemaphoreDelete(txWriteMutex);
-        txWriteMutex = nullptr;
         return false;
     }
 
@@ -164,7 +148,7 @@ OSIZE
 void AudioOutputI2S::end() {
     audio_detail::GraphUpdateLock graphLock;
     if (!isRunning() && txQueue == nullptr && txHandle == nullptr &&
-        txTask.load(std::memory_order_acquire) == nullptr && txWriteMutex == nullptr) return;
+        txTask.load(std::memory_order_acquire) == nullptr) return;
 
     setRunning(false);
 
@@ -194,8 +178,6 @@ void AudioOutputI2S::end() {
         txQueue = nullptr;
     }
     if (txWriteMutex != nullptr) {
-        vSemaphoreDelete(txWriteMutex);
-        txWriteMutex = nullptr;
     }
 }
 
@@ -264,14 +246,7 @@ void AudioOutputI2S::txTaskLoop() {
     BlockPair pair;
 
     while (isRunning()) {
-        SemaphoreHandle_t writerMutex = txWriteMutex;
-        if (writerMutex != nullptr &&
-            xSemaphoreTake(writerMutex, pdMS_TO_TICKS(10)) != pdTRUE) {
-            continue;
-        }
-
         if (!isRunning() || xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) {
-            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             if (!isRunning()) break;
             continue;
         }
@@ -281,7 +256,6 @@ void AudioOutputI2S::txTaskLoop() {
             pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
-            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             if (!isRunning()) break;
             continue;
         }
@@ -334,7 +308,6 @@ void AudioOutputI2S::txTaskLoop() {
         if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
-            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             continue;
         }
         if (!isRunning() ||
@@ -342,7 +315,6 @@ void AudioOutputI2S::txTaskLoop() {
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
             AudioI2SPort::unlockAfterWrite();
-            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             if (!isRunning()) break;
             continue;
         }
@@ -363,7 +335,6 @@ void AudioOutputI2S::txTaskLoop() {
 
         AudioI2SPort::unlockAfterWrite();
         releasePair(pair);
-        if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
     }
 
     // Beim Beenden alle noch ausstehenden Blöcke freigeben.
