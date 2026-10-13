@@ -71,7 +71,7 @@ Wird die Sample-Rate oder die Blockgröße geändert, ändert sich die Blockperi
 
 - **Ohne aktiven I2S-Taktgeber:** Ein periodischer Software-Timer löst die Audio-Updates aus.
 - **Mit aktivem I2S-Ein- oder -Ausgang:** Der zuständige DMA-Callback liefert den Takt und benachrichtigt `AudioTask`; der Software-Audio-Timer bleibt abgeschaltet.
-- **Clock-Auswahl:** Die Taktquelle wird während `AudioMemory()` anhand der initialisierten Hardware gewählt und bleibt danach fest. Hardware-Ausgänge sollten deshalb vor `AudioMemory()` als statische Audio-Objekte angelegt und beim Betrieb nicht dynamisch gestartet oder gestoppt werden.
+- **Clock-Auswahl:** Die Taktquelle wird während `AudioMemory()` anhand der initialisierten Hardware gewählt und bleibt danach fest. Ein späterer Wechsel zwischen Software-Timer und I2S-DMA-Takt wird abgelehnt. Hardware-Ausgänge deshalb vor `AudioMemory()` als statische Audio-Objekte anlegen und während des Audiobetriebs nicht starten, stoppen oder zerstören. Wird der letzte I2S-Taktgeber dennoch gestoppt, pausieren die Audio-Updates, bis derselbe Hardware-Taktgeber wieder läuft; es erfolgt kein automatischer Wechsel zur Software-Uhr.
 - **Timeouts:** Die in dieser Arbeitsversion verwendeten Timeouts von bis zu 100 ms für Queue-Warten beziehungsweise I2S-Schreiben sind Fehler- und Leerlaufgrenzen. Sie sind **nicht** die Audio-Blockperiode.
 
 Für eine störungsfreie Wiedergabe müssen die Echtzeitverarbeitung und die Übergabe der Blöcke rechtzeitig erfolgen. Aufwendige DSP-Verarbeitung oder ein zu knapp dimensionierter Speicherpool kann zu Aussetzern führen.
@@ -224,7 +224,7 @@ Dieser Ansatz ist für die meisten Anwendungen vorzuziehen, weil die Lebensdauer
 
 ### Dynamische Objekte
 
-Wenn `AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME` aktiviert ist, entfernt der `AudioStream`-Destruktor das Objekt aus der Update-Liste und löst verbundene `AudioConnection`-Objekte. Das Makro muss als Build-Definition für die Bibliothek und den Sketch konsistent aktiviert werden; es sollte nicht nur lokal in einer einzelnen Quelldatei definiert sein. Füge dafür `-DAUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME` zu den bestehenden `build_flags` der betreffenden PlatformIO-Umgebung hinzu.
+Wenn `AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME` aktiviert ist, entfernt der `AudioStream`-Destruktor das Objekt aus der Update-Liste und löst verbundene `AudioConnection`-Objekte. Das Makro muss als Build-Definition für die Bibliothek und den Sketch konsistent aktiviert werden; es sollte nicht nur lokal in einer einzelnen Quelldatei definiert sein. Füge dafür `-DAUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME` zu den bestehenden `build_flags` der betreffenden PlatformIO-Umgebung hinzu. Diese Funktion macht den Hardware-Taktgeber nicht dynamisch: Der clockgebende I2S-Ein-/Ausgang muss über die Laufzeit aktiv bleiben.
 
 ```cpp
 auto *synth = new AudioSynthWaveform;
@@ -238,9 +238,9 @@ delete connection;  // Verbindung explizit zuerst trennen
 connection = nullptr;
 delete synth;
 synth = nullptr;
-delete output;
-output = nullptr;
 AudioStream::enableUpdates();
+
+// output bleibt als fester Hardware-Taktgeber bestehen.
 ```
 
 Die Reihenfolge ist bewusst gewählt: Zuerst wird die Verbindung gelöscht, dann werden Quelle und Ziel freigegeben. `disableUpdates()`/`enableUpdates()` schützen den zusammenhängenden Umbau vor einer gleichzeitigen Traversierung des Audio-Graphs. Die Aufrufe müssen paarig und in derselben Kontrollstrecke erfolgen.
@@ -255,5 +255,6 @@ Ohne `AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME` würden bei `delete` die Einträge de
 - **PSRAM und interner RAM unterscheiden:** Der Streaming-Ringpuffer liegt im PSRAM; Audio-Blöcke, MP3-Eingabe und PCM-Decoder-Puffer sind separate Speicherbereiche. Die Größe eines Rings sagt daher nichts über die noch verfügbaren Audio-Blöcke aus.
 - **Latenz korrekt einordnen:** Blockperiode, FFT-Frame-Dauer und Queue-/I/O-Timeouts beschreiben unterschiedliche Sachverhalte und sollten nicht miteinander verwechselt werden.
 - **Fenster- und Sample-Puffer gültig halten:** Bei `AudioEffectGranular` und benutzerdefinierten FFT-Fenstern werden Zeiger übergeben. Der zugehörige Speicher muss über die gesamte Nutzungsdauer gültig bleiben.
-- **CPU-Auslastung prüfen:** Aufwendige FIR-Filter und andere DSP-Objekte sollten im Zielsystem gemessen werden. Der Aufwand hängt von Sample-Rate, Blockgröße, Filterlänge und Gesamtheit der aktiven Objekte ab.
+- **CPU-Auslastung prüfen:** Aufwendige FIR-Filter und andere DSP-Objekte sollten im Zielsystem gemessen werden. Der Aufwand hängt von Sample-Rate, Blockgröße, Filterlänge und Gesamtheit der aktiven Objekte ab. `AudioStream::processorUsage()` liefert nur dann einen belastbaren Wert, wenn FreeRTOS-Laufzeitstatistiken mit `ESP_TIMER` als Zeitbasis konfiguriert sind.
+- **Blockpool-Zeigerprüfung:** Für zusätzliche defensive Prüfung kann `-DAUDIOSTREAM_ENABLE_POOL_POINTER_CHECKS` aktiviert werden. Ohne dieses Debug-Flag entfällt die Bereichs-/Ausrichtungsprüfung in `release_locked()` aus dem Echtzeitpfad; Blöcke müssen dann ausschließlich mit gültigen, aus dem Audio-Blockpool stammenden Zeigern freigegeben werden.
 - **Versionsabhängige Parameter prüfen:** Nach Änderungen am Audio-Graphen, an ESP-IDF/Arduino-Core oder an den Task-Erstellungen sollten insbesondere Task-Stacks, Prioritäten, Timeouts, Queue-Längen und Puffergrößen mit dem tatsächlich gebauten Quellcode abgeglichen werden.
