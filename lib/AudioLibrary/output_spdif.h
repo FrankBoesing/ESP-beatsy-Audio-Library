@@ -7,6 +7,7 @@
 #include "i2s_port.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+#include <freertos/semphr.h>
 #include "AudioStream.h"
 
 /*
@@ -62,6 +63,8 @@ class AudioOutputSPDIF : public AudioStream {
     uint8_t controller_ = 0;
     i2s_chan_handle_t txHandle = nullptr;
     QueueHandle_t txQueue = nullptr;
+    // Prevent the TX task from writing during shared I2S clock reconfiguration.
+    SemaphoreHandle_t txWriteMutex = nullptr;
     TaskHandle_t txTask = nullptr;
 
     std::atomic<uint32_t> running{0};
