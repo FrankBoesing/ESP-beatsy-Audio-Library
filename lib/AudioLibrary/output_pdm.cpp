@@ -9,16 +9,22 @@
 
 static constexpr char TAG[] = "AudioOutputPDM";
 
+OSIZE
 AudioOutputPDM::AudioOutputPDM() : AudioStream(2, inputQueueArray) {}
+OSIZE
 AudioOutputPDM::AudioOutputPDM(const Pins &pins)
     : AudioStream(2, inputQueueArray), pdmPins(pins), numChannels(pins.dataRight >= 0 ? 2U : 1U) {}
+OSIZE
 AudioOutputPDM::AudioOutputPDM(int8_t data) : AudioStream(2, inputQueueArray), pdmPins{data, -1} {}
+OSIZE
 AudioOutputPDM::~AudioOutputPDM() { end(); }
 
+OSPEED
 bool AudioOutputPDM::isRunning() const {
     return running.load(std::memory_order_acquire) != 0;
 }
 
+OSIZE
 void AudioOutputPDM::setRunning(bool value) {
     running.store(value ? 1U : 0U, std::memory_order_release);
 }
@@ -40,6 +46,7 @@ bool AudioOutputPDM::setSampleRate(float rate) {
     return AudioI2SPort::setSampleRate(rate);
 }
 
+OSIZE
 bool AudioOutputPDM::begin() {
     return beginInternal();
 }
@@ -54,6 +61,7 @@ bool AudioOutputPDM::begin(const Pins &pins) {
     return beginInternal();
 }
 
+OSIZE
 bool AudioOutputPDM::begin(int8_t data) {
     return begin(Pins{data, -1});
 }
@@ -256,7 +264,7 @@ void AudioOutputPDM::releasePair(BlockPair &pair) {
     }
 }
 
-OSPEED
+OSIZE
 void AudioOutputPDM::txTaskEntry(void *arg) {
     static_cast<AudioOutputPDM *>(arg)->txTaskLoop();
 }
