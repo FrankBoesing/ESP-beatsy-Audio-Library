@@ -62,7 +62,7 @@ class AudioOutputSPDIF : public AudioStream {
     uint8_t controller_ = 0;
     i2s_chan_handle_t txHandle = nullptr;
     QueueHandle_t txQueue = nullptr;
-    // Prevent the TX task from writing during shared I2S clock reconfiguration.
+    // Allows end() to wait for the TX task before releasing resources.
     std::atomic<TaskHandle_t> txTask{nullptr};
 
     std::atomic<uint32_t> running{0};
