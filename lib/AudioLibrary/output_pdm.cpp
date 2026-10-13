@@ -209,7 +209,7 @@ bool AudioOutputPDM::beginInternal() {
 OSIZE
 void AudioOutputPDM::end() {
     AudioGraphUpdateLock graphLock;
-    if (!isRunning() && txQueue == nullptr && txHandle == nullptr) return;
+    if (!isRunning() && txQueue == nullptr && txHandle == nullptr && txTask == nullptr && txWriteMutex == nullptr) return;
 
     setRunning(false);
 
