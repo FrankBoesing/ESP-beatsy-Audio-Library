@@ -67,11 +67,7 @@ bool AudioOutputSPDIF::beginHardware() { return beginInternal(); }
 OSIZE
 bool AudioOutputSPDIF::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate <= 0.0f) return false;
-    audio_detail::GraphUpdateLock graphLock;
-
-    const bool ok = AudioI2SPort::setSampleRate(rate);
-    if (ok) updateChannelStatus(AudioStream::sampleRate());
-    return ok;
+    return AudioI2SPort::setSampleRate(rate);
 }
 
 OSIZE
@@ -265,9 +261,12 @@ void AudioOutputSPDIF::txTaskLoop() {
 
         if (!isRunning()) {
             releasePair(pair);
-            pair = {nullptr, nullptr, 0};
+            pair = {nullptr, nullptr};
             break;
         }
+
+        // The sample rate is global and may have been changed through another output.
+        updateChannelStatus(AudioStream::sampleRate());
 
         const uint16_t frameInBlockStart = frameInBlock;
         const int16_t *left = pair.left ? pair.left->data : audio_zeroblock;
