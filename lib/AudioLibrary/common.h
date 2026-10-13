@@ -60,6 +60,3 @@
 
 #define AUDIO_SAMPLE_RATE AUDIO_SAMPLE_RATE_EXACT
 
-// Shared immutable silence block. Defined once in common.cpp and stored in
-// read-only flash-mapped data on ESP32 targets.
-extern const int16_t audio_zeroblock[AUDIO_BLOCK_SAMPLES];

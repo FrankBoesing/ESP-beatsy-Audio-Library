@@ -46,7 +46,7 @@ extern const int16_t AudioWindowTukey256[];
 }
 
 class AudioAnalyzeFFT256 : public AudioStream {
-public:
+  public:
     AudioAnalyzeFFT256();
 
     bool available();
@@ -58,7 +58,7 @@ public:
 
     uint16_t output[128] __attribute__((aligned(4)));
 
-private:
+  private:
     static constexpr uint16_t FFT_SIZE = 256;
     static constexpr uint16_t NUM_BINS = 128;
 

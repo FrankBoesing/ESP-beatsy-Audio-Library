@@ -3,7 +3,6 @@
 
 #include <esp_log.h>
 #include "i2s_port.h"
-#include "audio_graph_update_lock.h"
 
 namespace {
 constexpr char TAG[] = "AudioInputI2S";

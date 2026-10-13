@@ -3,17 +3,15 @@
 
 #include <cmath>
 #include "i2s_port.h"
-#include "audio_graph_update_lock.h"
-#include "spdif_bmc_encoder.h"
 
-namespace {
-constexpr uint8_t PREAMBLE_B = 0x17; // B preamble polarity for a preceding HIGH level
-constexpr uint8_t PREAMBLE_M = 0x1D; // M preamble polarity for a preceding HIGH level
-constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH level
+static constexpr char TAG[] = "SPDIF";
 
+static constexpr uint8_t PREAMBLE_B = 0x17; // B preamble polarity for a preceding HIGH level
+static constexpr uint8_t PREAMBLE_M = 0x1D; // M preamble polarity for a preceding HIGH level
+static constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH level
 
-uint8_t spdifSampleRateCode(float rate) {
-    const uint32_t hz = static_cast<uint32_t>(std::lround(rate));
+static uint8_t spdifSampleRateCode(float rate) {
+    const uint32_t hz = (uint32_t)(std::lround(rate));
     switch (hz) {
     case 32000:
         return 0x3;
@@ -34,17 +32,13 @@ uint8_t spdifSampleRateCode(float rate) {
     }
 }
 
-} // namespace
-
 AudioOutputSPDIF::AudioOutputSPDIF() : AudioOutputSPDIF(0, Pins{-1}) {}
 AudioOutputSPDIF::AudioOutputSPDIF(const Pins &pins) : AudioOutputSPDIF(0, pins) {}
 AudioOutputSPDIF::AudioOutputSPDIF(int8_t dout) : AudioOutputSPDIF(0, Pins{dout}) {}
 AudioOutputSPDIF::AudioOutputSPDIF(uint8_t controller, const Pins &pins)
     : AudioStream(2, inputQueueArray), spdifPins(pins), controller_(controller) {}
 AudioOutputSPDIF::~AudioOutputSPDIF() { end(); }
-
 bool AudioOutputSPDIF::isRunning() const { return running.load(std::memory_order_acquire) != 0; }
-
 void AudioOutputSPDIF::setRunning(bool value) { running.store(value ? 1U : 0U, std::memory_order_release); }
 
 void AudioOutputSPDIF::updateChannelStatus(float rate) {
@@ -52,7 +46,6 @@ void AudioOutputSPDIF::updateChannelStatus(float rate) {
 }
 
 bool AudioOutputSPDIF::begin() { return beginInternal(); }
-
 bool AudioOutputSPDIF::begin(const Pins &pins) {
     end();
     if (txHandle != nullptr || txQueue != nullptr) return false;
@@ -61,7 +54,6 @@ bool AudioOutputSPDIF::begin(const Pins &pins) {
 }
 
 bool AudioOutputSPDIF::begin(int8_t dout) { return begin(Pins{dout}); }
-
 bool AudioOutputSPDIF::beginHardware() { return beginInternal(); }
 
 OSIZE
@@ -76,12 +68,12 @@ bool AudioOutputSPDIF::beginInternal() {
     if (isRunning()) return true;
 #if defined(CONFIG_I2S_ISR_IRAM_SAFE) && CONFIG_I2S_ISR_IRAM_SAFE
     if (!esp_ptr_internal(this)) {
-        ESP_LOGE("AudioOutputSPDIF", "IRAM-safe I2S callbacks require AudioOutputSPDIF in internal RAM");
+        ESP_LOGE(TAG, "IRAM-safe I2S callbacks require AudioOutputSPDIF in internal RAM");
         return false;
     }
 #endif
     if (txHandle != nullptr || txQueue != nullptr) {
-        ESP_LOGE("AudioOutputSPDIF", "Previous SPDIF output shutdown did not complete");
+        ESP_LOGE(TAG, "Previous SPDIF output shutdown did not complete");
         return false;
     }
     if (spdifPins.dout < 0) {
@@ -106,7 +98,7 @@ bool AudioOutputSPDIF::beginInternal() {
     if (!AudioI2SPort::setEventHandler(controller_, AudioI2SPort::Direction::Tx, &AudioOutputSPDIF::onI2STransmit,
                                        this)) {
         if (!AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx)) {
-            ESP_LOGE("AudioOutputSPDIF", "Could not release SPDIF port after callback registration failure; retaining handle");
+            ESP_LOGE(TAG, "Could not release SPDIF port after callback registration failure; retaining handle");
             return false;
         }
         txHandle = nullptr;
@@ -129,7 +121,7 @@ bool AudioOutputSPDIF::beginInternal() {
         txTask.store(nullptr, std::memory_order_release);
         AudioI2SPort::clearEventHandler(controller_, AudioI2SPort::Direction::Tx, this);
         if (!AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx)) {
-            ESP_LOGE("AudioOutputSPDIF", "Could not release SPDIF port after task creation failure; retaining resources");
+            ESP_LOGE(TAG, "Could not release SPDIF port after task creation failure; retaining resources");
             return false;
         }
         txHandle = nullptr;
@@ -147,11 +139,11 @@ bool AudioOutputSPDIF::beginInternal() {
 
         AudioI2SPort::clearEventHandler(controller_, AudioI2SPort::Direction::Tx, this);
         if (!AudioI2SPort::stop(controller_, AudioI2SPort::Direction::Tx)) {
-            ESP_LOGE("AudioOutputSPDIF", "TX channel could not be stopped after startup failure; retaining port resources");
+            ESP_LOGE(TAG, "TX channel could not be stopped after startup failure; retaining port resources");
             return false;
         }
         if (!AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx)) {
-            ESP_LOGE("AudioOutputSPDIF", "Could not release SPDIF port after startup failure; retaining resources");
+            ESP_LOGE(TAG, "Could not release SPDIF port after startup failure; retaining resources");
             return false;
         }
         txHandle = nullptr;
@@ -187,11 +179,11 @@ void AudioOutputSPDIF::end() {
     if (txHandle != nullptr) {
         AudioI2SPort::clearEventHandler(controller_, AudioI2SPort::Direction::Tx, this);
         if (!AudioI2SPort::stop(controller_, AudioI2SPort::Direction::Tx)) {
-            ESP_LOGE("AudioOutputSPDIF", "TX channel could not be stopped; retaining port resources for retry");
+            ESP_LOGE(TAG, "TX channel could not be stopped; retaining port resources for retry");
             return;
         }
         if (!AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx)) {
-            ESP_LOGE("AudioOutputSPDIF", "Could not release SPDIF port; retaining resources for retry");
+            ESP_LOGE(TAG, "Could not release SPDIF port; retaining resources for retry");
             return;
         }
         txHandle = nullptr;
@@ -248,6 +240,49 @@ bool AUDIO_I2S_ISR_ATTR AudioOutputSPDIF::onI2STransmit(i2s_chan_handle_t, i2s_e
     return AudioStream::update_all_from_isr();
 }
 
+extern "C" {
+    extern const uint32_t BMC_BYTE_TABLE[256];
+    extern const uint8_t BMC_NIBBLE_TABLE[16];
+}
+
+ALWAYS_INLINE OSPEED
+static void encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble, uint16_t *destination) {
+    if (destination == nullptr) return;
+
+    const uint16_t sampleBits = (uint16_t)(sample);
+    const uint32_t lowEntry = BMC_BYTE_TABLE[sampleBits & 0xFFU];
+    const uint32_t highEntry = BMC_BYTE_TABLE[sampleBits >> 8U];
+
+    const bool lowParity = ((lowEntry >> 16U) & 1U) != 0;
+    const bool highParity = ((highEntry >> 16U) & 1U) != 0;
+
+    // IEC 60958 bits 4..31 require even parity. The zero auxiliary field adds
+    // no parity, so P is the XOR of the two sample-byte parities and C.
+    const bool parityBit = lowParity ^ highParity ^ channelStatus;
+    const uint8_t statusNibble = static_cast<uint8_t>((channelStatus ? 0x04U : 0U) | (parityBit ? 0x08U : 0U));
+
+    const uint16_t lowCode = (uint16_t)(lowEntry);
+    uint16_t highCode = (uint16_t)(highEntry);
+
+    // Table entries assume a HIGH phase at byte start. An odd-parity byte
+    // flips the ending BMC phase; invert the next table word when required.
+    bool phaseHigh = true; // the preceding eight auxiliary bits are zero
+    phaseHigh ^= lowParity;
+    if (!phaseHigh) highCode = (uint16_t)(~highCode);
+    phaseHigh ^= highParity;
+
+    uint8_t tail = BMC_NIBBLE_TABLE[statusNibble];
+    if (!phaseHigh) tail = static_cast<uint8_t>(~tail);
+
+    // Pack directly into the DMA buffer: no per-bit loop and no 64-bit
+    // temporary followed by a separate split/store pass.
+    constexpr uint16_t zeroAuxBmc = 0x3333;
+    destination[0] = (uint16_t)(((uint16_t)(preamble) << 8U) | (zeroAuxBmc >> 8U));
+    destination[1] = (uint16_t)(((zeroAuxBmc & 0xFFU) << 8U) | (lowCode >> 8U));
+    destination[2] = (uint16_t)((lowCode << 8U) | (highCode >> 8U));
+    destination[3] = (uint16_t)((highCode << 8U) | tail);
+}
+
 OSPEED
 void AudioOutputSPDIF::txTaskLoop() {
     uint32_t writeErrorCount = 0;
@@ -279,8 +314,8 @@ void AudioOutputSPDIF::txTaskLoop() {
                 const uint8_t statusBit = channelStatusBit(frameInBlock);
                 const uint8_t leftPreamble = frameInBlock == 0 ? PREAMBLE_B : PREAMBLE_M;
 
-                spdif_bmc::encodeSubframe(leftSample, statusBit != 0, leftPreamble, &encodedBuffer[i * 8U]);
-                spdif_bmc::encodeSubframe(rightSample, statusBit != 0, PREAMBLE_W, &encodedBuffer[i * 8U + 4U]);
+                encodeSubframe(leftSample, statusBit != 0, leftPreamble, &encodedBuffer[i * 8U]);
+                encodeSubframe(rightSample, statusBit != 0, PREAMBLE_W, &encodedBuffer[i * 8U + 4U]);
 
                 if (++frameInBlock >= 192U) frameInBlock = 0;
             }
@@ -299,13 +334,13 @@ void AudioOutputSPDIF::txTaskLoop() {
             // Keep the status-frame index aligned to complete stereo subframes
             // accepted by the driver, rather than counting an unwritten tail.
             constexpr size_t BYTES_PER_SPDIF_FRAME = 8U * sizeof(uint16_t);
-            frameInBlock = static_cast<uint16_t>(
+            frameInBlock = (uint16_t)(
                 (frameInBlockStart + (bytesWritten / BYTES_PER_SPDIF_FRAME)) % 192U);
 
             const uint32_t now = millis();
             ++writeErrorCount;
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
-                ESP_LOGE("AudioOutputSPDIF", "TX error #%lu: %s, bytes=%lu/%lu",
+                ESP_LOGE(TAG, "TX error #%lu: %s, bytes=%lu/%lu",
                          static_cast<unsigned long>(writeErrorCount), esp_err_to_name(err),
                          static_cast<unsigned long>(bytesWritten), static_cast<unsigned long>(sizeof(encodedBuffer)));
                 lastErrorLogMs = now;

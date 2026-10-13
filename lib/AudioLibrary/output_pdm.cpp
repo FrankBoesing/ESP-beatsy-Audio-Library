@@ -5,12 +5,9 @@
 #include <esp_err.h>
 #include <esp_log.h>
 #include "i2s_port.h"
-#include "audio_graph_update_lock.h"
 
-namespace {
-constexpr char TAG[] = "AudioOutputPDM";
 
-}
+static constexpr char TAG[] = "AudioOutputPDM";
 
 AudioOutputPDM::AudioOutputPDM() : AudioStream(2, inputQueueArray) {}
 AudioOutputPDM::AudioOutputPDM(const Pins &pins)
@@ -88,7 +85,7 @@ bool AudioOutputPDM::beginInternal() {
     }
     if (pdmPins.dataLeft < 0 || (numChannels == 2 && pdmPins.dataRight < 0)) {
         ESP_LOGE(TAG, "Invalid PDM DATA pins: left=%d right=%d channels=%u",
-                 pdmPins.dataLeft, pdmPins.dataRight, static_cast<unsigned>(numChannels));
+                 pdmPins.dataLeft, pdmPins.dataRight, (unsigned)(numChannels));
         return false;
     }
 
@@ -310,7 +307,7 @@ void AudioOutputPDM::txTaskLoop() {
                 } else {
                     mono = 0;
                 }
-                pcmBuffer[i] = static_cast<int16_t>(mono);
+                pcmBuffer[i] = (int16_t)(mono);
             }
         } else {
             sampleCount *= 2U;

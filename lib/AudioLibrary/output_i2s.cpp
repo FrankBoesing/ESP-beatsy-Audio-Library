@@ -5,11 +5,8 @@
 #include <esp_err.h>
 #include <cmath>
 #include "i2s_port.h"
-#include "audio_graph_update_lock.h"
 
-static constexpr const char TAG[] = "I2S";
-
-
+static constexpr char TAG[] = "I2S";
 
 AudioOutputI2S::AudioOutputI2S() : AudioStream(2, inputQueueArray) {} // kein Hardware-Init hier
 AudioOutputI2S::AudioOutputI2S(const Pins &pins)
@@ -278,7 +275,7 @@ void AudioOutputI2S::txTaskLoop() {
                 }
 
                 // Zweierkomplement-Sample als 16-Bit-Wert übernehmen.
-                const uint32_t sample = static_cast<uint16_t>(static_cast<int16_t>(mono));
+                const uint32_t sample = (uint16_t)((int16_t)(mono));
 
                 buffer[i] = sample | (sample << 16);
             }
@@ -289,8 +286,8 @@ void AudioOutputI2S::txTaskLoop() {
 
             GCC_UNROLL
             for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                const uint32_t l = static_cast<uint16_t>(left[i]);
-                const uint32_t r = static_cast<uint16_t>(right[i]);
+                const uint32_t l = (uint16_t)(left[i]);
+                const uint32_t r = (uint16_t)(right[i]);
 
                 buffer[i] = l | (r << 16);
             }

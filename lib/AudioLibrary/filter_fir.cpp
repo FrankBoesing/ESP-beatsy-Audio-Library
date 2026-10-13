@@ -1,8 +1,6 @@
 #include "filter_fir.h"
-
 #include <cstring>
 
-namespace {
 OSPEED
 static inline int16_t q15ToPcm(int64_t value) {
     constexpr int64_t HALF = int64_t{1} << 14;
@@ -23,7 +21,7 @@ static inline int16_t q15ToPcm(int64_t value) {
 
     return (int16_t)(value);
 }
-} // namespace
+
 
 AudioFilterFIR::AudioFilterFIR() : AudioStream(1, inputQueueArray) {}
 

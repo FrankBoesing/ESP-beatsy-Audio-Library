@@ -69,7 +69,7 @@ float AudioAnalyzeFFT1024::read(unsigned int binNumber) {
     if (binNumber >= NUM_BINS) {
         return 0.0f;
     }
-    return static_cast<float>(output[binNumber]) * (1.0f / 16384.0f);
+    return (float)(output[binNumber]) * (1.0f / 16384.0f);
 }
 
 float AudioAnalyzeFFT1024::read(unsigned int binFirst, unsigned int binLast) {
@@ -89,7 +89,7 @@ float AudioAnalyzeFFT1024::read(unsigned int binFirst, unsigned int binLast) {
     for (unsigned int bin = binFirst; bin <= binLast; ++bin) {
         sum += output[bin];
     }
-    return static_cast<float>(sum) * (1.0f / 16384.0f);
+    return (float)(sum) * (1.0f / 16384.0f);
 }
 
 void AudioAnalyzeFFT1024::averageTogether(uint8_t n) {
@@ -114,9 +114,9 @@ void AudioAnalyzeFFT1024::processFrame(void) {
     for (uint16_t blockIndex = 0; blockIndex < BLOCKS_PER_FRAME; ++blockIndex) {
         const int16_t *samples = blocklist[blockIndex]->data;
         for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i, ++sampleIndex) {
-            float sample = static_cast<float>(samples[i]) * q15Scale;
+            float sample = (float)(samples[i]) * q15Scale;
             if (window != nullptr) {
-                sample *= static_cast<float>(window[sampleIndex]) * q15Scale;
+                sample *= (float)(window[sampleIndex]) * q15Scale;
             }
             fftBuffer[2U * sampleIndex] = sample;
             fftBuffer[2U * sampleIndex + 1U] = 0.0f;

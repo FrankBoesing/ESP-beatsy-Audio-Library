@@ -1,12 +1,10 @@
 #include "control_es8311.h"
-
 #include <cmath>
-
 #pragma GCC optimize("Os")
 
-namespace {
-constexpr uint32_t ES8311_I2C_FREQUENCY = 400000;
-}
+
+static constexpr uint32_t ES8311_I2C_FREQUENCY = 400000;
+
 
 // Coefficients for MCLK = 256 * sample rate, taken from the clock divider
 // table in Espressif's es8311.c (entries filtered to the 256x MCLK case).

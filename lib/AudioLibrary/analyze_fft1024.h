@@ -46,7 +46,7 @@ extern const int16_t AudioWindowTukey1024[];
 }
 
 class AudioAnalyzeFFT1024 : public AudioStream {
-public:
+  public:
     AudioAnalyzeFFT1024();
     ~AudioAnalyzeFFT1024() override;
 
@@ -59,16 +59,14 @@ public:
 
     uint16_t output[512] __attribute__((aligned(4)));
 
-private:
+  private:
     static constexpr uint16_t FFT_SIZE = 1024;
     static constexpr uint16_t NUM_BINS = 512;
     static constexpr uint16_t BLOCKS_PER_FRAME = FFT_SIZE / AUDIO_BLOCK_SAMPLES;
     static constexpr uint16_t HALF_FRAME_BLOCKS = BLOCKS_PER_FRAME / 2;
 
-    static_assert((FFT_SIZE % AUDIO_BLOCK_SAMPLES) == 0,
-                  "FFT1024 requires AUDIO_BLOCK_SAMPLES to divide 1024");
-    static_assert((BLOCKS_PER_FRAME % 2) == 0,
-                  "FFT1024 requires an even number of audio blocks for 50% overlap");
+    static_assert((FFT_SIZE % AUDIO_BLOCK_SAMPLES) == 0, "FFT1024 requires AUDIO_BLOCK_SAMPLES to divide 1024");
+    static_assert((BLOCKS_PER_FRAME % 2) == 0, "FFT1024 requires an even number of audio blocks for 50% overlap");
 
     void processFrame(void);
 

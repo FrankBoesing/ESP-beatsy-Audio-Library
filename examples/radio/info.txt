@@ -275,7 +275,7 @@ bool openStreamWithRedirects() {
             }
 
             ESP_LOGI(TAG, "Redirect %u: %s -> %s",
-                     static_cast<unsigned>(redirectCount + 1),
+                     (unsigned)(redirectCount + 1),
                      currentUrl.c_str(),
                      nextUrl.c_str());
 

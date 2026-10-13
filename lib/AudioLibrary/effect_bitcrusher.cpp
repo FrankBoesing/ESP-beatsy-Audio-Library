@@ -32,12 +32,12 @@ namespace {
 // least-significant bits. The signed reconstruction avoids converting an
 // out-of-range uint16_t value directly to int16_t.
 static inline int16_t quantizeSample(int16_t sample, uint16_t mask) {
-    const uint16_t quantized = static_cast<uint16_t>(sample) & mask;
+    const uint16_t quantized = (uint16_t)(sample) & mask;
 
     const int32_t signedValue =
         (quantized & 0x8000u) ? static_cast<int32_t>(quantized) - 65536 : static_cast<int32_t>(quantized);
 
-    return static_cast<int16_t>(signedValue);
+    return (int16_t)(signedValue);
 }
 
 } // namespace
@@ -106,7 +106,7 @@ void AudioEffectBitcrusher::update(void) {
 
     // bits is guaranteed to be in the range 1..16.
     // A full-width mask means no bit-depth reduction.
-    const uint16_t bitMask = (bits >= 16) ? 0xFFFFu : static_cast<uint16_t>(0xFFFFu << (16u - bits));
+    const uint16_t bitMask = (bits >= 16) ? 0xFFFFu : (uint16_t)(0xFFFFu << (16u - bits));
 
     if (step <= 1) {
         // Bit-depth reduction only.

@@ -11,14 +11,14 @@ void AudioSynthWaveformSine::update() {
 
     // Keep phase progression independent of block allocation.
     if (magnitude == 0) {
-        phase_accumulator += increment * static_cast<uint32_t>(AUDIO_BLOCK_SAMPLES);
+        phase_accumulator += increment * (uint32_t)(AUDIO_BLOCK_SAMPLES);
         return;
     }
 
     audio_block_t *block = allocate();
 
     if (!block) {
-        phase_accumulator += increment * static_cast<uint32_t>(AUDIO_BLOCK_SAMPLES);
+        phase_accumulator += increment * (uint32_t)(AUDIO_BLOCK_SAMPLES);
         return;
     }
 
@@ -38,7 +38,7 @@ static inline float sineHiresPhaseToRadians(uint32_t phase) {
     int32_t signedPhase;
     memcpy(&signedPhase, &phase, sizeof(signedPhase));
     constexpr float PHASE_TO_RADIANS = 6.2831853071795864769f / 4294967296.0f;
-    return static_cast<float>(signedPhase) * PHASE_TO_RADIANS;
+    return (float)(signedPhase) * PHASE_TO_RADIANS;
 }
 
 // Convert normalized float audio to signed Q1.31.
@@ -64,7 +64,7 @@ void AudioSynthWaveformSineHires::update() {
 
     // Preserve phase progression when output is muted.
     if (mag == 0) {
-        phase_accumulator = phase + increment * static_cast<uint32_t>(AUDIO_BLOCK_SAMPLES);
+        phase_accumulator = phase + increment * (uint32_t)(AUDIO_BLOCK_SAMPLES);
         return;
     }
 
@@ -72,7 +72,7 @@ void AudioSynthWaveformSineHires::update() {
     audio_block_t *msw = allocate();
 
     if (!msw) {
-        phase_accumulator = phase + increment * static_cast<uint32_t>(AUDIO_BLOCK_SAMPLES);
+        phase_accumulator = phase + increment * (uint32_t)(AUDIO_BLOCK_SAMPLES);
         return;
     }
 
@@ -81,12 +81,12 @@ void AudioSynthWaveformSineHires::update() {
     if (!lsw) {
         release(msw);
 
-        phase_accumulator = phase + increment * static_cast<uint32_t>(AUDIO_BLOCK_SAMPLES);
+        phase_accumulator = phase + increment * (uint32_t)(AUDIO_BLOCK_SAMPLES);
         return;
     }
 
     // magnitude is Q16: 65536 = unity gain.
-    const float amplitude = static_cast<float>(mag) * (1.0f / 65536.0f);
+    const float amplitude = (float)(mag) * (1.0f / 65536.0f);
 
     for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const float radians = sineHiresPhaseToRadians(phase);
@@ -98,10 +98,10 @@ void AudioSynthWaveformSineHires::update() {
         const int32_t value = sineHiresFloatToQ31(sineValue);
 
         // Output 0: upper 16 bits.
-        msw->data[i] = static_cast<int16_t>(value >> 16);
+        msw->data[i] = (int16_t)(value >> 16);
 
         // Output 1: lower 16 bits, preserving the raw bit pattern.
-        const uint16_t lowWord = static_cast<uint16_t>(static_cast<uint32_t>(value));
+        const uint16_t lowWord = (uint16_t)((uint32_t)(value));
 
         memcpy(&lsw->data[i], &lowWord, sizeof(lowWord));
 
