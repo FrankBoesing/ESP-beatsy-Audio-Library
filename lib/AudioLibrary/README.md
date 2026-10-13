@@ -69,8 +69,9 @@ Bei 128 Samples und 44.100 Hz ergibt sich:
 
 Wird die Sample-Rate oder die Blockgröße geändert, ändert sich die Blockperiode entsprechend.
 
-- **Ohne I2S-Ausgabe:** Ein periodischer Software-Timer löst die Audio-Updates aus.
-- **Mit I2S-Ausgabe:** Der I2S-TX-DMA-Callback liefert den Takt und benachrichtigt `AudioTask`; der Software-Audio-Timer ist dann abgeschaltet.
+- **Ohne aktiven I2S-Taktgeber:** Ein periodischer Software-Timer löst die Audio-Updates aus.
+- **Mit aktivem I2S-Ein- oder -Ausgang:** Der zuständige DMA-Callback liefert den Takt und benachrichtigt `AudioTask`; der Software-Audio-Timer bleibt abgeschaltet.
+- **Clock-Auswahl:** Die Taktquelle wird während `AudioMemory()` anhand der initialisierten Hardware gewählt und bleibt danach fest. Hardware-Ausgänge sollten deshalb vor `AudioMemory()` als statische Audio-Objekte angelegt und beim Betrieb nicht dynamisch gestartet oder gestoppt werden.
 - **Timeouts:** Die in dieser Arbeitsversion verwendeten Timeouts von bis zu 100 ms für Queue-Warten beziehungsweise I2S-Schreiben sind Fehler- und Leerlaufgrenzen. Sie sind **nicht** die Audio-Blockperiode.
 
 Für eine störungsfreie Wiedergabe müssen die Echtzeitverarbeitung und die Übergabe der Blöcke rechtzeitig erfolgen. Aufwendige DSP-Verarbeitung oder ein zu knapp dimensionierter Speicherpool kann zu Aussetzern führen.

@@ -676,6 +676,9 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num, uint3
         portENTER_CRITICAL(&audio_mux);
         software_clock_deferred = false;
         portEXIT_CRITICAL(&audio_mux);
+        if (updates_locked) {
+            enableUpdates();
+        }
         ESP_LOGE("Audio", "Could not initialize audio scheduler");
         return;
     }
