@@ -487,10 +487,18 @@ void AudioDecoderStream::update() {
 
     _samplesPlayed += AUDIO_BLOCK_SAMPLES;
 
-    bool finishNow;
+    bool finishNow = false;
     portENTER_CRITICAL(&_decoderMux);
-    finishNow = _decoderFinished && _readBuffer < 0 &&
-                _pcmState[0] != PCM_READY && _pcmState[1] != PCM_READY;
+    bool anyReady = false;
+    for (uint8_t i = 0; i < PCM_BUFFER_COUNT; ++i) {
+        if (_pcmState[i] == PCM_READY) {
+            anyReady = true;
+            break;
+        }
+    }
+    if (_decoderFinished && _readBuffer < 0 && !anyReady) {
+        finishNow = true;
+    }
     _updateRunning = false;
     portEXIT_CRITICAL(&_decoderMux);
 
