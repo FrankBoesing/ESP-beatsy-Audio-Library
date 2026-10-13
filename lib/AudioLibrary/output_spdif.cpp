@@ -223,6 +223,7 @@ void AudioOutputSPDIF::update() {
     BlockPair pair;
     pair.left = receiveReadOnly(0);
     pair.right = receiveReadOnly(1);
+    pair.rateGeneration = AudioI2SPort::currentSampleRateGeneration();
 
     // Keep a valid BMC stream on the wire even when the graph has no source
     // blocks; nullptr channels are encoded as PCM silence by the TX task.
@@ -266,7 +267,7 @@ bool AudioOutputSPDIF::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void
 
 OSPEED
 void AudioOutputSPDIF::txTaskLoop() {
-    BlockPair pair{nullptr, nullptr};
+    BlockPair pair{nullptr, nullptr, 0};
     while (isRunning()) {
         SemaphoreHandle_t writerMutex = txWriteMutex;
         if (writerMutex != nullptr &&
@@ -284,16 +285,18 @@ void AudioOutputSPDIF::txTaskLoop() {
         // controllers while this writer is idle waiting for an audio block.
         if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
             releasePair(pair);
-            pair = {nullptr, nullptr};
+            pair = {nullptr, nullptr, 0};
             if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             continue;
         }
-        if (!isRunning()) {
+        if (!isRunning() ||
+            pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
             releasePair(pair);
-            pair = {nullptr, nullptr};
+            pair = {nullptr, nullptr, 0};
             AudioI2SPort::unlockAfterWrite();
             if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
-            break;
+            if (!isRunning()) break;
+            continue;
         }
 
         const int16_t *left = pair.left ? pair.left->data : audio_zeroblock;
@@ -315,7 +318,7 @@ void AudioOutputSPDIF::txTaskLoop() {
         (void)i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);
 
         releasePair(pair);
-        pair = {nullptr, nullptr};
+        pair = {nullptr, nullptr, 0};
         AudioI2SPort::unlockAfterWrite();
         if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
     }
