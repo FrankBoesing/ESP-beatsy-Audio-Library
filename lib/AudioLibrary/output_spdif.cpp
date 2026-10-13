@@ -284,14 +284,19 @@ void AudioOutputSPDIF::txTaskLoop() {
             continue;
         }
 
-        // Discard blocks that were queued before a global rate change.
-        if (!isRunning() ||
-            pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
+        if (!isRunning()) {
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
             if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
-            if (!isRunning()) break;
-            continue;
+            break;
+        }
+
+        // A stale audio block is replaced with valid S/PDIF silence. Unlike
+        // PCM I2S, dropping an entire DMA period here could break the BMC stream.
+        uint32_t pairGeneration = AudioI2SPort::currentSampleRateGeneration();
+        if (pair.rateGeneration != pairGeneration) {
+            releasePair(pair);
+            pair = {nullptr, nullptr, pairGeneration};
         }
 
         if (sampleRateCodeGeneration.load(std::memory_order_acquire) !=
@@ -316,17 +321,20 @@ void AudioOutputSPDIF::txTaskLoop() {
         const int16_t *left = pair.left ? pair.left->data : audio_zeroblock;
         const int16_t *right = pair.right ? pair.right->data : audio_zeroblock;
 
-        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            const int16_t leftSample = left[i];
-            const int16_t rightSample = right[i];
-            const uint8_t statusBit = channelStatusBit(frameInBlock);
-            const uint8_t leftPreamble = frameInBlock == 0 ? PREAMBLE_B : PREAMBLE_M;
+        auto encodeBlock = [this](const int16_t *leftSamples, const int16_t *rightSamples) {
+            for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                const int16_t leftSample = leftSamples[i];
+                const int16_t rightSample = rightSamples[i];
+                const uint8_t statusBit = channelStatusBit(frameInBlock);
+                const uint8_t leftPreamble = frameInBlock == 0 ? PREAMBLE_B : PREAMBLE_M;
 
-            spdif_bmc::encodeSubframe(leftSample, statusBit != 0, leftPreamble, &encodedBuffer[i * 8U]);
-            spdif_bmc::encodeSubframe(rightSample, statusBit != 0, PREAMBLE_W, &encodedBuffer[i * 8U + 4U]);
+                spdif_bmc::encodeSubframe(leftSample, statusBit != 0, leftPreamble, &encodedBuffer[i * 8U]);
+                spdif_bmc::encodeSubframe(rightSample, statusBit != 0, PREAMBLE_W, &encodedBuffer[i * 8U + 4U]);
 
-            if (++frameInBlock >= 192U) frameInBlock = 0;
-        }
+                if (++frameInBlock >= 192U) frameInBlock = 0;
+            }
+        };
+        encodeBlock(left, right);
 
         size_t bytesWritten = 0;
         if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
@@ -336,15 +344,27 @@ void AudioOutputSPDIF::txTaskLoop() {
             if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             continue;
         }
-        if (!isRunning() ||
-            pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
+        if (!isRunning()) {
             frameInBlock = frameInBlockStart;
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
             AudioI2SPort::unlockAfterWrite();
             if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
-            if (!isRunning()) break;
-            continue;
+            break;
+        }
+
+        pairGeneration = AudioI2SPort::currentSampleRateGeneration();
+        if (pair.rateGeneration != pairGeneration) {
+            // The clock changed while this block was encoded. Re-encode silence
+            // under the new channel-status bits while the shared lock excludes
+            // any further sample-rate change.
+            frameInBlock = frameInBlockStart;
+            releasePair(pair);
+            pair = {nullptr, nullptr, pairGeneration};
+            if (sampleRateCodeGeneration.load(std::memory_order_acquire) != pairGeneration) {
+                updateChannelStatus(AudioStream::sampleRate());
+            }
+            encodeBlock(audio_zeroblock, audio_zeroblock);
         }
 
         const esp_err_t err = i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);
