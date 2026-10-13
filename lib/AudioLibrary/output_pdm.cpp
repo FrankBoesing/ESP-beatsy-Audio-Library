@@ -42,21 +42,7 @@ bool AudioOutputPDM::setSampleRate(float rate) {
 
     audio_detail::GraphUpdateLock graphLock;
 
-    auto discardQueuedPairs = [this]() {
-        if (txQueue == nullptr) return;
-        BlockPair pair;
-        while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
-    };
-
-    // The graph lock prevents new queue entries. AudioI2SPort's shared writer
-    // gate waits for in-flight PCM writes, and generation checks discard any
-    // stale pair already dequeued before the rate change.
-    const uint32_t oldGeneration = AudioI2SPort::currentSampleRateGeneration();
-    const bool ok = AudioI2SPort::setSampleRate(rate);
-    if (AudioI2SPort::currentSampleRateGeneration() != oldGeneration) {
-        discardQueuedPairs();
-    }
-    return ok;
+    return AudioI2SPort::setSampleRate(rate);
 }
 
 bool AudioOutputPDM::begin() {
@@ -247,8 +233,6 @@ void AudioOutputPDM::update() {
     // The enabled PDM DMA auto-clears buffers to silence; avoid queueing when
     // no input arrived, and release any block if the output isn't running.
     if (pair.left == nullptr && pair.right == nullptr) return;
-    pair.rateGeneration = AudioI2SPort::currentSampleRateGeneration();
-
     if (!isRunning() || txQueue == nullptr) {
         releasePair(pair);
         return;
@@ -307,13 +291,9 @@ void AudioOutputPDM::txTaskLoop() {
             continue;
         }
 
-        // Discard blocks that were queued before a global rate change.
-        if (!isRunning() ||
-            pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
+        if (!isRunning()) {
             releasePair(pair);
-            pair = {nullptr, nullptr, 0};
-            if (!isRunning()) break;
-            continue;
+            break;
         }
 
         const int16_t *left = pair.left ? pair.left->data : nullptr;
@@ -344,20 +324,10 @@ void AudioOutputPDM::txTaskLoop() {
 
         size_t bytesWritten = 0;
         const size_t bytesToWrite = sampleCount * sizeof(int16_t);
-        if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
+        if (!isRunning()) {
             releasePair(pair);
-            pair = {nullptr, nullptr, 0};
-            continue;
+            break;
         }
-        if (!isRunning() ||
-            pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
-            releasePair(pair);
-            pair = {nullptr, nullptr, 0};
-            AudioI2SPort::unlockAfterWrite();
-            if (!isRunning()) break;
-            continue;
-        }
-
         const esp_err_t err = i2s_channel_write(txHandle, pcmBuffer, bytesToWrite, &bytesWritten, 100);
 
         if (err != ESP_OK || bytesWritten != bytesToWrite) {
@@ -371,7 +341,6 @@ void AudioOutputPDM::txTaskLoop() {
             }
         }
 
-        AudioI2SPort::unlockAfterWrite();
         releasePair(pair);
         pair = {nullptr, nullptr, 0};
     }
