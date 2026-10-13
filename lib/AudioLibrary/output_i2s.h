@@ -24,8 +24,8 @@
  *   - 16-bit I2S slots
  *   - MCLK = 256 * sample rate
  *
- * The AudioStream blocks remain 16-bit. Conversion to the 32-bit
- * I2S slot format is performed only in the TX task.
+ * The AudioStream blocks remain 16-bit. AudioOutputI2S::update() converts
+ * them directly into the DMA buffer supplied by the TX callback.
  */
 class AudioOutputI2S : public AudioStream {
   public:
@@ -68,15 +68,13 @@ class AudioOutputI2S : public AudioStream {
 
     i2s_chan_handle_t txHandle = nullptr;
     QueueHandle_t txQueue = nullptr;
-    std::atomic<TaskHandle_t> txTask{nullptr};
+    std::atomic<uint32_t *> pendingDmaBuffer{nullptr};
 
     // 32-bit atomics avoid an ISR/task spinlock for these independent values.
     std::atomic<uint32_t> running{0};
     std::atomic<uint32_t> txCallbackCountValue{0};
 
     static bool AUDIO_I2S_ISR_ATTR onI2STransmit(i2s_chan_handle_t channel, i2s_event_data_t *event, void *userContext);
-    static void txTaskEntry(void *arg);
-    void txTaskLoop();
 
     bool beginInternal();
     void releasePair(BlockPair &pair);
