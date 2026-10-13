@@ -26,6 +26,7 @@ constexpr uint16_t DMA_DESC_NUM = 2;
 constexpr uint16_t DMA_FRAME_NUM = AUDIO_BLOCK_SAMPLES;
 constexpr uint8_t MAX_PORTS = AudioI2SPort::MAX_CONTROLLERS;
 
+OSIZE
 uint32_t choosePdmDacBclkDivider(uint32_t rate, i2s_clock_src_t clockSource) {
     constexpr uint32_t DEFAULT_BCLK_DIV = 13;
     constexpr uint32_t MIN_BCLK_DIV = 8;
@@ -71,6 +72,7 @@ uint32_t choosePdmDacBclkDivider(uint32_t rate, i2s_clock_src_t clockSource) {
     return bestDivider;
 }
 
+OSIZE
 i2s_pdm_tx_clk_config_t makePdmDacClockConfig(uint32_t rate) {
     i2s_pdm_tx_clk_config_t cfg = I2S_PDM_TX_CLK_DAC_DEFAULT_CONFIG(rate);
     // Preserve the tested DAC mode: fp=960, fs=480, OSR=2.
@@ -81,6 +83,7 @@ i2s_pdm_tx_clk_config_t makePdmDacClockConfig(uint32_t rate) {
 
 #if defined(SOC_I2S_SUPPORTS_PCM2PDM) && SOC_I2S_SUPPORTS_PCM2PDM && defined(SOC_I2S_HW_VERSION_2) &&                  \
     SOC_I2S_HW_VERSION_2
+OSIZE
 void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &cfg) {
     constexpr uint32_t PDM_BCLK_FACTOR = 64;
 
@@ -154,6 +157,7 @@ void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &cfg) {
              (ulong)(divider.numerator), (ulong)(divider.denominator), predictedRate);
 }
 #else
+OSIZE
 void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &) {}
 #endif
 
@@ -186,21 +190,28 @@ PortState ports[MAX_PORTS]{};
 // A single task-side writer publishes the owner to the I2S callback ISRs.
 std::atomic<int32_t> schedulerOwner{-1};
 
+OSIZE
 int8_t getSchedulerOwner() { return static_cast<int8_t>(schedulerOwner.load(std::memory_order_acquire)); }
+OSIZE
 void setSchedulerOwner(int8_t owner) { schedulerOwner.store((int32_t)(owner), std::memory_order_release); }
+OSIZE
 PortState *stateFor(uint8_t controller) { return controller < MAX_PORTS ? &ports[controller] : nullptr; }
+OSIZE
 uint8_t controllerOf(const PortState *state) { return (uint8_t)(state - ports); }
 
+OSIZE
 int8_t ownerCode(uint8_t controller, Direction direction) {
     if (direction == Direction::None || controller >= MAX_PORTS) return -1;
     return static_cast<int8_t>(controller * 2U + (direction == Direction::Rx ? 1U : 0U));
 }
 
+OSIZE
 bool sameFormat(const Format &a, const Format &b) {
     return a.mode == b.mode && a.encoding == b.encoding && a.slots == b.slots && a.slotBits == b.slotBits &&
            a.rateMultiplier == b.rateMultiplier;
 }
 
+OSIZE
 bool formatImplemented(const Format &f) {
     if (f.slotBits != 16) return false;
 
@@ -217,6 +228,7 @@ bool formatImplemented(const Format &f) {
     return f.encoding == AudioI2SPort::DataEncoding::SpdifBMC && f.rateMultiplier == 4;
 }
 
+OSIZE
 bool sameOptionalPin(int8_t requested, int8_t configured) { return requested < 0 || requested == configured; }
 
 OSIZE
@@ -282,6 +294,7 @@ void resetPortState(PortState &s) {
     portEXIT_CRITICAL(&s.callbackMux);
 }
 
+OSPEED
 bool AUDIO_I2S_ISR_ATTR dispatchTx(i2s_chan_handle_t channel, i2s_event_data_t *event, void *context) {
     auto *s = static_cast<PortState *>(context);
     if (!s) return false;
@@ -299,6 +312,7 @@ bool AUDIO_I2S_ISR_ATTR dispatchTx(i2s_chan_handle_t channel, i2s_event_data_t *
     return taskWoken;
 }
 
+OSPEED
 bool AUDIO_I2S_ISR_ATTR dispatchRx(i2s_chan_handle_t channel, i2s_event_data_t *event, void *context) {
     auto *s = static_cast<PortState *>(context);
     if (!s) return false;
@@ -504,12 +518,14 @@ OSIZE bool acquire(Direction d, const Pins &pins, i2s_chan_handle_t *out, uint32
     return true;
 }
 
+OSIZE
 bool anyActive() {
     for (const PortState &s : ports)
         if (s.txActive || s.rxActive) return true;
     return false;
 }
 
+OSIZE
 int8_t findActiveOwner() {
     for (uint8_t i = 0; i < MAX_PORTS; ++i) {
         if (ports[i].txActive) return ownerCode(i, Direction::Tx);
@@ -518,6 +534,7 @@ int8_t findActiveOwner() {
     return -1;
 }
 
+OSIZE
 bool enabled(const PortState &s, Direction d) { return d == Direction::Tx ? s.txEnabled : s.rxEnabled; }
 
 OSIZE
@@ -595,11 +612,15 @@ void clearHandler(PortState &s, Direction d, void *context) {
 
 } // namespace
 
+OSIZE
 bool AudioI2SPort::acquireTx(const Pins &pins, i2s_chan_handle_t *handle) { return acquireTx(pins, handle, Format{}); }
+OSIZE
 bool AudioI2SPort::acquireTx(const Pins &pins, i2s_chan_handle_t *handle, const Format &format) {
     return acquire(Direction::Tx, pins, handle, (uint32_t)(std::lround(AudioStream::sampleRate())), format);
 }
+OSIZE
 bool AudioI2SPort::acquireRx(const Pins &pins, i2s_chan_handle_t *handle) { return acquireRx(pins, handle, Format{}); }
+OSIZE
 bool AudioI2SPort::acquireRx(const Pins &pins, i2s_chan_handle_t *handle, const Format &format) {
     return acquire(Direction::Rx, pins, handle, (uint32_t)(std::lround(AudioStream::sampleRate())), format);
 }
@@ -622,6 +643,7 @@ bool AudioI2SPort::setEventHandler(uint8_t controller, Direction d, EventCallbac
     return available;
 }
 
+OSIZE
 void AudioI2SPort::clearEventHandler(uint8_t controller, Direction d, void *context) {
     if (PortState *s = stateFor(controller)) clearHandler(*s, d, context);
 }
@@ -929,6 +951,7 @@ bool AudioI2SPort::setSampleRate(float rate) {
     return restoreOk;
 }
 
+OSPEED
 bool AUDIO_I2S_ISR_ATTR AudioI2SPort::isClockOwner(uint8_t controller, Direction d) {
     const int8_t requestedOwner = (d == Direction::None || controller >= MAX_PORTS)
                                       ? -1
