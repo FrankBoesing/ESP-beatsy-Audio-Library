@@ -453,11 +453,6 @@ void AudioDecoderStream::update() {
         }
 
         const size_t availableFrames = totalFrames - _readPosition;
-        if (availableFrames == 0) {
-            releaseReadBuffer(index);
-            continue;
-        }
-
         const size_t frames = std::min(availableFrames, AUDIO_BLOCK_SAMPLES - outputFrames);
         const size_t bytes = frames * sizeof(int16_t);
         memcpy(left->data + outputFrames, _pcm[index] + _readPosition, bytes);
