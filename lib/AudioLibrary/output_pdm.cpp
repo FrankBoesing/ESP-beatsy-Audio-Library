@@ -40,8 +40,6 @@ OSIZE
 bool AudioOutputPDM::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate < 16000.0f || rate > 48000.0f) return false;
 
-    audio_detail::GraphUpdateLock graphLock;
-
     return AudioI2SPort::setSampleRate(rate);
 }
 
@@ -282,7 +280,7 @@ void AudioOutputPDM::txTaskLoop() {
     // PDM TX accepts 16-bit PCM data. Stereo is interleaved L,R; mono has
     // one word per PCM frame. Hardware creates the high-rate PDM bitstream.
     int16_t pcmBuffer[AUDIO_BLOCK_SAMPLES * 2U];
-    BlockPair pair{nullptr, nullptr, 0};
+    BlockPair pair{nullptr, nullptr};
 
     while (isRunning()) {
         if (!isRunning() ||
@@ -342,7 +340,7 @@ void AudioOutputPDM::txTaskLoop() {
         }
 
         releasePair(pair);
-        pair = {nullptr, nullptr, 0};
+        pair = {nullptr, nullptr};
     }
 
     while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
