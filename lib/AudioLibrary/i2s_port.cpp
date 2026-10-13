@@ -1,6 +1,7 @@
 #include "i2s_port.h"
 
 #include <cmath>
+#include <climits>
 #include <atomic>
 #include <esp_err.h>
 #include <esp_clk_tree.h>
@@ -813,13 +814,19 @@ void AudioI2SPort::release(uint8_t controller, Direction d) {
 
 OSIZE
 bool AudioI2SPort::setSampleRate(float rate) {
-    if (!std::isfinite(rate) || rate <= 0.0f) return false;
+    // lround() returns long and every configured serializer may multiply the
+    // PCM rate by up to four (software SPDIF BMC). Reject values that would
+    // overflow either representation before touching timer or hardware state.
+    if (!std::isfinite(rate) || rate <= 0.0f ||
+        static_cast<double>(rate) > static_cast<double>(LONG_MAX)) {
+        return false;
+    }
     AudioGraphUpdateLock graphLock;
     AudioPortWriteLock writerLock;
     if (!writerLock.locked()) return false;
 
     const long rounded = std::lround(rate);
-    if (rounded <= 0) return false;
+    if (rounded <= 0 || static_cast<uint64_t>(rounded) > UINT32_MAX / 4U) return false;
     const uint32_t newRate = static_cast<uint32_t>(rounded);
     const float oldRateFloat = AudioStream::sampleRate();
     const uint32_t oldRate = static_cast<uint32_t>(std::lround(oldRateFloat));
@@ -922,13 +929,14 @@ bool AudioI2SPort::setSampleRate(float rate) {
     // the hardware clock has changed.
     currentRateGeneration.fetch_add(1, std::memory_order_release);
 
+    bool restoreOk = true;
     for (uint8_t i = 0; i < MAX_PORTS; ++i) {
         if (ports[i].pairCreated && !restoreEnabled(ports[i], oldTx[i], oldRx[i])) {
             ESP_LOGE(TAG, "I2S%u sample rate changed but channel re-enable failed", i);
-            return false;
+            restoreOk = false;
         }
     }
-    return true;
+    return restoreOk;
 }
 
 uint32_t AudioI2SPort::currentSampleRateGeneration() {
