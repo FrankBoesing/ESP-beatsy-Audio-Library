@@ -808,8 +808,9 @@ bool AudioI2SPort::setSampleRate(float rate) {
         static_cast<double>(rate) > static_cast<double>(LONG_MAX)) {
         return false;
     }
-    audio_detail::GraphUpdateLock graphLock;
-
+    // The caller may hold AudioNoInterrupts()/AudioInterrupts() if the graph
+    // must not run during this reconfiguration. Otherwise brief audio glitches
+    // are possible while the hardware clocks are changed.
     // Sample rate is global across all controllers. Validate restrictions from
     // every already-configured mode, even when a different output initiated the
     // change; in particular, the direct PCM-to-PDM path supports only 16–48 kHz.
