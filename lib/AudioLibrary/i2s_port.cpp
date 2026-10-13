@@ -164,17 +164,7 @@ void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &) {}
 struct PortState {
     i2s_chan_handle_t txHandle = nullptr;
     i2s_chan_handle_t rxHandle = nullptr;
-    Pins pins = {-1, -1, -1, -1, -1};
-    Format format = {};
-    Direction physicalMaster = Direction::None;
     uint32_t sampleRate = 0;
-    bool pairCreated = false;
-    bool txAcquired = false;
-    bool rxAcquired = false;
-    bool txActive = false;
-    bool rxActive = false;
-    bool txEnabled = false;
-    bool rxEnabled = false;
 
     portMUX_TYPE callbackMux = portMUX_INITIALIZER_UNLOCKED;
     EventCallback txCallback = nullptr;
@@ -183,6 +173,17 @@ struct PortState {
     void *rxContext = nullptr;
     uint32_t txCallbacksInFlight = 0;
     uint32_t rxCallbacksInFlight = 0;
+
+    Pins pins = {-1, -1, -1, -1, -1};
+    Format format = {};
+    Direction physicalMaster = Direction::None;
+    bool pairCreated = false;
+    bool txAcquired = false;
+    bool rxAcquired = false;
+    bool txActive = false;
+    bool rxActive = false;
+    bool txEnabled = false;
+    bool rxEnabled = false;
 };
 
 PortState ports[MAX_PORTS]{};
