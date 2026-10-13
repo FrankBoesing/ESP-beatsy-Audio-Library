@@ -254,6 +254,7 @@ void AudioOutputPDM::update() {
     // a block. The enabled I2S/PDM DMA keeps running and auto-clears DMA buffers
     // to silence; avoiding empty queue entries prevents them delaying real audio.
     if (pair.left == nullptr && pair.right == nullptr) return;
+    pair.rateGeneration = AudioI2SPort::currentSampleRateGeneration();
 
     if (txQueue == nullptr) {
         releasePair(pair);
@@ -304,7 +305,7 @@ void AudioOutputPDM::txTaskLoop() {
     // PDM TX accepts 16-bit PCM data. Stereo is interleaved L,R; mono has
     // one word per PCM frame. Hardware creates the high-rate PDM bitstream.
     int16_t pcmBuffer[AUDIO_BLOCK_SAMPLES * 2U];
-    BlockPair pair{nullptr, nullptr};
+    BlockPair pair{nullptr, nullptr, 0};
 
     while (isRunning()) {
         // Take the writer lock before dequeuing a pair so a sample-rate
@@ -325,16 +326,18 @@ void AudioOutputPDM::txTaskLoop() {
         // global lock while idle waiting for an audio block from this output.
         if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
             releasePair(pair);
-            pair = {nullptr, nullptr};
+            pair = {nullptr, nullptr, 0};
             if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
             continue;
         }
-        if (!isRunning()) {
+        if (!isRunning() ||
+            pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
             releasePair(pair);
-            pair = {nullptr, nullptr};
+            pair = {nullptr, nullptr, 0};
             AudioI2SPort::unlockAfterWrite();
             if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
-            break;
+            if (!isRunning()) break;
+            continue;
         }
 
         const int16_t *left = pair.left ? pair.left->data : nullptr;
@@ -379,7 +382,7 @@ void AudioOutputPDM::txTaskLoop() {
         }
 
         releasePair(pair);
-        pair = {nullptr, nullptr};
+        pair = {nullptr, nullptr, 0};
         AudioI2SPort::unlockAfterWrite();
         if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
     }
