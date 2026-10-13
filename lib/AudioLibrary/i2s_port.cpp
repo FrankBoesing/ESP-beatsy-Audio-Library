@@ -649,6 +649,12 @@ bool disableChannel(PortState &s, Direction d) {
         return true;
     }
     const esp_err_t err = i2s_channel_disable(h);
+    if (err == ESP_ERR_INVALID_STATE) {
+        // The driver says the channel is already not running. Reconcile the
+        // tracked state instead of leaving a permanently stuck enabled flag.
+        isEnabled = false;
+        return true;
+    }
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "I2S%u %s disable failed: %s", controllerOf(&s), d == Direction::Tx ? "TX" : "RX",
                  esp_err_to_name(err));
@@ -744,8 +750,13 @@ bool AudioI2SPort::start(uint8_t controller, Direction d) {
     if (!enableChannel(*s, d)) {
         if (!s->txActive && !s->rxActive) {
             const Direction slave = master == Direction::Tx ? Direction::Rx : Direction::Tx;
-            disableChannel(*s, slave);
-            disableChannel(*s, master);
+            // Attempt both disables even if the first fails. stop() can retry
+            // any residual enabled channel during the caller's failure cleanup.
+            const bool slaveStopped = disableChannel(*s, slave);
+            const bool masterStopped = disableChannel(*s, master);
+            if (!slaveStopped || !masterStopped) {
+                ESP_LOGE(TAG, "I2S%u could not fully roll back a failed start", controller);
+            }
         }
         if (firstActive) AudioStream::setExternalUpdateClock(false);
         return false;
@@ -760,32 +771,49 @@ bool AudioI2SPort::start(uint8_t controller, Direction d) {
 }
 
 OSIZE
-void AudioI2SPort::stop(uint8_t controller, Direction d) {
+bool AudioI2SPort::stop(uint8_t controller, Direction d) {
     PortState *s = stateFor(controller);
-    if (!s || d == Direction::None) return;
-    const bool wasActive = d == Direction::Tx ? s->txActive : s->rxActive;
-    if (!wasActive) return;
-    if (d == Direction::Tx)
-        s->txActive = false;
-    else
-        s->rxActive = false;
+    if (!s || d == Direction::None) return false;
 
-    if (d != s->physicalMaster) disableChannel(*s, d);
-    if (!s->txActive && !s->rxActive) {
-        const Direction slave = s->physicalMaster == Direction::Tx ? Direction::Rx : Direction::Tx;
-        disableChannel(*s, slave);
-        disableChannel(*s, s->physicalMaster);
+    const bool nextTxActive = s->txActive && d != Direction::Tx;
+    const bool nextRxActive = s->rxActive && d != Direction::Rx;
+    const bool wasActive = d == Direction::Tx ? s->txActive : s->rxActive;
+    if (!wasActive && !s->txEnabled && !s->rxEnabled) return true;
+
+    bool stopped = true;
+    const Direction master = s->physicalMaster;
+    const Direction slave = master == Direction::Tx ? Direction::Rx : Direction::Tx;
+
+    // If a different direction on this controller remains active, its physical
+    // master must keep running. Otherwise disable the departing slave first and
+    // then the master. Try all required disables even if one fails.
+    if (d != master && (wasActive || enabled(*s, d))) {
+        stopped = disableChannel(*s, d) && stopped;
+    }
+    if (!nextTxActive && !nextRxActive) {
+        const bool slaveStopped = disableChannel(*s, slave);
+        const bool masterStopped = disableChannel(*s, master);
+        stopped = slaveStopped && masterStopped && stopped;
     }
 
-    if (getSchedulerOwner() == ownerCode(controller, d)) {
+    // The event handler is detached by the caller before stop(). Update the
+    // logical active state even when the hardware refused to stop, so another
+    // functioning I2S direction can take over the graph clock. Enabled flags
+    // remain truthful and prevent release() from deleting a running channel.
+    s->txActive = nextTxActive;
+    s->rxActive = nextRxActive;
+
+    const int8_t owner = getSchedulerOwner();
+    if (owner == ownerCode(controller, d) || owner < 0 || !anyActive()) {
         setSchedulerOwner(findActiveOwner());
     }
-    if (!anyActive()) {
-        setSchedulerOwner(-1);
-        // The update clock source is fixed after AudioMemory(). Stopping the
-        // last I2S clock stops audio updates; do not claim to restore a software
-        // clock that was deliberately not selected during initialization.
+    if (!anyActive()) setSchedulerOwner(-1);
+
+    if (!stopped) {
+        ESP_LOGE(TAG, "I2S%u %s stop incomplete; retaining channel resources for a retry",
+                 controller, d == Direction::Tx ? "TX" : "RX");
     }
+    return stopped;
 }
 
 OSIZE
@@ -834,11 +862,15 @@ bool AudioI2SPort::setSampleRate(float rate) {
     const uint32_t newRate = static_cast<uint32_t>(rounded);
     const float oldRateFloat = AudioStream::sampleRate();
     const uint32_t oldRate = static_cast<uint32_t>(std::lround(oldRateFloat));
+    const float effectiveRate = static_cast<float>(newRate);
     if (newRate == oldRate) {
-        const bool changed = rate != oldRateFloat;
-        const bool ok = AudioStream::setSampleRate(rate);
-        // AudioStream publishes the requested rate before rearming the software
-        // timer; even a timer error must invalidate already queued old-rate blocks.
+        // Hardware rates are integer Hz. Keep AudioStream's rate identical to
+        // the value used to configure I2S, even if the caller supplied a
+        // fractional float that rounds to the current hardware rate.
+        const bool changed = effectiveRate != oldRateFloat;
+        const bool ok = AudioStream::setSampleRate(effectiveRate);
+        // Even if timer rearming fails, AudioStream has published the rate;
+        // invalidate queued blocks when that effective rate changed.
         if (changed) currentRateGeneration.fetch_add(1, std::memory_order_release);
         return ok;
     }
@@ -909,7 +941,7 @@ bool AudioI2SPort::setSampleRate(float rate) {
         err = reconfigurePortClock(s, newRate);
         if (err != ESP_OK) break;
     }
-    if (err == ESP_OK && !AudioStream::setSampleRate(rate)) err = ESP_FAIL;
+    if (err == ESP_OK && !AudioStream::setSampleRate(effectiveRate)) err = ESP_FAIL;
 
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "I2S sample-rate reconfiguration failed: %s", esp_err_to_name(err));
@@ -958,7 +990,7 @@ bool AudioI2SPort::setSampleRate(float rate) {
     return restoreOk;
 }
 
-uint32_t AudioI2SPort::currentSampleRateGeneration() {
+uint32_t AUDIO_I2S_ISR_ATTR AudioI2SPort::currentSampleRateGeneration() {
     return currentRateGeneration.load(std::memory_order_acquire);
 }
 
