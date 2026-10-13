@@ -18,7 +18,7 @@ void AudioOutputI2S::setRunning(bool value) { running.store(value ? 1U : 0U, std
 bool AudioOutputI2S::begin() { return beginInternal(); }
 bool AudioOutputI2S::begin(const Pins &pins) {
     end();
-    if (txHandle != nullptr || txQueue != nullptr) return false;
+    if (txHandle != nullptr) return false;
     i2sPins = pins;
     return beginInternal();
 }
@@ -49,7 +49,7 @@ bool AudioOutputI2S::beginInternal() {
         return false;
     }
 #endif
-    if (txHandle != nullptr || txQueue != nullptr) {
+    if (txHandle != nullptr) {
         ESP_LOGE(TAG, "Previous I2S output shutdown did not complete");
         return false;
     }
@@ -58,13 +58,8 @@ bool AudioOutputI2S::beginInternal() {
         return false;
     }
 
-    txQueue = xQueueCreate(QUEUE_LENGTH, sizeof(BlockPair));
-    if (txQueue == nullptr) return false;
-
     const AudioI2SPort::Pins portPins{i2sPins.bclk, i2sPins.ws, i2sPins.dout, -1, i2sPins.mclk, i2sPins.controller};
     if (!AudioI2SPort::acquireTx(portPins, &txHandle)) {
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
         txHandle = nullptr;
         return false;
     }
@@ -77,8 +72,6 @@ bool AudioOutputI2S::beginInternal() {
             return false;
         }
         txHandle = nullptr;
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
         return false;
     }
 
@@ -98,10 +91,6 @@ bool AudioOutputI2S::beginInternal() {
             return false;
         }
         txHandle = nullptr;
-        if (txQueue != nullptr) {
-            vQueueDelete(txQueue);
-            txQueue = nullptr;
-        }
         return false;
     }
 
@@ -111,16 +100,12 @@ bool AudioOutputI2S::beginInternal() {
 OSIZE
 void AudioOutputI2S::end() {
     audio_detail::GraphUpdateLock graphLock;
-    if (!isRunning() && txQueue == nullptr && txHandle == nullptr) return;
+    if (!isRunning() && txQueueCount == 0 && txHandle == nullptr) return;
 
     setRunning(false);
 
-    if (txQueue != nullptr) {
-        BlockPair pair;
-        while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) {
-            releasePair(pair);
-        }
-    }
+    BlockPair pair;
+    while (dequeuePair(pair)) releasePair(pair);
 
     if (txHandle != nullptr) {
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, this);
@@ -136,10 +121,6 @@ void AudioOutputI2S::end() {
         txHandle = nullptr;
     }
 
-    if (txQueue != nullptr) {
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
-    }
 }
 
 OSPEED
@@ -147,19 +128,15 @@ void AudioOutputI2S::update() {
     BlockPair pair{receiveReadOnly(0), receiveReadOnly(1)};
 
     if (pair.left != nullptr || pair.right != nullptr) {
-        if (!isRunning() || txQueue == nullptr) {
+        if (!isRunning()) {
             releasePair(pair);
-        } else if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
+        } else if (!enqueuePair(pair)) {
             BlockPair oldPair;
 
             // Keep the newest audio if the output falls behind.
-            if (xQueueReceive(txQueue, &oldPair, 0) == pdTRUE) {
-                releasePair(oldPair);
-            }
+            if (dequeuePair(oldPair)) releasePair(oldPair);
 
-            if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
-                releasePair(pair);
-            }
+            if (!enqueuePair(pair)) releasePair(pair);
         }
     }
 
@@ -167,12 +144,12 @@ void AudioOutputI2S::update() {
     // If multiple callbacks arrive before this update, the latest buffer wins;
     // older buffers remain silent rather than risking writes to a reused buffer.
     uint32_t *dmaBuffer = pendingDmaBuffer.exchange(nullptr, std::memory_order_acq_rel);
-    if (dmaBuffer == nullptr || !isRunning() || txQueue == nullptr) {
+    if (dmaBuffer == nullptr || !isRunning()) {
         return;
     }
 
     BlockPair ready{nullptr, nullptr};
-    if (xQueueReceive(txQueue, &ready, 0) != pdTRUE) {
+    if (!dequeuePair(ready)) {
         // auto_clear_after_cb leaves this DMA buffer silent when no PCM is ready.
         return;
     }
@@ -222,6 +199,25 @@ void AudioOutputI2S::releasePair(BlockPair &pair) {
         release(pair.right);
         pair.right = nullptr;
     }
+}
+
+bool AudioOutputI2S::enqueuePair(const BlockPair &pair) {
+    if (txQueueCount == QUEUE_LENGTH) return false;
+
+    txQueue[txQueueTail] = pair;
+    txQueueTail = (txQueueTail + 1U) % QUEUE_LENGTH;
+    ++txQueueCount;
+    return true;
+}
+
+bool AudioOutputI2S::dequeuePair(BlockPair &pair) {
+    if (txQueueCount == 0) return false;
+
+    pair = txQueue[txQueueHead];
+    txQueue[txQueueHead] = {nullptr, nullptr};
+    txQueueHead = (txQueueHead + 1U) % QUEUE_LENGTH;
+    --txQueueCount;
+    return true;
 }
 
 bool AUDIO_I2S_ISR_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
