@@ -1,4 +1,5 @@
 #include "output_spdif.h"
+#include <esp_memory_utils.h>
 
 #include <cmath>
 #include "i2s_port.h"
@@ -87,6 +88,12 @@ OSIZE
 bool AudioOutputSPDIF::beginInternal() {
     audio_detail::GraphUpdateLock graphLock;
     if (isRunning()) return true;
+#if defined(CONFIG_I2S_ISR_IRAM_SAFE) && CONFIG_I2S_ISR_IRAM_SAFE
+    if (!esp_ptr_internal(this)) {
+        ESP_LOGE("AudioOutputSPDIF", "IRAM-safe I2S callbacks require AudioOutputSPDIF in internal RAM");
+        return false;
+    }
+#endif
     if (txHandle != nullptr || txQueue != nullptr) {
         ESP_LOGE("AudioOutputSPDIF", "Previous SPDIF output shutdown did not complete");
         return false;
