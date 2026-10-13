@@ -158,7 +158,7 @@ bool AudioControlES8311::enable(uint32_t sampleRate) {
     // die analoge PGA-Verstärkung. Andere Registerbits bleiben erhalten.
     uint8_t adcScale = 0;
     if (readReg(REG_ADC16, adcScale)) {
-        ok &= writeReg(REG_ADC16, static_cast<uint8_t>(adcScale & 0xF8U));
+        ok &= writeReg(REG_ADC16, (uint8_t)(adcScale & 0xF8U));
     } else {
         ok = false;
     }
@@ -229,7 +229,7 @@ bool AudioControlES8311::inputLevel(float level) {
     }
 
     // Analog PGA: 0..30 dB in 3 dB steps (register 0x14, bits 3:0).
-    const uint8_t gain = static_cast<uint8_t>(level * 10.0f + 0.5f);
+    const uint8_t gain = (uint8_t)(level * 10.0f + 0.5f);
 
     // Preserve DMIC_ON and LINSEL; only replace PGAGAIN.
     uint8_t reg = 0;
@@ -237,7 +237,7 @@ bool AudioControlES8311::inputLevel(float level) {
         return false;
     }
 
-    reg = static_cast<uint8_t>((reg & 0xF0U) | (gain & 0x0FU));
+    reg = (uint8_t)((reg & 0xF0U) | (gain & 0x0FU));
     return writeReg(REG_SYSTEM14, reg);
 }
 

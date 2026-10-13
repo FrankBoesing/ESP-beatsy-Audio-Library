@@ -87,7 +87,7 @@ class AudioOutputSPDIF : public AudioStream {
     inline uint8_t channelStatusBit(uint16_t frame) const {
         if (frame >= 24U && frame < 28U) {
             const uint8_t rateCode = sampleRateCode.load(std::memory_order_relaxed);
-            return static_cast<uint8_t>((rateCode >> (frame - 24U)) & 1U);
+            return (uint8_t)((rateCode >> (frame - 24U)) & 1U);
         }
 
         // The 16-bit word-length status code is 0x02, LSB-first: only frame

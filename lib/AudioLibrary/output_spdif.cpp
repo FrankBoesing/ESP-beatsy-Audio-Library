@@ -259,7 +259,7 @@ static void encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble,
     // IEC 60958 bits 4..31 require even parity. The zero auxiliary field adds
     // no parity, so P is the XOR of the two sample-byte parities and C.
     const bool parityBit = lowParity ^ highParity ^ channelStatus;
-    const uint8_t statusNibble = static_cast<uint8_t>((channelStatus ? 0x04U : 0U) | (parityBit ? 0x08U : 0U));
+    const uint8_t statusNibble = (uint8_t)((channelStatus ? 0x04U : 0U) | (parityBit ? 0x08U : 0U));
 
     const uint16_t lowCode = (uint16_t)(lowEntry);
     uint16_t highCode = (uint16_t)(highEntry);
@@ -272,7 +272,7 @@ static void encodeSubframe(int16_t sample, bool channelStatus, uint8_t preamble,
     phaseHigh ^= highParity;
 
     uint8_t tail = BMC_NIBBLE_TABLE[statusNibble];
-    if (!phaseHigh) tail = static_cast<uint8_t>(~tail);
+    if (!phaseHigh) tail = (uint8_t)(~tail);
 
     // Pack directly into the DMA buffer: no per-bit loop and no 64-bit
     // temporary followed by a separate split/store pass.
@@ -341,8 +341,8 @@ void AudioOutputSPDIF::txTaskLoop() {
             ++writeErrorCount;
             if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
                 ESP_LOGE(TAG, "TX error #%lu: %s, bytes=%lu/%lu",
-                         static_cast<unsigned long>(writeErrorCount), esp_err_to_name(err),
-                         static_cast<unsigned long>(bytesWritten), static_cast<unsigned long>(sizeof(encodedBuffer)));
+                         (ulong)(writeErrorCount), esp_err_to_name(err),
+                         (ulong)(bytesWritten), (ulong)(sizeof(encodedBuffer)));
                 lastErrorLogMs = now;
             }
         }

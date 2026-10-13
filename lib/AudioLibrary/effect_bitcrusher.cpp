@@ -35,7 +35,7 @@ static inline int16_t quantizeSample(int16_t sample, uint16_t mask) {
     const uint16_t quantized = (uint16_t)(sample) & mask;
 
     const int32_t signedValue =
-        (quantized & 0x8000u) ? static_cast<int32_t>(quantized) - 65536 : static_cast<int32_t>(quantized);
+        (quantized & 0x8000u) ? (int32_t)(quantized) - 65536 : (int32_t)(quantized);
 
     return (int16_t)(signedValue);
 }
@@ -73,7 +73,7 @@ void AudioEffectBitcrusher::sampleRate(float hz) {
     }
 
     if (sampleStep != step) {
-        sampleStep = static_cast<uint8_t>(step);
+        sampleStep = (uint8_t)(step);
 
         // Start a new sample-hold interval using the next input sample.
         samplePhase = 0;

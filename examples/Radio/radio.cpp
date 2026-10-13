@@ -288,7 +288,7 @@ void setup() {
 
     const uint32_t bufferDeadline = millis() + PREBUFFER_TIMEOUT_MS;
 
-    while (audioSource.bufferedBytes() < PREBUFFER_BYTES && static_cast<int32_t>(bufferDeadline - millis()) > 0) {
+    while (audioSource.bufferedBytes() < PREBUFFER_BYTES && (ulong)(bufferDeadline - millis()) > 0) {
         delay(10);
     }
 

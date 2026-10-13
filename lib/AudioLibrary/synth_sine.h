@@ -4,12 +4,8 @@
 #include "AudioStream.h"
 
 class AudioSynthWaveformSine : public AudioStream {
-public:
-    AudioSynthWaveformSine()
-        : AudioStream(0, nullptr),
-          phase_accumulator(0),
-          phase_increment(0),
-          magnitude(16384) {}
+  public:
+    AudioSynthWaveformSine() : AudioStream(0, nullptr), phase_accumulator(0), phase_increment(0), magnitude(16384) {}
 
     void frequency(float freq) {
         if (!(freq >= 0.0f)) {
@@ -18,9 +14,7 @@ public:
             freq = AUDIO_SAMPLE_RATE_EXACT / 2.0f;
         }
 
-        phase_increment =
-            (uint32_t)(
-                freq * (4294967296.0f / AUDIO_SAMPLE_RATE_EXACT));
+        phase_increment = (uint32_t)(freq * (4294967296.0f / AUDIO_SAMPLE_RATE_EXACT));
     }
 
     void phase(float angle) {
@@ -34,9 +28,7 @@ public:
             }
         }
 
-        phase_accumulator =
-            (uint32_t)(
-                angle * (4294967296.0 / 360.0));
+        phase_accumulator = (uint32_t)(angle * (4294967296.0 / 360.0));
     }
 
     void amplitude(float n) {
@@ -46,12 +38,12 @@ public:
             n = 1.0f;
         }
 
-        magnitude = static_cast<int32_t>(n * 65536.0f);
+        magnitude = (int32_t)(n * 65536.0f);
     }
 
     void update() override;
 
-private:
+  private:
     uint32_t phase_accumulator;
     uint32_t phase_increment;
 
@@ -60,12 +52,9 @@ private:
 };
 
 class AudioSynthWaveformSineHires : public AudioStream {
-public:
+  public:
     AudioSynthWaveformSineHires()
-        : AudioStream(0, nullptr),
-          phase_accumulator(0),
-          phase_increment(0),
-          magnitude(16384) {}
+        : AudioStream(0, nullptr), phase_accumulator(0), phase_increment(0), magnitude(16384) {}
 
     void frequency(float freq) {
         if (!(freq >= 0.0f)) {
@@ -74,8 +63,7 @@ public:
             freq = AUDIO_SAMPLE_RATE_EXACT / 2.0f;
         }
 
-        phase_increment = (uint32_t)(
-            freq * (4294967296.0f / AUDIO_SAMPLE_RATE_EXACT));
+        phase_increment = (uint32_t)(freq * (4294967296.0f / AUDIO_SAMPLE_RATE_EXACT));
     }
 
     void phase(float angle) {
@@ -89,8 +77,7 @@ public:
             }
         }
 
-        phase_accumulator = (uint32_t)(
-            angle * (4294967296.0 / 360.0));
+        phase_accumulator = (uint32_t)(angle * (4294967296.0 / 360.0));
     }
 
     void amplitude(float n) {
@@ -100,17 +87,17 @@ public:
             n = 1.0f;
         }
 
-        magnitude = static_cast<int32_t>(n * 65536.0f);
+        magnitude = (int32_t)(n * 65536.0f);
     }
 
     void update() override;
 
-private:
-   uint32_t phase_accumulator;
-   uint32_t phase_increment;
+  private:
+    uint32_t phase_accumulator;
+    uint32_t phase_increment;
 
     // Q16: 65536 = 100 % Amplitude.
-   int32_t magnitude;
+    int32_t magnitude;
 };
 
 #endif
