@@ -702,9 +702,9 @@ void AudioI2SPort::stop(uint8_t controller, Direction d) {
     }
     if (!anyActive()) {
         setSchedulerOwner(-1);
-        if (!AudioStream::setExternalUpdateClock(false)) {
-            ESP_LOGE(TAG, "Could not restore software AudioStream clock");
-        }
+        // The update clock source is fixed after AudioMemory(). Stopping the
+        // last I2S clock stops audio updates; do not claim to restore a software
+        // clock that was deliberately not selected during initialization.
     }
 }
 
