@@ -4,22 +4,11 @@
 #include <esp_err.h>
 #include <cmath>
 #include "i2s_port.h"
+#include "audio_graph_update_lock.h"
 
 static constexpr const char TAG[] = "I2S";
 
-namespace {
-// Prevent AudioTask::update() from racing with TX queue creation, draining,
-// or deletion. The lock is recursive because AudioMemory() already holds it
-// while calling beginHardware().
-class AudioGraphUpdateLock {
-  public:
-    AudioGraphUpdateLock() { AudioNoInterrupts(); }
-    ~AudioGraphUpdateLock() { AudioInterrupts(); }
 
-    AudioGraphUpdateLock(const AudioGraphUpdateLock &) = delete;
-    AudioGraphUpdateLock &operator=(const AudioGraphUpdateLock &) = delete;
-};
-} // namespace
 
 AudioOutputI2S::AudioOutputI2S() : AudioStream(2, inputQueueArray) {} // kein Hardware-Init hier
 AudioOutputI2S::AudioOutputI2S(const Pins &pins)
@@ -48,7 +37,7 @@ bool AudioOutputI2S::beginHardware() { return beginInternal(); }
 OSIZE
 bool AudioOutputI2S::setChannelCount(uint num) {
     if (num < 1 || num > 2) return false;
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
     if (isRunning()) return false;
     numChannels = num;
     return true;
@@ -57,7 +46,7 @@ bool AudioOutputI2S::setChannelCount(uint num) {
 OSIZE
 bool AudioOutputI2S::setSampleRate(float hz) {
     if (!std::isfinite(hz) || hz <= 0.0f) return false;
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
     if (hz == AudioStream::sampleRate()) return true;
 
     const bool writerLocked = txWriteMutex != nullptr;
@@ -85,7 +74,7 @@ bool AudioOutputI2S::setSampleRate(float hz) {
 
 OSIZE
 bool AudioOutputI2S::beginInternal() {
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
     if (isRunning()) return true;
     if (i2sPins.bclk < 0 || i2sPins.ws < 0 || i2sPins.dout < 0) {
         ESP_LOGE(TAG, "Invalid I2S output pins");
@@ -173,7 +162,7 @@ bool AudioOutputI2S::beginInternal() {
 
 OSIZE
 void AudioOutputI2S::end() {
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
     if (!isRunning() && txQueue == nullptr && txHandle == nullptr &&
         txTask.load(std::memory_order_acquire) == nullptr && txWriteMutex == nullptr) return;
 
