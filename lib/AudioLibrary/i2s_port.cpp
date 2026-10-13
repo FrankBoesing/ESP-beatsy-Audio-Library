@@ -790,10 +790,11 @@ bool AudioI2SPort::setSampleRate(float rate) {
     const float oldRateFloat = AudioStream::sampleRate();
     const uint32_t oldRate = static_cast<uint32_t>(std::lround(oldRateFloat));
     if (newRate == oldRate) {
+        const bool changed = rate != oldRateFloat;
         const bool ok = AudioStream::setSampleRate(rate);
-        if (ok && rate != oldRateFloat) {
-            currentRateGeneration.fetch_add(1, std::memory_order_release);
-        }
+        // AudioStream publishes the requested rate before rearming the software
+        // timer; even a timer error must invalidate already queued old-rate blocks.
+        if (changed) currentRateGeneration.fetch_add(1, std::memory_order_release);
         return ok;
     }
 
@@ -881,13 +882,18 @@ bool AudioI2SPort::setSampleRate(float rate) {
 
     for (PortState &s : ports)
         if (s.pairCreated) s.sampleRate = newRate;
+
+    // Invalidate queued buffers as soon as the new rate is committed. Even if
+    // a channel later fails to re-enable, no old-rate block is written after
+    // the hardware clock has changed.
+    currentRateGeneration.fetch_add(1, std::memory_order_release);
+
     for (uint8_t i = 0; i < MAX_PORTS; ++i) {
         if (ports[i].pairCreated && !restoreEnabled(ports[i], oldTx[i], oldRx[i])) {
             ESP_LOGE(TAG, "I2S%u sample rate changed but channel re-enable failed", i);
             return false;
         }
     }
-    currentRateGeneration.fetch_add(1, std::memory_order_release);
     return true;
 }
 
