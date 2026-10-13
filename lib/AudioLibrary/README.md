@@ -50,7 +50,7 @@ Die Stack-Größen beziehen sich auf die in dieser Arbeitsversion verwendeten We
 | `AudioDecoder` | `AudioDecoderStream::startDecoderTask()` | `configMAX_PRIORITIES - 3` | 3072 Byte | `AUDIO_DECODER_CORE` (Standard: Core 0) | Dekodiert MP3-/AAC-Daten und füllt die abwechselnd verwendeten PCM-Puffer im PSRAM. Wird bei entsprechender Wiedergabe gestartet. |
 | `AudioStreamRx` | `AudioSourceStream::open()` | `configMAX_PRIORITIES - 5` | 3840 Byte | nicht fest zugeordnet | Liest Netzwerkdaten aus dem HTTP-Stream in einen temporären Chunk und kopiert diese in den Ringpuffer im PSRAM. Wird nur für Netzwerk-Streams benötigt. |
 
-Bei der normalen PCM-I²S-Ausgabe gibt es keinen separaten `AudioI2STx`-Task mehr: `AudioOutputI2S::update()` schreibt die Samples direkt in den DMA-Puffer, den der TX-Callback veröffentlicht. Die kleine Blockpaar-Queue bleibt als Puffer zwischen Graph-Update und DMA-Ereignis bestehen. SPDIF und PDM verwenden weiterhin ihre separaten TX-Tasks.
+Bei der normalen PCM-I²S-Ausgabe gibt es keinen separaten `AudioI2STx`-Task und keine FreeRTOS-Queue mehr: `AudioOutputI2S::update()` schreibt die Samples direkt in den DMA-Puffer, den der TX-Callback veröffentlicht. Ein fester Ring aus vier `BlockPair`-Einträgen puffert bei Bedarf zwischen Graph-Update und DMA-Ereignis; er wird ausschließlich im Audio-Task beziehungsweise unter `GraphUpdateLock` verwendet. SPDIF und PDM verwenden weiterhin ihre separaten TX-Tasks.
 
 Zusätzlich verwaltet ESP-IDF unter anderem Wi-Fi-, TCP/IP-, Event-Loop-, Timer-Service- und Idle-Tasks. Deren Prioritäten und Core-Zuordnungen hängen von der SDK-Konfiguration ab.
 
@@ -87,7 +87,7 @@ Die folgende Tabelle unterscheidet den globalen Audio-Blockpool von separaten I2
 | Puffer / Speicher | Größe bzw. Kapazität | Zweck und Hinweise |
 | --- | --- | --- |
 | `AudioMemory(n)` / Audio-Blockpool | `n` Blöcke; standardmäßig 128 Mono-Samples pro Block | `AudioMemory(n)` legt den Pool statisch an; `n` wird vom Anwendungsprogramm festgelegt. Ein Block enthält bei 128 Samples 256 Byte PCM sowie 4 Byte Verwaltungsfelder, insgesamt 260 Byte für `audio_block_t`. Hinzu kommt die Verfügbarkeitsmaske des Pools. |
-| I2S-Stereo-Queue | 4 Stereo-Blockpaare | Enthält Zeiger auf Blöcke, keine zusätzlichen PCM-Kopien. |
+| I2S-Blockpaar-Ring (PCM) | 4 Stereo-Blockpaare | Fester Ring im `AudioOutputI2S`-Objekt; enthält nur Blockzeiger und benötigt keine FreeRTOS-Queue. |
 | I2S-Ausgabepuffer | Kein separater PCM-Puffer | `AudioOutputI2S::update()` packt PCM direkt in den vom TX-Callback gemeldeten DMA-Puffer. |
 | I2S-DMA (Standard-PCM) | 2 Deskriptoren mit jeweils 128 Stereo-Frames | 512 Byte pro Deskriptor, insgesamt 1 KiB DMA-Nutzdaten. Dieselbe Deskriptorzahl gilt für TX und RX. |
 | MP3-Eingabepuffer | 2 KiB pro `AudioPlayMp3`-Objekt | Enthält komprimierte Daten im internen RAM. Wird auch beim dateibasierten MP3-Pfad verwendet. |
