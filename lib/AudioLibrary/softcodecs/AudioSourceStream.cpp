@@ -6,8 +6,11 @@
 #include <esp_heap_caps.h>
 #endif
 
+OSIZE
 AudioSourceStream::AudioSourceStream() : _stream(nullptr), _position(0) {}
+OSIZE
 AudioSourceStream::AudioSourceStream(Stream &stream) : _stream(nullptr), _position(0) { open(stream); }
+OSIZE
 AudioSourceStream::~AudioSourceStream() { close(); }
 
 OSIZE
@@ -94,6 +97,7 @@ void AudioSourceStream::resetIcyMetadataParser() {
     }
 }
 
+OSIZE
 void AudioSourceStream::parseIcyMetadata(const uint8_t *buffer, size_t size) {
     static constexpr char KEY[] = "StreamTitle='";
     static constexpr size_t KEY_LENGTH = sizeof(KEY) - 1;
@@ -136,6 +140,7 @@ void AudioSourceStream::parseIcyMetadata(const uint8_t *buffer, size_t size) {
     }
 }
 
+OSIZE
 void AudioSourceStream::finishIcyMetadata() {
     if (_icy.State != IcyParseState::Done || _icy.StreamTitleTooLong) {
         resetIcyMetadataParser();
@@ -162,6 +167,7 @@ void AudioSourceStream::finishIcyMetadata() {
     resetIcyMetadataParser();
 }
 
+OSIZE
 int AudioSourceStream::takeIcyStreamTitle(char *buffer, size_t capacity) {
     if (_icy.MetadataMutex == nullptr || buffer == nullptr || capacity == 0) {
         return -1;
@@ -192,6 +198,7 @@ int AudioSourceStream::takeIcyStreamTitle(char *buffer, size_t capacity) {
     return static_cast<int>(size);
 }
 
+OSPEED
 AudioSourceStatus AudioSourceStream::read(uint8_t *buffer, size_t requested, size_t &received) {
     received = 0;
 
@@ -232,6 +239,7 @@ AudioSourceStatus AudioSourceStream::read(uint8_t *buffer, size_t requested, siz
     return AudioSourceStatus::DATA;
 }
 
+OSIZE
 uint64_t AudioSourceStream::position() const {
     portENTER_CRITICAL(&_bufferMux);
     const uint64_t currentPosition = _position;
@@ -239,8 +247,11 @@ uint64_t AudioSourceStream::position() const {
     return currentPosition;
 }
 
+OSIZE
 uint64_t AudioSourceStream::size() const { return 0; }
+OSIZE
 bool AudioSourceStream::isSeekable() const { return false; }
+OSIZE
 bool AudioSourceStream::seek(uint64_t position) {
     (void)position;
     return false;
@@ -288,12 +299,18 @@ void AudioSourceStream::close() {
     _icy.NeedLength = true;
 }
 
+OSIZE
 bool AudioSourceStream::isOpen() const { return _stream != nullptr; }
+OSIZE
 size_t AudioSourceStream::refillThreshold() const { return REFILLTRESHOLD; }
+OSIZE
 size_t AudioSourceStream::fillSize() const { return REFILLTRESHOLD; }
+OSIZE
 bool AudioSourceStream::fillToThreshold() const { return true; }
+OSIZE
 Stream *AudioSourceStream::stream() { return _stream; }
 
+OSIZE
 bool AudioSourceStream::checkNetworkTimeout() {
     const uint32_t now = millis();
 
@@ -304,6 +321,7 @@ bool AudioSourceStream::checkNetworkTimeout() {
     return timedOut;
 }
 
+OSIZE
 size_t AudioSourceStream::bufferedBytes() const {
     portENTER_CRITICAL(&_bufferMux);
     const size_t buffered = _bufferedBytes;
@@ -311,7 +329,9 @@ size_t AudioSourceStream::bufferedBytes() const {
     return buffered;
 }
 
+OSIZE
 void AudioSourceStream::producerTaskEntry(void *arg) { ((AudioSourceStream *)arg)->producerTaskLoop(); }
+OSPEED
 void AudioSourceStream::producerTaskLoop() {
     // Small temporary buffer for incremental ICY metadata parsing.
     // The complete metadata block is never stored.
