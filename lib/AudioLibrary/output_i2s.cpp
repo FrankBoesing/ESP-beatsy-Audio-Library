@@ -127,16 +127,15 @@ bool AudioOutputI2S::beginInternal() {
         }
 
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, this);
-        AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE(TAG, "TX channel could not be stopped after startup failure; retaining port resources");
+            return false;
+        }
         AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
         if (txQueue != nullptr) {
             vQueueDelete(txQueue);
             txQueue = nullptr;
-        }
-        if (txWriteMutex != nullptr) {
-            vSemaphoreDelete(txWriteMutex);
-            txWriteMutex = nullptr;
         }
         return false;
     }
@@ -168,7 +167,10 @@ void AudioOutputI2S::end() {
 
     if (txHandle != nullptr) {
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, this);
-        AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::stop(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE(TAG, "TX channel could not be stopped; retaining port resources for retry");
+            return;
+        }
         AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
     }
@@ -176,8 +178,6 @@ void AudioOutputI2S::end() {
     if (txQueue != nullptr) {
         vQueueDelete(txQueue);
         txQueue = nullptr;
-    }
-    if (txWriteMutex != nullptr) {
     }
 }
 
