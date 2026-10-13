@@ -7,6 +7,7 @@
 
 namespace {
 constexpr char TAG[] = "AudioInputI2S";
+} // namespace
 
 
 
