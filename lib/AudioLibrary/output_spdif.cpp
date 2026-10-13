@@ -55,6 +55,7 @@ bool AudioOutputSPDIF::begin() { return beginInternal(); }
 
 bool AudioOutputSPDIF::begin(const Pins &pins) {
     end();
+    if (txHandle != nullptr || txQueue != nullptr) return false;
     spdifPins = pins;
     return beginInternal();
 }
@@ -68,14 +69,9 @@ bool AudioOutputSPDIF::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate <= 0.0f) return false;
     audio_detail::GraphUpdateLock graphLock;
 
-    const bool writerLocked = txWriteMutex != nullptr;
-    if (writerLocked && xSemaphoreTake(txWriteMutex, pdMS_TO_TICKS(500)) != pdTRUE) {
-        ESP_LOGE("AudioOutputSPDIF", "Timed out waiting for SPDIF TX writer before rate change");
-        return false;
-    }
-
-    // Keep the old-rate queue intact if the manager rejects the request and
-    // rolls back successfully. A committed generation change invalidates it.
+    // The graph lock excludes new queue entries. The shared port writer gate
+    // excludes in-flight hardware writes; the TX loop replaces stale generations
+    // with correctly encoded silence rather than outputting old-rate samples.
     const uint32_t oldGeneration = AudioI2SPort::currentSampleRateGeneration();
     const bool ok = AudioI2SPort::setSampleRate(rate);
     const uint32_t newGeneration = AudioI2SPort::currentSampleRateGeneration();
@@ -83,8 +79,7 @@ bool AudioOutputSPDIF::setSampleRate(float rate) {
         BlockPair pair;
         while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
     }
-    if (ok) updateChannelStatus(rate);
-    if (writerLocked) xSemaphoreGive(txWriteMutex);
+    if (ok) updateChannelStatus(AudioStream::sampleRate());
     return ok;
 }
 
@@ -92,19 +87,16 @@ OSIZE
 bool AudioOutputSPDIF::beginInternal() {
     audio_detail::GraphUpdateLock graphLock;
     if (isRunning()) return true;
+    if (txHandle != nullptr || txQueue != nullptr) {
+        ESP_LOGE("AudioOutputSPDIF", "Previous SPDIF output shutdown did not complete");
+        return false;
+    }
     if (spdifPins.dout < 0) {
         return false;
     }
 
     txQueue = xQueueCreate(QUEUE_LENGTH, sizeof(BlockPair));
     if (txQueue == nullptr) return false;
-
-    txWriteMutex = xSemaphoreCreateMutex();
-    if (txWriteMutex == nullptr) {
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
-        return false;
-    }
 
     // SPDIF uses only DATA externally. BCLK and WS remain internal to I2S0.
     const AudioI2SPort::Pins portPins{-1, -1, spdifPins.dout, -1, -1, controller_};
@@ -114,8 +106,6 @@ bool AudioOutputSPDIF::beginInternal() {
     if (!AudioI2SPort::acquireTx(portPins, &txHandle, format)) {
         vQueueDelete(txQueue);
         txQueue = nullptr;
-        vSemaphoreDelete(txWriteMutex);
-        txWriteMutex = nullptr;
         txHandle = nullptr;
         return false;
     }
@@ -126,8 +116,6 @@ bool AudioOutputSPDIF::beginInternal() {
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
-        vSemaphoreDelete(txWriteMutex);
-        txWriteMutex = nullptr;
         return false;
     }
 
@@ -148,8 +136,6 @@ bool AudioOutputSPDIF::beginInternal() {
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
-        vSemaphoreDelete(txWriteMutex);
-        txWriteMutex = nullptr;
         return false;
     }
 
@@ -161,7 +147,10 @@ bool AudioOutputSPDIF::beginInternal() {
         while (txTask.load(std::memory_order_acquire) != nullptr) vTaskDelay(1);
 
         AudioI2SPort::clearEventHandler(controller_, AudioI2SPort::Direction::Tx, this);
-        AudioI2SPort::stop(controller_, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::stop(controller_, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE("AudioOutputSPDIF", "TX channel could not be stopped after startup failure; retaining port resources");
+            return false;
+        }
         AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
         if (txQueue != nullptr) {
@@ -182,7 +171,7 @@ OSIZE
 void AudioOutputSPDIF::end() {
     audio_detail::GraphUpdateLock graphLock;
     if (!isRunning() && txQueue == nullptr && txHandle == nullptr &&
-        txTask.load(std::memory_order_acquire) == nullptr && txWriteMutex == nullptr) return;
+        txTask.load(std::memory_order_acquire) == nullptr) return;
 
     setRunning(false);
 
@@ -199,7 +188,10 @@ void AudioOutputSPDIF::end() {
 
     if (txHandle != nullptr) {
         AudioI2SPort::clearEventHandler(controller_, AudioI2SPort::Direction::Tx, this);
-        AudioI2SPort::stop(controller_, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::stop(controller_, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE("AudioOutputSPDIF", "TX channel could not be stopped; retaining port resources for retry");
+            return;
+        }
         AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
     }
@@ -209,8 +201,6 @@ void AudioOutputSPDIF::end() {
         txQueue = nullptr;
     }
     if (txWriteMutex != nullptr) {
-        vSemaphoreDelete(txWriteMutex);
-        txWriteMutex = nullptr;
     }
 }
 
@@ -267,14 +257,7 @@ void AudioOutputSPDIF::txTaskLoop() {
     uint32_t lastErrorLogMs = 0;
     BlockPair pair{nullptr, nullptr, 0};
     while (isRunning()) {
-        SemaphoreHandle_t writerMutex = txWriteMutex;
-        if (writerMutex != nullptr &&
-            xSemaphoreTake(writerMutex, pdMS_TO_TICKS(10)) != pdTRUE) {
-            continue;
-        }
-
         if (!isRunning() || xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) {
-            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             if (!isRunning()) break;
             continue;
         }
@@ -282,7 +265,6 @@ void AudioOutputSPDIF::txTaskLoop() {
         if (!isRunning()) {
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
-            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             break;
         }
 
@@ -299,8 +281,7 @@ void AudioOutputSPDIF::txTaskLoop() {
             if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
                 releasePair(pair);
                 pair = {nullptr, nullptr, 0};
-                if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
-                continue;
+                    continue;
             }
 
             // Read both the sample rate and its generation while reconfiguration
@@ -336,7 +317,6 @@ void AudioOutputSPDIF::txTaskLoop() {
             frameInBlock = frameInBlockStart;
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
-            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             continue;
         }
         if (!isRunning()) {
@@ -344,7 +324,6 @@ void AudioOutputSPDIF::txTaskLoop() {
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
             AudioI2SPort::unlockAfterWrite();
-            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             break;
         }
 
@@ -383,7 +362,6 @@ void AudioOutputSPDIF::txTaskLoop() {
         AudioI2SPort::unlockAfterWrite();
         releasePair(pair);
         pair = {nullptr, nullptr, 0};
-        if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
     }
 
     while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
