@@ -66,16 +66,19 @@ bool AudioOutputI2S::setSampleRate(float hz) {
         return false;
     }
 
-    // Hold the writer lock before draining so no old-rate pair can be removed
-    // from the queue and remain in an in-flight i2s_channel_write().
-    if (txQueue != nullptr) {
+    // The port manager validates and applies the global rate first. Only flush
+    // queued data if a new rate generation was committed; a rejected request
+    // with a successful rollback should not discard valid old-rate audio.
+    const uint32_t oldGeneration = AudioI2SPort::currentSampleRateGeneration();
+    const bool ok = AudioI2SPort::setSampleRate(hz);
+    if (txQueue != nullptr &&
+        AudioI2SPort::currentSampleRateGeneration() != oldGeneration) {
         BlockPair pair;
         while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) {
             releasePair(pair);
         }
     }
 
-    const bool ok = AudioI2SPort::setSampleRate(hz);
     if (writerLocked) xSemaphoreGive(txWriteMutex);
     return ok;
 }
