@@ -183,7 +183,7 @@ bool AudioOutputSPDIF::beginInternal() {
 OSIZE
 void AudioOutputSPDIF::end() {
     AudioGraphUpdateLock graphLock;
-    if (!isRunning() && txQueue == nullptr && txHandle == nullptr) return;
+    if (!isRunning() && txQueue == nullptr && txHandle == nullptr && txTask == nullptr && txWriteMutex == nullptr) return;
 
     setRunning(false);
 
