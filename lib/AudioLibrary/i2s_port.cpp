@@ -825,6 +825,17 @@ bool AudioI2SPort::setSampleRate(float rate) {
     AudioPortWriteLock writerLock;
     if (!writerLock.locked()) return false;
 
+    // Sample rate is global across all controllers. Validate restrictions from
+    // every already-configured mode, even when a different output initiated the
+    // change; in particular, the direct PCM-to-PDM path supports only 16–48 kHz.
+    for (const PortState &s : ports) {
+        if (s.pairCreated && s.format.mode == AudioI2SPort::PeripheralMode::PDM &&
+            (rate < 16000.0f || rate > 48000.0f)) {
+            ESP_LOGE(TAG, "Global sample rate must remain within 16-48 kHz while a PDM port is configured");
+            return false;
+        }
+    }
+
     const long rounded = std::lround(rate);
     if (rounded <= 0 || static_cast<uint64_t>(rounded) > UINT32_MAX / 4U) return false;
     const uint32_t newRate = static_cast<uint32_t>(rounded);
