@@ -1,13 +1,17 @@
 #include "AudioSourceMemory.h"
+#include "optimize.h"
 
+OSIZE
 AudioSourceMemory::AudioSourceMemory()
     : _data(nullptr), _size(0), _position(0) {}
 
+OSIZE
 AudioSourceMemory::AudioSourceMemory(const uint8_t *data, size_t size)
     : _data(nullptr), _size(0), _position(0) {
     open(data, size);
 }
 
+OSIZE
 bool AudioSourceMemory::open(const uint8_t *data, size_t size) {
     close();
 
@@ -22,6 +26,7 @@ bool AudioSourceMemory::open(const uint8_t *data, size_t size) {
     return true;
 }
 
+OSPEED
 AudioSourceStatus AudioSourceMemory::read(uint8_t *buffer, size_t requested,
                                           size_t &received) {
     received = 0;
@@ -53,18 +58,22 @@ AudioSourceStatus AudioSourceMemory::read(uint8_t *buffer, size_t requested,
     return AudioSourceStatus::DATA;
 }
 
+OSIZE
 uint64_t AudioSourceMemory::position() const {
     return _position;
 }
 
+OSIZE
 uint64_t AudioSourceMemory::size() const {
     return _size;
 }
 
+OSIZE
 bool AudioSourceMemory::isSeekable() const {
     return true;
 }
 
+OSIZE
 bool AudioSourceMemory::seek(uint64_t position) {
     if (!_data) {
         return false;
@@ -79,6 +88,7 @@ bool AudioSourceMemory::seek(uint64_t position) {
     return true;
 }
 
+OSIZE
 void AudioSourceMemory::close() {
     /*
      * Die Daten selbst gehören dem Aufrufer.
@@ -89,6 +99,7 @@ void AudioSourceMemory::close() {
     _position = 0;
 }
 
+OSIZE
 bool AudioSourceMemory::isOpen() const {
     return _data != nullptr;
 }
