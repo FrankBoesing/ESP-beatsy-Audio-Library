@@ -60,6 +60,7 @@ class AudioOutputI2S : public AudioStream {
     struct BlockPair {
         audio_block_t *left;
         audio_block_t *right;
+        uint32_t rateGeneration = 0;
     };
 
     static constexpr size_t QUEUE_LENGTH = 4;
