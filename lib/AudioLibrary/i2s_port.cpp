@@ -1091,7 +1091,7 @@ void AudioI2SPort::unlockAfterWrite() {
     xSemaphoreGive(portWriteCountMutex);
 }
 
-bool AudioI2SPort::isClockOwner(uint8_t controller, Direction d) {
+bool AUDIO_I2S_ISR_ATTR AudioI2SPort::isClockOwner(uint8_t controller, Direction d) {
     const int8_t requestedOwner = (d == Direction::None || controller >= MAX_PORTS)
                                       ? -1
                                       : static_cast<int8_t>(controller * 2U + (d == Direction::Rx ? 1U : 0U));
