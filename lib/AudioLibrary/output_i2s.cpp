@@ -170,7 +170,7 @@ bool AudioOutputI2S::beginInternal() {
 OSIZE
 void AudioOutputI2S::end() {
     AudioGraphUpdateLock graphLock;
-    if (!isRunning() && txQueue == nullptr && txHandle == nullptr) return;
+    if (!isRunning() && txQueue == nullptr && txHandle == nullptr && txTask == nullptr && txWriteMutex == nullptr) return;
 
     setRunning(false);
 
