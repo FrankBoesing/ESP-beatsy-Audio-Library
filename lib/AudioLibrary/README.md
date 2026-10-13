@@ -227,9 +227,9 @@ Dieser Ansatz ist für die meisten Anwendungen vorzuziehen, weil die Lebensdauer
 Wenn `AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME` aktiviert ist, entfernt der `AudioStream`-Destruktor das Objekt aus der Update-Liste und löst verbundene `AudioConnection`-Objekte. Das Makro muss als Build-Definition für die Bibliothek und den Sketch konsistent aktiviert werden; es sollte nicht nur lokal in einer einzelnen Quelldatei definiert sein. Füge dafür `-DAUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME` zu den bestehenden `build_flags` der betreffenden PlatformIO-Umgebung hinzu. Diese Funktion macht den Hardware-Taktgeber nicht dynamisch: Der clockgebende I2S-Ein-/Ausgang muss über die Laufzeit aktiv bleiben.
 
 ```cpp
+AudioOutputI2S output;  // statischer Hardware-Taktgeber
 auto *synth = new AudioSynthWaveform;
-auto *output = new AudioOutputI2S;
-auto *connection = new AudioConnection(*synth, 0, *output, 0);
+auto *connection = new AudioConnection(*synth, 0, output, 0);
 
 // ... Audio läuft ...
 
