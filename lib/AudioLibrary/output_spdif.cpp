@@ -274,18 +274,26 @@ void AudioOutputSPDIF::txTaskLoop() {
             continue;
         }
 
-        // Global lock covers writes from all controller instances. Sample-rate
-        // changes reconfigure all controllers and take the same lock.
-        if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
-            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
-            continue;
-        }
-
         if (!isRunning() || xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) {
-            AudioI2SPort::unlockAfterWrite();
             if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             if (!isRunning()) break;
             continue;
+        }
+
+        // Acquire the shared lock only after dequeueing. Never block other
+        // controllers while this writer is idle waiting for an audio block.
+        if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
+            releasePair(pair);
+            pair = {nullptr, nullptr};
+            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
+            continue;
+        }
+        if (!isRunning()) {
+            releasePair(pair);
+            pair = {nullptr, nullptr};
+            AudioI2SPort::unlockAfterWrite();
+            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
+            break;
         }
 
         const int16_t *left = pair.left ? pair.left->data : audio_zeroblock;
