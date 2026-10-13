@@ -7,6 +7,16 @@
 
 namespace {
 constexpr char TAG[] = "AudioOutputPDM";
+
+// Serialize graph/queue lifecycle changes with AudioOutputPDM::update().
+class AudioGraphUpdateLock {
+  public:
+    AudioGraphUpdateLock() { AudioNoInterrupts(); }
+    ~AudioGraphUpdateLock() { AudioInterrupts(); }
+
+    AudioGraphUpdateLock(const AudioGraphUpdateLock &) = delete;
+    AudioGraphUpdateLock &operator=(const AudioGraphUpdateLock &) = delete;
+};
 }
 
 AudioOutputPDM::AudioOutputPDM() : AudioStream(2, inputQueueArray) {}
@@ -25,7 +35,9 @@ void AudioOutputPDM::setRunning(bool value) {
 
 OSIZE
 bool AudioOutputPDM::setChannelCount(uint channels) {
-    if (isRunning() || channels < 1 || channels > 2) return false;
+    if (channels < 1 || channels > 2) return false;
+    AudioGraphUpdateLock graphLock;
+    if (isRunning()) return false;
     if (channels == 2 && pdmPins.dataRight < 0) return false;
     numChannels = channels;
     return true;
@@ -35,14 +47,12 @@ OSIZE
 bool AudioOutputPDM::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate < 16000.0f || rate > 48000.0f) return false;
 
-    // Stop the graph from adding more old-rate blocks while the hardware rate
-    // is being changed. Keep lock order consistent: graph first, TX writer second.
-    AudioStream::disableUpdates();
+    // Keep lock order consistent: graph first, TX writer second.
+    AudioGraphUpdateLock graphLock;
 
     const bool locked = txWriteMutex != nullptr;
     if (locked && xSemaphoreTake(txWriteMutex, pdMS_TO_TICKS(500)) != pdTRUE) {
         ESP_LOGE(TAG, "Timed out waiting for PDM TX writer before rate change");
-        AudioStream::enableUpdates();
         return false;
     }
 
@@ -60,7 +70,6 @@ bool AudioOutputPDM::setSampleRate(float rate) {
     discardQueuedPairs();
 
     if (locked) xSemaphoreGive(txWriteMutex);
-    AudioStream::enableUpdates();
     return ok;
 }
 
@@ -94,6 +103,7 @@ bool AudioOutputPDM::beginHardware() {
 
 OSIZE
 bool AudioOutputPDM::beginInternal() {
+    AudioGraphUpdateLock graphLock;
     if (isRunning()) return true;
     if (pdmPins.dataLeft < 0 || (numChannels == 2 && pdmPins.dataRight < 0)) {
         ESP_LOGE(TAG, "Invalid PDM DATA pins: left=%d right=%d channels=%u",
@@ -174,8 +184,9 @@ bool AudioOutputPDM::beginInternal() {
     if (!AudioI2SPort::start(CONTROLLER, AudioI2SPort::Direction::Tx)) {
         setRunning(false);
         xTaskNotifyGive(txTask);
-        const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(200);
-        while (txTask != nullptr && static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0) vTaskDelay(1);
+        // Wait for the finite queue/write timeout to expire before freeing
+        // resources referenced by the TX task.
+        while (txTask != nullptr) vTaskDelay(1);
 
         AudioI2SPort::clearEventHandler(CONTROLLER, AudioI2SPort::Direction::Tx, this);
         AudioI2SPort::stop(CONTROLLER, AudioI2SPort::Direction::Tx);
@@ -197,14 +208,16 @@ bool AudioOutputPDM::beginInternal() {
 
 OSIZE
 void AudioOutputPDM::end() {
+    AudioGraphUpdateLock graphLock;
     if (!isRunning() && txQueue == nullptr && txHandle == nullptr) return;
 
     setRunning(false);
 
     if (txTask != nullptr) {
         xTaskNotifyGive(txTask);
-        const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(200);
-        while (txTask != nullptr && static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0) vTaskDelay(1);
+        // The writer has finite queue/write timeouts. Wait for its explicit exit
+        // signal before deleting the queue or mutex it may still access.
+        while (txTask != nullptr) vTaskDelay(1);
     }
 
     if (txQueue != nullptr) {
