@@ -49,7 +49,6 @@ void AudioOutputSPDIF::setRunning(bool value) { running.store(value ? 1U : 0U, s
 
 void AudioOutputSPDIF::updateChannelStatus(float rate) {
     sampleRateCode.store(spdifSampleRateCode(rate), std::memory_order_release);
-    sampleRateCodeGeneration.store(AudioI2SPort::currentSampleRateGeneration(), std::memory_order_release);
 }
 
 bool AudioOutputSPDIF::begin() { return beginInternal(); }
@@ -70,16 +69,7 @@ bool AudioOutputSPDIF::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate <= 0.0f) return false;
     audio_detail::GraphUpdateLock graphLock;
 
-    // The graph lock excludes new queue entries. The shared port writer gate
-    // excludes in-flight hardware writes; the TX loop replaces stale generations
-    // with correctly encoded silence rather than outputting old-rate samples.
-    const uint32_t oldGeneration = AudioI2SPort::currentSampleRateGeneration();
     const bool ok = AudioI2SPort::setSampleRate(rate);
-    const uint32_t newGeneration = AudioI2SPort::currentSampleRateGeneration();
-    if (txQueue != nullptr && newGeneration != oldGeneration) {
-        BlockPair pair;
-        while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
-    }
     if (ok) updateChannelStatus(AudioStream::sampleRate());
     return ok;
 }
@@ -222,8 +212,6 @@ void AudioOutputSPDIF::update() {
     BlockPair pair;
     pair.left = receiveReadOnly(0);
     pair.right = receiveReadOnly(1);
-    pair.rateGeneration = AudioI2SPort::currentSampleRateGeneration();
-
     // While running, keep a valid BMC stream even when the graph has no source
     // blocks; nullptr channels are encoded as PCM silence by the TX task.
     if (!isRunning() || txQueue == nullptr) {
@@ -268,7 +256,7 @@ OSPEED
 void AudioOutputSPDIF::txTaskLoop() {
     uint32_t writeErrorCount = 0;
     uint32_t lastErrorLogMs = 0;
-    BlockPair pair{nullptr, nullptr, 0};
+    BlockPair pair{nullptr, nullptr};
     while (isRunning()) {
         if (!isRunning() || xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) {
             if (!isRunning()) break;
@@ -279,31 +267,6 @@ void AudioOutputSPDIF::txTaskLoop() {
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
             break;
-        }
-
-        // A stale audio block is replaced with valid S/PDIF silence. Unlike
-        // PCM I2S, dropping an entire DMA period here could break the BMC stream.
-        uint32_t pairGeneration = AudioI2SPort::currentSampleRateGeneration();
-        if (pair.rateGeneration != pairGeneration) {
-            releasePair(pair);
-            pair = {nullptr, nullptr, pairGeneration};
-        }
-
-        if (sampleRateCodeGeneration.load(std::memory_order_acquire) !=
-            AudioI2SPort::currentSampleRateGeneration()) {
-            if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
-                releasePair(pair);
-                pair = {nullptr, nullptr, 0};
-                continue;
-            }
-
-            // Read both the sample rate and its generation while reconfiguration
-            // is excluded, so the status code cannot be stamped with a stale rate.
-            if (sampleRateCodeGeneration.load(std::memory_order_acquire) !=
-                AudioI2SPort::currentSampleRateGeneration()) {
-                updateChannelStatus(AudioStream::sampleRate());
-            }
-            AudioI2SPort::unlockAfterWrite();
         }
 
         const uint16_t frameInBlockStart = frameInBlock;
@@ -326,32 +289,10 @@ void AudioOutputSPDIF::txTaskLoop() {
         encodeBlock(left, right);
 
         size_t bytesWritten = 0;
-        if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
-            frameInBlock = frameInBlockStart;
-            releasePair(pair);
-            pair = {nullptr, nullptr, 0};
-            continue;
-        }
         if (!isRunning()) {
             frameInBlock = frameInBlockStart;
             releasePair(pair);
-            pair = {nullptr, nullptr, 0};
-            AudioI2SPort::unlockAfterWrite();
             break;
-        }
-
-        pairGeneration = AudioI2SPort::currentSampleRateGeneration();
-        if (pair.rateGeneration != pairGeneration) {
-            // The clock changed while this block was encoded. Re-encode silence
-            // under the new channel-status bits while the shared lock excludes
-            // any further sample-rate change.
-            frameInBlock = frameInBlockStart;
-            releasePair(pair);
-            pair = {nullptr, nullptr, pairGeneration};
-            if (sampleRateCodeGeneration.load(std::memory_order_acquire) != pairGeneration) {
-                updateChannelStatus(AudioStream::sampleRate());
-            }
-            encodeBlock(audio_zeroblock, audio_zeroblock);
         }
 
         const esp_err_t err = i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);
@@ -372,9 +313,8 @@ void AudioOutputSPDIF::txTaskLoop() {
             }
         }
 
-        AudioI2SPort::unlockAfterWrite();
         releasePair(pair);
-        pair = {nullptr, nullptr, 0};
+        pair = {nullptr, nullptr};
     }
 
     while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
