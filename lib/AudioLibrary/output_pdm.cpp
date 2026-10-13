@@ -164,13 +164,15 @@ bool AudioOutputPDM::beginInternal() {
 
     setRunning(true);
 
+    TaskHandle_t createdTask = nullptr;
     const BaseType_t result = xTaskCreatePinnedToCore(
         txTaskEntry, "AudioPDM", 3072, this, configMAX_PRIORITIES - 2,
-        &txTask, AUDIO_PROCESSING_CORE);
+        &createdTask, AUDIO_PROCESSING_CORE);
+    if (result == pdPASS) txTask.store(createdTask, std::memory_order_release);
 
     if (result != pdPASS) {
         setRunning(false);
-        txTask = nullptr;
+        txTask.store(nullptr, std::memory_order_release);
         AudioI2SPort::clearEventHandler(CONTROLLER, AudioI2SPort::Direction::Tx, this);
         AudioI2SPort::release(CONTROLLER, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
@@ -183,10 +185,10 @@ bool AudioOutputPDM::beginInternal() {
 
     if (!AudioI2SPort::start(CONTROLLER, AudioI2SPort::Direction::Tx)) {
         setRunning(false);
-        xTaskNotifyGive(txTask);
         // Wait for the finite queue/write timeout to expire before freeing
-        // resources referenced by the TX task.
-        while (txTask != nullptr) vTaskDelay(1);
+        // resources referenced by the TX task. Avoid a notification racing
+        // the task's self-delete path.
+        while (txTask.load(std::memory_order_acquire) != nullptr) vTaskDelay(1);
 
         AudioI2SPort::clearEventHandler(CONTROLLER, AudioI2SPort::Direction::Tx, this);
         AudioI2SPort::stop(CONTROLLER, AudioI2SPort::Direction::Tx);
@@ -209,15 +211,15 @@ bool AudioOutputPDM::beginInternal() {
 OSIZE
 void AudioOutputPDM::end() {
     AudioGraphUpdateLock graphLock;
-    if (!isRunning() && txQueue == nullptr && txHandle == nullptr && txTask == nullptr && txWriteMutex == nullptr) return;
+    if (!isRunning() && txQueue == nullptr && txHandle == nullptr &&
+        txTask.load(std::memory_order_acquire) == nullptr && txWriteMutex == nullptr) return;
 
     setRunning(false);
 
-    if (txTask != nullptr) {
-        xTaskNotifyGive(txTask);
+    if (txTask.load(std::memory_order_acquire) != nullptr) {
         // The writer has finite queue/write timeouts. Wait for its explicit exit
         // signal before deleting the queue or mutex it may still access.
-        while (txTask != nullptr) vTaskDelay(1);
+        while (txTask.load(std::memory_order_acquire) != nullptr) vTaskDelay(1);
     }
 
     if (txQueue != nullptr) {
@@ -296,8 +298,8 @@ bool AudioOutputPDM::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *
 
 OSPEED
 void AudioOutputPDM::txTaskLoop() {
-    static uint32_t writeErrorCount = 0;
-    static uint32_t lastErrorLogMs = 0;
+    uint32_t writeErrorCount = 0;
+    uint32_t lastErrorLogMs = 0;
 
     // PDM TX accepts 16-bit PCM data. Stereo is interleaved L,R; mono has
     // one word per PCM frame. Hardware creates the high-rate PDM bitstream.
@@ -366,6 +368,6 @@ void AudioOutputPDM::txTaskLoop() {
     }
 
     while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
-    txTask = nullptr;
+    txTask.store(nullptr, std::memory_order_release);
     vTaskDelete(nullptr);
 }
