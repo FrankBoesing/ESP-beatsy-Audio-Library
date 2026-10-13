@@ -278,6 +278,7 @@ class AudioStream {
     static void scheduler_task(void *parameter);
     static void software_timer_callback(void *parameter);
     static bool update_setup_internal(bool deferSoftwareClock);
+    // Caller holds audio_update_mutex when it exists.
     static bool start_software_timer(void);
     static bool stop_software_timer(void);
 
