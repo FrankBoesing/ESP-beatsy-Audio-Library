@@ -64,7 +64,7 @@ class AudioOutputPDM : public AudioStream {
 
     i2s_chan_handle_t txHandle = nullptr;
     QueueHandle_t txQueue = nullptr;
-    // Serializes PCM writes against live PDM clock reconfiguration.
+    // Allows end() to wait for the TX task before releasing resources.
     std::atomic<TaskHandle_t> txTask{nullptr};
 
     std::atomic<uint32_t> running{0};
