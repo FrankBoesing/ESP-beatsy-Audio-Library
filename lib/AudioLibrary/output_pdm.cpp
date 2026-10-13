@@ -244,13 +244,12 @@ void AudioOutputPDM::update() {
     pair.left = receiveReadOnly(0);
     pair.right = receiveReadOnly(1);
 
-    // Match AudioOutputI2S: don't enqueue a pair when neither input delivered
-    // a block. The enabled I2S/PDM DMA keeps running and auto-clears DMA buffers
-    // to silence; avoiding empty queue entries prevents them delaying real audio.
+    // The enabled PDM DMA auto-clears buffers to silence; avoid queueing when
+    // no input arrived, and release any block if the output isn't running.
     if (pair.left == nullptr && pair.right == nullptr) return;
     pair.rateGeneration = AudioI2SPort::currentSampleRateGeneration();
 
-    if (txQueue == nullptr) {
+    if (!isRunning() || txQueue == nullptr) {
         releasePair(pair);
         return;
     }
