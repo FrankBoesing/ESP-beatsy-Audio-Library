@@ -70,8 +70,6 @@ class AudioOutputI2S : public AudioStream {
 
     i2s_chan_handle_t txHandle = nullptr;
     QueueHandle_t txQueue = nullptr;
-    // Prevent the TX task from dequeuing/writing while the global I2S clock is reconfigured.
-    SemaphoreHandle_t txWriteMutex = nullptr;
     std::atomic<TaskHandle_t> txTask{nullptr};
 
     // 32-bit atomics avoid an ISR/task spinlock for these independent values.
