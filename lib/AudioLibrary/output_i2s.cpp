@@ -7,20 +7,28 @@
 
 static constexpr char TAG[] = "I2S";
 
+OSIZE
 AudioOutputI2S::AudioOutputI2S() : AudioStream(2, inputQueueArray) {} // kein Hardware-Init hier
+OSIZE
 AudioOutputI2S::AudioOutputI2S(const Pins &pins)
     : AudioStream(2, inputQueueArray), i2sPins(pins) {} // kein Hardware-Init hier
+OSIZE
 AudioOutputI2S::~AudioOutputI2S() { end(); }
+OSPEED
 bool AudioOutputI2S::isRunning() const { return running.load(std::memory_order_acquire) != 0; }
+OSIZE
 void AudioOutputI2S::setRunning(bool value) { running.store(value ? 1U : 0U, std::memory_order_release); }
 
+OSIZE
 bool AudioOutputI2S::begin() { return beginInternal(); }
+OSIZE
 bool AudioOutputI2S::begin(const Pins &pins) {
     end();
     if (txHandle != nullptr) return false;
     i2sPins = pins;
     return beginInternal();
 }
+OSIZE
 bool AudioOutputI2S::beginHardware() { return beginInternal(); }
 
 OSIZE
@@ -188,6 +196,7 @@ void AudioOutputI2S::update() {
     releasePair(ready);
 }
 
+OSPEED
 void AudioOutputI2S::releasePair(BlockPair &pair) {
     if (pair.left != nullptr) {
         release(pair.left);
@@ -200,6 +209,7 @@ void AudioOutputI2S::releasePair(BlockPair &pair) {
     }
 }
 
+OSPEED
 bool AudioOutputI2S::enqueuePair(const BlockPair &pair) {
     if (txQueueCount == QUEUE_LENGTH) return false;
 
@@ -209,6 +219,7 @@ bool AudioOutputI2S::enqueuePair(const BlockPair &pair) {
     return true;
 }
 
+OSPEED
 bool AudioOutputI2S::dequeuePair(BlockPair &pair) {
     if (txQueueCount == 0) return false;
 
@@ -219,6 +230,7 @@ bool AudioOutputI2S::dequeuePair(BlockPair &pair) {
     return true;
 }
 
+OSPEED
 bool AUDIO_I2S_ISR_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
     auto *output = static_cast<AudioOutputI2S *>(userContext);
     if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) return false;
