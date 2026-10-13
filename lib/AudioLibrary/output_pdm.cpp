@@ -217,8 +217,6 @@ void AudioOutputPDM::end() {
         vQueueDelete(txQueue);
         txQueue = nullptr;
     }
-    if (txWriteMutex != nullptr) {
-    }
 }
 
 OSPEED
