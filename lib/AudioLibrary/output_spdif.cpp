@@ -294,7 +294,7 @@ void AudioOutputSPDIF::txTaskLoop() {
             if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
                 releasePair(pair);
                 pair = {nullptr, nullptr, 0};
-                    continue;
+                continue;
             }
 
             // Read both the sample rate and its generation while reconfiguration
