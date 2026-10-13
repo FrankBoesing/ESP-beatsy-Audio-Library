@@ -817,20 +817,62 @@ bool AudioI2SPort::stop(uint8_t controller, Direction d) {
 }
 
 OSIZE
-void AudioI2SPort::release(uint8_t controller, Direction d) {
+bool AudioI2SPort::release(uint8_t controller, Direction d) {
     PortState *s = stateFor(controller);
-    if (!s || d == Direction::None) return;
-    if (d == Direction::Tx)
-        s->txAcquired = false;
-    else
-        s->rxAcquired = false;
-    if (s->txAcquired || s->rxAcquired || s->txActive || s->rxActive || s->txEnabled || s->rxEnabled) return;
+    if (!s || d == Direction::None) return false;
+
+    // A direction must be stopped before it releases its channel reference.
+    if ((d == Direction::Tx && s->txActive) || (d == Direction::Rx && s->rxActive)) {
+        ESP_LOGE(TAG, "I2S%u %s release requested while active", controller, d == Direction::Tx ? "TX" : "RX");
+        return false;
+    }
+
+    bool &acquired = d == Direction::Tx ? s->txAcquired : s->rxAcquired;
+    acquired = false;
+
+    // A paired channel may still be needed by the other direction, including
+    // when this released direction is the physical clock master.
+    if (s->txAcquired || s->rxAcquired || s->txActive || s->rxActive) return true;
+
+    if (s->txEnabled || s->rxEnabled) {
+        // No direction is active but hardware is still enabled. Keep ownership
+        // so the caller can retry stop()/release() without losing its handle.
+        acquired = true;
+        ESP_LOGE(TAG, "I2S%u release blocked by an enabled channel", controller);
+        return false;
+    }
 
     clearHandler(*s, Direction::Tx, s->txContext);
     clearHandler(*s, Direction::Rx, s->rxContext);
-    if (s->txHandle) i2s_del_channel(s->txHandle);
-    if (s->rxHandle) i2s_del_channel(s->rxHandle);
+
+    // Delete the other channel first and the caller's own channel last. If
+    // deletion fails, the caller can keep its handle and safely retry.
+    i2s_chan_handle_t *otherHandle = d == Direction::Tx ? &s->rxHandle : &s->txHandle;
+    i2s_chan_handle_t *requestedHandle = d == Direction::Tx ? &s->txHandle : &s->rxHandle;
+
+    if (*otherHandle != nullptr) {
+        const esp_err_t err = i2s_del_channel(*otherHandle);
+        if (err != ESP_OK) {
+            acquired = true;
+            ESP_LOGE(TAG, "I2S%u paired channel release failed: %s", controller, esp_err_to_name(err));
+            return false;
+        }
+        *otherHandle = nullptr;
+    }
+
+    if (*requestedHandle != nullptr) {
+        const esp_err_t err = i2s_del_channel(*requestedHandle);
+        if (err != ESP_OK) {
+            acquired = true;
+            ESP_LOGE(TAG, "I2S%u %s channel release failed: %s", controller,
+                     d == Direction::Tx ? "TX" : "RX", esp_err_to_name(err));
+            return false;
+        }
+        *requestedHandle = nullptr;
+    }
+
     resetPortState(*s);
+    return true;
 }
 
 OSIZE
