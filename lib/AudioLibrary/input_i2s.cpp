@@ -120,7 +120,7 @@ void AudioInputI2S::end() {
 }
 
 OSIZE
-bool AudioInputI2S::onI2SReceive(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
+bool AUDIO_I2S_ISR_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
     auto *input = static_cast<AudioInputI2S *>(userContext);
     if (input == nullptr || event == nullptr || event->dma_buf == nullptr) return false;
     if (input->running.load(std::memory_order_acquire) == 0) return false;
