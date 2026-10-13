@@ -39,14 +39,7 @@ OSIZE
 bool AudioOutputPDM::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate < 16000.0f || rate > 48000.0f) return false;
 
-    // Keep lock order consistent: graph first, TX writer second.
     audio_detail::GraphUpdateLock graphLock;
-
-    const bool locked = txWriteMutex != nullptr;
-    if (locked && xSemaphoreTake(txWriteMutex, pdMS_TO_TICKS(500)) != pdTRUE) {
-        ESP_LOGE(TAG, "Timed out waiting for PDM TX writer before rate change");
-        return false;
-    }
 
     auto discardQueuedPairs = [this]() {
         if (txQueue == nullptr) return;
@@ -54,17 +47,14 @@ bool AudioOutputPDM::setSampleRate(float rate) {
         while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
     };
 
-    // The graph lock stops new pairs being enqueued and txWriteMutex prevents
-    // an in-flight PCM write while the manager disables/reconfigures the channel.
-    // Keep queued blocks on a clean rejection/rollback; flush only if the global
-    // rate generation changed, including an incomplete rollback.
+    // The graph lock prevents new queue entries. AudioI2SPort's shared writer
+    // gate waits for in-flight PCM writes, and generation checks discard any
+    // stale pair already dequeued before the rate change.
     const uint32_t oldGeneration = AudioI2SPort::currentSampleRateGeneration();
     const bool ok = AudioI2SPort::setSampleRate(rate);
     if (AudioI2SPort::currentSampleRateGeneration() != oldGeneration) {
         discardQueuedPairs();
     }
-
-    if (locked) xSemaphoreGive(txWriteMutex);
     return ok;
 }
 
@@ -75,6 +65,7 @@ bool AudioOutputPDM::begin() {
 OSIZE
 bool AudioOutputPDM::begin(const Pins &pins) {
     end();
+    if (txHandle != nullptr || txQueue != nullptr) return false;
     pdmPins = pins;
     // Supplying two DATA pins is the explicit request for stereo mode.
     numChannels = pdmPins.dataRight >= 0 ? 2U : 1U;
@@ -100,6 +91,10 @@ OSIZE
 bool AudioOutputPDM::beginInternal() {
     audio_detail::GraphUpdateLock graphLock;
     if (isRunning()) return true;
+    if (txHandle != nullptr || txQueue != nullptr) {
+        ESP_LOGE(TAG, "Previous PDM output shutdown did not complete");
+        return false;
+    }
     if (pdmPins.dataLeft < 0 || (numChannels == 2 && pdmPins.dataRight < 0)) {
         ESP_LOGE(TAG, "Invalid PDM DATA pins: left=%d right=%d channels=%u",
                  pdmPins.dataLeft, pdmPins.dataRight, static_cast<unsigned>(numChannels));
@@ -114,13 +109,6 @@ bool AudioOutputPDM::beginInternal() {
 
     txQueue = xQueueCreate(QUEUE_LENGTH, sizeof(BlockPair));
     if (txQueue == nullptr) return false;
-
-    txWriteMutex = xSemaphoreCreateMutex();
-    if (txWriteMutex == nullptr) {
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
-        return false;
-    }
 
     // In ESP-IDF's two-line DAC mode, DOUT emits the second (right) PCM slot
     // and DOUT2 emits the first (left) slot. Keep the public pin order intuitive.
@@ -139,8 +127,6 @@ bool AudioOutputPDM::beginInternal() {
         ESP_LOGE(TAG, "Could not acquire I2S0 PCM-to-PDM output");
         vQueueDelete(txQueue);
         txQueue = nullptr;
-        vSemaphoreDelete(txWriteMutex);
-        txWriteMutex = nullptr;
         txHandle = nullptr;
         return false;
     }
@@ -152,8 +138,6 @@ bool AudioOutputPDM::beginInternal() {
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
-        vSemaphoreDelete(txWriteMutex);
-        txWriteMutex = nullptr;
         return false;
     }
 
@@ -173,8 +157,6 @@ bool AudioOutputPDM::beginInternal() {
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
-        vSemaphoreDelete(txWriteMutex);
-        txWriteMutex = nullptr;
         return false;
     }
 
@@ -186,7 +168,10 @@ bool AudioOutputPDM::beginInternal() {
         while (txTask.load(std::memory_order_acquire) != nullptr) vTaskDelay(1);
 
         AudioI2SPort::clearEventHandler(CONTROLLER, AudioI2SPort::Direction::Tx, this);
-        AudioI2SPort::stop(CONTROLLER, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::stop(CONTROLLER, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE(TAG, "PDM TX channel could not be stopped after startup failure; retaining port resources");
+            return false;
+        }
         AudioI2SPort::release(CONTROLLER, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
         if (txQueue != nullptr) {
@@ -207,7 +192,7 @@ OSIZE
 void AudioOutputPDM::end() {
     audio_detail::GraphUpdateLock graphLock;
     if (!isRunning() && txQueue == nullptr && txHandle == nullptr &&
-        txTask.load(std::memory_order_acquire) == nullptr && txWriteMutex == nullptr) return;
+        txTask.load(std::memory_order_acquire) == nullptr) return;
 
     setRunning(false);
 
@@ -224,7 +209,10 @@ void AudioOutputPDM::end() {
 
     if (txHandle != nullptr) {
         AudioI2SPort::clearEventHandler(CONTROLLER, AudioI2SPort::Direction::Tx, this);
-        AudioI2SPort::stop(CONTROLLER, AudioI2SPort::Direction::Tx);
+        if (!AudioI2SPort::stop(CONTROLLER, AudioI2SPort::Direction::Tx)) {
+            ESP_LOGE(TAG, "PDM TX channel could not be stopped; retaining port resources for retry");
+            return;
+        }
         AudioI2SPort::release(CONTROLLER, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
     }
@@ -234,8 +222,6 @@ void AudioOutputPDM::end() {
         txQueue = nullptr;
     }
     if (txWriteMutex != nullptr) {
-        vSemaphoreDelete(txWriteMutex);
-        txWriteMutex = nullptr;
     }
 }
 
@@ -303,16 +289,8 @@ void AudioOutputPDM::txTaskLoop() {
     BlockPair pair{nullptr, nullptr, 0};
 
     while (isRunning()) {
-        // Take the writer lock before dequeuing a pair so a sample-rate
-        // change can drain all queued old-rate blocks before reconfiguring.
-        if (txWriteMutex != nullptr &&
-            xSemaphoreTake(txWriteMutex, pdMS_TO_TICKS(10)) != pdTRUE) {
-            continue;
-        }
-
         if (!isRunning() ||
             xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) {
-            if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
             if (!isRunning()) break;
             continue;
         }
@@ -322,7 +300,6 @@ void AudioOutputPDM::txTaskLoop() {
             pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
-            if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
             if (!isRunning()) break;
             continue;
         }
@@ -358,7 +335,6 @@ void AudioOutputPDM::txTaskLoop() {
         if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
-            if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
             continue;
         }
         if (!isRunning() ||
@@ -366,7 +342,6 @@ void AudioOutputPDM::txTaskLoop() {
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
             AudioI2SPort::unlockAfterWrite();
-            if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
             if (!isRunning()) break;
             continue;
         }
@@ -387,7 +362,6 @@ void AudioOutputPDM::txTaskLoop() {
         AudioI2SPort::unlockAfterWrite();
         releasePair(pair);
         pair = {nullptr, nullptr, 0};
-        if (txWriteMutex != nullptr) xSemaphoreGive(txWriteMutex);
     }
 
     while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
