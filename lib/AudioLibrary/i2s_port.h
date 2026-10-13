@@ -65,7 +65,9 @@ class AudioI2SPort {
                                 EventCallback callback, void *userContext);
     static void clearEventHandler(uint8_t controller, Direction direction, void *userContext);
     static bool start(uint8_t controller, Direction direction);
-    static void stop(uint8_t controller, Direction direction);
+    // False means the channel could not be safely disabled. In that case the
+    // caller must retain the port handle/resources and may retry end().
+    static bool stop(uint8_t controller, Direction direction);
     static void release(uint8_t controller, Direction direction);
 
     // AudioStream has one global sample rate, so all allocated controllers
@@ -73,7 +75,7 @@ class AudioI2SPort {
     static bool setSampleRate(float sampleRate);
     // Generation changes whenever a new global sample rate is committed.
     // Queued TX/RX blocks stamped with an older generation must be discarded.
-    static uint32_t currentSampleRateGeneration();
+    static uint32_t AUDIO_I2S_ISR_ATTR currentSampleRateGeneration();
 
     // Allows concurrent writes on separate controllers while making a global
     // sample-rate reconfiguration wait for existing writes and block new ones.
