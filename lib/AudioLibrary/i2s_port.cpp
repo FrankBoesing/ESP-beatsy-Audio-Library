@@ -8,6 +8,7 @@
 #include <hal/i2s_hal.h>
 #include <hal/i2s_ll.h>
 #include <esp_log.h>
+#include <esp_private/periph_ctrl.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <driver/i2s_pdm.h>
@@ -136,8 +137,10 @@ void applyPrecisePdmMclkIfNeeded(const i2s_pdm_tx_clk_config_t &cfg) {
     }
 
     i2s_dev_t *hw = I2S_LL_GET_HW(0);
-    i2s_ll_tx_set_mclk(hw, &divider);
-    i2s_ll_tx_update(hw);
+    PERIPH_RCC_ATOMIC() {
+        i2s_ll_tx_set_mclk(hw, &divider);
+        i2s_ll_tx_update(hw);
+    }
 
     const uint64_t dividerNumerator = (uint64_t)(divider.integer) * divider.denominator + divider.numerator;
     const double actualMclk =
