@@ -281,19 +281,11 @@ void AudioOutputSPDIF::txTaskLoop() {
             continue;
         }
 
-        // Acquire the shared lock only after dequeueing. Never block other
-        // controllers while this writer is idle waiting for an audio block.
-        if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
-            releasePair(pair);
-            pair = {nullptr, nullptr, 0};
-            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
-            continue;
-        }
+        // Discard blocks that were queued before a global rate change.
         if (!isRunning() ||
             pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
-            AudioI2SPort::unlockAfterWrite();
             if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             if (!isRunning()) break;
             continue;
@@ -315,11 +307,27 @@ void AudioOutputSPDIF::txTaskLoop() {
         }
 
         size_t bytesWritten = 0;
+        if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
+            releasePair(pair);
+            pair = {nullptr, nullptr, 0};
+            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
+            continue;
+        }
+        if (!isRunning() ||
+            pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
+            releasePair(pair);
+            pair = {nullptr, nullptr, 0};
+            AudioI2SPort::unlockAfterWrite();
+            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
+            if (!isRunning()) break;
+            continue;
+        }
+
         (void)i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);
 
+        AudioI2SPort::unlockAfterWrite();
         releasePair(pair);
         pair = {nullptr, nullptr, 0};
-        AudioI2SPort::unlockAfterWrite();
         if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
     }
 
