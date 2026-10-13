@@ -9,6 +9,16 @@ constexpr uint8_t PREAMBLE_B = 0x17; // B preamble polarity for a preceding HIGH
 constexpr uint8_t PREAMBLE_M = 0x1D; // M preamble polarity for a preceding HIGH level
 constexpr uint8_t PREAMBLE_W = 0x1B; // W preamble polarity for a preceding HIGH level
 
+// Serialize graph/queue lifecycle changes with AudioOutputSPDIF::update().
+class AudioGraphUpdateLock {
+  public:
+    AudioGraphUpdateLock() { AudioNoInterrupts(); }
+    ~AudioGraphUpdateLock() { AudioInterrupts(); }
+
+    AudioGraphUpdateLock(const AudioGraphUpdateLock &) = delete;
+    AudioGraphUpdateLock &operator=(const AudioGraphUpdateLock &) = delete;
+};
+
 uint8_t spdifSampleRateCode(float rate) {
     const uint32_t hz = static_cast<uint32_t>(std::lround(rate));
     switch (hz) {
@@ -63,19 +73,28 @@ bool AudioOutputSPDIF::beginHardware() { return beginInternal(); }
 OSIZE
 bool AudioOutputSPDIF::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate <= 0.0f) return false;
+    AudioGraphUpdateLock graphLock;
+
+    const bool writerLocked = txWriteMutex != nullptr;
+    if (writerLocked && xSemaphoreTake(txWriteMutex, pdMS_TO_TICKS(500)) != pdTRUE) {
+        ESP_LOGE("AudioOutputSPDIF", "Timed out waiting for SPDIF TX writer before rate change");
+        return false;
+    }
 
     if (txQueue != nullptr) {
         BlockPair pair;
         while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
     }
 
-    if (!AudioI2SPort::setSampleRate(rate)) return false;
-    updateChannelStatus(rate);
-    return true;
+    const bool ok = AudioI2SPort::setSampleRate(rate);
+    if (ok) updateChannelStatus(rate);
+    if (writerLocked) xSemaphoreGive(txWriteMutex);
+    return ok;
 }
 
 OSIZE
 bool AudioOutputSPDIF::beginInternal() {
+    AudioGraphUpdateLock graphLock;
     if (isRunning()) return true;
     if (spdifPins.dout < 0) {
         return false;
@@ -83,6 +102,13 @@ bool AudioOutputSPDIF::beginInternal() {
 
     txQueue = xQueueCreate(QUEUE_LENGTH, sizeof(BlockPair));
     if (txQueue == nullptr) return false;
+
+    txWriteMutex = xSemaphoreCreateMutex();
+    if (txWriteMutex == nullptr) {
+        vQueueDelete(txQueue);
+        txQueue = nullptr;
+        return false;
+    }
 
     // SPDIF uses only DATA externally. BCLK and WS remain internal to I2S0.
     const AudioI2SPort::Pins portPins{-1, -1, spdifPins.dout, -1, -1, controller_};
@@ -92,6 +118,8 @@ bool AudioOutputSPDIF::beginInternal() {
     if (!AudioI2SPort::acquireTx(portPins, &txHandle, format)) {
         vQueueDelete(txQueue);
         txQueue = nullptr;
+        vSemaphoreDelete(txWriteMutex);
+        txWriteMutex = nullptr;
         txHandle = nullptr;
         return false;
     }
@@ -102,6 +130,8 @@ bool AudioOutputSPDIF::beginInternal() {
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
+        vSemaphoreDelete(txWriteMutex);
+        txWriteMutex = nullptr;
         return false;
     }
 
@@ -120,14 +150,17 @@ bool AudioOutputSPDIF::beginInternal() {
         txHandle = nullptr;
         vQueueDelete(txQueue);
         txQueue = nullptr;
+        vSemaphoreDelete(txWriteMutex);
+        txWriteMutex = nullptr;
         return false;
     }
 
     if (!AudioI2SPort::start(controller_, AudioI2SPort::Direction::Tx)) {
         setRunning(false);
         xTaskNotifyGive(txTask);
-        const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(200);
-        while (txTask != nullptr && static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0) vTaskDelay(1);
+        // Wait for the finite queue/write timeout in txTaskLoop to expire before
+        // releasing resources referenced by the task.
+        while (txTask != nullptr) vTaskDelay(1);
 
         AudioI2SPort::clearEventHandler(controller_, AudioI2SPort::Direction::Tx, this);
         AudioI2SPort::stop(controller_, AudioI2SPort::Direction::Tx);
@@ -137,6 +170,10 @@ bool AudioOutputSPDIF::beginInternal() {
             vQueueDelete(txQueue);
             txQueue = nullptr;
         }
+        if (txWriteMutex != nullptr) {
+            vSemaphoreDelete(txWriteMutex);
+            txWriteMutex = nullptr;
+        }
         return false;
     }
 
@@ -145,14 +182,15 @@ bool AudioOutputSPDIF::beginInternal() {
 
 OSIZE
 void AudioOutputSPDIF::end() {
+    AudioGraphUpdateLock graphLock;
     if (!isRunning() && txQueue == nullptr && txHandle == nullptr) return;
 
     setRunning(false);
 
     if (txTask != nullptr) {
         xTaskNotifyGive(txTask);
-        const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(200);
-        while (txTask != nullptr && static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0) vTaskDelay(1);
+        // Do not delete the queue while txTask may still be using it.
+        while (txTask != nullptr) vTaskDelay(1);
     }
 
     if (txQueue != nullptr) {
@@ -170,6 +208,10 @@ void AudioOutputSPDIF::end() {
     if (txQueue != nullptr) {
         vQueueDelete(txQueue);
         txQueue = nullptr;
+    }
+    if (txWriteMutex != nullptr) {
+        vSemaphoreDelete(txWriteMutex);
+        txWriteMutex = nullptr;
     }
 }
 
@@ -223,7 +265,17 @@ OSPEED
 void AudioOutputSPDIF::txTaskLoop() {
     BlockPair pair{nullptr, nullptr};
     while (isRunning()) {
-        if (xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(100)) != pdTRUE) continue;
+        SemaphoreHandle_t writerMutex = txWriteMutex;
+        if (writerMutex != nullptr &&
+            xSemaphoreTake(writerMutex, pdMS_TO_TICKS(10)) != pdTRUE) {
+            continue;
+        }
+
+        if (!isRunning() || xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) {
+            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
+            if (!isRunning()) break;
+            continue;
+        }
 
         const int16_t *left = pair.left ? pair.left->data : audio_zeroblock;
         const int16_t *right = pair.right ? pair.right->data : audio_zeroblock;
@@ -245,6 +297,7 @@ void AudioOutputSPDIF::txTaskLoop() {
 
         releasePair(pair);
         pair = {nullptr, nullptr};
+        if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
     }
 
     while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
