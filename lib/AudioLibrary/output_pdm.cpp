@@ -4,19 +4,11 @@
 #include <esp_err.h>
 #include <esp_log.h>
 #include "i2s_port.h"
+#include "audio_graph_update_lock.h"
 
 namespace {
 constexpr char TAG[] = "AudioOutputPDM";
 
-// Serialize graph/queue lifecycle changes with AudioOutputPDM::update().
-class AudioGraphUpdateLock {
-  public:
-    AudioGraphUpdateLock() { AudioNoInterrupts(); }
-    ~AudioGraphUpdateLock() { AudioInterrupts(); }
-
-    AudioGraphUpdateLock(const AudioGraphUpdateLock &) = delete;
-    AudioGraphUpdateLock &operator=(const AudioGraphUpdateLock &) = delete;
-};
 }
 
 AudioOutputPDM::AudioOutputPDM() : AudioStream(2, inputQueueArray) {}
@@ -36,7 +28,7 @@ void AudioOutputPDM::setRunning(bool value) {
 OSIZE
 bool AudioOutputPDM::setChannelCount(uint channels) {
     if (channels < 1 || channels > 2) return false;
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
     if (isRunning()) return false;
     if (channels == 2 && pdmPins.dataRight < 0) return false;
     numChannels = channels;
@@ -48,7 +40,7 @@ bool AudioOutputPDM::setSampleRate(float rate) {
     if (!std::isfinite(rate) || rate < 16000.0f || rate > 48000.0f) return false;
 
     // Keep lock order consistent: graph first, TX writer second.
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
 
     const bool locked = txWriteMutex != nullptr;
     if (locked && xSemaphoreTake(txWriteMutex, pdMS_TO_TICKS(500)) != pdTRUE) {
@@ -106,7 +98,7 @@ bool AudioOutputPDM::beginHardware() {
 
 OSIZE
 bool AudioOutputPDM::beginInternal() {
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
     if (isRunning()) return true;
     if (pdmPins.dataLeft < 0 || (numChannels == 2 && pdmPins.dataRight < 0)) {
         ESP_LOGE(TAG, "Invalid PDM DATA pins: left=%d right=%d channels=%u",
@@ -213,7 +205,7 @@ bool AudioOutputPDM::beginInternal() {
 
 OSIZE
 void AudioOutputPDM::end() {
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
     if (!isRunning() && txQueue == nullptr && txHandle == nullptr &&
         txTask.load(std::memory_order_acquire) == nullptr && txWriteMutex == nullptr) return;
 
