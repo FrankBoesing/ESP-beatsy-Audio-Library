@@ -178,12 +178,13 @@ class AudioStream {
     static uint32_t blockPeriodUs(void);
 
     // Initializes the scheduler and starts its software-clock fallback.
-    // AudioMemory() uses an internal deferred-start path while hardware streams
-    // initialize, so an available I2S/DMA clock can take over first.
+    // AudioMemory() defers this start while hardware streams initialize.
     static bool update_setup(void);
+    // Stop from another task after quiescing any external clock. This waits for
+    // an in-flight graph traversal via the graph mutex.
     static void update_stop(void);
-    // Select the hardware clock during initialization. Once initialization
-    // finishes, the selected clock source remains fixed.
+    // Select the clock source during AudioMemory() hardware initialization.
+    // After initialization, only requests for the already-selected source succeed.
     static bool setExternalUpdateClock(bool enabled);
 
     // Signal one audio update cycle. This function is intentionally kept as
@@ -260,7 +261,9 @@ class AudioStream {
 
     static audio_block_t *allocate_locked(void);
     static void release_locked(audio_block_t *block);
+#ifdef AUDIOSTREAM_ENABLE_POOL_POINTER_CHECKS
     static bool is_block_from_pool(const audio_block_t *block);
+#endif
 
     // -------------------------------------------------------------------------
     // ESP32 synchronization
