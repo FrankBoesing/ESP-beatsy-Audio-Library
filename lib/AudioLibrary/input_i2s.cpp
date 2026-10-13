@@ -50,7 +50,10 @@ bool AudioInputI2S::beginInternal() {
     if (!AudioI2SPort::setEventHandler(i2sPins.controller, AudioI2SPort::Direction::Rx, &AudioInputI2S::onI2SReceive,
                                        this)) {
         ESP_LOGE(TAG, "Could not register RX event handler");
-        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
+        if (!AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx)) {
+            ESP_LOGE(TAG, "Could not release RX port after callback registration failure; retaining handle");
+            return false;
+        }
         rxHandle = nullptr;
         return false;
     }
@@ -69,7 +72,10 @@ bool AudioInputI2S::beginInternal() {
             ESP_LOGE(TAG, "RX channel could not be stopped after startup failure; retaining port handle");
             return false;
         }
-        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
+        if (!AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx)) {
+            ESP_LOGE(TAG, "Could not release RX port after startup failure; retaining handle");
+            return false;
+        }
         rxHandle = nullptr;
 
         writeBlockIndex.store(0, std::memory_order_relaxed);
@@ -95,7 +101,10 @@ void AudioInputI2S::end() {
             ESP_LOGE(TAG, "RX channel could not be stopped; retaining port handle for retry");
             return;
         }
-        AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx);
+        if (!AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Rx)) {
+            ESP_LOGE(TAG, "Could not release RX port; retaining handle for retry");
+            return;
+        }
         rxHandle = nullptr;
     }
 
