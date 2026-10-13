@@ -134,7 +134,8 @@ bool AudioInputBuffer::releaseRead(size_t consumed) {
         }
     }
 
-    return validate();
+    return true;
+    // return validate();
 }
 
 OSPEED
@@ -143,6 +144,11 @@ uint8_t *AudioInputBuffer::getWriteRegion(size_t &length) {
 
     if (buffer == nullptr) {
         return nullptr;
+    }
+
+    if (region_a_length == 0) {
+        length = buffer_size;
+        return buffer;
     }
 
     if (region_b_length > 0) {
@@ -159,11 +165,6 @@ uint8_t *AudioInputBuffer::getWriteRegion(size_t &length) {
     const size_t end_of_a = region_a_start + region_a_length;
     const size_t free_after_a = buffer_size - end_of_a;
     const size_t free_before_a = region_a_start;
-
-    if (region_a_length == 0) {
-        length = buffer_size;
-        return buffer;
-    }
 
     if (free_after_a > 0) {
         if (free_after_a >= free_before_a) {
@@ -265,7 +266,7 @@ AudioSourceStatus AudioInputBuffer::fill(AudioSource &source) {
 
     uint8_t *destination = acquireWrite(available);
 
-    if (destination == nullptr || available == 0) {
+    if (destination == nullptr) {
         return AudioSourceStatus::WOULD_BLOCK;
     }
 
