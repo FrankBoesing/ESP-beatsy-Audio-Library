@@ -284,19 +284,11 @@ void AudioOutputI2S::txTaskLoop() {
             continue;
         }
 
-        // Acquire the shared lock only after dequeueing. Never block other
-        // controllers while this writer is idle waiting for an audio block.
-        if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
-            releasePair(pair);
-            pair = {nullptr, nullptr};
-            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
-            continue;
-        }
+        // Discard blocks that were queued before a global rate change.
         if (!isRunning() ||
             pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
-            AudioI2SPort::unlockAfterWrite();
             if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
             if (!isRunning()) break;
             continue;
@@ -347,6 +339,22 @@ void AudioOutputI2S::txTaskLoop() {
          * Ein Timeout verhindert, dass das Beenden dauerhaft blockiert,
          * falls der I2S-Treiber keine Daten mehr annimmt.
          */
+        if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
+            releasePair(pair);
+            pair = {nullptr, nullptr, 0};
+            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
+            continue;
+        }
+        if (!isRunning() ||
+            pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
+            releasePair(pair);
+            pair = {nullptr, nullptr, 0};
+            AudioI2SPort::unlockAfterWrite();
+            if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
+            if (!isRunning()) break;
+            continue;
+        }
+
         const esp_err_t err = i2s_channel_write(txHandle, buffer, sizeof(buffer), &bytesWritten, 100);
 
         if (err != ESP_OK || bytesWritten != sizeof(buffer)) {
@@ -361,8 +369,8 @@ void AudioOutputI2S::txTaskLoop() {
             }
         }
 
-        releasePair(pair);
         AudioI2SPort::unlockAfterWrite();
+        releasePair(pair);
         if (writerMutex != nullptr) xSemaphoreGive(writerMutex);
     }
 
