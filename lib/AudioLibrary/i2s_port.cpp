@@ -10,7 +10,6 @@
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <freertos/semphr.h>
 #include <driver/i2s_pdm.h>
 #include "AudioStream.h"
 #include "audio_graph_update_lock.h"
@@ -200,80 +199,9 @@ struct PortState {
 };
 
 PortState ports[MAX_PORTS]{};
-// Writers from different controllers may write concurrently. Clock changes
-// close the gate to new writers and wait for all current writes to finish.
-SemaphoreHandle_t portWriteGate = nullptr;
-SemaphoreHandle_t portWriteCountMutex = nullptr;
-SemaphoreHandle_t portWriteResourceSemaphore = nullptr;
-uint32_t activePortWriters = 0;
 // AudioStream has one graph clock, irrespective of how many I2S controllers run.
 // A single task-side writer publishes the owner to the I2S callback ISRs.
 std::atomic<int32_t> schedulerOwner{-1};
-std::atomic<uint32_t> currentRateGeneration{0};
-
-bool ensurePortWriteLocks() {
-    if (portWriteGate != nullptr && portWriteCountMutex != nullptr &&
-        portWriteResourceSemaphore != nullptr) {
-        return true;
-    }
-
-    portWriteGate = xSemaphoreCreateMutex();
-    portWriteCountMutex = xSemaphoreCreateMutex();
-    // A binary semaphore, not a mutex: the first writer takes it and the last
-    // writer may be a different task that gives it back.
-    portWriteResourceSemaphore = xSemaphoreCreateBinary();
-    const bool resourceReady = portWriteResourceSemaphore != nullptr &&
-                               xSemaphoreGive(portWriteResourceSemaphore) == pdTRUE;
-    if (portWriteGate != nullptr && portWriteCountMutex != nullptr && resourceReady) {
-        return true;
-    }
-
-    if (portWriteGate != nullptr) vSemaphoreDelete(portWriteGate);
-    if (portWriteCountMutex != nullptr) vSemaphoreDelete(portWriteCountMutex);
-    if (portWriteResourceSemaphore != nullptr) vSemaphoreDelete(portWriteResourceSemaphore);
-    portWriteGate = nullptr;
-    portWriteCountMutex = nullptr;
-    portWriteResourceSemaphore = nullptr;
-    ESP_LOGE(TAG, "Could not create shared I2S writer locks");
-    return false;
-}
-
-class AudioPortWriteLock {
-  public:
-    AudioPortWriteLock() {
-        // Before the first port is allocated, only AudioStream's sample rate
-        // changes; there are no hardware writers to exclude.
-        if (portWriteGate == nullptr && portWriteResourceSemaphore == nullptr) {
-            locked_ = true;
-            return;
-        }
-
-        gateLocked_ = xSemaphoreTake(portWriteGate, portMAX_DELAY) == pdTRUE;
-        if (!gateLocked_) return;
-
-        resourceLocked_ = xSemaphoreTake(portWriteResourceSemaphore, portMAX_DELAY) == pdTRUE;
-        locked_ = resourceLocked_;
-        if (!locked_) {
-            xSemaphoreGive(portWriteGate);
-            gateLocked_ = false;
-        }
-    }
-
-    ~AudioPortWriteLock() {
-        if (resourceLocked_) xSemaphoreGive(portWriteResourceSemaphore);
-        if (gateLocked_) xSemaphoreGive(portWriteGate);
-    }
-
-    bool locked() const { return locked_; }
-
-    AudioPortWriteLock(const AudioPortWriteLock &) = delete;
-    AudioPortWriteLock &operator=(const AudioPortWriteLock &) = delete;
-
-  private:
-    bool gateLocked_ = false;
-    bool resourceLocked_ = false;
-    bool locked_ = false;
-};
 
 int8_t getSchedulerOwner() { return static_cast<int8_t>(schedulerOwner.load(std::memory_order_acquire)); }
 void setSchedulerOwner(int8_t owner) { schedulerOwner.store(static_cast<int32_t>(owner), std::memory_order_release); }
@@ -410,11 +338,6 @@ bool AUDIO_I2S_ISR_ATTR dispatchRx(i2s_chan_handle_t channel, i2s_event_data_t *
 
 OSIZE
 bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t rate, const Format &format) {
-    if (!ensurePortWriteLocks()) {
-        resetPortState(s);
-        return false;
-    }
-
     const bool spdifBmc = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC;
     const bool pdmDac = format.mode == AudioI2SPort::PeripheralMode::PDM;
     if ((!spdifBmc && !pdmDac && (requested.bclk < 0 || requested.ws < 0)) ||
@@ -886,8 +809,6 @@ bool AudioI2SPort::setSampleRate(float rate) {
         return false;
     }
     audio_detail::GraphUpdateLock graphLock;
-    AudioPortWriteLock writerLock;
-    if (!writerLock.locked()) return false;
 
     // Sample rate is global across all controllers. Validate restrictions from
     // every already-configured mode, even when a different output initiated the
@@ -910,12 +831,7 @@ bool AudioI2SPort::setSampleRate(float rate) {
         // Hardware rates are integer Hz. Keep AudioStream's rate identical to
         // the value used to configure I2S, even if the caller supplied a
         // fractional float that rounds to the current hardware rate.
-        const bool changed = effectiveRate != oldRateFloat;
-        const bool ok = AudioStream::setSampleRate(effectiveRate);
-        // Even if timer rearming fails, AudioStream has published the rate;
-        // invalidate queued blocks when that effective rate changed.
-        if (changed) currentRateGeneration.fetch_add(1, std::memory_order_release);
-        return ok;
+        return AudioStream::setSampleRate(effectiveRate);
     }
 
     bool oldTx[MAX_PORTS]{}, oldRx[MAX_PORTS]{};
@@ -1005,40 +921,28 @@ bool AudioI2SPort::setSampleRate(float rate) {
 
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "I2S sample-rate reconfiguration failed: %s", esp_err_to_name(err));
-        bool rollbackOk = true;
         for (PortState &s : ports) {
             if (!s.pairCreated) continue;
             const esp_err_t rollbackErr = reconfigurePortClock(s, oldRate);
             if (rollbackErr != ESP_OK) {
                 ESP_LOGE(TAG, "I2S%u clock rollback failed: %s", controllerOf(&s), esp_err_to_name(rollbackErr));
-                rollbackOk = false;
             }
             s.sampleRate = oldRate;
         }
         if (!AudioStream::setSampleRate(oldRateFloat)) {
             ESP_LOGE(TAG, "AudioStream sample-rate rollback failed");
-            rollbackOk = false;
         }
         for (uint8_t i = 0; i < MAX_PORTS; ++i) {
             if (ports[i].pairCreated && !restoreEnabled(ports[i], oldTx[i], oldRx[i])) {
                 ESP_LOGE(TAG, "I2S%u channel restore after rollback failed", i);
-                rollbackOk = false;
             }
         }
 
-        // If rollback was incomplete, invalidate buffered audio rather than
-        // allowing pre-failure blocks to play across a possibly mixed clock state.
-        if (!rollbackOk) currentRateGeneration.fetch_add(1, std::memory_order_release);
         return false;
     }
 
     for (PortState &s : ports)
         if (s.pairCreated) s.sampleRate = newRate;
-
-    // Invalidate queued buffers as soon as the new rate is committed. Even if
-    // a channel later fails to re-enable, no old-rate block is written after
-    // the hardware clock has changed.
-    currentRateGeneration.fetch_add(1, std::memory_order_release);
 
     bool restoreOk = true;
     for (uint8_t i = 0; i < MAX_PORTS; ++i) {
@@ -1048,48 +952,6 @@ bool AudioI2SPort::setSampleRate(float rate) {
         }
     }
     return restoreOk;
-}
-
-uint32_t AUDIO_I2S_ISR_ATTR AudioI2SPort::currentSampleRateGeneration() {
-    return currentRateGeneration.load(std::memory_order_acquire);
-}
-
-OSIZE
-bool AudioI2SPort::lockForWrite(TickType_t timeoutTicks) {
-    if (portWriteGate == nullptr || portWriteCountMutex == nullptr ||
-        portWriteResourceSemaphore == nullptr) {
-        return false;
-    }
-
-    // The gate prevents a rate-change writer from starving behind new DMA
-    // writers while the reader count/resource lock transition is in progress.
-    if (xSemaphoreTake(portWriteGate, timeoutTicks) != pdTRUE) return false;
-    if (xSemaphoreTake(portWriteCountMutex, portMAX_DELAY) != pdTRUE) {
-        xSemaphoreGive(portWriteGate);
-        return false;
-    }
-
-    if (activePortWriters == 0 &&
-        xSemaphoreTake(portWriteResourceSemaphore, portMAX_DELAY) != pdTRUE) {
-        xSemaphoreGive(portWriteCountMutex);
-        xSemaphoreGive(portWriteGate);
-        return false;
-    }
-
-    ++activePortWriters;
-    xSemaphoreGive(portWriteCountMutex);
-    xSemaphoreGive(portWriteGate);
-    return true;
-}
-
-void AudioI2SPort::unlockAfterWrite() {
-    if (portWriteCountMutex == nullptr || portWriteResourceSemaphore == nullptr) return;
-    if (xSemaphoreTake(portWriteCountMutex, portMAX_DELAY) != pdTRUE) return;
-
-    if (activePortWriters > 0 && --activePortWriters == 0) {
-        xSemaphoreGive(portWriteResourceSemaphore);
-    }
-    xSemaphoreGive(portWriteCountMutex);
 }
 
 bool AUDIO_I2S_ISR_ATTR AudioI2SPort::isClockOwner(uint8_t controller, Direction d) {
