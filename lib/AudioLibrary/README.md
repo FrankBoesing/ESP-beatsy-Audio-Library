@@ -29,10 +29,12 @@ AudioStreamRx --AudioSourceStream-Ringpuffer--> AudioDecoder
                                                   |
                                                   | PCM-Puffer
                                                   v
-Audio-Graph / AudioTask --Stereo-Queue--> AudioI2STx --> I2S
+Audio-Graph / AudioTask --direkte DMA-Befüllung--> I2S (PCM)
        ^
        |
 Software-Timer oder I2S-TX-DMA-Callback
+
+SPDIF- und PDM-Ausgabe behalten ihren separaten TX-Task-Pfad.
 ```
 
 Die Netzwerk- und Decoder-Pfade sind nur aktiv, wenn die entsprechende Quelle beziehungsweise Wiedergabe verwendet wird. Die I2S-Ausgabe-Task wird nur bei aktivierter I2S-Ausgabe gestartet.
@@ -48,6 +50,8 @@ Die Stack-Größen beziehen sich auf die in dieser Arbeitsversion verwendeten We
 | `AudioDecoder` | `AudioDecoderStream::startDecoderTask()` | `configMAX_PRIORITIES - 3` | 8192 Byte | `AUDIO_DECODER_CORE` (Standard: Core 0) | Dekodiert MP3-/AAC-Daten und füllt die abwechselnd verwendeten PCM-Puffer im internen RAM. Wird bei entsprechender Wiedergabe gestartet. |
 | `AudioI2STx` | `AudioOutputI2S::beginInternal()` | `configMAX_PRIORITIES - 2` | 4096 Byte | `AUDIO_PROCESSING_CORE` (Standard: Core 1) | Entnimmt Stereo-Blöcke aus der Queue, konvertiert sie in I2S-Daten und übergibt sie an den I2S-Treiber. |
 | `AudioStreamRx` | `AudioSourceStream::open()` | `configMAX_PRIORITIES - 5` | 8192 Byte | nicht fest zugeordnet | Liest Netzwerkdaten aus dem HTTP-Stream in einen temporären Chunk und kopiert diese in den Ringpuffer im PSRAM. Wird nur für Netzwerk-Streams benötigt. |
+
+Bei der normalen PCM-I²S-Ausgabe gibt es keinen separaten `AudioI2STx`-Task mehr: `AudioOutputI2S::update()` schreibt die Samples direkt in den DMA-Puffer, den der TX-Callback veröffentlicht. Die kleine Blockpaar-Queue bleibt als Puffer zwischen Graph-Update und DMA-Ereignis bestehen. SPDIF und PDM verwenden weiterhin ihre separaten TX-Tasks.
 
 Zusätzlich verwaltet ESP-IDF unter anderem Wi-Fi-, TCP/IP-, Event-Loop-, Timer-Service- und Idle-Tasks. Deren Prioritäten und Core-Zuordnungen hängen von der SDK-Konfiguration ab.
 
