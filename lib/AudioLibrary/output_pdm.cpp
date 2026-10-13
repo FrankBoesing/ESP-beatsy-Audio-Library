@@ -63,11 +63,9 @@ bool AudioOutputPDM::setSampleRate(float rate) {
     };
 
     discardQueuedPairs();
-    // The TX task cannot call i2s_channel_write() while the manager disables
-    // and reconfigures the PDM channel.
+    // The graph lock stops new pairs being enqueued and txWriteMutex prevents
+    // an in-flight PCM write while the manager disables/reconfigures the channel.
     const bool ok = AudioI2SPort::setSampleRate(rate);
-    // Discard any pair that was already pending as the callback was quiesced.
-    discardQueuedPairs();
 
     if (locked) xSemaphoreGive(txWriteMutex);
     return ok;
