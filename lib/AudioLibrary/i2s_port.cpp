@@ -215,6 +215,7 @@ SemaphoreHandle_t portWriteMutex = nullptr;
 // AudioStream has one graph clock, irrespective of how many I2S controllers run.
 // A single task-side writer publishes the owner to the I2S callback ISRs.
 std::atomic<int32_t> schedulerOwner{-1};
+std::atomic<uint32_t> currentRateGeneration{0};
 
 bool ensurePortWriteMutex() {
     if (portWriteMutex != nullptr) return true;
@@ -788,7 +789,13 @@ bool AudioI2SPort::setSampleRate(float rate) {
     const uint32_t newRate = static_cast<uint32_t>(rounded);
     const float oldRateFloat = AudioStream::sampleRate();
     const uint32_t oldRate = static_cast<uint32_t>(std::lround(oldRateFloat));
-    if (newRate == oldRate) return AudioStream::setSampleRate(rate);
+    if (newRate == oldRate) {
+        const bool ok = AudioStream::setSampleRate(rate);
+        if (ok && rate != oldRateFloat) {
+            currentRateGeneration.fetch_add(1, std::memory_order_release);
+        }
+        return ok;
+    }
 
     bool oldTx[MAX_PORTS]{}, oldRx[MAX_PORTS]{};
     for (uint8_t i = 0; i < MAX_PORTS; ++i) {
@@ -880,7 +887,12 @@ bool AudioI2SPort::setSampleRate(float rate) {
             return false;
         }
     }
+    currentRateGeneration.fetch_add(1, std::memory_order_release);
     return true;
+}
+
+uint32_t AudioI2SPort::currentSampleRateGeneration() {
+    return currentRateGeneration.load(std::memory_order_acquire);
 }
 
 OSIZE
