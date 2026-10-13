@@ -182,6 +182,8 @@ class AudioStream {
     // initialize, so an available I2S/DMA clock can take over first.
     static bool update_setup(void);
     static void update_stop(void);
+    // Select the hardware clock during initialization. Once initialization
+    // finishes, the selected clock source remains fixed.
     static bool setExternalUpdateClock(bool enabled);
 
     // Signal one audio update cycle. This function is intentionally kept as
@@ -279,7 +281,6 @@ class AudioStream {
     static TaskHandle_t audio_task_handle;
     static SemaphoreHandle_t audio_update_mutex;
     static esp_timer_handle_t software_timer;
-    static bool software_timer_running;
     static bool software_clock_deferred;
     static bool update_scheduled;
     static bool external_update_clock;

@@ -23,8 +23,6 @@ portMUX_TYPE AudioStream::audio_mux = portMUX_INITIALIZER_UNLOCKED;
 TaskHandle_t AudioStream::audio_task_handle = nullptr;
 SemaphoreHandle_t AudioStream::audio_update_mutex = nullptr;
 esp_timer_handle_t AudioStream::software_timer = nullptr;
-
-bool AudioStream::software_timer_running = false;
 bool AudioStream::software_clock_deferred = false;
 bool AudioStream::update_scheduled = false;
 bool AudioStream::external_update_clock = false;
@@ -224,11 +222,13 @@ bool AudioStream::setSampleRate(float rate) {
     portENTER_CRITICAL(&audio_mux);
     audio_sample_rate = rate;
     const bool rearm_software_clock =
-        update_scheduled && software_timer_running && !external_update_clock;
+        update_scheduled && software_timer != nullptr && !external_update_clock &&
+        !software_clock_deferred;
+    esp_timer_handle_t timer = software_timer;
     portEXIT_CRITICAL(&audio_mux);
 
     bool ok = true;
-    if (rearm_software_clock) {
+    if (rearm_software_clock && timer != nullptr && esp_timer_is_active(timer)) {
         ok = stop_software_timer() && start_software_timer();
     }
 
@@ -264,63 +264,30 @@ uint32_t AudioStream::blockPeriodUs(void) {
 
 OSIZE
 bool AudioStream::setExternalUpdateClock(bool enabled) {
-    // Clock source changes are control-plane operations. Serialize them with
-    // software-timer start/stop and sample-rate changes.
-    const bool locked = audio_update_mutex != nullptr;
-    if (locked && xSemaphoreTakeRecursive(audio_update_mutex, portMAX_DELAY) != pdTRUE) {
+    // The clock source is selected once, during initialize_memory()'s
+    // hardware-initialization pass. Later output start/stop calls do not switch
+    // clocks; the audio graph and its timing source are expected to stay fixed.
+    portENTER_CRITICAL(&audio_mux);
+    const bool scheduler_running = update_scheduled;
+    const bool timer_exists = software_timer != nullptr;
+    const bool selecting_clock = software_clock_deferred;
+    const bool current_clock = external_update_clock;
+    portEXIT_CRITICAL(&audio_mux);
+
+    if (!scheduler_running || !timer_exists) {
         return false;
+    }
+
+    if (!selecting_clock) {
+        // Starting a hardware output after the software clock was selected
+        // would create two competing clocks. Refuse that unsupported transition.
+        return enabled ? current_clock : true;
     }
 
     portENTER_CRITICAL(&audio_mux);
-    const bool already_enabled = external_update_clock;
-    const bool scheduler_running = update_scheduled;
-    const bool timer_exists = software_timer != nullptr;
-    const bool defer_start = software_clock_deferred;
+    external_update_clock = enabled;
     portEXIT_CRITICAL(&audio_mux);
-
-    if (already_enabled == enabled) {
-        if (locked) xSemaphoreGiveRecursive(audio_update_mutex);
-        return true;
-    }
-    if (!scheduler_running || !timer_exists) {
-        if (locked) xSemaphoreGiveRecursive(audio_update_mutex);
-        return false;
-    }
-
-    bool ok = true;
-    if (enabled) {
-        // Publish external-clock ownership first, so a timer callback that
-        // has not started yet will not submit another software-clock update.
-        portENTER_CRITICAL(&audio_mux);
-        external_update_clock = true;
-        portEXIT_CRITICAL(&audio_mux);
-
-        // The software timer may deliberately not have been started yet.
-        ok = stop_software_timer();
-        if (!ok) {
-            portENTER_CRITICAL(&audio_mux);
-            external_update_clock = false;
-            portEXIT_CRITICAL(&audio_mux);
-        }
-    } else if (defer_start) {
-        // During beginHardware(), do not start the fallback clock between
-        // two hardware streams being initialized.
-        portENTER_CRITICAL(&audio_mux);
-        external_update_clock = false;
-        portEXIT_CRITICAL(&audio_mux);
-    } else {
-        // Arm the fallback before publishing the clock-source switch. If
-        // starting fails, external_update_clock remains true.
-        ok = start_software_timer(true);
-        if (ok) {
-            portENTER_CRITICAL(&audio_mux);
-            external_update_clock = false;
-            portEXIT_CRITICAL(&audio_mux);
-        }
-    }
-
-    if (locked) xSemaphoreGiveRecursive(audio_update_mutex);
-    return ok;
+    return true;
 }
 
 OSIZE
@@ -378,7 +345,6 @@ bool AudioStream::update_setup_internal(bool deferSoftwareClock) {
     portENTER_CRITICAL(&audio_mux);
     update_scheduled = true;
     external_update_clock = false;
-    software_timer_running = false;
     software_clock_deferred = deferSoftwareClock;
     portEXIT_CRITICAL(&audio_mux);
 
@@ -386,7 +352,6 @@ bool AudioStream::update_setup_internal(bool deferSoftwareClock) {
         portENTER_CRITICAL(&audio_mux);
         update_scheduled = false;
         external_update_clock = false;
-        software_timer_running = false;
         software_clock_deferred = false;
         portEXIT_CRITICAL(&audio_mux);
 
@@ -401,7 +366,7 @@ bool AudioStream::update_setup_internal(bool deferSoftwareClock) {
 }
 
 OSIZE
-bool AudioStream::start_software_timer(bool allowExternalClock) {
+bool AudioStream::start_software_timer(void) {
     const bool locked = audio_update_mutex != nullptr;
     if (locked && xSemaphoreTakeRecursive(audio_update_mutex, portMAX_DELAY) != pdTRUE) {
         return false;
@@ -409,9 +374,7 @@ bool AudioStream::start_software_timer(bool allowExternalClock) {
 
     portENTER_CRITICAL(&audio_mux);
     const bool valid = update_scheduled && software_timer != nullptr;
-    const bool shouldStart =
-        valid && (allowExternalClock || !external_update_clock) &&
-        !software_clock_deferred && !software_timer_running;
+    const bool shouldStart = valid && !external_update_clock && !software_clock_deferred;
     esp_timer_handle_t timer = software_timer;
     portEXIT_CRITICAL(&audio_mux);
 
@@ -419,18 +382,14 @@ bool AudioStream::start_software_timer(bool allowExternalClock) {
         if (locked) xSemaphoreGiveRecursive(audio_update_mutex);
         return false;
     }
-    if (!shouldStart) {
+    if (!shouldStart || esp_timer_is_active(timer)) {
         if (locked) xSemaphoreGiveRecursive(audio_update_mutex);
         return true;
     }
 
     const uint32_t period = blockPeriodUs();
     const esp_err_t err = period == 0 ? ESP_ERR_INVALID_ARG : esp_timer_start_periodic(timer, period);
-    if (err == ESP_OK) {
-        portENTER_CRITICAL(&audio_mux);
-        software_timer_running = true;
-        portEXIT_CRITICAL(&audio_mux);
-    } else {
+    if (err != ESP_OK) {
         ESP_LOGE("Audio", "Could not start software audio clock: %s", esp_err_to_name(err));
     }
 
@@ -447,22 +406,15 @@ bool AudioStream::stop_software_timer(void) {
 
     portENTER_CRITICAL(&audio_mux);
     esp_timer_handle_t timer = software_timer;
-    const bool wasRunning = software_timer_running;
     portEXIT_CRITICAL(&audio_mux);
 
-    if (!wasRunning || timer == nullptr) {
+    if (timer == nullptr || !esp_timer_is_active(timer)) {
         if (locked) xSemaphoreGiveRecursive(audio_update_mutex);
         return true;
     }
 
     const esp_err_t err = esp_timer_stop(timer);
-    if (err == ESP_OK || err == ESP_ERR_INVALID_STATE) {
-        // INVALID_STATE means the timer is already stopped; the desired state
-        // is therefore achieved.
-        portENTER_CRITICAL(&audio_mux);
-        software_timer_running = false;
-        portEXIT_CRITICAL(&audio_mux);
-    } else {
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         ESP_LOGE("Audio", "Could not stop software audio clock: %s", esp_err_to_name(err));
     }
 
@@ -513,7 +465,6 @@ void AudioStream::update_stop(void) {
     }
 
     portENTER_CRITICAL(&audio_mux);
-    software_timer_running = false;
     software_clock_deferred = false;
     portEXIT_CRITICAL(&audio_mux);
 }
@@ -531,10 +482,7 @@ void AudioStream::software_timer_callback(void *) {
 
 OSPEED
 void AudioStream::update_all(void) {
-    portENTER_CRITICAL(&audio_mux);
-    TaskHandle_t task = software_clock_deferred ? nullptr : audio_task_handle;
-    portEXIT_CRITICAL(&audio_mux);
-
+    TaskHandle_t task = audio_task_handle;
     if (task != nullptr) {
         xTaskNotifyGive(task);
     }
@@ -556,10 +504,7 @@ void AudioStream::enableUpdates(void) {
 
 OSPEED
 bool IRAM_ATTR AudioStream::update_all_from_isr(void) {
-    portENTER_CRITICAL_ISR(&audio_mux);
-    TaskHandle_t task = software_clock_deferred ? nullptr : audio_task_handle;
-    portEXIT_CRITICAL_ISR(&audio_mux);
-
+    TaskHandle_t task = audio_task_handle;
     if (task != nullptr) {
         BaseType_t higher_priority_task_woken = pdFALSE;
         vTaskNotifyGiveFromISR(task, &higher_priority_task_woken);
@@ -579,16 +524,6 @@ void AudioStream::scheduler_task(void *) {
 OSPEED
 void AudioStream::process_all_now(void) {
     if (audio_update_mutex == nullptr || xSemaphoreTakeRecursive(audio_update_mutex, portMAX_DELAY) != pdTRUE) {
-        return;
-    }
-
-    // A notification may have been queued just before hardware initialization
-    // deferred scheduling. Do not traverse the graph until initialization ends.
-    portENTER_CRITICAL(&audio_mux);
-    const bool deferred = software_clock_deferred;
-    portEXIT_CRITICAL(&audio_mux);
-    if (deferred) {
-        xSemaphoreGiveRecursive(audio_update_mutex);
         return;
     }
 
@@ -684,12 +619,13 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num, uint3
         return;
     }
 
-    // Pause graph scheduling before touching the memory pool. The recursive
-    // mutex lets any already-running graph traversal finish first.
-    const bool clockControlLocked = audio_update_mutex != nullptr;
-    if (clockControlLocked &&
-        xSemaphoreTakeRecursive(audio_update_mutex, portMAX_DELAY) != pdTRUE) {
-        return;
+    // Pause graph traversal while the pool and hardware clock source are set up.
+    // On first initialization the mutex is created together with the scheduler,
+    // so we take it immediately after the scheduler has been initialized.
+    bool updates_locked = false;
+    if (audio_update_mutex != nullptr) {
+        disableUpdates();
+        updates_locked = true;
     }
 
     portENTER_CRITICAL(&audio_mux);
@@ -700,30 +636,23 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num, uint3
         portENTER_CRITICAL(&audio_mux);
         software_clock_deferred = false;
         portEXIT_CRITICAL(&audio_mux);
-        if (clockControlLocked) xSemaphoreGiveRecursive(audio_update_mutex);
+        if (updates_locked) {
+            enableUpdates();
+        }
         ESP_LOGE("Audio", "Could not pause software clock before memory initialization");
         return;
-    }
-
-    if (clockControlLocked) {
-        xSemaphoreGiveRecursive(audio_update_mutex);
     }
 
     portENTER_CRITICAL(&audio_mux);
 
     memory_pool = data;
     memory_pool_size = (uint16_t)(num);
-
     memory_pool_available_mask = available_mask;
     memory_pool_mask_words = (uint16_t)(mask_words);
-
     memory_pool_first_mask = 0;
-
     memory_used = 0;
     memory_used_max = 0;
 
-    // Mark all valid blocks as available.
-    // Unused bits in the last mask word remain cleared.
     for (unsigned int i = 0; i < mask_words; ++i) {
         available_mask[i] = 0xFFFFFFFFu;
     }
@@ -741,27 +670,25 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num, uint3
 
     portEXIT_CRITICAL(&audio_mux);
 
-    // Set up the scheduler and create AudioClock, but defer starting the timer
-    // until all audio streams have had their beginHardware() opportunity.
-    if (audio_task_handle == nullptr) {
-        if (!update_setup_internal(true)) {
-            ESP_LOGE("Audio", "Could not initialize audio scheduler");
-        }
+    // Create the scheduler if needed, but leave AudioClock stopped until all
+    // input/output hardware has had its chance to claim the timing source.
+    if (audio_task_handle == nullptr && !update_setup_internal(true)) {
+        portENTER_CRITICAL(&audio_mux);
+        software_clock_deferred = false;
+        portEXIT_CRITICAL(&audio_mux);
+        ESP_LOGE("Audio", "Could not initialize audio scheduler");
+        return;
     }
 
-    /* Hardware der Audio-Streams initialisieren */
+    if (!updates_locked && audio_update_mutex != nullptr) {
+        disableUpdates();
+        updates_locked = true;
+    }
+
     for (AudioStream *p = first_update; p != nullptr; p = p->next_update) {
         if (!p->beginHardware()) {
             ESP_LOGE("Audio", "Hardware initialization failed");
         }
-    }
-
-    // Hold off both timer and DMA-triggered graph processing until the complete
-    // hardware initialization pass has finished.
-    const bool finishClockControlLocked = audio_update_mutex != nullptr;
-    if (finishClockControlLocked &&
-        xSemaphoreTakeRecursive(audio_update_mutex, portMAX_DELAY) != pdTRUE) {
-        return;
     }
 
     portENTER_CRITICAL(&audio_mux);
@@ -773,8 +700,8 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num, uint3
         ESP_LOGE("Audio", "Could not start software clock after hardware initialization");
     }
 
-    if (finishClockControlLocked) {
-        xSemaphoreGiveRecursive(audio_update_mutex);
+    if (updates_locked) {
+        enableUpdates();
     }
 }
 
