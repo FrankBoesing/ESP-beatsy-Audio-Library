@@ -1,19 +1,23 @@
 #include "AudioInputBuffer.h"
+#include "optimize.h"
 
 #if defined(ARDUINO_ARCH_ESP32)
 #include "esp_heap_caps.h"
 #endif
 
+OSIZE
 AudioInputBuffer::AudioInputBuffer(size_t capacity)
     : buffer(nullptr), buffer_size(capacity), region_a_start(0),
       region_a_length(0), region_b_start(0), region_b_length(0),
       write_acquired(false), write_start(0), write_length(0),
       psram_allocated(false) {}
 
+OSIZE
 AudioInputBuffer::~AudioInputBuffer() {
     end();
 }
 
+OSIZE
 bool AudioInputBuffer::begin() {
     end();
 
@@ -29,11 +33,13 @@ bool AudioInputBuffer::begin() {
     return true;
 }
 
+OSIZE
 void AudioInputBuffer::end() {
     freeBuffer();
     reset();
 }
 
+OSIZE
 void AudioInputBuffer::reset() {
     region_a_start = 0;
     region_a_length = 0;
@@ -46,6 +52,7 @@ void AudioInputBuffer::reset() {
     write_length = 0;
 }
 
+OSIZE
 bool AudioInputBuffer::allocateBuffer() {
 #if defined(ARDUINO_ARCH_ESP32)
     if (psramFound()) {
@@ -70,6 +77,7 @@ bool AudioInputBuffer::allocateBuffer() {
     return true;
 }
 
+OSIZE
 void AudioInputBuffer::freeBuffer() {
     if (buffer == nullptr) {
         return;
@@ -85,6 +93,7 @@ void AudioInputBuffer::freeBuffer() {
     psram_allocated = false;
 }
 
+OSPEED
 const uint8_t *AudioInputBuffer::acquireRead(size_t &length) const {
     length = 0;
 
@@ -96,6 +105,7 @@ const uint8_t *AudioInputBuffer::acquireRead(size_t &length) const {
     return buffer + region_a_start;
 }
 
+OSPEED
 bool AudioInputBuffer::releaseRead(size_t consumed) {
     if (consumed > region_a_length) {
         return false;
@@ -127,6 +137,7 @@ bool AudioInputBuffer::releaseRead(size_t consumed) {
     return validate();
 }
 
+OSPEED
 uint8_t *AudioInputBuffer::getWriteRegion(size_t &length) {
     length = 0;
 
@@ -171,6 +182,7 @@ uint8_t *AudioInputBuffer::getWriteRegion(size_t &length) {
     return nullptr;
 }
 
+OSPEED
 uint8_t *AudioInputBuffer::acquireWrite(size_t &length) {
     if (write_acquired) {
         length = 0;
@@ -190,6 +202,7 @@ uint8_t *AudioInputBuffer::acquireWrite(size_t &length) {
     return ptr;
 }
 
+OSPEED
 bool AudioInputBuffer::commitWrite(size_t written) {
     if (!write_acquired) {
         return false;
@@ -236,6 +249,7 @@ bool AudioInputBuffer::commitWrite(size_t written) {
     return true;
 }
 
+OSPEED
 AudioSourceStatus AudioInputBuffer::fill(AudioSource &source) {
     /*
      * First decide whether a refill is necessary.
@@ -301,10 +315,12 @@ AudioSourceStatus AudioInputBuffer::fill(AudioSource &source) {
     return status;
 }
 
+OSPEED
 size_t AudioInputBuffer::availableRead() const {
     return region_a_length + region_b_length;
 }
 
+OSPEED
 size_t AudioInputBuffer::availableWrite() const {
     if (buffer == nullptr) {
         return 0;
@@ -313,22 +329,27 @@ size_t AudioInputBuffer::availableWrite() const {
     return buffer_size - region_a_length - region_b_length;
 }
 
+OSIZE
 size_t AudioInputBuffer::capacity() const {
     return buffer_size;
 }
 
+OSPEED
 bool AudioInputBuffer::empty() const {
     return region_a_length == 0 && region_b_length == 0;
 }
 
+OSPEED
 bool AudioInputBuffer::full() const {
     return availableWrite() == 0;
 }
 
+OSIZE
 bool AudioInputBuffer::usingPSRAM() const {
     return psram_allocated;
 }
 
+OSPEED
 bool AudioInputBuffer::validate() const {
     if (buffer == nullptr) {
         return true;
