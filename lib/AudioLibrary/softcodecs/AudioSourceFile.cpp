@@ -1,15 +1,20 @@
 #include "AudioSourceFile.h"
+#include "optimize.h"
 
+OSIZE
 AudioSourceFile::AudioSourceFile() {}
 
+OSIZE
 AudioSourceFile::AudioSourceFile(const File &file) {
     open(file);
 }
 
+OSIZE
 AudioSourceFile::~AudioSourceFile() {
     close();
 }
 
+OSIZE
 bool AudioSourceFile::open(const File &file) {
     close();
 
@@ -22,6 +27,7 @@ bool AudioSourceFile::open(const File &file) {
     return (bool)(_file);
 }
 
+OSIZE
 bool AudioSourceFile::open(fs::FS &fs, const char *path, const char *mode) {
     close();
 
@@ -34,6 +40,7 @@ bool AudioSourceFile::open(fs::FS &fs, const char *path, const char *mode) {
     return (bool)(_file);
 }
 
+OSPEED
 AudioSourceStatus AudioSourceFile::read(uint8_t *buffer, size_t requested, size_t &received) {
     received = 0;
 
@@ -59,6 +66,7 @@ AudioSourceStatus AudioSourceFile::read(uint8_t *buffer, size_t requested, size_
     return AudioSourceStatus::WOULD_BLOCK;
 }
 
+OSIZE
 uint64_t AudioSourceFile::position() const {
     if (!_file) {
         return 0;
@@ -67,6 +75,7 @@ uint64_t AudioSourceFile::position() const {
     return (uint64_t)(_file.position());
 }
 
+OSIZE
 uint64_t AudioSourceFile::size() const {
     if (!_file) {
         return 0;
@@ -75,10 +84,12 @@ uint64_t AudioSourceFile::size() const {
     return (uint64_t)(_file.size());
 }
 
+OSIZE
 bool AudioSourceFile::isSeekable() const {
     return (bool)(_file);
 }
 
+OSIZE
 bool AudioSourceFile::seek(uint64_t position) {
     if (!_file) {
         return false;
@@ -96,32 +107,39 @@ bool AudioSourceFile::seek(uint64_t position) {
     return _file.seek((uint32_t)(position));
 }
 
+OSIZE
 void AudioSourceFile::close() {
     if (_file) {
         _file.close();
     }
 }
 
+OSIZE
 bool AudioSourceFile::isOpen() const {
     return (bool)(_file);
 }
 
+OSIZE
 size_t AudioSourceFile::refillThreshold() const {
     return 2 * 1024;
 }
 
+OSIZE
 size_t AudioSourceFile::fillSize() const {
     return 2 * 1024;
 }
 
+OSIZE
 bool AudioSourceFile::fillToThreshold() const {
     return false;
 }
 
+OSIZE
 File &AudioSourceFile::file() {
     return _file;
 }
 
+OSIZE
 const File &AudioSourceFile::file() const {
     return _file;
 }
