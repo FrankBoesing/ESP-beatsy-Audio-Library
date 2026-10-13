@@ -7,7 +7,6 @@
 #include "i2s_port.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
-#include <freertos/semphr.h>
 #include "AudioStream.h"
 
 /*
