@@ -56,6 +56,7 @@ void AudioOutputSPDIF::setRunning(bool value) { running.store(value ? 1U : 0U, s
 
 void AudioOutputSPDIF::updateChannelStatus(float rate) {
     sampleRateCode.store(spdifSampleRateCode(rate), std::memory_order_release);
+    sampleRateCodeGeneration.store(AudioI2SPort::currentSampleRateGeneration(), std::memory_order_release);
 }
 
 bool AudioOutputSPDIF::begin() { return beginInternal(); }
@@ -267,6 +268,8 @@ bool AudioOutputSPDIF::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void
 
 OSPEED
 void AudioOutputSPDIF::txTaskLoop() {
+    uint32_t writeErrorCount = 0;
+    uint32_t lastErrorLogMs = 0;
     BlockPair pair{nullptr, nullptr, 0};
     while (isRunning()) {
         SemaphoreHandle_t writerMutex = txWriteMutex;
@@ -291,6 +294,12 @@ void AudioOutputSPDIF::txTaskLoop() {
             continue;
         }
 
+        if (sampleRateCodeGeneration.load(std::memory_order_acquire) !=
+            AudioI2SPort::currentSampleRateGeneration()) {
+            updateChannelStatus(AudioStream::sampleRate());
+        }
+
+        const uint16_t frameInBlockStart = frameInBlock;
         const int16_t *left = pair.left ? pair.left->data : audio_zeroblock;
         const int16_t *right = pair.right ? pair.right->data : audio_zeroblock;
 
@@ -315,6 +324,7 @@ void AudioOutputSPDIF::txTaskLoop() {
         }
         if (!isRunning() ||
             pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
+            frameInBlock = frameInBlockStart;
             releasePair(pair);
             pair = {nullptr, nullptr, 0};
             AudioI2SPort::unlockAfterWrite();
@@ -323,7 +333,17 @@ void AudioOutputSPDIF::txTaskLoop() {
             continue;
         }
 
-        (void)i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);
+        const esp_err_t err = i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);
+        if (err != ESP_OK || bytesWritten != sizeof(encodedBuffer)) {
+            const uint32_t now = millis();
+            ++writeErrorCount;
+            if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
+                ESP_LOGE("AudioOutputSPDIF", "TX error #%lu: %s, bytes=%lu/%lu",
+                         static_cast<unsigned long>(writeErrorCount), esp_err_to_name(err),
+                         static_cast<unsigned long>(bytesWritten), static_cast<unsigned long>(sizeof(encodedBuffer)));
+                lastErrorLogMs = now;
+            }
+        }
 
         AudioI2SPort::unlockAfterWrite();
         releasePair(pair);
