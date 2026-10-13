@@ -121,7 +121,7 @@ class AudioDecoderStream : public AudioPlayer {
      */
     static constexpr UBaseType_t DECODER_TASK_PRIORITY = configMAX_PRIORITIES - 3;
     static constexpr BaseType_t DECODER_TASK_CORE = AUDIO_DECODER_CORE;
-    static constexpr uint16_t DECODER_TASK_STACK = 6*1024; // TODO: Try to reduce this. Viel testen.
+    static constexpr uint16_t DECODER_TASK_STACK = 3*1024; // TODO: Try to reduce this. Viel testen.
     static constexpr uint8_t PCM_BUFFER_COUNT = 2;
 
     static void decoderTaskEntry(void *arg);

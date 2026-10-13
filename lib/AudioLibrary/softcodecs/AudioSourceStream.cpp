@@ -72,7 +72,7 @@ bool AudioSourceStream::open(Stream &stream, uint32_t icyMetaInt) {
     stream.setTimeout(STREAM_READ_TIMEOUT_MS);
 
     const BaseType_t result = xTaskCreate(&AudioSourceStream::producerTaskEntry, "AudioStreamRx",
-                                          3072, // Stack
+                                          3840, // Stack
                                           this, configMAX_PRIORITIES - 5, &_producerTask);
 
     if (result != pdPASS) {
