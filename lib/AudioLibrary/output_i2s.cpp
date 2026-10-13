@@ -124,12 +124,14 @@ bool AudioOutputI2S::beginInternal() {
     resetTxCallbackCount();
     setRunning(true);
 
+    TaskHandle_t createdTask = nullptr;
     const BaseType_t result = xTaskCreatePinnedToCore(txTaskEntry, "AudioI2STx", 2048, this, configMAX_PRIORITIES - 2,
-                                                      &txTask, AUDIO_PROCESSING_CORE);
+                                                      &createdTask, AUDIO_PROCESSING_CORE);
+    if (result == pdPASS) txTask.store(createdTask, std::memory_order_release);
 
     if (result != pdPASS) {
         setRunning(false);
-        txTask = nullptr;
+        txTask.store(nullptr, std::memory_order_release);
         AudioI2SPort::clearEventHandler(i2sPins.controller, AudioI2SPort::Direction::Tx, this);
         AudioI2SPort::release(i2sPins.controller, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
@@ -142,10 +144,9 @@ bool AudioOutputI2S::beginInternal() {
 
     if (!AudioI2SPort::start(i2sPins.controller, AudioI2SPort::Direction::Tx)) {
         setRunning(false);
-        xTaskNotifyGive(txTask);
-        // txTask uses finite queue/write timeouts and signals completion by
-        // clearing txTask. Never free its queue/handle while it still runs.
-        while (txTask != nullptr) {
+        // The task's finite queue/write timeouts guarantee that it can exit
+        // without racing a notification against its own deletion.
+        while (txTask.load(std::memory_order_acquire) != nullptr) {
             vTaskDelay(1);
         }
 
@@ -170,15 +171,14 @@ bool AudioOutputI2S::beginInternal() {
 OSIZE
 void AudioOutputI2S::end() {
     AudioGraphUpdateLock graphLock;
-    if (!isRunning() && txQueue == nullptr && txHandle == nullptr && txTask == nullptr && txWriteMutex == nullptr) return;
+    if (!isRunning() && txQueue == nullptr && txHandle == nullptr &&
+        txTask.load(std::memory_order_acquire) == nullptr && txWriteMutex == nullptr) return;
 
     setRunning(false);
 
-    if (txTask != nullptr) {
-        xTaskNotifyGive(txTask);
-        // txTask uses finite queue/write timeouts and signals completion by
-        // clearing txTask. Do not delete resources if it has not exited yet.
-        while (txTask != nullptr) {
+    if (txTask.load(std::memory_order_acquire) != nullptr) {
+        // Do not race a notification against task self-deletion.
+        while (txTask.load(std::memory_order_acquire) != nullptr) {
             vTaskDelay(1);
         }
     }
@@ -262,8 +262,8 @@ bool AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *
 
 OSPEED
 void AudioOutputI2S::txTaskLoop() {
-    static uint32_t writeErrorCount = 0;
-    static uint32_t lastErrorLogMs = 0;
+    uint32_t writeErrorCount = 0;
+    uint32_t lastErrorLogMs = 0;
 
     // Ein uint32_t enthält ein I2S-Frame:
     // linker Slot: 16 Bit, rechter Slot: 16 Bit.
@@ -351,7 +351,7 @@ void AudioOutputI2S::txTaskLoop() {
         releasePair(pair);
     }
 
-    txTask = nullptr;
+    txTask.store(nullptr, std::memory_order_release);
 
     vTaskDelete(nullptr);
 }
