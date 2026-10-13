@@ -71,6 +71,9 @@ class AudioI2SPort {
     // AudioStream has one global sample rate, so all allocated controllers
     // are reconfigured together.
     static bool setSampleRate(float sampleRate);
+    // Generation changes whenever the global sample rate successfully changes.
+    // Queued TX blocks stamped with an older generation must be discarded.
+    static uint32_t currentSampleRateGeneration();
 
     // Serializes DMA-writer tasks against global clock reconfiguration, which
     // changes every configured controller together.
