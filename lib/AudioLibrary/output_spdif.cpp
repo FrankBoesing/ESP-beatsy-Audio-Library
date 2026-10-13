@@ -224,9 +224,9 @@ void AudioOutputSPDIF::update() {
     pair.right = receiveReadOnly(1);
     pair.rateGeneration = AudioI2SPort::currentSampleRateGeneration();
 
-    // Keep a valid BMC stream on the wire even when the graph has no source
+    // While running, keep a valid BMC stream even when the graph has no source
     // blocks; nullptr channels are encoded as PCM silence by the TX task.
-    if (txQueue == nullptr) {
+    if (!isRunning() || txQueue == nullptr) {
         releasePair(pair);
         return;
     }
