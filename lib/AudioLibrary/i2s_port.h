@@ -75,8 +75,8 @@ class AudioI2SPort {
     // Queued TX blocks stamped with an older generation must be discarded.
     static uint32_t currentSampleRateGeneration();
 
-    // Serializes DMA-writer tasks against global clock reconfiguration, which
-    // changes every configured controller together.
+    // Allows concurrent writes on separate controllers while making a global
+    // sample-rate reconfiguration wait for existing writes and block new ones.
     static bool lockForWrite(TickType_t timeoutTicks = portMAX_DELAY);
     static void unlockAfterWrite();
 
