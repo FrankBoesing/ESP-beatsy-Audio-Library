@@ -5,7 +5,17 @@
 
 namespace {
 constexpr char TAG[] = "AudioInputI2S";
+
+// Serialize ring-buffer lifecycle changes with AudioInputI2S::update().
+class AudioGraphUpdateLock {
+  public:
+    AudioGraphUpdateLock() { AudioStream::disableUpdates(); }
+    ~AudioGraphUpdateLock() { AudioStream::enableUpdates(); }
+
+    AudioGraphUpdateLock(const AudioGraphUpdateLock &) = delete;
+    AudioGraphUpdateLock &operator=(const AudioGraphUpdateLock &) = delete;
 }
+;
 
 AudioInputI2S::AudioInputI2S() : AudioStream(0, nullptr) {}
 AudioInputI2S::AudioInputI2S(const Pins &pins) : AudioStream(0, nullptr), i2sPins(pins) {}
@@ -25,6 +35,7 @@ bool AudioInputI2S::beginHardware() { return beginInternal(); }
 
 OSIZE
 bool AudioInputI2S::beginInternal() {
+    AudioGraphUpdateLock graphLock;
     if (isRunning()) return true;
 
     if (i2sPins.bclk < 0 || i2sPins.ws < 0 || i2sPins.din < 0) {
@@ -71,6 +82,7 @@ bool AudioInputI2S::beginInternal() {
 
 OSIZE
 void AudioInputI2S::end() {
+    AudioGraphUpdateLock graphLock;
     if (!isRunning() && rxHandle == nullptr) return;
 
     // Stop accepting samples, then detach and drain the ISR callback before
