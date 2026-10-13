@@ -32,7 +32,7 @@ class AudioOutputI2S : public AudioStream {
         int8_t ws;
         int8_t dout;
         int8_t mclk; // -1 = disable
-        uint8_t controller = 0; // ESP-IDF hardware controller index (0..3)
+        uint8_t controller = 0; // ESP-IDF hardware controller index, starting at 0
     };
 
     AudioOutputI2S();
