@@ -82,12 +82,15 @@ bool AudioOutputSPDIF::setSampleRate(float rate) {
         return false;
     }
 
-    if (txQueue != nullptr) {
+    // Keep the old-rate queue intact if the manager rejects the request and
+    // rolls back successfully. A committed generation change invalidates it.
+    const uint32_t oldGeneration = AudioI2SPort::currentSampleRateGeneration();
+    const bool ok = AudioI2SPort::setSampleRate(rate);
+    const uint32_t newGeneration = AudioI2SPort::currentSampleRateGeneration();
+    if (txQueue != nullptr && newGeneration != oldGeneration) {
         BlockPair pair;
         while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
     }
-
-    const bool ok = AudioI2SPort::setSampleRate(rate);
     if (ok) updateChannelStatus(rate);
     if (writerLocked) xSemaphoreGive(txWriteMutex);
     return ok;
