@@ -64,10 +64,11 @@ class AudioOutputI2S : public AudioStream {
     uint numChannels = 2;
 
     i2s_chan_handle_t txHandle = nullptr;
+    // Accessed only by AudioTask and lifecycle methods under GraphUpdateLock.
     BlockPair txQueue[QUEUE_LENGTH]{};
-    size_t txQueueHead = 0;
-    size_t txQueueTail = 0;
-    size_t txQueueCount = 0;
+    uint8_t txQueueHead = 0;
+    uint8_t txQueueTail = 0;
+    uint8_t txQueueCount = 0;
     std::atomic<uint32_t *> pendingDmaBuffer{nullptr};
 
     // 32-bit atomics avoid an ISR/task spinlock for these independent values.
