@@ -139,12 +139,14 @@ bool AudioOutputSPDIF::beginInternal() {
     updateChannelStatus(AudioStream::sampleRate());
     setRunning(true);
 
+    TaskHandle_t createdTask = nullptr;
     const BaseType_t result = xTaskCreatePinnedToCore(txTaskEntry, "AudioSPDIF", 2048, this, configMAX_PRIORITIES - 2,
-                                                      &txTask, AUDIO_PROCESSING_CORE);
+                                                      &createdTask, AUDIO_PROCESSING_CORE);
+    if (result == pdPASS) txTask.store(createdTask, std::memory_order_release);
 
     if (result != pdPASS) {
         setRunning(false);
-        txTask = nullptr;
+        txTask.store(nullptr, std::memory_order_release);
         AudioI2SPort::clearEventHandler(controller_, AudioI2SPort::Direction::Tx, this);
         AudioI2SPort::release(controller_, AudioI2SPort::Direction::Tx);
         txHandle = nullptr;
@@ -157,10 +159,10 @@ bool AudioOutputSPDIF::beginInternal() {
 
     if (!AudioI2SPort::start(controller_, AudioI2SPort::Direction::Tx)) {
         setRunning(false);
-        xTaskNotifyGive(txTask);
-        // Wait for the finite queue/write timeout in txTaskLoop to expire before
-        // releasing resources referenced by the task.
-        while (txTask != nullptr) vTaskDelay(1);
+        // Wait for the finite queue/write timeout to expire before freeing
+        // resources referenced by the task; avoid notifying a task that may
+        // already have reached its self-delete path.
+        while (txTask.load(std::memory_order_acquire) != nullptr) vTaskDelay(1);
 
         AudioI2SPort::clearEventHandler(controller_, AudioI2SPort::Direction::Tx, this);
         AudioI2SPort::stop(controller_, AudioI2SPort::Direction::Tx);
@@ -183,14 +185,15 @@ bool AudioOutputSPDIF::beginInternal() {
 OSIZE
 void AudioOutputSPDIF::end() {
     AudioGraphUpdateLock graphLock;
-    if (!isRunning() && txQueue == nullptr && txHandle == nullptr && txTask == nullptr && txWriteMutex == nullptr) return;
+    if (!isRunning() && txQueue == nullptr && txHandle == nullptr &&
+        txTask.load(std::memory_order_acquire) == nullptr && txWriteMutex == nullptr) return;
 
     setRunning(false);
 
-    if (txTask != nullptr) {
-        xTaskNotifyGive(txTask);
-        // Do not delete the queue while txTask may still be using it.
-        while (txTask != nullptr) vTaskDelay(1);
+    if (txTask.load(std::memory_order_acquire) != nullptr) {
+        // Do not delete the queue while txTask may still be using it. The
+        // task's finite waits let it observe running=false without a notify.
+        while (txTask.load(std::memory_order_acquire) != nullptr) vTaskDelay(1);
     }
 
     if (txQueue != nullptr) {
@@ -301,6 +304,6 @@ void AudioOutputSPDIF::txTaskLoop() {
     }
 
     while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
-    txTask = nullptr;
+    txTask.store(nullptr, std::memory_order_release);
     vTaskDelete(nullptr);
 }
