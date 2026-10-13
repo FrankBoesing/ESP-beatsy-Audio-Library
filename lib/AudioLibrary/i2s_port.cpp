@@ -13,6 +13,7 @@
 #include <freertos/semphr.h>
 #include <driver/i2s_pdm.h>
 #include "AudioStream.h"
+#include "audio_graph_update_lock.h"
 
 namespace {
 using Direction = AudioI2SPort::Direction;
@@ -22,17 +23,6 @@ using EventCallback = AudioI2SPort::EventCallback;
 
 constexpr char TAG[] = "AudioI2SPort";
 
-// Reconfiguration pauses graph traversal while clocks and channel states
-// are changed. AudioStream's mutex is recursive, so nested sample-rate calls
-// remain safe.
-class AudioGraphUpdateLock {
-  public:
-    AudioGraphUpdateLock() { AudioNoInterrupts(); }
-    ~AudioGraphUpdateLock() { AudioInterrupts(); }
-
-    AudioGraphUpdateLock(const AudioGraphUpdateLock &) = delete;
-    AudioGraphUpdateLock &operator=(const AudioGraphUpdateLock &) = delete;
-};
 constexpr uint16_t DMA_DESC_NUM = 6;
 constexpr uint16_t DMA_FRAME_NUM = AUDIO_BLOCK_SAMPLES;
 constexpr uint8_t MAX_PORTS = AudioI2SPort::MAX_CONTROLLERS;
@@ -824,7 +814,7 @@ bool AudioI2SPort::setSampleRate(float rate) {
         static_cast<double>(rate) > static_cast<double>(LONG_MAX)) {
         return false;
     }
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
     AudioPortWriteLock writerLock;
     if (!writerLock.locked()) return false;
 
