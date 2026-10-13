@@ -233,12 +233,12 @@ auto *connection = new AudioConnection(*synth, 0, output, 0);
 
 // ... Audio läuft ...
 
-AudioStream::disableUpdates();
+AudioNoInterrupts();
 delete connection;  // Verbindung explizit zuerst trennen
 connection = nullptr;
 delete synth;
 synth = nullptr;
-AudioStream::enableUpdates();
+AudioInterrupts();
 
 // output bleibt als fester Hardware-Taktgeber bestehen.
 ```
