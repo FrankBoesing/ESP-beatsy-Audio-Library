@@ -247,7 +247,7 @@ void AudioOutputI2S::releasePair(BlockPair &pair) {
 
 void AudioOutputI2S::txTaskEntry(void *arg) { static_cast<AudioOutputI2S *>(arg)->txTaskLoop(); }
 
-bool AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
+bool AUDIO_I2S_ISR_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
     auto *output = static_cast<AudioOutputI2S *>(userContext);
     if (output == nullptr || !output->markTxCallbackFromISR()) return false;
     if (!AudioI2SPort::isClockOwner(output->i2sPins.controller, AudioI2SPort::Direction::Tx)) return false;
