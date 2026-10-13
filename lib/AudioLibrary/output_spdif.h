@@ -70,6 +70,7 @@ class AudioOutputSPDIF : public AudioStream {
 
     std::atomic<uint32_t> running{0};
     std::atomic<uint8_t> sampleRateCode{0};
+    std::atomic<uint32_t> sampleRateCodeGeneration{0};
 
     // Reused exclusively by the TX task: four 16-bit I2S frames per PCM
     // sample per channel pair, i.e. eight halfwords per stereo PCM frame.
