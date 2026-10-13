@@ -25,8 +25,8 @@ constexpr char TAG[] = "AudioI2SPort";
 // remain safe.
 class AudioGraphUpdateLock {
   public:
-    AudioGraphUpdateLock() { AudioStream::disableUpdates(); }
-    ~AudioGraphUpdateLock() { AudioStream::enableUpdates(); }
+    AudioGraphUpdateLock() { AudioNoInterrupts(); }
+    ~AudioGraphUpdateLock() { AudioInterrupts(); }
 
     AudioGraphUpdateLock(const AudioGraphUpdateLock &) = delete;
     AudioGraphUpdateLock &operator=(const AudioGraphUpdateLock &) = delete;
