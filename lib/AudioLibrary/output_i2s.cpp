@@ -51,19 +51,7 @@ bool AudioOutputI2S::setSampleRate(float hz) {
     audio_detail::GraphUpdateLock graphLock;
     if (hz == AudioStream::sampleRate()) return true;
 
-    // GraphUpdateLock prevents new blocks from being queued during the change.
-    // The shared port writer lock excludes in-flight DMA writes, while the
-    // generation stamp makes any old pair already dequeued/queued harmless.
-    const uint32_t oldGeneration = AudioI2SPort::currentSampleRateGeneration();
-    const bool ok = AudioI2SPort::setSampleRate(hz);
-    if (txQueue != nullptr &&
-        AudioI2SPort::currentSampleRateGeneration() != oldGeneration) {
-        BlockPair pair;
-        while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) {
-            releasePair(pair);
-        }
-    }
-    return ok;
+    return AudioI2SPort::setSampleRate(hz);
 }
 
 OSIZE
@@ -208,8 +196,6 @@ void AudioOutputI2S::update() {
     pair.right = receiveReadOnly(1);
 
     if (pair.left == nullptr && pair.right == nullptr) return;
-    pair.rateGeneration = AudioI2SPort::currentSampleRateGeneration();
-
     if (!isRunning() || txQueue == nullptr) {
         releasePair(pair);
         return;
@@ -270,13 +256,9 @@ void AudioOutputI2S::txTaskLoop() {
             continue;
         }
 
-        // Discard blocks that were queued before a global rate change.
-        if (!isRunning() ||
-            pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
+        if (!isRunning()) {
             releasePair(pair);
-            pair = {nullptr, nullptr, 0};
-            if (!isRunning()) break;
-            continue;
+            break;
         }
 
         if (numChannels == 1) {
@@ -324,20 +306,10 @@ void AudioOutputI2S::txTaskLoop() {
          * Ein Timeout verhindert, dass das Beenden dauerhaft blockiert,
          * falls der I2S-Treiber keine Daten mehr annimmt.
          */
-        if (!AudioI2SPort::lockForWrite(pdMS_TO_TICKS(500))) {
+        if (!isRunning()) {
             releasePair(pair);
-            pair = {nullptr, nullptr, 0};
-            continue;
+            break;
         }
-        if (!isRunning() ||
-            pair.rateGeneration != AudioI2SPort::currentSampleRateGeneration()) {
-            releasePair(pair);
-            pair = {nullptr, nullptr, 0};
-            AudioI2SPort::unlockAfterWrite();
-            if (!isRunning()) break;
-            continue;
-        }
-
         const esp_err_t err = i2s_channel_write(txHandle, buffer, sizeof(buffer), &bytesWritten, 100);
 
         if (err != ESP_OK || bytesWritten != sizeof(buffer)) {
@@ -352,7 +324,6 @@ void AudioOutputI2S::txTaskLoop() {
             }
         }
 
-        AudioI2SPort::unlockAfterWrite();
         releasePair(pair);
     }
 
