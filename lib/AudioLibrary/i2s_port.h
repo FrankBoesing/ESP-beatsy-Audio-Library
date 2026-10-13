@@ -68,7 +68,9 @@ class AudioI2SPort {
     // False means the channel could not be safely disabled. In that case the
     // caller must retain the port handle/resources and may retry end().
     static bool stop(uint8_t controller, Direction direction);
-    static void release(uint8_t controller, Direction direction);
+    // False indicates that channel resources could not be released; the caller
+    // must retain its handle and may retry cleanup.
+    static bool release(uint8_t controller, Direction direction);
 
     // AudioStream has one global sample rate, so all allocated controllers
     // are reconfigured together.
