@@ -28,7 +28,8 @@ bool AudioStream::update_scheduled = false;
 bool AudioStream::external_update_clock = false;
 float AudioStream::audio_sample_rate = AUDIO_SAMPLE_RATE_EXACT;
 
-// Conversion factor for the per-stream cycle counters collected in AudioTask.
+// Guarded by audio_mux. A stopped esp_timer can still have a callback in flight.
+static bool software_timer_callback_running = false;
 static uint32_t cpu_cycles_per_us = 0;
 
 float AudioStream::processorUsage(uint8_t core) {
@@ -411,16 +412,28 @@ bool AudioStream::stop_software_timer(void) {
     esp_timer_handle_t timer = software_timer;
     portEXIT_CRITICAL(&audio_mux);
 
-    if (timer == nullptr || !esp_timer_is_active(timer)) {
-        return true;
+    bool ok = true;
+    if (timer != nullptr && esp_timer_is_active(timer)) {
+        const esp_err_t err = esp_timer_stop(timer);
+        if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+            ESP_LOGE("Audio", "Could not stop software audio clock: %s", esp_err_to_name(err));
+            ok = false;
+        }
     }
 
-    const esp_err_t err = esp_timer_stop(timer);
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE("Audio", "Could not stop software audio clock: %s", esp_err_to_name(err));
+    // esp_timer_stop() disarms the timer but does not wait for a callback that
+    // has already been dispatched. The callback flag closes that lifetime gap.
+    for (;;) {
+        portENTER_CRITICAL(&audio_mux);
+        const bool callbackRunning = software_timer_callback_running;
+        portEXIT_CRITICAL(&audio_mux);
+        if (!callbackRunning) {
+            break;
+        }
+        vTaskDelay(1);
     }
 
-    return err == ESP_OK || err == ESP_ERR_INVALID_STATE;
+    return ok;
 }
 
 OSIZE
@@ -452,11 +465,14 @@ void AudioStream::update_stop(void) {
     esp_timer_handle_t timer = software_timer;
     portEXIT_CRITICAL(&audio_mux);
 
-    // Stop and delete the software timer before deleting the task it can notify.
+    // Stop the software timer and wait for any already-dispatched callback
+    // before deleting the task it may notify.
     if (timer != nullptr) {
-        const esp_err_t stop_err = esp_timer_stop(timer);
-        if (stop_err != ESP_OK && stop_err != ESP_ERR_INVALID_STATE) {
-            ESP_LOGE("Audio", "Could not stop software audio clock: %s", esp_err_to_name(stop_err));
+        if (!stop_software_timer()) {
+            if (locked) {
+                xSemaphoreGiveRecursive(mutex);
+            }
+            return;
         }
 
         const esp_err_t delete_err = esp_timer_delete(timer);
@@ -496,10 +512,17 @@ OSPEED
 void AudioStream::software_timer_callback(void *) {
     portENTER_CRITICAL(&audio_mux);
     const bool useSoftwareClock = update_scheduled && !software_clock_deferred && !external_update_clock;
+    if (useSoftwareClock) {
+        software_timer_callback_running = true;
+    }
     portEXIT_CRITICAL(&audio_mux);
 
     if (useSoftwareClock) {
         update_all();
+
+        portENTER_CRITICAL(&audio_mux);
+        software_timer_callback_running = false;
+        portEXIT_CRITICAL(&audio_mux);
     }
 }
 
