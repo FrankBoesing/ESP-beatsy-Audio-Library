@@ -14,8 +14,8 @@ class AudioGraphUpdateLock {
 
     AudioGraphUpdateLock(const AudioGraphUpdateLock &) = delete;
     AudioGraphUpdateLock &operator=(const AudioGraphUpdateLock &) = delete;
-}
-;
+};
+
 
 AudioInputI2S::AudioInputI2S() : AudioStream(0, nullptr) {}
 AudioInputI2S::AudioInputI2S(const Pins &pins) : AudioStream(0, nullptr), i2sPins(pins) {}
