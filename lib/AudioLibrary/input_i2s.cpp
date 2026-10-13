@@ -2,19 +2,11 @@
 
 #include <esp_log.h>
 #include "i2s_port.h"
+#include "audio_graph_update_lock.h"
 
 namespace {
 constexpr char TAG[] = "AudioInputI2S";
 
-// Serialize ring-buffer lifecycle changes with AudioInputI2S::update().
-class AudioGraphUpdateLock {
-  public:
-    AudioGraphUpdateLock() { AudioNoInterrupts(); }
-    ~AudioGraphUpdateLock() { AudioInterrupts(); }
-
-    AudioGraphUpdateLock(const AudioGraphUpdateLock &) = delete;
-    AudioGraphUpdateLock &operator=(const AudioGraphUpdateLock &) = delete;
-};
 
 
 AudioInputI2S::AudioInputI2S() : AudioStream(0, nullptr) {}
@@ -35,7 +27,7 @@ bool AudioInputI2S::beginHardware() { return beginInternal(); }
 
 OSIZE
 bool AudioInputI2S::beginInternal() {
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
     if (isRunning()) return true;
 
     if (i2sPins.bclk < 0 || i2sPins.ws < 0 || i2sPins.din < 0) {
@@ -82,7 +74,7 @@ bool AudioInputI2S::beginInternal() {
 
 OSIZE
 void AudioInputI2S::end() {
-    AudioGraphUpdateLock graphLock;
+    audio_detail::GraphUpdateLock graphLock;
     if (!isRunning() && rxHandle == nullptr) return;
 
     // Stop accepting samples, then detach and drain the ISR callback before
