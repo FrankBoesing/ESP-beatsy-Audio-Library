@@ -25,24 +25,31 @@ AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER
 #error "AUDIO_CODEC not defined"
 #endif
 
-// Keep the oscillators directly connected to the mixers. They produce audio
-// blocks from startup, so the output does not depend on an envelope being
-// triggered before the first DMA buffers are filled.
+// Oscillators produce continuously available signal blocks. Envelopes shape
+// individual notes without making audio startup depend on the first note event.
 AudioSynthWaveformSine lead;
+AudioEffectEnvelope leadEnvelope;
+
 AudioSynthWaveformSine bass;
+AudioEffectEnvelope bassEnvelope;
+
 AudioSynthWaveformSine chordRoot;
 AudioSynthWaveformSine chordThird;
 AudioSynthWaveformSine chordFifth;
-
 AudioMixer4 chordMixer;
+AudioEffectEnvelope chordEnvelope;
+
 AudioMixer4 mainMixer;
 
-AudioConnection leadToMain(lead, 0, mainMixer, 0);
-AudioConnection bassToMain(bass, 0, mainMixer, 1);
+AudioConnection leadToEnvelope(lead, leadEnvelope);
+AudioConnection bassToEnvelope(bass, bassEnvelope);
 AudioConnection rootToChord(chordRoot, 0, chordMixer, 0);
 AudioConnection thirdToChord(chordThird, 0, chordMixer, 1);
 AudioConnection fifthToChord(chordFifth, 0, chordMixer, 2);
-AudioConnection chordToMain(chordMixer, 0, mainMixer, 2);
+AudioConnection chordToEnvelope(chordMixer, chordEnvelope);
+AudioConnection leadToMain(leadEnvelope, 0, mainMixer, 0);
+AudioConnection bassToMain(bassEnvelope, 0, mainMixer, 1);
+AudioConnection chordToMain(chordEnvelope, 0, mainMixer, 2);
 AudioConnection mainToLeft(mainMixer, 0, audioOut, 0);
 AudioConnection mainToRight(mainMixer, 0, audioOut, 1);
 
@@ -65,10 +72,20 @@ constexpr int8_t CHORD_THIRD_MIDI[4] = {64, 59, 60, 57};
 constexpr int8_t CHORD_FIFTH_MIDI[4] = {67, 62, 64, 60};
 
 constexpr uint32_t STEP_MS = 230; // eighth notes, about 130 BPM
+constexpr uint32_t LEAD_GATE_MS = STEP_MS * 68 / 100;
+constexpr uint32_t BASS_GATE_MS = STEP_MS * 140 / 100;
+constexpr uint32_t CHORD_GATE_MS = STEP_MS * 7;
 
 uint32_t nextStep = 0;
 uint32_t nextStats = 0;
 uint32_t stepCounter = 0;
+
+uint32_t leadNoteOffAt = 0;
+uint32_t bassNoteOffAt = 0;
+uint32_t chordNoteOffAt = 0;
+bool leadNoteActive = false;
+bool bassNoteActive = false;
+bool chordActive = false;
 
 int8_t motif[4] = {};
 int lastDegree = 4;
@@ -117,13 +134,16 @@ void updateChord(uint8_t chord)
     chordFifth.frequency(midiFrequency(CHORD_FIFTH_MIDI[chord]));
 }
 
-void playStep()
+void playStep(uint32_t now)
 {
     const uint8_t stepInBar = stepCounter % 8;
     const uint8_t chord = (stepCounter / 8) % 4;
 
     if (stepInBar == 0) {
         updateChord(chord);
+        chordEnvelope.noteOn();
+        chordNoteOffAt = now + CHORD_GATE_MS;
+        chordActive = true;
     }
 
     int degree;
@@ -143,16 +163,26 @@ void playStep()
     }
 
     lastDegree = degree;
-    lead.frequency(midiFrequency(scaleDegreeToMidi(degree)));
 
-    // Change the bass on quarter-note boundaries; the note then sustains
-    // until the next bass change.
+    // Leave occasional gaps, except at the start and end of each bar.
+    if (stepInBar == 0 || stepInBar == 7 || random(100) >= 18) {
+        lead.frequency(midiFrequency(scaleDegreeToMidi(degree)));
+        leadEnvelope.noteOn();
+        leadNoteOffAt = now + LEAD_GATE_MS;
+        leadNoteActive = true;
+    }
+
+    // Bass plays quarter notes and changes octave midway through each bar.
     if ((stepInBar & 1U) == 0) {
         int bassMidi = CHORD_ROOT_MIDI[chord] - 12;
         if (stepInBar == 4) {
             bassMidi += 12;
         }
+
         bass.frequency(midiFrequency(bassMidi));
+        bassEnvelope.noteOn();
+        bassNoteOffAt = now + BASS_GATE_MS;
+        bassNoteActive = true;
     }
 
     ++stepCounter;
@@ -185,8 +215,8 @@ void setup()
     audioOut.setChannelCount(codec.channels());
     AudioMemory(20);
 
-    // A clean, retro-leaning sound with three continuous sine oscillators
-    // forming the chord pad.
+    // Retro-leaning tones: square-like melody timbre is not available on this
+    // sine-only oscillator, so the envelopes provide the chip-tune articulation.
     lead.frequency(440.0f);
     lead.amplitude(0.18f);
 
@@ -199,6 +229,24 @@ void setup()
     chordRoot.amplitude(0.09f);
     chordThird.amplitude(0.09f);
     chordFifth.amplitude(0.09f);
+
+    leadEnvelope.attack(4.0f);
+    leadEnvelope.hold(2.0f);
+    leadEnvelope.decay(35.0f);
+    leadEnvelope.sustain(0.22f);
+    leadEnvelope.release(45.0f);
+
+    bassEnvelope.attack(3.0f);
+    bassEnvelope.hold(4.0f);
+    bassEnvelope.decay(45.0f);
+    bassEnvelope.sustain(0.25f);
+    bassEnvelope.release(65.0f);
+
+    chordEnvelope.attack(35.0f);
+    chordEnvelope.hold(0.0f);
+    chordEnvelope.decay(120.0f);
+    chordEnvelope.sustain(0.38f);
+    chordEnvelope.release(180.0f);
 
     chordMixer.gain(0, 0.35f);
     chordMixer.gain(1, 0.35f);
@@ -229,6 +277,21 @@ void loop()
 {
     const uint32_t now = millis();
 
+    if (leadNoteActive && static_cast<int32_t>(now - leadNoteOffAt) >= 0) {
+        leadEnvelope.noteOff();
+        leadNoteActive = false;
+    }
+
+    if (bassNoteActive && static_cast<int32_t>(now - bassNoteOffAt) >= 0) {
+        bassEnvelope.noteOff();
+        bassNoteActive = false;
+    }
+
+    if (chordActive && static_cast<int32_t>(now - chordNoteOffAt) >= 0) {
+        chordEnvelope.noteOff();
+        chordActive = false;
+    }
+
     if (static_cast<int32_t>(now - nextStep) >= 0) {
         nextStep += STEP_MS;
 
@@ -237,7 +300,7 @@ void loop()
             nextStep = now + STEP_MS;
         }
 
-        playStep();
+        playStep(now);
     }
 
     if (static_cast<int32_t>(now - nextStats) >= 0) {
