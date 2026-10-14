@@ -5,8 +5,6 @@
 #include <Arduino.h>
 #include <atomic>
 #include "i2s_port.h"
-#include <freertos/FreeRTOS.h>
-#include <freertos/queue.h>
 #include "AudioStream.h"
 
 /*
@@ -63,20 +61,23 @@ class AudioOutputPDM : public AudioStream {
     uint numChannels = 1;
 
     i2s_chan_handle_t txHandle = nullptr;
-    QueueHandle_t txQueue = nullptr;
-    // Allows end() to wait for the TX task before releasing resources.
-    std::atomic<TaskHandle_t> txTask{nullptr};
+    // Accessed only by AudioTask and lifecycle methods under GraphUpdateLock.
+    BlockPair txQueue[QUEUE_LENGTH]{};
+    uint8_t txQueueHead = 0;
+    uint8_t txQueueTail = 0;
+    uint8_t txQueueCount = 0;
+    std::atomic<int16_t *> pendingDmaBuffer{nullptr};
 
     std::atomic<uint32_t> running{0};
 
     static bool AUDIO_I2S_ISR_ATTR onI2STransmit(i2s_chan_handle_t channel,
                                                  i2s_event_data_t *event,
                                                  void *userContext);
-    static void txTaskEntry(void *arg);
 
-    void txTaskLoop();
     bool beginInternal();
     void releasePair(BlockPair &pair);
+    bool enqueuePair(const BlockPair &pair);
+    bool dequeuePair(BlockPair &pair);
     void setRunning(bool value);
 
     AudioOutputPDM(const AudioOutputPDM &) = delete;
