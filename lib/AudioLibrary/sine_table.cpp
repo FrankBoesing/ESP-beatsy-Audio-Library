@@ -6,8 +6,6 @@ extern "C" {
 extern const int16_t sinTable_q15[513];
 }
 
-namespace AudioSineTable {
-
 OSPEED ALWAYS_INLINE
 static int16_t sample(uint32_t phase, int32_t magnitude) {
     const int32_t interpolated = sin_q15_phase_q16(phase);
@@ -30,4 +28,3 @@ void generatePhased(int16_t *output, const uint32_t *phases, size_t count, int32
     }
 }
 
-} // namespace AudioSineTable
