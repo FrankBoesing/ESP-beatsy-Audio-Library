@@ -231,7 +231,9 @@ int16_t AudioEffectFreeverbBase::processSample(
         // 64-bit multiplies in the per-sample inner loop.
         const int32_t damped = (int32_t)bufout * damping2 +
                                (int32_t)channel.comb_filter[i] * damping1;
-        channel.comb_filter[i] = sat16_shift(damped, 15);
+        // damping1 and damping2 are nonnegative and sum to 32768, so this
+        // weighted average of two int16_t values stays within int16_t.
+        channel.comb_filter[i] = shift_toward_zero(damped, 15);
 
         const int32_t feedback_product =
             (int32_t)channel.comb_filter[i] * feedback;
