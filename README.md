@@ -23,6 +23,7 @@ Compatibility is primarily **source/API-level compatibility**, not binary compat
 - **Mixer extension:** In addition to the familiar four-input AudioMixer4, **AudioMixerN** supports 4–32 inputs. It uses floating-point gains and accumulation, with saturation to 16-bit PCM only at the final output.
 - **Filter implementation:** AudioFilterLadder replaces the Teensy/CMSIS-DSP FIR interpolation path with portable polyphase FIR routines and uses 4× internal oversampling.
 - **ESP-specific playback:** MP3/AAC decoding, generic AudioSource objects and network-stream handling extend the original hardware-focused audio graph with ESP32 software-decoder functionality.
+- **Wavetable instruments:** `AudioSynthWavetable` renders sample-based instruments from static sample/instrument data, commonly generated from an SF2 SoundFont by an external converter. It does not parse or load `.sf2` files at runtime; use selected converted instruments rather than bundling a large complete SoundFont in a sketch.
 - **Hardware codecs:** AudioControlES8311 and AudioControlES8388 are included for boards using those codecs.
 - **USB Audio:** Work in progress
 
@@ -44,6 +45,7 @@ These examples are present in the repository. Their board-specific pin and codec
 | [Simple Drum](examples/Synthesis/SimpleDrum/SimpleDrum.cpp) | Triggers four simple-drum synthesizers and mixes them to stereo output. |
 | [Generative Melody](examples/Synthesis/GenerativeMelody/GenerativeMelody.cpp) | Creates C64-inspired, ever-changing melodies with a repeating motif, chord-aware notes, a bass line, a sustained chord pad and four tempo-synchronised melody echoes. |
 | [Deep House Groove](examples/Synthesis/DeepHouse/DeepHouse.cpp) | Generates a 125 BPM four-on-the-floor beat with kick, noise clap, closed/open hi-hats with occasional ghost notes, syncopated filtered bass, offbeat seventh-chord stabs and stereo Freeverb ambience. |
+| [Neon Noir](examples/Synthesis/NeonNoir/NeonNoir.cpp) | Original 76 BPM cinematic synth piece with slow detuned pads, pulsing sub-bass, a generated additive wavetable lead, tempo-synchronised echoes, stereo Freeverb and per-node CPU diagnostics. The self-contained table exercises `AudioSynthWavetable` without bundling a SoundFont. |
 
 
 
