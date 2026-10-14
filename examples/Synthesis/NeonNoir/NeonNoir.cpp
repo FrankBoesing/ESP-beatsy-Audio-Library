@@ -60,6 +60,7 @@ AudioEffectEnvelope bassEnvelope;
 
 AudioSynthWavetable glassLead;
 AudioSynthWavetable choirLayer;
+AudioFilterBiquad leadFilter;
 AudioEffectDelay leadDelay(1800);
 AudioMixer4 echoMixer;
 
@@ -82,7 +83,8 @@ AudioConnection filterToPadEnvelope(padFilter, padEnvelope);
 AudioConnection bassToFilter(bassOsc, bassFilter);
 AudioConnection filterToBassEnvelope(bassFilter, bassEnvelope);
 
-AudioConnection leadToDelay(glassLead, leadDelay);
+AudioConnection leadToFilter(glassLead, leadFilter);
+AudioConnection leadToDelay(leadFilter, leadDelay);
 AudioConnection choirToWet(choirLayer, 0, wetMixer, 3);
 AudioConnection echo1(leadDelay, 0, echoMixer, 0);
 AudioConnection echo2(leadDelay, 1, echoMixer, 1);
@@ -95,12 +97,12 @@ AudioConnection bassToWet(bassEnvelope, 0, wetMixer, 2);
 AudioConnection wetToSpace(wetMixer, space);
 
 AudioConnection padToLeft(padEnvelope, 0, leftMixer, 0);
-AudioConnection leadToLeft(glassLead, 0, leftMixer, 1);
+AudioConnection leadToLeft(leadFilter, 0, leftMixer, 1);
 AudioConnection bassToLeft(bassEnvelope, 0, leftMixer, 2);
 AudioConnection spaceToLeft(space, 0, leftMixer, 3);
 
 AudioConnection padToRight(padEnvelope, 0, rightMixer, 0);
-AudioConnection leadToRight(glassLead, 0, rightMixer, 1);
+AudioConnection leadToRight(leadFilter, 0, rightMixer, 1);
 AudioConnection bassToRight(bassEnvelope, 0, rightMixer, 2);
 AudioConnection spaceToRight(space, 1, rightMixer, 3);
 
@@ -252,6 +254,8 @@ void printStatistics()
     Serial.print("Lead: ");
     printStreamUsage("sawTable", glassLead);
     Serial.print(" | ");
+    printStreamUsage("lowpass", leadFilter);
+    Serial.print(" | ");
     printStreamUsage("chorale", choirLayer);
     Serial.print(" | ");
     printStreamUsage("delay", leadDelay);
@@ -310,6 +314,9 @@ void setup()
 
     glassLead.setInstrument(nvd_saw_instrument);
     choirLayer.setInstrument(nvd_chorale_instrument);
+    // Tame the strong high harmonics of the sampled saw wave while keeping
+    // enough upper-midrange energy for the lead to remain clear.
+    leadFilter.setLowpass(0, 1900.0f, 0.80f);
 
     // Set taps before playback. Each repeat lands one eighth-note later.
     leadDelay.delay(0, STEP_MS);
