@@ -26,3 +26,7 @@ Der Teensy-Upstream unterstützt weitere Codec- und Audiochip-Treiber, die bei e
 - control_cs4272
 - control_cs42448
 - control_tlv320aic3206
+
+
+5. Audio-Recorder
+- Recorder zum Mitschneiden der Audioausgabe; Zielmedium, Dateiformat und Pufferstrategie noch festlegen.
