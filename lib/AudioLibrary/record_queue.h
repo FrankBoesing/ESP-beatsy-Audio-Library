@@ -39,6 +39,7 @@ private:
 public:
 	AudioRecordQueue(void) : AudioStream(1, inputQueueArray),
 		userblock(NULL), head(0), tail(0), enabled(0) { }
+	~AudioRecordQueue();
 
 	void begin(void);
 	int available(void);

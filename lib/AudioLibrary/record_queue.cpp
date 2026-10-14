@@ -27,6 +27,11 @@
 #include <Arduino.h>
 #include "record_queue.h"
 
+AudioRecordQueue::~AudioRecordQueue()
+{
+	clear();
+}
+
 // AudioRecordQueue's public API may be called from an application task while
 // update() runs on the audio task. Keep queue state protected, but never call
 // AudioStream::release() while holding this lock (release uses audio_mux).
