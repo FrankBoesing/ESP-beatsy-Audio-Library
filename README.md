@@ -42,7 +42,7 @@ These examples are present in the repository. Their board-specific pin and codec
 | [Guitar synthesis](examples/Synthesis/Guitar/Guitar.cpp) | Uses six Karplus–Strong string generators, mixers and chord data to synthesize strummed chords. |
 | [Polyphonic synth music](examples/Synthesis/PlaySynthMusic/main.cpp) | Plays a score stored in memory using 16 waveform voices, envelopes and left/right AudioMixerN instances. |
 | [Simple Drum](examples/Synthesis/SimpleDrum/SimpleDrum.cpp) | Triggers four simple-drum synthesizers and mixes them to stereo output. |
-| [Generative Melody](examples/Synthesis/GenerativeMelody/GenerativeMelody.cpp) | Creates C64-inspired, ever-changing melodies with a repeating motif, chord-aware notes, a bass line and a sustained chord pad. |
+| [Generative Melody](examples/Synthesis/GenerativeMelody/GenerativeMelody.cpp) | Creates C64-inspired, ever-changing melodies with a repeating motif, chord-aware notes, a bass line, a sustained chord pad and four tempo-synchronised melody echoes. |
 
 
 
