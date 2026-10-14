@@ -99,40 +99,6 @@ static inline int16_t sat16_shift(int64_t value, unsigned int shift) {
     return (int16_t)value;
 }
 
-// Scale the sum of the eight comb filters by 31457 / 2^17, matching
-// sat16_shift((int64_t)sum * 31457, 17) exactly without a 64-bit multiply.
-// The sum is bounded by eight int16_t samples ([-262144, 262136]).
-static inline int16_t scale_comb_sum(int32_t sum) {
-    const uint32_t magnitude = (uint32_t)(sum < 0 ? -sum : sum);
-
-    // Common case: the product safely fits in int32_t.
-    if (magnitude <= 68267U) {
-        return sat16_shift(sum * 31457, 17);
-    }
-
-    // Split magnitude into 16-bit halves:
-    // magnitude * 31457 / 2^17 =
-    // (high * 31457) / 2 + (low * 31457) / 2^17.
-    // The two 32-bit products and the correction term stay in range.
-    const uint32_t high_product = (magnitude >> 16) * 31457U;
-    const uint32_t low_product = (magnitude & 0xFFFFU) * 31457U;
-    const uint32_t scaled_magnitude =
-        (high_product >> 1) +
-        ((low_product + ((high_product & 1U) << 16)) >> 17);
-
-    if (sum < 0) {
-        if (scaled_magnitude >= 32768U) {
-            return INT16_MIN;
-        }
-        return (int16_t)-(int32_t)scaled_magnitude;
-    }
-
-    if (scaled_magnitude >= 32767U) {
-        return INT16_MAX;
-    }
-    return (int16_t)scaled_magnitude;
-}
-
 AudioEffectFreeverbBase::AudioEffectFreeverbBase(bool stereo)
     : AudioStream(1, inputQueueArray),
       delay_samples(stereo ? STEREO_DELAY_SAMPLES : MONO_DELAY_SAMPLES),
@@ -281,7 +247,7 @@ int16_t AudioEffectFreeverbBase::processSample(
         channel.comb_index[i] = next;
     }
 
-    int16_t output = scale_comb_sum(sum);
+    int16_t output = sat16_shift((int64_t)sum * 31457, 17);
 
     for (size_t i = 0; i < 4; ++i) {
         const uint16_t index = channel.allpass_index[i];
