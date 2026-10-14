@@ -160,13 +160,7 @@ void AudioOutputI2S::update() {
 
     BlockPair ready{nullptr, nullptr};
     if (!dequeuePair(ready)) {
-        // No PCM is available: clear only this DMA buffer instead of clearing every callback.
-        std::memset(dmaBuffer, 0, sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES);
-
-#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-        (void)esp_cache_msync(dmaBuffer, sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES,
-                              ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-#endif
+        // auto_clear_after_cb leaves this DMA buffer silent when no PCM is ready.
         return;
     }
 
