@@ -2,8 +2,8 @@
  * Deep House Groove
  *
  * A generative four-on-the-floor groove with a syncopated bass line,
- * chord stabs, clap and closed/open hi-hats. The pattern repeats at a steady
- * tempo while chord voicings and small details vary from bar to bar.
+ * chord stabs, clap and closed/open hi-hats. The chord progression stays steady
+ * while occasional ghost hi-hats add small rhythmic variations.
  */
 
 #include <Audio.h>
@@ -181,6 +181,9 @@ void playStep(uint32_t now)
         } else {
             triggerEnvelope(closedHatEnvelope, closedHatActive, closedHatOffAt, now, 24);
         }
+    } else if ((stepInBar % 4U) == 3U && random(100) < 18) {
+        // Occasional sixteenth-note ghost hat.
+        triggerEnvelope(closedHatEnvelope, closedHatActive, closedHatOffAt, now, 18);
     }
 
     // Syncopated bass: root, fifth and octave. Notes are deliberately short.
