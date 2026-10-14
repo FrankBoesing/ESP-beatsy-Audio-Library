@@ -8,6 +8,7 @@
  */
 
 #include <Audio.h>
+#include <math.h>
 #include <esp_system.h>
 
 AudioOutputI2S audioOut({
