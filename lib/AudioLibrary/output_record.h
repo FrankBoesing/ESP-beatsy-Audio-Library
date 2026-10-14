@@ -80,7 +80,7 @@ class AudioOutputRecord : public AudioStream {
     char _tempPath[256] = {};
     char _finalPath[256] = {};
 
-    TaskHandle_t _writerTask = nullptr;
+    SemaphoreHandle_t _writerWake = nullptr;
     SemaphoreHandle_t _writerDone = nullptr;
 
     bool _recording = false;

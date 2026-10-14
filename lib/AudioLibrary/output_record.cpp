@@ -19,6 +19,11 @@ AudioOutputRecord::AudioOutputRecord()
 AudioOutputRecord::~AudioOutputRecord() {
     stop();
 
+    if (_writerWake != nullptr) {
+        vSemaphoreDelete(_writerWake);
+        _writerWake = nullptr;
+    }
+
     if (_writerDone != nullptr) {
         vSemaphoreDelete(_writerDone);
         _writerDone = nullptr;
@@ -85,6 +90,13 @@ bool AudioOutputRecord::begin(fs::FS &filesystem, const char *basePath,
         }
     }
 
+    if (_writerWake == nullptr) {
+        _writerWake = xSemaphoreCreateBinary();
+        if (_writerWake == nullptr) {
+            return false;
+        }
+    }
+
     // A task which has already stopped may still have a completion signal to
     // consume. Wait for it before reusing the object and its semaphore.
     if (finishing) {
@@ -104,6 +116,8 @@ bool AudioOutputRecord::begin(fs::FS &filesystem, const char *basePath,
     if (busy) {
         return false;
     }
+
+    xSemaphoreTake(_writerWake, 0);
 
     const int tempLength = snprintf(_tempPath, sizeof(_tempPath), "%s.tmp", basePath);
     const int finalLength = snprintf(_finalPath, sizeof(_finalPath), "%s.wav", basePath);
@@ -165,11 +179,11 @@ bool AudioOutputRecord::begin(fs::FS &filesystem, const char *basePath,
     BaseType_t result;
     if (_writerCore == CORE_UNPINNED) {
         result = xTaskCreate(&AudioOutputRecord::writerTaskEntry, "AudioRecord",
-                             6144, this, configMAX_PRIORITIES - 5, &_writerTask);
+                             6144, this, configMAX_PRIORITIES - 5, nullptr);
     } else {
         result = xTaskCreatePinnedToCore(&AudioOutputRecord::writerTaskEntry, "AudioRecord",
                                          6144, this, configMAX_PRIORITIES - 5,
-                                         &_writerTask, _writerCore);
+                                         nullptr, _writerCore);
     }
 
     if (result != pdPASS) {
@@ -182,7 +196,6 @@ bool AudioOutputRecord::begin(fs::FS &filesystem, const char *basePath,
         portENTER_CRITICAL(&_bufferMux);
         _recording = false;
         _workerRunning = false;
-        _writerTask = nullptr;
         _hasError = true;
         _lastResult = false;
         portEXIT_CRITICAL(&_bufferMux);
@@ -322,7 +335,6 @@ void AudioOutputRecord::update() {
     size_t writeIndex = 0;
     size_t bytesToCopy = 0;
     uint8_t channels = 0;
-    TaskHandle_t task = nullptr;
 
     portENTER_CRITICAL(&_bufferMux);
 
@@ -337,12 +349,10 @@ void AudioOutputRecord::update() {
             _stopRequested = true;
             _hasError = true;
             notifyWriter = true;
-            task = _writerTask;
         } else {
             _producerActive = true;
             writeIndex = _writeIndex;
             acceptBlock = true;
-            task = _writerTask;
         }
     }
 
@@ -377,8 +387,8 @@ void AudioOutputRecord::update() {
         notifyWriter = true;
     }
 
-    if (notifyWriter && task != nullptr) {
-        xTaskNotifyGive(task);
+    if (notifyWriter && _writerWake != nullptr) {
+        xSemaphoreGive(_writerWake);
     }
 
     if (left != nullptr) {
@@ -457,7 +467,7 @@ void AudioOutputRecord::writerTaskLoop() {
             break;
         }
 
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        xSemaphoreTake(_writerWake, portMAX_DELAY);
     }
 
     bool hasError = false;
@@ -488,7 +498,6 @@ void AudioOutputRecord::writerTaskLoop() {
     _completionPending = true;
     _stopRequested = false;
     _producerActive = false;
-    _writerTask = nullptr;
     _bufferedBytes = 0;
     _writeIndex = 0;
     _readIndex = 0;
@@ -507,10 +516,9 @@ void AudioOutputRecord::writerTaskLoop() {
 // ============================================================================
 
 bool AudioOutputRecord::stop() {
-    TaskHandle_t task = nullptr;
     bool running = false;
     bool finishing = false;
-    bool notifyTask = false;
+    bool notifyWriter = false;
 
     portENTER_CRITICAL(&_bufferMux);
 
@@ -521,9 +529,8 @@ bool AudioOutputRecord::stop() {
         _recording = false;
         if (!_stopRequested) {
             _stopRequested = true;
-            notifyTask = true;
+            notifyWriter = true;
         }
-        task = _writerTask;
     }
 
     portEXIT_CRITICAL(&_bufferMux);
@@ -547,10 +554,8 @@ bool AudioOutputRecord::stop() {
         return _lastResult;
     }
 
-    // If overflow already requested shutdown, update() has notified the task.
-    // Avoid notifying a task handle that may already be finishing.
-    if (notifyTask && task != nullptr) {
-        xTaskNotifyGive(task);
+    if (notifyWriter && _writerWake != nullptr) {
+        xSemaphoreGive(_writerWake);
     }
 
     if (_writerDone == nullptr ||
