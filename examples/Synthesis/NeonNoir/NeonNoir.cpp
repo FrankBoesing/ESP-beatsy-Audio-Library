@@ -17,6 +17,8 @@
 #include <stdint.h>
 #include <esp_system.h>
 
+#include "NewVintageDreamsWavetables.h"
+
 AudioOutputI2S audioOut({
     PIN_I2S_BLCK, // BCLK
     PIN_I2S_WS,   // WS / LRCLK
@@ -57,6 +59,7 @@ AudioEffectEnvelope bassEnvelope;
 // -----------------------------------------------------------------------------
 
 AudioSynthWavetable glassLead;
+AudioSynthWavetable choirLayer;
 AudioEffectDelay leadDelay(1800);
 AudioMixer4 echoMixer;
 
@@ -80,6 +83,7 @@ AudioConnection bassToFilter(bassOsc, bassFilter);
 AudioConnection filterToBassEnvelope(bassFilter, bassEnvelope);
 
 AudioConnection leadToDelay(glassLead, leadDelay);
+AudioConnection choirToWet(choirLayer, 0, wetMixer, 3);
 AudioConnection echo1(leadDelay, 0, echoMixer, 0);
 AudioConnection echo2(leadDelay, 1, echoMixer, 1);
 AudioConnection echo3(leadDelay, 2, echoMixer, 2);
@@ -104,46 +108,6 @@ AudioConnection leftToOutput(leftMixer, 0, audioOut, 0);
 AudioConnection rightToOutput(rightMixer, 0, audioOut, 1);
 
 namespace {
-
-constexpr uint8_t WAVETABLE_BITS = 8;
-constexpr size_t WAVETABLE_SIZE = 1U << WAVETABLE_BITS;
-
-// The extra final sample duplicates sample[0] for the interpolation at the
-// end of the loop. This table is populated once, before AudioMemory starts the
-// audio scheduler, then remains unchanged while the wavetable voice is active.
-int16_t glassWaveform[WAVETABLE_SIZE + 1];
-
-const uint8_t glassNoteRanges[1] = {127};
-const AudioSynthWavetable::sample_data glassSamples[1] = {{
-    glassWaveform,
-    true,                                      // LOOP
-    WAVETABLE_BITS,                            // INDEX_BITS
-    4294967296.0f / AUDIO_SAMPLE_RATE_EXACT,   // PER_HERTZ_PHASE_INCREMENT
-    UINT32_MAX,                                // MAX_PHASE (unused for looping samples)
-    0U,                                        // LOOP_PHASE_END: use uint32 phase wrap
-    0U,                                        // LOOP_PHASE_LENGTH: use uint32 phase wrap
-    UINT16_MAX,                                // INITIAL_ATTENUATION_SCALAR
-    0U,                                        // DELAY_COUNT
-    155U,                                      // ATTACK_COUNT (~28 ms)
-    0U,                                        // HOLD_COUNT
-    620U,                                      // DECAY_COUNT (~112 ms)
-    2600U,                                     // RELEASE_COUNT (~472 ms)
-    858993459,                                 // SUSTAIN_MULT: 40% drop => 60% sustain
-    5200U,                                     // VIBRATO_DELAY
-    487000U,                                   // VIBRATO_INCREMENT (~5 Hz)
-    0.010f,                                    // VIBRATO_PITCH_COEFFICIENT_INITIAL
-    -0.010f,                                   // VIBRATO_PITCH_COEFFICIENT_SECOND
-    UINT32_MAX,                                // MODULATION_DELAY: disabled
-    0U,                                        // MODULATION_INCREMENT
-    0.0f,                                      // MODULATION_PITCH_COEFFICIENT_INITIAL
-    0.0f,                                      // MODULATION_PITCH_COEFFICIENT_SECOND
-    0,                                         // MODULATION_AMPLITUDE_INITIAL_GAIN
-    0                                          // MODULATION_AMPLITUDE_SECOND_GAIN
-}};
-
-const AudioSynthWavetable::instrument_data glassInstrument = {
-    1U, glassNoteRanges, glassSamples
-};
 
 constexpr uint32_t BPM = 76;
 constexpr uint32_t STEP_MS = 60000UL / BPM / 2U; // eighth notes
@@ -184,38 +148,6 @@ bool timeReached(uint32_t now, uint32_t deadline)
     return static_cast<int32_t>(now - deadline) >= 0;
 }
 
-void buildGlassWavetable()
-{
-    float source[WAVETABLE_SIZE];
-    float peak = 0.0f;
-
-    for (size_t i = 0; i < WAVETABLE_SIZE; ++i) {
-        const float phase = 6.28318530718f * static_cast<float>(i) /
-                            static_cast<float>(WAVETABLE_SIZE);
-        const float value =
-            1.00f * sinf(phase) +
-            0.48f * sinf(phase * 2.0f) +
-            0.23f * sinf(phase * 3.0f) +
-            0.11f * sinf(phase * 4.0f) +
-            0.055f * sinf(phase * 6.0f);
-        source[i] = value;
-        const float magnitude = fabsf(value);
-        if (magnitude > peak) {
-            peak = magnitude;
-        }
-    }
-
-    if (peak < 0.001f) {
-        peak = 1.0f;
-    }
-
-    for (size_t i = 0; i < WAVETABLE_SIZE; ++i) {
-        const float scaled = source[i] * (24500.0f / peak);
-        glassWaveform[i] = static_cast<int16_t>(scaled);
-    }
-    glassWaveform[WAVETABLE_SIZE] = glassWaveform[0];
-}
-
 void updatePad(uint8_t chord)
 {
     // Gentle oscillator offsets create movement without a separate chorus.
@@ -235,6 +167,8 @@ void playStep(uint32_t now)
 
     if (stepInBar == 0) {
         updatePad(chord);
+        // A sampled choir layer supplies a slow, airy undertone to the chord.
+        choirLayer.playNote(PAD_NOTES[chord][3] + 12, 56);
     }
 
     // A restrained low pulse on the downbeat and halfway through each bar.
@@ -316,7 +250,9 @@ void printStatistics()
     Serial.println();
 
     Serial.print("Lead: ");
-    printStreamUsage("wavetable", glassLead);
+    printStreamUsage("sawTable", glassLead);
+    Serial.print(" | ");
+    printStreamUsage("chorale", choirLayer);
     Serial.print(" | ");
     printStreamUsage("delay", leadDelay);
     Serial.print(" | ");
@@ -372,8 +308,8 @@ void setup()
 
     audioOut.setChannelCount(codec.channels());
 
-    buildGlassWavetable();
-    glassLead.setInstrument(glassInstrument);
+    glassLead.setInstrument(nvd_saw_instrument);
+    choirLayer.setInstrument(nvd_chorale_instrument);
 
     // Set taps before playback. Each repeat lands one eighth-note later.
     leadDelay.delay(0, STEP_MS);
@@ -424,7 +360,7 @@ void setup()
     wetMixer.gain(0, 0.52f); // pad into the reverb
     wetMixer.gain(1, 0.85f); // lead echoes into the reverb
     wetMixer.gain(2, 0.12f); // a little bass ambience
-    wetMixer.gain(3, 0.0f);
+    wetMixer.gain(3, 0.34f); // CC0 SoundFont-derived choir wavetable
 
     leftMixer.gain(0, 0.34f);  // dry pad
     leftMixer.gain(1, 0.34f);  // dry wavetable lead
