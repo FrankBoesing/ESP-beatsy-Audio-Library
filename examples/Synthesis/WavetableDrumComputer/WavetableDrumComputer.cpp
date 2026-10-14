@@ -11,7 +11,10 @@
  */
 
 #include <Audio.h>
+#include <SD.h>
+#include <SPI.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "WavetableDrumTables.h"
 
@@ -42,6 +45,7 @@ AudioSynthWavetable openHat;
 AudioMixer4 drumMixer;
 AudioMixer4 hatMixer;
 AudioMixer4 masterMixer;
+AudioRecordFile recorder;
 
 AudioConnection kickToDrums(kick, 0, drumMixer, 0);
 AudioConnection snareToDrums(snare, 0, drumMixer, 1);
@@ -53,6 +57,9 @@ AudioConnection drumsToMaster(drumMixer, 0, masterMixer, 0);
 AudioConnection hatsToMaster(hatMixer, 0, masterMixer, 1);
 AudioConnection masterToLeft(masterMixer, 0, audioOut, 0);
 AudioConnection masterToRight(masterMixer, 0, audioOut, 1);
+// The current drum mix is mono and is sent to both output channels. Record the
+// same mix as mono WAV to avoid doubling the file size without gaining stereo.
+AudioConnection masterToRecorder(masterMixer, recorder);
 
 namespace {
 
@@ -60,6 +67,44 @@ constexpr uint32_t BPM = 107;
 constexpr uint32_t STEP_MS = 60000UL / (BPM * 4U); // sixteenth notes
 constexpr uint8_t STEPS_PER_BAR = 16;
 constexpr uint32_t INTRO_STEPS = 4U * STEPS_PER_BAR;
+constexpr uint32_t RECORD_DURATION_MS = 60000U;
+constexpr uint32_t RECORD_SAMPLE_RATE = static_cast<uint32_t>(AUDIO_SAMPLE_RATE_EXACT);
+
+char recordingBasePath[40] = {};
+uint32_t recordingStartedAt = 0;
+bool recordingActive = false;
+
+bool mountSD()
+{
+#if defined(PIN_SD_CS) && defined(PIN_SPI_MOSI) && defined(PIN_SPI_MISO) && defined(PIN_SPI_SCK)
+    SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_SD_CS);
+    return SD.begin(PIN_SD_CS, SPI);
+#else
+    return SD.begin();
+#endif
+}
+
+bool chooseRecordingPath()
+{
+    char finalPath[48];
+    char tempPath[48];
+
+    for (unsigned int index = 1; index <= 999; ++index) {
+        const int length = snprintf(recordingBasePath, sizeof(recordingBasePath),
+                                    "/DrumComputer_%03u", index);
+        if (length <= 0 || static_cast<size_t>(length) >= sizeof(recordingBasePath)) {
+            return false;
+        }
+
+        snprintf(finalPath, sizeof(finalPath), "%s.wav", recordingBasePath);
+        snprintf(tempPath, sizeof(tempPath), "%s.tmp", recordingBasePath);
+        if (!SD.exists(finalPath) && !SD.exists(tempPath)) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 constexpr uint16_t stepBit(uint8_t step)
 {
@@ -212,6 +257,13 @@ void setup()
     Serial.begin(115200);
     Serial.println("Wavetable Drum Computer");
 
+    if (!mountSD()) {
+        Serial.println("ERROR: SD mount failed. Check card, wiring and SPI pin configuration.");
+        while (true) {
+            delay(1000);
+        }
+    }
+
     AudioMemory(40);
     AudioNoInterrupts();
 
@@ -244,6 +296,26 @@ void setup()
 
     AudioInterrupts();
 
+    if (!chooseRecordingPath()) {
+        Serial.println("ERROR: no free /DrumComputer_NNN.wav filename found.");
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    if (!recorder.begin(SD, recordingBasePath, RECORD_SAMPLE_RATE, 1,
+                        AudioRecordFile::CORE_UNPINNED)) {
+        Serial.println("ERROR: could not start SD recorder. Check PSRAM, SD card space and filenames.");
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    recordingStartedAt = millis();
+    recordingActive = true;
+    Serial.printf("Recording %s.wav as mono PCM WAV for about 60 seconds.\n",
+                  recordingBasePath);
+
     nextStepAt = millis() + 250U;
     Serial.println("Playing four-bar intro, then an endless rock groove.");
 }
@@ -253,6 +325,18 @@ void loop()
     const uint32_t now = millis();
 
     updateKickPitch(now);
+
+    if (recordingActive &&
+        static_cast<uint32_t>(now - recordingStartedAt) >= RECORD_DURATION_MS) {
+        recordingActive = false;
+
+        if (recorder.stop()) {
+            Serial.printf("Recording saved: %s.wav\n", recordingBasePath);
+        } else {
+            Serial.printf("Recording finalization failed; check %s.tmp (error=%s).\n",
+                          recordingBasePath, recorder.hasError() ? "yes" : "no");
+        }
+    }
 
     if (timeReached(now, nextStepAt)) {
         // Schedule from the current time to avoid bursts after a delayed loop.
