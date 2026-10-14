@@ -367,10 +367,9 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
     cfg.role = I2S_ROLE_MASTER;
     cfg.dma_desc_num = DMA_DESC_NUM;
     cfg.dma_frame_num = (uint16_t)(DMA_FRAME_NUM * format.rateMultiplier);
-    // Standard PCM I2S handles underruns by clearing its DMA buffer in AudioOutputI2S::update().
-    // Keep driver-side clearing for SPDIF and PDM, whose output paths still rely on it.
-    cfg.auto_clear_after_cb =
-        format.mode == AudioI2SPort::PeripheralMode::PDM || format.encoding == AudioI2SPort::DataEncoding::SpdifBMC;
+    // PCM I2S and PDM clear their DMA buffers in their update paths on underrun.
+    // SPDIF keeps driver-side clearing because its encoded output still uses a TX task.
+    cfg.auto_clear_after_cb = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC;
     cfg.allow_pd = false;
     cfg.intr_priority = 2;
 
