@@ -194,9 +194,11 @@ void AudioOutputI2S::update() {
         }
     }
 
-    // Make task-side PCM writes visible to DMA on cacheable targets.
-    (void)esp_cache_msync(dmaBuffer, sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES,
-                          ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+    // Match ESP-IDF: synchronize only when this DMA buffer is cacheable.
+    if (esp_cache_get_line_size_by_addr(dmaBuffer) > 0) {
+        (void)esp_cache_msync(dmaBuffer, sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES,
+                              ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+    }
 
     releasePair(ready);
 }
