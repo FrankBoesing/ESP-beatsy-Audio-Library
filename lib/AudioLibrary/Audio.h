@@ -50,6 +50,7 @@
 #include "play_memory.h"
 #include "play_mp3.h"
 #include "play_queue.h"
+#include "record_queue.h"
 #include "play_sd_wav.h"
 #include "synth_dc.h"
 #include "synth_sine.h"
