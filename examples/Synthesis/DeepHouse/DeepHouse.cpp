@@ -91,8 +91,6 @@ AudioConnection bassToLeft(bassEnvelope, 0, leftMixer, 1);
 AudioConnection bassToRight(bassEnvelope, 0, rightMixer, 1);
 AudioConnection dryChordToLeft(chordEnvelope, 0, leftMixer, 2);
 AudioConnection dryChordToRight(chordEnvelope, 0, rightMixer, 2);
-AudioConnection reverbToLeft(chordReverb, 0, leftMixer, 3);
-AudioConnection reverbToRight(chordReverb, 1, rightMixer, 3);
 AudioConnection leftToOutput(leftMixer, 0, audioOut, 0);
 AudioConnection rightToOutput(rightMixer, 0, audioOut, 1);
 
