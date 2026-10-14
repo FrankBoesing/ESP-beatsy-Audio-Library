@@ -39,15 +39,25 @@ AudioSynthWaveformSine chordFifth;
 AudioMixer4 chordMixer;
 AudioEffectEnvelope chordEnvelope;
 
+// Four short, tempo-synchronised echoes on the lead melody.
+AudioEffectDelay leadDelay(1100);
+AudioMixer4 delayMixer;
+
 AudioMixer4 mainMixer;
 
 AudioConnection leadToEnvelope(lead, leadEnvelope);
+AudioConnection leadToDelay(leadEnvelope, leadDelay);
 AudioConnection bassToEnvelope(bass, bassEnvelope);
 AudioConnection rootToChord(chordRoot, 0, chordMixer, 0);
 AudioConnection thirdToChord(chordThird, 0, chordMixer, 1);
 AudioConnection fifthToChord(chordFifth, 0, chordMixer, 2);
 AudioConnection chordToEnvelope(chordMixer, chordEnvelope);
 AudioConnection leadToMain(leadEnvelope, 0, mainMixer, 0);
+AudioConnection echo1(leadDelay, 0, delayMixer, 0);
+AudioConnection echo2(leadDelay, 1, delayMixer, 1);
+AudioConnection echo3(leadDelay, 2, delayMixer, 2);
+AudioConnection echo4(leadDelay, 3, delayMixer, 3);
+AudioConnection delayToMain(delayMixer, 0, mainMixer, 3);
 AudioConnection bassToMain(bassEnvelope, 0, mainMixer, 1);
 AudioConnection chordToMain(chordEnvelope, 0, mainMixer, 2);
 AudioConnection mainToLeft(mainMixer, 0, audioOut, 0);
@@ -215,6 +225,16 @@ void setup()
     audioOut.setChannelCount(codec.channels());
     AudioMemory(20);
 
+    // Echo every eighth note, with progressively quieter repeats.
+    leadDelay.delay(0, STEP_MS);
+    leadDelay.delay(1, STEP_MS * 2);
+    leadDelay.delay(2, STEP_MS * 3);
+    leadDelay.delay(3, STEP_MS * 4);
+    delayMixer.gain(0, 0.30f);
+    delayMixer.gain(1, 0.22f);
+    delayMixer.gain(2, 0.15f);
+    delayMixer.gain(3, 0.10f);
+
     // Retro-leaning tones: square-like melody timbre is not available on this
     // sine-only oscillator, so the envelopes provide the chip-tune articulation.
     lead.frequency(440.0f);
@@ -255,6 +275,7 @@ void setup()
     mainMixer.gain(0, 0.65f);
     mainMixer.gain(1, 0.45f);
     mainMixer.gain(2, 0.70f);
+    mainMixer.gain(3, 0.65f);
 
     if (!codec.enable()) {
         Serial.println("ERROR: audio codec initialization failed");
@@ -263,7 +284,7 @@ void setup()
         }
     }
 
-    codec.volume(0.65f);
+    codec.volume(0.8f);
 
     randomSeed(esp_random());
 
