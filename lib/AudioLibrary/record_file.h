@@ -1,5 +1,5 @@
-#ifndef output_record_h_
-#define output_record_h_
+#ifndef record_file_h_
+#define record_file_h_
 
 #include <Arduino.h>
 #include <FS.h>

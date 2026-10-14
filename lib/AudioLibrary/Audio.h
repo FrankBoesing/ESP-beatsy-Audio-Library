@@ -40,7 +40,7 @@
 #include "output_i2s.h"
 #include "output_i2s2.h"
 #include "output_i2s3.h"
-#include "output_record.h"
+#include "record_file.h"
 #include "output_spdif.h"
 #include "output_spdif2.h"
 #include "output_spdif3.h"
