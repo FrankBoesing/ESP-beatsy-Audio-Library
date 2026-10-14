@@ -56,7 +56,7 @@ bool AudioOutputPDM::begin() {
 OSIZE
 bool AudioOutputPDM::begin(const Pins &pins) {
     end();
-    if (txHandle != nullptr || txQueue != nullptr) return false;
+    if (txHandle != nullptr) return false;
     pdmPins = pins;
     // Supplying two DATA pins is the explicit request for stereo mode.
     numChannels = pdmPins.dataRight >= 0 ? 2U : 1U;
