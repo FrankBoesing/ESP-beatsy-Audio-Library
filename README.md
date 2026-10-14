@@ -43,7 +43,7 @@ These examples are present in the repository. Their board-specific pin and codec
 | [Polyphonic synth music](examples/Synthesis/PlaySynthMusic/main.cpp) | Plays a score stored in memory using 16 waveform voices, envelopes and left/right AudioMixerN instances. |
 | [Simple Drum](examples/Synthesis/SimpleDrum/SimpleDrum.cpp) | Triggers four simple-drum synthesizers and mixes them to stereo output. |
 | [Generative Melody](examples/Synthesis/GenerativeMelody/GenerativeMelody.cpp) | Creates C64-inspired, ever-changing melodies with a repeating motif, chord-aware notes, a bass line, a sustained chord pad and four tempo-synchronised melody echoes. |
-| [Deep House Groove](examples/Synthesis/DeepHouse/DeepHouse.cpp) | Generates a 125 BPM four-on-the-floor beat with kick, noise clap, closed/open hi-hats with occasional ghost notes, syncopated filtered bass and offbeat seventh-chord stabs. |
+| [Deep House Groove](examples/Synthesis/DeepHouse/DeepHouse.cpp) | Generates a 125 BPM four-on-the-floor beat with kick, noise clap, closed/open hi-hats with occasional ghost notes, syncopated filtered bass, offbeat seventh-chord stabs and stereo Freeverb ambience. |
 
 
 
