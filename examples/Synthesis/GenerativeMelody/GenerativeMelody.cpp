@@ -1,9 +1,8 @@
 /*
  * C64-inspired generative melody.
  *
- * This is an original ESP-beatsy example, not a port of a specific C64 BASIC
- * listing. It uses a diatonic scale, chord tones, small melodic steps and a
- * repeated motif to make each run different while keeping the result coherent.
+ * A diatonic scale, chord tones, small melodic steps and a repeated motif make
+ * each run different while keeping the result musically coherent.
  */
 
 #include <Audio.h>
@@ -198,9 +197,25 @@ void playStep(uint32_t now)
     ++stepCounter;
 }
 
+void printCoreUsage(uint8_t core)
+{
+    const float usage = AudioStream::processorUsage(core);
+
+    Serial.print("Core ");
+    Serial.print(core);
+    Serial.print(": ");
+
+    if (usage < 0.0f) {
+        Serial.print("n/a");
+    } else {
+        Serial.print(usage, 1);
+        Serial.print("%");
+    }
+}
+
 void printStatistics()
 {
-    Serial.print("CPU ");
+    Serial.print("Audio graph CPU ");
     Serial.print(AudioProcessorUsage(), 1);
     Serial.print("% (max ");
     Serial.print(AudioProcessorUsageMax(), 1);
@@ -209,6 +224,12 @@ void printStatistics()
     Serial.print(" (max ");
     Serial.print(AudioMemoryUsageMax());
     Serial.println(")");
+
+    Serial.print("CPU load: ");
+    printCoreUsage(0);
+    Serial.print(" | ");
+    printCoreUsage(1);
+    Serial.println();
 
     AudioProcessorUsageMaxReset();
     AudioMemoryUsageMaxReset();
@@ -287,6 +308,11 @@ void setup()
     codec.volume(0.8f);
 
     randomSeed(esp_random());
+
+    // Take baseline readings so the first displayed core loads cover a full
+    // measurement interval when FreeRTOS runtime statistics are available.
+    (void)AudioStream::processorUsage(0);
+    (void)AudioStream::processorUsage(1);
 
     nextStep = millis() + STEP_MS;
     nextStats = millis() + 5000;
