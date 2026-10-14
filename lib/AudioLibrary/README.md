@@ -14,6 +14,7 @@ Diese Datei dokumentiert die Task-Architektur, das Timing, die wesentlichen Puff
 - [6. FFT-Analyzer: FFT256 und FFT1024](#6-fft-analyzer-fft256-und-fft1024)
 - [7. Dynamische Lebensdauer von AudioStream-Objekten](#7-dynamische-lebensdauer-von-audiostream-objekten)
 - [8. Hinweise für die Praxis](#8-hinweise-für-die-praxis)
+- [9. Freeverb: Messstand und Optimierungspotenzial](#9-freeverb-messstand-und-optimierungspotenzial)
 
 ---
 
@@ -264,3 +265,37 @@ Ohne `AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME` würden bei `delete` die Einträge de
 - **CPU-Auslastung prüfen:** Aufwendige FIR-Filter und andere DSP-Objekte sollten im Zielsystem gemessen werden. Der Aufwand hängt von Sample-Rate, Blockgröße, Filterlänge und Gesamtheit der aktiven Objekte ab. `AudioStream::processorUsage(core)` liefert nur dann einen belastbaren Wert, wenn FreeRTOS-Laufzeitstatistiken mit `ESP_TIMER` als Zeitbasis konfiguriert sind.
 - **Blockpool-Zeigerprüfung:** Für zusätzliche defensive Prüfung kann `-DAUDIOSTREAM_ENABLE_POOL_POINTER_CHECKS` aktiviert werden. Ohne dieses Debug-Flag entfällt die Bereichs-/Ausrichtungsprüfung in `release_locked()` aus dem Echtzeitpfad; Blöcke müssen dann ausschließlich mit gültigen, aus dem Audio-Blockpool stammenden Zeigern freigegeben werden.
 - **Versionsabhängige Parameter prüfen:** Nach Änderungen am Audio-Graphen, an ESP-IDF/Arduino-Core oder an den Task-Erstellungen sollten insbesondere Task-Stacks, Prioritäten, Timeouts, Queue-Längen und Puffergrößen mit dem tatsächlich gebauten Quellcode abgeglichen werden.
+
+
+## 9. Freeverb: Messstand und Optimierungspotenzial
+
+Dieser Abschnitt dokumentiert den aktuellen Performance-Stand des Freeverb im Beispiel `examples/Synthesis/DeepHouse/DeepHouse.cpp` sowie mögliche nächste Optimierungsschritte. Die CPU-Werte stammen aus Messungen auf dem aktuellen Testaufbau; sie sind keine allgemeingültigen Leistungswerte für alle ESP32-Varianten, Sample-Raten oder Audio-Graphen.
+
+### Aktueller Messstand
+
+Nach der letzten Optimierung in `effect_freeverb.cpp` wurden folgende Werte beobachtet:
+
+| Messgröße | Gemessener Bereich |
+| --- | ---: |
+| Freeverb, aktuelle Auslastung | ca. 28,5–28,8 % |
+| Freeverb, gemessener Spitzenwert | ca. 28,9–30,2 % |
+| Gesamter Audio-Graph, aktuelle Auslastung | ca. 39,5–43,8 % |
+| Gesamter Audio-Graph, gemessener Spitzenwert | ca. 45,0–45,2 % |
+| Audio-Blöcke belegt | 2 aktuell, maximal 6 von 40 |
+
+Vor der letzten Vereinfachung redundanter Sättigungsprüfungen im inneren Comb-Filter lag die Freeverb-Auslastung bei ungefähr 46,5–46,9 %. Danach wurden rund 28,5–28,8 % gemessen: eine Verbesserung um etwa 18 Prozentpunkte beziehungsweise ungefähr 38 % weniger Rechenlast für den Freeverb. Die Werte schwanken zwischen Messintervallen; entscheidend ist die deutliche, wiederholt beobachtete Reduktion. Der Klang wurde dabei weiterhin als funktionierend beurteilt.
+
+### Mögliche nächste Optimierungen
+
+Die Reihenfolge ist bewusst konservativ gewählt: zuerst begrenzte Änderungen mit geringem Risiko testen und jede Änderung einzeln messen.
+
+1. **Stereo-Eingangsskalierung nur einmal berechnen.** Im Stereo-Freeverb ruft der Sample-Loop `processSample()` separat für links und rechts auf. Die Eingangsskalierung mit `8738 / 2^17` wird dadurch für dasselbe Eingangssample zweimal berechnet. Sie könnte vor die beiden Kanalaufrufe gezogen werden. Dabei muss die Schnittstelle eindeutig festlegen, ob `processSample()` ein ursprüngliches oder bereits skaliertes Sample erwartet; für Mono und Stereo ist das Verhalten separat zu prüfen.
+2. **Ringpuffer-Adressierung untersuchen.** Die Comb- und Allpass-Schleifen inkrementieren jeweils Indizes und prüfen den Umlauf. Ein Zeiger-basierter Umlauf könnte Indexberechnungen oder Speicherzugriffe vereinfachen. Ob er auf dem Zielcompiler tatsächlich schneller ist, muss ein Benchmark zeigen.
+3. **Feste Schleifen testweise entrollen.** Die Schleifen bearbeiten stets acht Comb- beziehungsweise vier Allpass-Filter. Entrollen könnte Schleifensteuerung reduzieren, kann aber den Maschinencode vergrößern und die Instruktionscache-Effizienz verschlechtern. Deshalb nur als isolierten Benchmark testen.
+4. **Algorithmische Änderungen vorerst vermeiden.** Filteranzahl oder Verzögerungslängen zu verändern könnte mehr Rechenzeit sparen, würde aber die Nachhallcharakteristik, Diffusion und Raumdichte verändern. Das ist keine reine Optimierung mehr.
+
+### Erwartung und Vorgehen
+
+Als grobe, nicht gemessene Schätzung erscheinen weitere **3–6 Prozentpunkte weniger CPU-Auslastung des gesamten Audio-Graphen** als möglich, sofern einzelne Optimierungen messbar greifen. Das ist weder garantiert noch additiv für jeden genannten Ansatz.
+
+Der sinnvollste nächste Schritt ist, zuerst die gemeinsame Eingangsskalierung im Stereo-Pfad zu untersuchen und getrennt zu messen. Anschließend kann die Ringpuffer-Adressierung folgen. Nach jeder Änderung sollten Klang, aktuelle und maximale CPU-Last sowie der Audio-Blockverbrauch erneut geprüft werden. Bei der derzeitigen Graph-Auslastung von ungefähr 40–44 % besteht kein unmittelbarer Zwang zu riskanteren Änderungen.
