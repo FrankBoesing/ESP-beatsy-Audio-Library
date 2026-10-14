@@ -9,6 +9,10 @@
  *
  * This is an original composition using broad retro-futuristic soundtrack
  * characteristics. It does not reproduce a melody from Blade Runner.
+ *
+ * Hardware setup is selected with #ifdefs: ESP32 + ES8311/ES8388, or Teensy
+ * + SGTL5000 Audio Shield. The ESP32 path has been tested; the Teensy path
+ * is provided for convenience but has not yet been hardware-tested here.
  */
 
 #include <Audio.h>
