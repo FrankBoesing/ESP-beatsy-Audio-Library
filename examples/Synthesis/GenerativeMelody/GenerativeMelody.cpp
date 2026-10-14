@@ -354,4 +354,8 @@ void loop()
         nextStats = now + 5000;
         printStatistics();
     }
+
+    // Yield to FreeRTOS. Without this, the Arduino loop task can busy-spin
+    // on core 1 and leave no idle time for the per-core CPU-load measurement.
+    delay(1);
 }
