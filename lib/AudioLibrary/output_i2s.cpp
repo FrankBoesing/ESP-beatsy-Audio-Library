@@ -1,7 +1,7 @@
 #include "output_i2s.h"
 #include <esp_memory_utils.h>
 #include <esp_cache.h>
-#include <esp_private/esp_cache_private.h>
+#include <soc/soc_caps.h>
 #include <cstring>
 
 #include <esp_err.h>
@@ -163,10 +163,10 @@ void AudioOutputI2S::update() {
         // No PCM is available: clear only this DMA buffer instead of clearing every callback.
         std::memset(dmaBuffer, 0, sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES);
 
-        if (esp_cache_get_line_size_by_addr(dmaBuffer) > 0) {
-            (void)esp_cache_msync(dmaBuffer, sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES,
-                                  ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-        }
+#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
+        (void)esp_cache_msync(dmaBuffer, sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES,
+                              ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+#endif
         return;
     }
 
@@ -202,11 +202,11 @@ void AudioOutputI2S::update() {
         }
     }
 
-    // Match ESP-IDF: synchronize only when this DMA buffer is cacheable.
-    if (esp_cache_get_line_size_by_addr(dmaBuffer) > 0) {
-        (void)esp_cache_msync(dmaBuffer, sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES,
-                              ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-    }
+    // Match ESP-IDF: sync DMA buffers on targets whose internal RAM uses L1 cache.
+#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
+    (void)esp_cache_msync(dmaBuffer, sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES,
+                          ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+#endif
 
     releasePair(ready);
 }
