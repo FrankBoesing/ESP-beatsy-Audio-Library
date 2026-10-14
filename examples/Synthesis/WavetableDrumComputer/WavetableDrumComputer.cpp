@@ -126,6 +126,7 @@ bool closedHatActive = false;
 bool openHatActive = false;
 
 uint32_t kickSweepStarted = 0;
+uint32_t kickSweepLastUpdate = UINT32_MAX;
 bool kickSweepActive = false;
 
 bool timeReached(uint32_t now, uint32_t deadline)
@@ -145,14 +146,16 @@ void triggerKick(uint32_t now, int velocity)
 {
     kick.playFrequency(142.0f, velocity);
     kickSweepStarted = now;
+    kickSweepLastUpdate = now - 1U;
     kickSweepActive = true;
 }
 
 void updateKickPitch(uint32_t now)
 {
-    if (!kickSweepActive) {
+    if (!kickSweepActive || now == kickSweepLastUpdate) {
         return;
     }
+    kickSweepLastUpdate = now;
 
     const uint32_t elapsed = now - kickSweepStarted;
     constexpr uint32_t SWEEP_MS = 65U;
@@ -285,7 +288,9 @@ void setup()
     if (!codec.enable()) {
         Serial.println("ERROR: audio codec initialization failed");
         AudioInterrupts();
-        return;
+        while (true) {
+            delay(1000);
+        }
     }
     codec.volume(0.75f);
 
