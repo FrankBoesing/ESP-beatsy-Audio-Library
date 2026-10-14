@@ -477,25 +477,25 @@ void setup()
     bassEnvelope.sustain(0.08f);
     bassEnvelope.release(180.0f);
 
-    // A continuous, subdued mechanical bed: close low tones beat slowly,
-    // with a little pink noise for texture, then roll off above 220 Hz.
-    machineCore.begin(0.075f, 43.8f, WAVEFORM_SINE);
-    machineMotor.begin(0.055f, 45.1f, WAVEFORM_TRIANGLE);
-    machineOvertone.begin(0.025f, 87.6f, WAVEFORM_SINE);
-    machineNoise.amplitude(0.035f);
+    // A clearly audible but still low mechanical bed: slow beating tones,
+    // stronger upper hum and pink-noise texture, rolled off above 280 Hz.
+    machineCore.begin(0.14f, 43.8f, WAVEFORM_SINE);
+    machineMotor.begin(0.105f, 45.1f, WAVEFORM_TRIANGLE);
+    machineOvertone.begin(0.07f, 87.6f, WAVEFORM_SINE);
+    machineNoise.amplitude(0.08f);
     machineMixer.gain(0, 0.90f);
     machineMixer.gain(1, 0.80f);
-    machineMixer.gain(2, 0.45f);
-    machineMixer.gain(3, 0.18f);
-    machineFilter.setLowpass(0, 220.0f, 0.72f);
+    machineMixer.gain(2, 0.65f);
+    machineMixer.gain(3, 0.30f);
+    machineFilter.setLowpass(0, 280.0f, 0.72f);
 
     // Mix the machinery underneath the existing bass without another output.
     lowEndMixer.gain(0, 1.0f);
-    lowEndMixer.gain(1, 0.70f);
+    lowEndMixer.gain(1, 0.95f);
 
     // Distant warning/siren tone: a slow up/down glide that is heard only
     // through Freeverb, with a long fade in/out.
-    distantSiren.begin(0.12f, SIREN_CENTER_HZ, WAVEFORM_SINE);
+    distantSiren.begin(0.5f, SIREN_CENTER_HZ, WAVEFORM_SINE);
     sirenEnvelope.attack(1700.0f);
     sirenEnvelope.hold(0.0f);
     sirenEnvelope.decay(1000.0f);
