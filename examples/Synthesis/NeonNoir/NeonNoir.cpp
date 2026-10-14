@@ -316,7 +316,7 @@ void setup()
     choirLayer.setInstrument(nvd_chorale_instrument);
     // Tame the strong high harmonics of the sampled saw wave while keeping
     // enough upper-midrange energy for the lead to remain clear.
-    leadFilter.setLowpass(0, 1900.0f, 0.80f);
+    leadFilter.setLowpass(0, 2400.0f, 0.80f);
 
     // Set taps before playback. Each repeat lands one eighth-note later.
     leadDelay.delay(0, STEP_MS);
