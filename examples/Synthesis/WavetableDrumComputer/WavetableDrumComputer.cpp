@@ -228,7 +228,7 @@ void setup()
     drumMixer.gain(3, 0.44f); // high tom
 
     hatMixer.gain(0, 0.30f); // closed hat
-    hatMixer.gain(1, 0.34f); // open hat
+    hatMixer.gain(1, 0.28f); // open hat
 
     masterMixer.gain(0, 0.82f);
     masterMixer.gain(1, 0.66f);
