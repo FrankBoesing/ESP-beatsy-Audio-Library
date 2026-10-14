@@ -115,6 +115,13 @@ constexpr uint32_t BPM = 76;
 constexpr uint32_t STEP_MS = 60000UL / BPM / 2U; // eighth notes
 constexpr uint8_t STEPS_PER_BAR = 8;
 
+// A slow filter sweep adds motion to the lead without introducing another
+// AudioStream node. The control task updates coefficients well outside update().
+constexpr uint32_t LEAD_FILTER_SWEEP_MS = 12000U;
+constexpr uint32_t LEAD_FILTER_UPDATE_MS = 80U;
+constexpr float LEAD_FILTER_CENTER_HZ = 2400.0f;
+constexpr float LEAD_FILTER_DEPTH_HZ = 350.0f;
+
 // Four slow, open voicings: Dm(add9), Bbmaj7, Fmaj7 and Csus2.
 constexpr int8_t PAD_NOTES[4][4] = {
     {50, 53, 57, 64}, // D3, F3, A3, E4
@@ -135,6 +142,8 @@ constexpr int8_t LEAD_NOTES[4][STEPS_PER_BAR] = {
 uint32_t nextStep = 0;
 uint32_t nextStats = 0;
 uint32_t stepCounter = 0;
+uint32_t leadFilterModStart = 0;
+uint32_t nextLeadFilterUpdate = 0;
 uint32_t bassOffAt = 0;
 uint32_t leadOffAt = 0;
 bool bassActive = false;
@@ -148,6 +157,21 @@ float midiFrequency(int midiNote)
 bool timeReached(uint32_t now, uint32_t deadline)
 {
     return static_cast<int32_t>(now - deadline) >= 0;
+}
+
+void updateLeadFilter(uint32_t now)
+{
+    if (!timeReached(now, nextLeadFilterUpdate)) {
+        return;
+    }
+    nextLeadFilterUpdate = now + LEAD_FILTER_UPDATE_MS;
+
+    const uint32_t elapsed = (now - leadFilterModStart) % LEAD_FILTER_SWEEP_MS;
+    const float phase = 6.28318530718f * static_cast<float>(elapsed) /
+                        static_cast<float>(LEAD_FILTER_SWEEP_MS);
+    const float cutoff = LEAD_FILTER_CENTER_HZ +
+                         LEAD_FILTER_DEPTH_HZ * sinf(phase);
+    leadFilter.setLowpass(0, cutoff, 0.80f);
 }
 
 void updatePad(uint8_t chord)
@@ -393,8 +417,10 @@ void setup()
     (void)AudioStream::processorUsage(0);
     (void)AudioStream::processorUsage(1);
 
-    nextStep = millis() + STEP_MS;
-    nextStats = millis() + 5000;
+    leadFilterModStart = millis();
+    nextLeadFilterUpdate = leadFilterModStart + LEAD_FILTER_UPDATE_MS;
+    nextStep = leadFilterModStart + STEP_MS;
+    nextStats = leadFilterModStart + 5000;
 
     Serial.println("Neon Noir started (76 BPM, original cinematic synth piece)");
 }
@@ -403,6 +429,7 @@ void loop()
 {
     const uint32_t now = millis();
 
+    updateLeadFilter(now);
     processNoteOffs(now);
 
     if (timeReached(now, nextStep)) {
