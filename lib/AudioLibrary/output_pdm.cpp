@@ -1,7 +1,7 @@
 #include "output_pdm.h"
 #include <esp_memory_utils.h>
 #include <esp_cache.h>
-#include <esp_private/esp_cache_private.h>
+#include <soc/soc_caps.h>
 #include <cstring>
 
 #include <cmath>
@@ -209,9 +209,9 @@ void AudioOutputPDM::update() {
     if (!dequeuePair(ready)) {
         // Underrun: clear only the DMA buffer that will be reused.
         std::memset(dmaBuffer, 0, bufferBytes);
-        if (esp_cache_get_line_size_by_addr(dmaBuffer) > 0) {
-            (void)esp_cache_msync(dmaBuffer, bufferBytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-        }
+#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
+        (void)esp_cache_msync(dmaBuffer, bufferBytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+#endif
         return;
     }
 
@@ -241,9 +241,9 @@ void AudioOutputPDM::update() {
         }
     }
 
-    if (esp_cache_get_line_size_by_addr(dmaBuffer) > 0) {
-        (void)esp_cache_msync(dmaBuffer, bufferBytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-    }
+#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
+    (void)esp_cache_msync(dmaBuffer, bufferBytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+#endif
 
     releasePair(ready);
 }
