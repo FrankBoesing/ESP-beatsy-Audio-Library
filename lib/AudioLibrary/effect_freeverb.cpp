@@ -57,6 +57,24 @@ static constexpr size_t STEREO_DELAY_SAMPLES = 25450;
 
 // Freeverb's original fixed-point implementation rounds negative values
 // toward zero before shifting, then clamps the result to int16_t.
+// Most inner-loop values are proven to fit int32_t; keep those operations
+// 32-bit to avoid unnecessary 64-bit arithmetic on ESP32.
+static inline int16_t sat16_shift(int32_t value, unsigned int shift) {
+    if (shift != 0U && value < 0) {
+        value += ((int32_t)1 << shift) - 1;
+    }
+    value >>= shift;
+
+    if (value > INT16_MAX) {
+        return INT16_MAX;
+    }
+    if (value < INT16_MIN) {
+        return INT16_MIN;
+    }
+    return (int16_t)value;
+}
+
+// Use 64-bit arithmetic only where the intermediate product can exceed int32_t.
 static inline int16_t sat16_shift(int64_t value, unsigned int shift) {
     if (shift != 0U && value < 0) {
         value += ((int64_t)1 << shift) - 1;
@@ -237,7 +255,7 @@ int16_t AudioEffectFreeverbBase::processSample(
         channel.allpass_index[i] = next;
     }
 
-    return sat16_shift((int64_t)output * 30, 0);
+    return sat16_shift((int32_t)output * 30, 0);
 }
 
 void AudioEffectFreeverbBase::passThroughOnAllocationFailure() {
