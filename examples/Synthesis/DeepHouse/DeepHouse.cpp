@@ -282,6 +282,14 @@ void setup()
     delay(200);
 
     audioOut.setChannelCount(codec.channels());
+
+    // Allocate reverb storage before AudioMemory() starts audio updates.
+    chordReverb.roomsize(0.38f);
+    chordReverb.damping(0.65f);
+    if (!chordReverb.begin()) {
+        Serial.println("WARNING: chord reverb allocation failed; using dry chord signal");
+    }
+
     AudioMemory(40);
 
     // Kick: short pitch drop for a round electronic thump.
@@ -342,12 +350,6 @@ void setup()
     chordEnvelope.decay(90.0f);
     chordEnvelope.sustain(0.12f);
     chordEnvelope.release(65.0f);
-
-    chordReverb.roomsize(0.38f);
-    chordReverb.damping(0.65f);
-    if (!chordReverb.begin()) {
-        Serial.println("WARNING: chord reverb allocation failed; using dry chord signal");
-    }
 
     leftMixer.gain(0, 0.82f);  // drums
     leftMixer.gain(1, 0.78f);  // bass
