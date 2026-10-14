@@ -10,9 +10,7 @@
  * This is an original composition using broad retro-futuristic soundtrack
  * characteristics. It does not reproduce a melody from Blade Runner.
  *
- * Hardware setup is selected with #ifdefs: ESP32 + ES8311/ES8388, or Teensy
- * + SGTL5000 Audio Shield. The ESP32 path has been tested; the Teensy path
- * is provided for convenience but has not yet been hardware-tested here.
+ * This checked-in sketch targets ESP32 hardware supported by ESP-beatsy.
  */
 
 #include <Audio.h>
@@ -21,9 +19,6 @@
 
 #include "NewVintageDreamsWavetables.h"
 
-// Only the hardware-dependent pieces differ between ESP32 and Teensy.
-// The AudioStream signal graph below uses the familiar Teensy API on both.
-#if defined(ARDUINO_ARCH_ESP32)
 AudioOutputI2S audioOut({
     PIN_I2S_BLCK, // BCLK
     PIN_I2S_WS,   // WS / LRCLK
@@ -36,15 +31,7 @@ AudioControlES8388 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER
 #elif defined(AUDIO_CODEC_ES8311)
 AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER_ACTIVE});
 #else
-#error "For ESP32, define AUDIO_CODEC_ES8388 or AUDIO_CODEC_ES8311"
-#endif
-
-#elif defined(CORE_TEENSY) || defined(TEENSYDUINO)
-AudioOutputI2S audioOut;
-AudioControlSGTL5000 codec;
-
-#else
-#error "This example is configured for ESP32 or Teensy with the SGTL5000 Audio Shield"
+#error "AUDIO_CODEC not defined"
 #endif
 
 // -----------------------------------------------------------------------------
@@ -82,11 +69,7 @@ AudioMixer4 lowEndMixer;
 AudioSynthWavetable glassLead;
 AudioSynthWavetable choirLayer;
 AudioFilterBiquad leadFilter;
-#if defined(ARDUINO_ARCH_ESP32)
 AudioEffectDelay leadDelay(1800);
-#else
-AudioEffectDelay leadDelay;
-#endif
 AudioMixer4 echoMixer;
 
 AudioSynthWaveform distantSiren;
@@ -311,7 +294,6 @@ void processNoteOffs(uint32_t now)
     }
 }
 
-#if defined(ARDUINO_ARCH_ESP32)
 void printCoreUsage(uint8_t core)
 {
     const float usage = AudioStream::processorUsage(core);
@@ -338,11 +320,8 @@ void printStreamUsage(const char *name, AudioStream &stream)
     stream.AudioProcessorUsageMaxReset();
 }
 
-#endif // ARDUINO_ARCH_ESP32: detailed diagnostics
-
 void printStatistics()
 {
-#if defined(ARDUINO_ARCH_ESP32)
     Serial.println("Node CPU % (current/max):");
 
     Serial.print("Pad: ");
@@ -417,8 +396,6 @@ void printStatistics()
     printStreamUsage("i2s", audioOut);
     Serial.println();
 
-#endif // ARDUINO_ARCH_ESP32: per-node diagnostics
-
     Serial.print("Audio graph CPU ");
     Serial.print(AudioProcessorUsage(), 1);
     Serial.print("% (max ");
@@ -429,14 +406,12 @@ void printStatistics()
     Serial.print(AudioMemoryUsageMax());
     Serial.println(")");
 
-#if defined(ARDUINO_ARCH_ESP32)
     Serial.print("CPU load: ");
     printCoreUsage(0);
     Serial.print(" | ");
     printCoreUsage(1);
     Serial.println();
 
-#endif // ARDUINO_ARCH_ESP32: per-core diagnostics
 
     AudioProcessorUsageMaxReset();
     AudioMemoryUsageMaxReset();
@@ -449,9 +424,7 @@ void setup()
     Serial.begin(115200);
     delay(200);
 
-#if defined(ARDUINO_ARCH_ESP32)
     audioOut.setChannelCount(codec.channels());
-#endif
 
     glassLead.setInstrument(nvd_saw_instrument);
     choirLayer.setInstrument(nvd_chorale_instrument);
@@ -472,16 +445,12 @@ void setup()
     Serial.println("Neon Noir: initializing stereo Freeverb");
     space.roomsize(0.78f);
     space.damping(0.34f);
-#if defined(ARDUINO_ARCH_ESP32)
     if (space.begin()) {
         Serial.print("Neon Noir: reverb buffers in ");
         Serial.println(space.usingPSRAM() ? "PSRAM" : "internal RAM");
     } else {
         Serial.println("WARNING: reverb allocation failed");
     }
-#else
-    Serial.println("Neon Noir: using Teensy Freeverb delay-line buffers");
-#endif
 
     AudioMemory(48);
 
@@ -562,10 +531,8 @@ void setup()
     }
     codec.volume(0.76f);
 
-#if defined(ARDUINO_ARCH_ESP32)
     (void)AudioStream::processorUsage(0);
     (void)AudioStream::processorUsage(1);
-#endif
 
     leadFilterModStart = millis();
     nextLeadFilterUpdate = leadFilterModStart + LEAD_FILTER_UPDATE_MS;
