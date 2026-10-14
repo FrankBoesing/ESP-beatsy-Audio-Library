@@ -367,9 +367,8 @@ bool createPair(PortState &s, const Pins &requested, Direction first, uint32_t r
     cfg.role = I2S_ROLE_MASTER;
     cfg.dma_desc_num = DMA_DESC_NUM;
     cfg.dma_frame_num = (uint16_t)(DMA_FRAME_NUM * format.rateMultiplier);
-    // Keep driver-side clearing for standard I2S/PCM and SPDIF.
-    // PDM clears its DMA buffer in the direct update path.
-    cfg.auto_clear_after_cb = format.mode != AudioI2SPort::PeripheralMode::PDM;
+    // PCM/PDM clear their DMA buffers in their update paths; SPDIF retains driver-side clearing.
+    cfg.auto_clear_after_cb = format.encoding == AudioI2SPort::DataEncoding::SpdifBMC;
     cfg.allow_pd = false;
     cfg.intr_priority = 2;
 
