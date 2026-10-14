@@ -3,8 +3,7 @@
  *
  * This is an original ESP-beatsy example, not a port of a specific C64 BASIC
  * listing. It uses a diatonic scale, chord tones, small melodic steps and a
- * short repeated motif to make each run different while keeping the result
- * musically coherent.
+ * repeated motif to make each run different while keeping the result coherent.
  */
 
 #include <Audio.h>
@@ -26,30 +25,24 @@ AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER
 #error "AUDIO_CODEC not defined"
 #endif
 
-// Lead, bass and a three-note chord pad.
-AudioSynthWaveform lead;
-AudioEffectEnvelope leadEnvelope;
+// Keep the oscillators directly connected to the mixers. They produce audio
+// blocks from startup, so the output does not depend on an envelope being
+// triggered before the first DMA buffers are filled.
+AudioSynthWaveformSine lead;
+AudioSynthWaveformSine bass;
+AudioSynthWaveformSine chordRoot;
+AudioSynthWaveformSine chordThird;
+AudioSynthWaveformSine chordFifth;
 
-AudioSynthWaveform bass;
-AudioEffectEnvelope bassEnvelope;
-
-AudioSynthWaveform chordRoot;
-AudioSynthWaveform chordThird;
-AudioSynthWaveform chordFifth;
 AudioMixer4 chordMixer;
-AudioEffectEnvelope chordEnvelope;
-
 AudioMixer4 mainMixer;
 
-AudioConnection leadToEnvelope(lead, leadEnvelope);
-AudioConnection bassToEnvelope(bass, bassEnvelope);
+AudioConnection leadToMain(lead, 0, mainMixer, 0);
+AudioConnection bassToMain(bass, 0, mainMixer, 1);
 AudioConnection rootToChord(chordRoot, 0, chordMixer, 0);
 AudioConnection thirdToChord(chordThird, 0, chordMixer, 1);
 AudioConnection fifthToChord(chordFifth, 0, chordMixer, 2);
-AudioConnection chordToEnvelope(chordMixer, chordEnvelope);
-AudioConnection leadToMain(leadEnvelope, 0, mainMixer, 0);
-AudioConnection bassToMain(bassEnvelope, 0, mainMixer, 1);
-AudioConnection chordToMain(chordEnvelope, 0, mainMixer, 2);
+AudioConnection chordToMain(chordMixer, 0, mainMixer, 2);
 AudioConnection mainToLeft(mainMixer, 0, audioOut, 0);
 AudioConnection mainToRight(mainMixer, 0, audioOut, 1);
 
@@ -59,7 +52,7 @@ namespace {
 constexpr int8_t SCALE_SEMITONES[7] = {0, 2, 4, 5, 7, 9, 11};
 
 // Chord progression: C - G - Am - F.
-// Each chord is described using scale-degree indices, starting at C4.
+// Scale degrees start at C4 (degree 0).
 constexpr int8_t CHORD_DEGREES[4][3] = {
     {0, 2, 4}, // C major: C, E, G
     {4, 6, 8}, // G major: G, B, D
@@ -72,16 +65,10 @@ constexpr int8_t CHORD_THIRD_MIDI[4] = {64, 59, 60, 57};
 constexpr int8_t CHORD_FIFTH_MIDI[4] = {67, 62, 64, 60};
 
 constexpr uint32_t STEP_MS = 230; // eighth notes, about 130 BPM
-constexpr uint32_t MELODY_GATE_PERCENT = 68;
 
 uint32_t nextStep = 0;
 uint32_t nextStats = 0;
 uint32_t stepCounter = 0;
-
-uint32_t leadNoteOffAt = 0;
-uint32_t bassNoteOffAt = 0;
-bool leadNoteActive = false;
-bool bassNoteActive = false;
 
 int8_t motif[4] = {};
 int lastDegree = 4;
@@ -128,33 +115,9 @@ void updateChord(uint8_t chord)
     chordRoot.frequency(midiFrequency(CHORD_ROOT_MIDI[chord]));
     chordThird.frequency(midiFrequency(CHORD_THIRD_MIDI[chord]));
     chordFifth.frequency(midiFrequency(CHORD_FIFTH_MIDI[chord]));
-    chordEnvelope.noteOn();
 }
 
-void playLeadNote(int degree, uint32_t now)
-{
-    lead.frequency(midiFrequency(scaleDegreeToMidi(degree)));
-    leadEnvelope.noteOn();
-    leadNoteOffAt = now + (STEP_MS * MELODY_GATE_PERCENT) / 100;
-    leadNoteActive = true;
-}
-
-void playBassNote(uint8_t chord, uint8_t stepInBar, uint32_t now)
-{
-    int midiNote = CHORD_ROOT_MIDI[chord] - 12;
-
-    // Lift every third beat by an octave for a little variation.
-    if (stepInBar == 4) {
-        midiNote += 12;
-    }
-
-    bass.frequency(midiFrequency(midiNote));
-    bassEnvelope.noteOn();
-    bassNoteOffAt = now + (STEP_MS * 170) / 100;
-    bassNoteActive = true;
-}
-
-void playStep(uint32_t now)
+void playStep()
 {
     const uint8_t stepInBar = stepCounter % 8;
     const uint8_t chord = (stepCounter / 8) % 4;
@@ -180,15 +143,16 @@ void playStep(uint32_t now)
     }
 
     lastDegree = degree;
+    lead.frequency(midiFrequency(scaleDegreeToMidi(degree)));
 
-    // Leave occasional gaps, except at the start and end of each bar.
-    if (stepInBar == 0 || stepInBar == 7 || random(100) >= 18) {
-        playLeadNote(degree, now);
-    }
-
-    // Bass plays quarter notes.
+    // Change the bass on quarter-note boundaries; the note then sustains
+    // until the next bass change.
     if ((stepInBar & 1U) == 0) {
-        playBassNote(chord, stepInBar, now);
+        int bassMidi = CHORD_ROOT_MIDI[chord] - 12;
+        if (stepInBar == 4) {
+            bassMidi += 12;
+        }
+        bass.frequency(midiFrequency(bassMidi));
     }
 
     ++stepCounter;
@@ -217,40 +181,32 @@ void setup()
     Serial.begin(115200);
     delay(200);
 
+    // Configure the output mode before AudioMemory() initializes its hardware.
+    audioOut.setChannelCount(codec.channels());
     AudioMemory(20);
 
-    // Keep a chip-tune-like timbre without making the lead too harsh.
-    lead.begin(0.17f, 440.0f, WAVEFORM_SQUARE);
-    bass.begin(0.18f, 110.0f, WAVEFORM_TRIANGLE);
-    chordRoot.begin(0.11f, 261.63f, WAVEFORM_TRIANGLE);
-    chordThird.begin(0.11f, 329.63f, WAVEFORM_TRIANGLE);
-    chordFifth.begin(0.11f, 392.00f, WAVEFORM_TRIANGLE);
+    // A clean, retro-leaning sound with three continuous sine oscillators
+    // forming the chord pad.
+    lead.frequency(440.0f);
+    lead.amplitude(0.18f);
 
-    leadEnvelope.attack(4.0f);
-    leadEnvelope.hold(0.0f);
-    leadEnvelope.decay(45.0f);
-    leadEnvelope.sustain(0.18f);
-    leadEnvelope.release(55.0f);
+    bass.frequency(midiFrequency(CHORD_ROOT_MIDI[0] - 12));
+    bass.amplitude(0.14f);
 
-    bassEnvelope.attack(3.0f);
-    bassEnvelope.hold(0.0f);
-    bassEnvelope.decay(60.0f);
-    bassEnvelope.sustain(0.12f);
-    bassEnvelope.release(65.0f);
+    chordRoot.frequency(midiFrequency(CHORD_ROOT_MIDI[0]));
+    chordThird.frequency(midiFrequency(CHORD_THIRD_MIDI[0]));
+    chordFifth.frequency(midiFrequency(CHORD_FIFTH_MIDI[0]));
+    chordRoot.amplitude(0.09f);
+    chordThird.amplitude(0.09f);
+    chordFifth.amplitude(0.09f);
 
-    chordEnvelope.attack(25.0f);
-    chordEnvelope.hold(0.0f);
-    chordEnvelope.decay(80.0f);
-    chordEnvelope.sustain(0.34f);
-    chordEnvelope.release(180.0f);
+    chordMixer.gain(0, 0.35f);
+    chordMixer.gain(1, 0.35f);
+    chordMixer.gain(2, 0.35f);
 
-    chordMixer.gain(0, 0.33f);
-    chordMixer.gain(1, 0.33f);
-    chordMixer.gain(2, 0.33f);
-
-    mainMixer.gain(0, 0.55f);
-    mainMixer.gain(1, 0.42f);
-    mainMixer.gain(2, 0.75f);
+    mainMixer.gain(0, 0.65f);
+    mainMixer.gain(1, 0.45f);
+    mainMixer.gain(2, 0.70f);
 
     if (!codec.enable()) {
         Serial.println("ERROR: audio codec initialization failed");
@@ -259,8 +215,7 @@ void setup()
         }
     }
 
-    audioOut.setChannelCount(codec.channels());
-    codec.volume(0.55f);
+    codec.volume(0.65f);
 
     randomSeed(esp_random());
 
@@ -274,16 +229,6 @@ void loop()
 {
     const uint32_t now = millis();
 
-    if (leadNoteActive && static_cast<int32_t>(now - leadNoteOffAt) >= 0) {
-        leadEnvelope.noteOff();
-        leadNoteActive = false;
-    }
-
-    if (bassNoteActive && static_cast<int32_t>(now - bassNoteOffAt) >= 0) {
-        bassEnvelope.noteOff();
-        bassNoteActive = false;
-    }
-
     if (static_cast<int32_t>(now - nextStep) >= 0) {
         nextStep += STEP_MS;
 
@@ -292,7 +237,7 @@ void loop()
             nextStep = now + STEP_MS;
         }
 
-        playStep(now);
+        playStep();
     }
 
     if (static_cast<int32_t>(now - nextStats) >= 0) {
