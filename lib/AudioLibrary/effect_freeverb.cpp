@@ -74,6 +74,15 @@ static inline int16_t sat16_shift(int32_t value, unsigned int shift) {
     return (int16_t)value;
 }
 
+// Round a signed fixed-point value toward zero and shift it. The caller must
+// guarantee that the shifted result fits in int16_t; this avoids redundant
+// saturation comparisons in the Freeverb inner loop.
+static inline int16_t shift_toward_zero(int32_t value, unsigned int shift) {
+    const uint32_t negative_rounding = (uint32_t)(value >> 31) & ((1U << shift) - 1U);
+    value += (int32_t)negative_rounding;
+    return (int16_t)(value >> shift);
+}
+
 // Use 64-bit arithmetic only where the intermediate product can exceed int32_t.
 static inline int16_t sat16_shift(int64_t value, unsigned int shift) {
     if (shift != 0U && value < 0) {
@@ -243,7 +252,7 @@ int16_t AudioEffectFreeverbBase::processSample(
     int32_t damping1, int32_t damping2) {
 
     // Preserve the input/output scaling used by the original Teensy effect.
-    input = sat16_shift((int32_t)input * 8738, 17);
+    input = shift_toward_zero((int32_t)input * 8738, 17);
 
     int32_t sum = 0;
     for (size_t i = 0; i < 8; ++i) {
@@ -260,7 +269,8 @@ int16_t AudioEffectFreeverbBase::processSample(
 
         const int32_t feedback_product =
             (int32_t)channel.comb_filter[i] * feedback;
-        const int16_t feedback_sample = sat16_shift(feedback_product, 15);
+        // feedback is at most 32112, so this Q15 result always fits in int16_t.
+        const int16_t feedback_sample = shift_toward_zero(feedback_product, 15);
         channel.comb[i][index] = sat16_shift(
             (int32_t)input + feedback_sample, 0);
 
@@ -280,7 +290,8 @@ int16_t AudioEffectFreeverbBase::processSample(
         // Match the original Freeverb allpass delay-line arithmetic.
         channel.allpass[i][index] =
             (int16_t)((int32_t)output + ((int32_t)bufout >> 1));
-        output = sat16_shift((int32_t)bufout - output, 1);
+        // The difference of two int16_t samples divided by two fits in int16_t.
+        output = shift_toward_zero((int32_t)bufout - output, 1);
 
         uint16_t next = (uint16_t)(index + 1U);
         if (next >= channel.allpass_length[i]) {
