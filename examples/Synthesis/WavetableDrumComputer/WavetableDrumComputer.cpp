@@ -5,9 +5,9 @@
  * The arrangement is inspired by the punchy 1990s alt-rock feel of drum-led
  * intros; it is not a note-for-note transcription of a released recording.
  *
- * Kick, snare body and tom use AudioSynthWavetable with compact single-cycle
- * tables. A shared white-noise source adds the snare snap and closed/open hats.
- * The sequencer and its note-off / kick-pitch updates are non-blocking.
+ * The kick, snare, hi-hats and toms use short one-shot samples prepared from
+ * Aspirin DX Soundbank - Fairytale Edition (CC0 1.0). AudioSynthWavetable
+ * handles sample interpolation and velocity; the sequencer remains non-blocking.
  */
 
 #include <Audio.h>
@@ -30,30 +30,25 @@ AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER
 #error "AUDIO_CODEC not defined"
 #endif
 
-// Wavetable voices: tonal drum bodies with their own short envelopes.
+// Each sample player is a separate AudioStream node. One-shot samples retain
+// their recorded transient and decay; the kick additionally gets a short pitch drop.
 AudioSynthWavetable kick;
-AudioSynthWavetable snareBody;
-AudioSynthWavetable tom;
-
-// One noise source can feed independent envelopes for simultaneous hits.
-AudioSynthNoiseWhite percussionNoise;
-AudioEffectEnvelope snareNoiseEnvelope;
-AudioEffectEnvelope closedHatEnvelope;
-AudioEffectEnvelope openHatEnvelope;
+AudioSynthWavetable snare;
+AudioSynthWavetable highTom;
+AudioSynthWavetable lowTom;
+AudioSynthWavetable closedHat;
+AudioSynthWavetable openHat;
 
 AudioMixer4 drumMixer;
 AudioMixer4 hatMixer;
 AudioMixer4 masterMixer;
 
 AudioConnection kickToDrums(kick, 0, drumMixer, 0);
-AudioConnection snareBodyToDrums(snareBody, 0, drumMixer, 1);
-AudioConnection tomToDrums(tom, 0, drumMixer, 2);
-AudioConnection noiseToSnare(percussionNoise, snareNoiseEnvelope);
-AudioConnection snareNoiseToDrums(snareNoiseEnvelope, 0, drumMixer, 3);
-AudioConnection noiseToClosedHat(percussionNoise, closedHatEnvelope);
-AudioConnection noiseToOpenHat(percussionNoise, openHatEnvelope);
-AudioConnection closedHatToMix(closedHatEnvelope, 0, hatMixer, 0);
-AudioConnection openHatToMix(openHatEnvelope, 0, hatMixer, 1);
+AudioConnection snareToDrums(snare, 0, drumMixer, 1);
+AudioConnection lowTomToDrums(lowTom, 0, drumMixer, 2);
+AudioConnection highTomToDrums(highTom, 0, drumMixer, 3);
+AudioConnection closedHatToMix(closedHat, 0, hatMixer, 0);
+AudioConnection openHatToMix(openHat, 0, hatMixer, 1);
 AudioConnection drumsToMaster(drumMixer, 0, masterMixer, 0);
 AudioConnection hatsToMaster(hatMixer, 0, masterMixer, 1);
 AudioConnection masterToLeft(masterMixer, 0, audioOut, 0);
@@ -93,7 +88,7 @@ constexpr uint16_t INTRO_TOM[4] = {
 };
 
 // The main groove is four bars long and repeats indefinitely. Bar four ends
-// with a tom fill so every pass leads naturally into the next downbeat.
+// with a descending tom fill so each pass leads naturally into the next downbeat.
 constexpr uint16_t GROOVE_KICK[4] = {
     stepBit(0) | stepBit(7) | stepBit(8) | stepBit(11) | stepBit(14),
     stepBit(0) | stepBit(6) | stepBit(8) | stepBit(10) | stepBit(14),
@@ -117,14 +112,6 @@ constexpr uint16_t GROOVE_TOM[4] = {
 
 uint32_t nextStepAt = 0;
 uint32_t stepCounter = 0;
-
-uint32_t snareOffAt = 0;
-uint32_t closedHatOffAt = 0;
-uint32_t openHatOffAt = 0;
-bool snareActive = false;
-bool closedHatActive = false;
-bool openHatActive = false;
-
 uint32_t kickSweepStarted = 0;
 uint32_t kickSweepLastUpdate = UINT32_MAX;
 bool kickSweepActive = false;
@@ -132,14 +119,6 @@ bool kickSweepActive = false;
 bool timeReached(uint32_t now, uint32_t deadline)
 {
     return static_cast<int32_t>(now - deadline) >= 0;
-}
-
-void triggerEnvelope(AudioEffectEnvelope &envelope, bool &active,
-                    uint32_t &noteOffAt, uint32_t now, uint32_t gateMs)
-{
-    envelope.noteOn();
-    active = true;
-    noteOffAt = now + gateMs;
 }
 
 void triggerKick(uint32_t now, int velocity)
@@ -152,6 +131,7 @@ void triggerKick(uint32_t now, int velocity)
 
 void updateKickPitch(uint32_t now)
 {
+    // Avoid repeated frequency changes within the same millisecond.
     if (!kickSweepActive || now == kickSweepLastUpdate) {
         return;
     }
@@ -191,50 +171,37 @@ void playStep(uint32_t now)
 
     if ((snarePattern & hit) != 0U) {
         const int velocity = (stepInBar == 4U) ? 103 : 112;
-        snareBody.playFrequency((stepInBar == 11U) ? 205.0f : 178.0f, velocity);
-        triggerEnvelope(snareNoiseEnvelope, snareActive, snareOffAt, now, 18U);
+        // The small pitch lift on the fill makes the final snare hit stand out.
+        snare.playFrequency((stepInBar == 11U) ? 205.0f : 178.0f, velocity);
     }
 
     if ((tomPattern & hit) != 0U) {
-        const float frequency = (stepInBar < 13U) ? 118.0f : 91.0f;
-        const int velocity = (stepInBar >= 14U) ? 105 : 86;
-        tom.playFrequency(frequency, velocity);
+        const int velocity = (stepInBar >= 14U) ? 108 : 90;
+        // High toms first, then the lower tom at the end of the fill.
+        if (stepInBar < 14U) {
+            highTom.playFrequency(118.0f, velocity);
+        } else {
+            lowTom.playFrequency(91.0f, velocity);
+        }
     }
 
-    // Eighth-note hats, with an open-hat lift at the end of each four-bar phrase.
+    // Eighth-note sampled hi-hats. An open hat lifts the end of each phrase.
     if ((stepInBar % 2U) == 0U) {
         if (stepInBar == 14U && phraseBar == 3U) {
-            triggerEnvelope(openHatEnvelope, openHatActive, openHatOffAt, now, 65U);
+            openHat.playFrequency(440.0f, 112);
         } else {
-            triggerEnvelope(closedHatEnvelope, closedHatActive, closedHatOffAt, now, 12U);
+            const int velocity = (stepInBar % 4U) == 0U ? 83 : 67;
+            closedHat.playFrequency(440.0f, velocity);
         }
     } else if (stepInBar == 7U && (phraseBar == 1U || phraseBar == 3U)) {
-        // Quiet sixteenth-note ghost hats help the repeating groove breathe.
-        triggerEnvelope(closedHatEnvelope, closedHatActive, closedHatOffAt, now, 8U);
+        // Quiet sixteenth-note ghost hats add a little movement.
+        closedHat.playFrequency(440.0f, 48);
     }
 
     ++stepCounter;
 
     if (stepCounter == INTRO_STEPS) {
         Serial.println("Intro complete: continuing with the looping rock groove.");
-    }
-}
-
-void processNoteOffs(uint32_t now)
-{
-    if (snareActive && timeReached(now, snareOffAt)) {
-        snareNoiseEnvelope.noteOff();
-        snareActive = false;
-    }
-
-    if (closedHatActive && timeReached(now, closedHatOffAt)) {
-        closedHatEnvelope.noteOff();
-        closedHatActive = false;
-    }
-
-    if (openHatActive && timeReached(now, openHatOffAt)) {
-        openHatEnvelope.noteOff();
-        openHatActive = false;
     }
 }
 
@@ -245,45 +212,26 @@ void setup()
     Serial.begin(115200);
     Serial.println("Wavetable Drum Computer");
 
-    RockDrumTables::initialize();
-    AudioMemory(32);
-
+    AudioMemory(40);
     AudioNoInterrupts();
 
     kick.setInstrument(RockDrumTables::kickInstrument);
-    snareBody.setInstrument(RockDrumTables::snareInstrument);
-    tom.setInstrument(RockDrumTables::tomInstrument);
+    snare.setInstrument(RockDrumTables::snareInstrument);
+    highTom.setInstrument(RockDrumTables::highTomInstrument);
+    lowTom.setInstrument(RockDrumTables::lowTomInstrument);
+    closedHat.setInstrument(RockDrumTables::closedHatInstrument);
+    openHat.setInstrument(RockDrumTables::openHatInstrument);
 
-    percussionNoise.amplitude(0.42f);
+    drumMixer.gain(0, 0.72f); // kick
+    drumMixer.gain(1, 0.64f); // snare
+    drumMixer.gain(2, 0.44f); // low tom
+    drumMixer.gain(3, 0.44f); // high tom
 
-    snareNoiseEnvelope.attack(0.4f);
-    snareNoiseEnvelope.hold(1.5f);
-    snareNoiseEnvelope.decay(18.0f);
-    snareNoiseEnvelope.sustain(0.02f);
-    snareNoiseEnvelope.release(22.0f);
+    hatMixer.gain(0, 0.30f); // closed hat
+    hatMixer.gain(1, 0.34f); // open hat
 
-    closedHatEnvelope.attack(0.3f);
-    closedHatEnvelope.hold(0.0f);
-    closedHatEnvelope.decay(8.0f);
-    closedHatEnvelope.sustain(0.0f);
-    closedHatEnvelope.release(8.0f);
-
-    openHatEnvelope.attack(0.4f);
-    openHatEnvelope.hold(1.0f);
-    openHatEnvelope.decay(42.0f);
-    openHatEnvelope.sustain(0.03f);
-    openHatEnvelope.release(34.0f);
-
-    drumMixer.gain(0, 0.78f); // kick
-    drumMixer.gain(1, 0.32f); // snare wavetable body
-    drumMixer.gain(2, 0.33f); // tom
-    drumMixer.gain(3, 0.28f); // snare noise
-
-    hatMixer.gain(0, 0.24f); // closed hat
-    hatMixer.gain(1, 0.28f); // open hat
-
-    masterMixer.gain(0, 0.88f);
-    masterMixer.gain(1, 0.64f);
+    masterMixer.gain(0, 0.82f);
+    masterMixer.gain(1, 0.66f);
 
     if (!codec.enable()) {
         Serial.println("ERROR: audio codec initialization failed");
@@ -304,10 +252,10 @@ void loop()
 {
     const uint32_t now = millis();
 
-    processNoteOffs(now);
     updateKickPitch(now);
 
     if (timeReached(now, nextStepAt)) {
+        // Schedule from the current time to avoid bursts after a delayed loop.
         nextStepAt = now + STEP_MS;
         playStep(now);
     }
