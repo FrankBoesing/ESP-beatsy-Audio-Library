@@ -255,8 +255,69 @@ void printCoreUsage(uint8_t core)
     }
 }
 
+void printStreamUsage(const char *name, AudioStream &stream)
+{
+    Serial.print(name);
+    Serial.print(' ');
+    Serial.print(stream.AudioProcessorUsage(), 1);
+    Serial.print('/');
+    Serial.print(stream.AudioProcessorUsageMax(), 1);
+    Serial.print('%');
+    stream.AudioProcessorUsageMaxReset();
+}
+
 void printStatistics()
 {
+    Serial.println("Node CPU % (current/max):");
+
+    Serial.print("Drums: ");
+    printStreamUsage("kick", kick);
+    Serial.print(" | ");
+    printStreamUsage("noise", percussionNoise);
+    Serial.print(" | ");
+    printStreamUsage("clap", clapEnvelope);
+    Serial.print(" | ");
+    printStreamUsage("closedHat", closedHatEnvelope);
+    Serial.print(" | ");
+    printStreamUsage("openHat", openHatEnvelope);
+    Serial.print(" | ");
+    printStreamUsage("drumMix", drumMixer);
+    Serial.println();
+
+    Serial.print("Bass: ");
+    printStreamUsage("osc", bass);
+    Serial.print(" | ");
+    printStreamUsage("filter", bassFilter);
+    Serial.print(" | ");
+    printStreamUsage("env", bassEnvelope);
+    Serial.println();
+
+    Serial.print("Chords: ");
+    printStreamUsage("root", chordRoot);
+    Serial.print(" | ");
+    printStreamUsage("third", chordThird);
+    Serial.print(" | ");
+    printStreamUsage("fifth", chordFifth);
+    Serial.print(" | ");
+    printStreamUsage("seventh", chordSeventh);
+    Serial.print(" | ");
+    printStreamUsage("mix", chordMixer);
+    Serial.print(" | ");
+    printStreamUsage("filter", chordFilter);
+    Serial.print(" | ");
+    printStreamUsage("env", chordEnvelope);
+    Serial.print(" | ");
+    printStreamUsage("reverb", chordReverb);
+    Serial.println();
+
+    Serial.print("Output: ");
+    printStreamUsage("leftMix", leftMixer);
+    Serial.print(" | ");
+    printStreamUsage("rightMix", rightMixer);
+    Serial.print(" | ");
+    printStreamUsage("i2s", audioOut);
+    Serial.println();
+
     Serial.print("Audio graph CPU ");
     Serial.print(AudioProcessorUsage(), 1);
     Serial.print("% (max ");
