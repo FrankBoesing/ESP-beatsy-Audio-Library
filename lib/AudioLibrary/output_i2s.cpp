@@ -1,5 +1,6 @@
 #include "output_i2s.h"
 #include <esp_memory_utils.h>
+#include <esp_cache.h>
 
 #include <esp_err.h>
 #include <cmath>
@@ -192,6 +193,10 @@ void AudioOutputI2S::update() {
             dmaBuffer[i] = l | (r << 16);
         }
     }
+
+    // Make task-side PCM writes visible to DMA on cacheable targets.
+    (void)esp_cache_msync(dmaBuffer, sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES,
+                          ESP_CACHE_MSYNC_FLAG_DIR_C2M);
 
     releasePair(ready);
 }
