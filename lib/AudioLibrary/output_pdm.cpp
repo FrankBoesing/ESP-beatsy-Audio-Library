@@ -1,5 +1,7 @@
 #include "output_pdm.h"
 #include <esp_memory_utils.h>
+#include <esp_cache.h>
+#include <cstring>
 
 #include <cmath>
 #include <esp_err.h>
@@ -87,7 +89,7 @@ bool AudioOutputPDM::beginInternal() {
         return false;
     }
 #endif
-    if (txHandle != nullptr || txQueue != nullptr) {
+    if (txHandle != nullptr) {
         ESP_LOGE(TAG, "Previous PDM output shutdown did not complete");
         return false;
     }
@@ -102,9 +104,6 @@ bool AudioOutputPDM::beginInternal() {
         ESP_LOGE(TAG, "PDM PCM sample rate must be between 16 kHz and 48 kHz");
         return false;
     }
-
-    txQueue = xQueueCreate(QUEUE_LENGTH, sizeof(BlockPair));
-    if (txQueue == nullptr) return false;
 
     // In ESP-IDF's two-line DAC mode, DOUT emits the second (right) PCM slot
     // and DOUT2 emits the first (left) slot. Keep the public pin order intuitive.
@@ -121,8 +120,6 @@ bool AudioOutputPDM::beginInternal() {
 
     if (!AudioI2SPort::acquireTx(portPins, &txHandle, format)) {
         ESP_LOGE(TAG, "Could not acquire I2S0 PCM-to-PDM output");
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
         txHandle = nullptr;
         return false;
     }
@@ -135,41 +132,16 @@ bool AudioOutputPDM::beginInternal() {
             return false;
         }
         txHandle = nullptr;
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
         return false;
     }
 
+    pendingDmaBuffer.store(nullptr, std::memory_order_relaxed);
     setRunning(true);
-
-    TaskHandle_t createdTask = nullptr;
-    const BaseType_t result = xTaskCreatePinnedToCore(
-        txTaskEntry, "AudioPDM", 3072, this, configMAX_PRIORITIES - 2,
-        &createdTask, AUDIO_PROCESSING_CORE);
-    if (result == pdPASS) txTask.store(createdTask, std::memory_order_release);
-
-    if (result != pdPASS) {
-        setRunning(false);
-        txTask.store(nullptr, std::memory_order_release);
-        AudioI2SPort::clearEventHandler(CONTROLLER, AudioI2SPort::Direction::Tx, this);
-        if (!AudioI2SPort::release(CONTROLLER, AudioI2SPort::Direction::Tx)) {
-            ESP_LOGE(TAG, "Could not release PDM port after task creation failure; retaining resources");
-            return false;
-        }
-        txHandle = nullptr;
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
-        return false;
-    }
 
     if (!AudioI2SPort::start(CONTROLLER, AudioI2SPort::Direction::Tx)) {
         setRunning(false);
-        // Wait for the finite queue/write timeout to expire before freeing
-        // resources referenced by the TX task. Avoid a notification racing
-        // the task's self-delete path.
-        while (txTask.load(std::memory_order_acquire) != nullptr) vTaskDelay(1);
-
         AudioI2SPort::clearEventHandler(CONTROLLER, AudioI2SPort::Direction::Tx, this);
+        pendingDmaBuffer.store(nullptr, std::memory_order_relaxed);
         if (!AudioI2SPort::stop(CONTROLLER, AudioI2SPort::Direction::Tx)) {
             ESP_LOGE(TAG, "PDM TX channel could not be stopped after startup failure; retaining port resources");
             return false;
@@ -179,37 +151,26 @@ bool AudioOutputPDM::beginInternal() {
             return false;
         }
         txHandle = nullptr;
-        if (txQueue != nullptr) {
-            vQueueDelete(txQueue);
-            txQueue = nullptr;
-        }
         return false;
     }
 
     return true;
 }
 
+
 OSIZE
 void AudioOutputPDM::end() {
     audio_detail::GraphUpdateLock graphLock;
-    if (!isRunning() && txQueue == nullptr && txHandle == nullptr &&
-        txTask.load(std::memory_order_acquire) == nullptr) return;
+    if (!isRunning() && txQueueCount == 0 && txHandle == nullptr) return;
 
     setRunning(false);
 
-    if (txTask.load(std::memory_order_acquire) != nullptr) {
-        // The writer has finite queue/write timeouts. Wait for its explicit exit
-        // signal before deleting the queue or mutex it may still access.
-        while (txTask.load(std::memory_order_acquire) != nullptr) vTaskDelay(1);
-    }
-
-    if (txQueue != nullptr) {
-        BlockPair pair;
-        while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
-    }
+    BlockPair pair;
+    while (dequeuePair(pair)) releasePair(pair);
 
     if (txHandle != nullptr) {
         AudioI2SPort::clearEventHandler(CONTROLLER, AudioI2SPort::Direction::Tx, this);
+        pendingDmaBuffer.store(nullptr, std::memory_order_relaxed);
         if (!AudioI2SPort::stop(CONTROLLER, AudioI2SPort::Direction::Tx)) {
             ESP_LOGE(TAG, "PDM TX channel could not be stopped; retaining port resources for retry");
             return;
@@ -220,37 +181,72 @@ void AudioOutputPDM::end() {
         }
         txHandle = nullptr;
     }
-
-    if (txQueue != nullptr) {
-        vQueueDelete(txQueue);
-        txQueue = nullptr;
-    }
 }
+
 
 OSPEED
 void AudioOutputPDM::update() {
-    BlockPair pair;
-    pair.left = receiveReadOnly(0);
-    pair.right = receiveReadOnly(1);
+    BlockPair pair{receiveReadOnly(0), receiveReadOnly(1)};
 
-    // The enabled PDM DMA auto-clears buffers to silence; avoid queueing when
-    // no input arrived, and release any block if the output isn't running.
-    if (pair.left == nullptr && pair.right == nullptr) return;
-    if (!isRunning() || txQueue == nullptr) {
-        releasePair(pair);
+    if (pair.left != nullptr || pair.right != nullptr) {
+        if (!isRunning()) {
+            releasePair(pair);
+        } else if (!enqueuePair(pair)) {
+            BlockPair oldPair;
+            if (dequeuePair(oldPair)) releasePair(oldPair);
+            if (!enqueuePair(pair)) releasePair(pair);
+        }
+    }
+
+    // The TX callback publishes the completed PDM DMA buffer.
+    int16_t *dmaBuffer = pendingDmaBuffer.exchange(nullptr, std::memory_order_acq_rel);
+    if (dmaBuffer == nullptr || !isRunning()) return;
+
+    const size_t sampleCount = AUDIO_BLOCK_SAMPLES * numChannels;
+    const size_t bufferBytes = sampleCount * sizeof(int16_t);
+    BlockPair ready{nullptr, nullptr};
+    if (!dequeuePair(ready)) {
+        // Underrun: clear only the DMA buffer that will be reused.
+        std::memset(dmaBuffer, 0, bufferBytes);
+        if (esp_cache_get_line_size_by_addr(dmaBuffer) > 0) {
+            (void)esp_cache_msync(dmaBuffer, bufferBytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+        }
         return;
     }
 
-    if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
-        BlockPair oldPair;
-        if (xQueueReceive(txQueue, &oldPair, 0) == pdTRUE) {
-            releasePair(oldPair);
+    const int16_t *left = ready.left ? ready.left->data : nullptr;
+    const int16_t *right = ready.right ? ready.right->data : nullptr;
+
+    if (numChannels == 1) {
+        GCC_UNROLL
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            int32_t mono;
+            if (left && right) {
+                mono = ((int32_t)left[i] + (int32_t)right[i]) / 2;
+            } else if (left) {
+                mono = left[i];
+            } else if (right) {
+                mono = right[i];
+            } else {
+                mono = 0;
+            }
+            dmaBuffer[i] = (int16_t)mono;
         }
-        if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
-            releasePair(pair);
+    } else {
+        GCC_UNROLL
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            dmaBuffer[i * 2U] = left ? left[i] : 0;
+            dmaBuffer[i * 2U + 1U] = right ? right[i] : 0;
         }
     }
+
+    if (esp_cache_get_line_size_by_addr(dmaBuffer) > 0) {
+        (void)esp_cache_msync(dmaBuffer, bufferBytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+    }
+
+    releasePair(ready);
 }
+
 
 OSPEED
 void AudioOutputPDM::releasePair(BlockPair &pair) {
@@ -264,91 +260,39 @@ void AudioOutputPDM::releasePair(BlockPair &pair) {
     }
 }
 
-OSIZE
-void AudioOutputPDM::txTaskEntry(void *arg) {
-    static_cast<AudioOutputPDM *>(arg)->txTaskLoop();
+OSPEED
+bool AudioOutputPDM::enqueuePair(const BlockPair &pair) {
+    if (txQueueCount == QUEUE_LENGTH) return false;
+
+    txQueue[txQueueTail] = pair;
+    txQueueTail = (txQueueTail + 1U) % QUEUE_LENGTH;
+    ++txQueueCount;
+    return true;
 }
 
 OSPEED
-bool AUDIO_I2S_ISR_ATTR AudioOutputPDM::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *, void *userContext) {
+bool AudioOutputPDM::dequeuePair(BlockPair &pair) {
+    if (txQueueCount == 0) return false;
+
+    pair = txQueue[txQueueHead];
+    txQueue[txQueueHead] = {nullptr, nullptr};
+    txQueueHead = (txQueueHead + 1U) % QUEUE_LENGTH;
+    --txQueueCount;
+    return true;
+}
+
+OSPEED
+bool AUDIO_I2S_ISR_ATTR AudioOutputPDM::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
     auto *output = static_cast<AudioOutputPDM *>(userContext);
     if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) return false;
+
+    int16_t *dmaBuffer = nullptr;
+    const size_t expectedBytes = sizeof(int16_t) * AUDIO_BLOCK_SAMPLES * output->numChannels;
+    if (event != nullptr && event->dma_buf != nullptr && event->size == expectedBytes) {
+        dmaBuffer = static_cast<int16_t *>(event->dma_buf);
+    }
+    output->pendingDmaBuffer.store(dmaBuffer, std::memory_order_release);
+
     if (!AudioI2SPort::isClockOwner(CONTROLLER, AudioI2SPort::Direction::Tx)) return false;
     return AudioStream::update_all_from_isr();
-}
-
-OSPEED
-void AudioOutputPDM::txTaskLoop() {
-    uint32_t writeErrorCount = 0;
-    uint32_t lastErrorLogMs = 0;
-
-    // PDM TX accepts 16-bit PCM data. Stereo is interleaved L,R; mono has
-    // one word per PCM frame. Hardware creates the high-rate PDM bitstream.
-    int16_t pcmBuffer[AUDIO_BLOCK_SAMPLES * 2U];
-    BlockPair pair{nullptr, nullptr};
-
-    while (isRunning()) {
-        if (!isRunning() ||
-            xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) {
-            if (!isRunning()) break;
-            continue;
-        }
-
-        if (!isRunning()) {
-            releasePair(pair);
-            break;
-        }
-
-        const int16_t *left = pair.left ? pair.left->data : nullptr;
-        const int16_t *right = pair.right ? pair.right->data : nullptr;
-        size_t sampleCount = AUDIO_BLOCK_SAMPLES;
-
-        if (numChannels == 1) {
-            for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                int32_t mono;
-                if (left && right) {
-                    mono = ((int32_t)(left[i]) + (int32_t)(right[i])) / 2;
-                } else if (left) {
-                    mono = left[i];
-                } else if (right) {
-                    mono = right[i];
-                } else {
-                    mono = 0;
-                }
-                pcmBuffer[i] = (int16_t)(mono);
-            }
-        } else {
-            sampleCount *= 2U;
-            for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                pcmBuffer[i * 2U] = left ? left[i] : 0;
-                pcmBuffer[i * 2U + 1U] = right ? right[i] : 0;
-            }
-        }
-
-        size_t bytesWritten = 0;
-        const size_t bytesToWrite = sampleCount * sizeof(int16_t);
-        if (!isRunning()) {
-            releasePair(pair);
-            break;
-        }
-        const esp_err_t err = i2s_channel_write(txHandle, pcmBuffer, bytesToWrite, &bytesWritten, 100);
-
-        if (err != ESP_OK || bytesWritten != bytesToWrite) {
-            const uint32_t now = millis();
-            ++writeErrorCount;
-            if (lastErrorLogMs == 0 || now - lastErrorLogMs >= 1000) {
-                ESP_LOGE(TAG, "PDM TX error #%lu: %s, bytes=%lu/%lu",
-                         (ulong)(writeErrorCount), esp_err_to_name(err),
-                         (ulong)(bytesWritten), (ulong)(bytesToWrite));
-                lastErrorLogMs = now;
-            }
-        }
-
-        releasePair(pair);
-        pair = {nullptr, nullptr};
-    }
-
-    while (xQueueReceive(txQueue, &pair, 0) == pdTRUE) releasePair(pair);
-    txTask.store(nullptr, std::memory_order_release);
-    vTaskDelete(nullptr);
 }
