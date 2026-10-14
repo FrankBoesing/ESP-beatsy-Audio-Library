@@ -70,7 +70,7 @@ constexpr uint32_t INTRO_STEPS = 4U * STEPS_PER_BAR;
 constexpr uint32_t RECORD_DURATION_MS = 60000U;
 constexpr uint32_t RECORD_SAMPLE_RATE = static_cast<uint32_t>(AUDIO_SAMPLE_RATE_EXACT);
 
-char recordingBasePath[40] = {};
+constexpr char RECORDING_BASE_PATH[] = "/DrumComputer";
 uint32_t recordingStartedAt = 0;
 bool recordingActive = false;
 
@@ -84,26 +84,9 @@ bool mountSD()
 #endif
 }
 
-bool chooseRecordingPath()
+bool recordingFilesExist()
 {
-    char finalPath[48];
-    char tempPath[48];
-
-    for (unsigned int index = 1; index <= 999; ++index) {
-        const int length = snprintf(recordingBasePath, sizeof(recordingBasePath),
-                                    "/DrumComputer_%03u", index);
-        if (length <= 0 || static_cast<size_t>(length) >= sizeof(recordingBasePath)) {
-            return false;
-        }
-
-        snprintf(finalPath, sizeof(finalPath), "%s.wav", recordingBasePath);
-        snprintf(tempPath, sizeof(tempPath), "%s.tmp", recordingBasePath);
-        if (!SD.exists(finalPath) && !SD.exists(tempPath)) {
-            return true;
-        }
-    }
-
-    return false;
+    return SD.exists("/DrumComputer.wav") || SD.exists("/DrumComputer.tmp");
 }
 
 constexpr uint16_t stepBit(uint8_t step)
@@ -296,25 +279,22 @@ void setup()
 
     AudioInterrupts();
 
-    if (!chooseRecordingPath()) {
-        Serial.println("ERROR: no free /DrumComputer_NNN.wav filename found.");
-        while (true) {
-            delay(1000);
+    if (recordingFilesExist()) {
+        Serial.println("Recording skipped: /DrumComputer.wav or /DrumComputer.tmp already exists.");
+    } else {
+        if (!recorder.begin(SD, RECORDING_BASE_PATH, RECORD_SAMPLE_RATE, 1,
+                            AudioRecordFile::CORE_UNPINNED)) {
+            Serial.println("ERROR: could not start SD recorder. Check PSRAM, SD card space and filenames.");
+            while (true) {
+                delay(1000);
+            }
         }
-    }
 
-    if (!recorder.begin(SD, recordingBasePath, RECORD_SAMPLE_RATE, 1,
-                        AudioRecordFile::CORE_UNPINNED)) {
-        Serial.println("ERROR: could not start SD recorder. Check PSRAM, SD card space and filenames.");
-        while (true) {
-            delay(1000);
-        }
+        recordingStartedAt = millis();
+        recordingActive = true;
+        Serial.printf("Recording %s.wav as mono PCM WAV for about 60 seconds.\n",
+                      RECORDING_BASE_PATH);
     }
-
-    recordingStartedAt = millis();
-    recordingActive = true;
-    Serial.printf("Recording %s.wav as mono PCM WAV for about 60 seconds.\n",
-                  recordingBasePath);
 
     nextStepAt = millis() + 250U;
     Serial.println("Playing four-bar intro, then an endless rock groove.");
@@ -331,10 +311,10 @@ void loop()
         recordingActive = false;
 
         if (recorder.stop()) {
-            Serial.printf("Recording saved: %s.wav\n", recordingBasePath);
+            Serial.printf("Recording saved: %s.wav\n", RECORDING_BASE_PATH);
         } else {
             Serial.printf("Recording finalization failed; check %s.tmp (error=%s).\n",
-                          recordingBasePath, recorder.hasError() ? "yes" : "no");
+                          RECORDING_BASE_PATH, recorder.hasError() ? "yes" : "no");
         }
     }
 
