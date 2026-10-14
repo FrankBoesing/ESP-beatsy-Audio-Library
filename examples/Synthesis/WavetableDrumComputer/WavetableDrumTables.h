@@ -14,10 +14,10 @@ static int16_t tomWave[257];
 
 static void initialize()
 {
-    constexpr float TWO_PI = 6.28318530718f;
+    constexpr float TABLE_TWO_PI = 6.28318530718f;
 
     for (uint16_t i = 0; i < 256; ++i) {
-        const float phase = TWO_PI * static_cast<float>(i) / 256.0f;
+        const float phase = TABLE_TWO_PI * static_cast<float>(i) / 256.0f;
 
         // Rounded, harmonic-rich low end. The sketch adds a short pitch drop.
         const float kick =
