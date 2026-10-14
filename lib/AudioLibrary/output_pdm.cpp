@@ -1,6 +1,7 @@
 #include "output_pdm.h"
 #include <esp_memory_utils.h>
 #include <esp_cache.h>
+#include <esp_private/esp_cache_private.h>
 #include <cstring>
 
 #include <cmath>
