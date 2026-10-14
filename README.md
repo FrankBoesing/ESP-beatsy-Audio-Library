@@ -38,8 +38,8 @@ These examples are present in the repository. Their board-specific pin and codec
 | [Internet Radio](examples/Radio/radio.cpp) | Reads an HTTP/HTTPS radio stream, selects the MP3 or AAC player from the response content type and adjusts the output sample rate when requested. Requires local Wi-Fi credentials in secrets.h. **Note:** the sample uses TLS with certificate verification disabled; production applications should validate the server certificate. |
 | [Stereo Pass-through](examples/HardwareTesting/PassThroughStereo.cpp) | Routes the left/right I2S input to the matching output channel and reports received, erroneous and dropped input blocks. |
 | [Play Queue Demo](examples/Queues/PlayQueueDemo.cpp) | Generates a sine wave in application code and demonstrates AudioPlayQueue buffer/sample submission, including non-stalling operation. |
-| [Record to LittleFS](examples/RecordLittleFS/RecordLittleFS.cpp) | Generates a short 880 Hz sine ping with an envelope and records mono PCM WAV to LittleFS using AudioOutputRecord. Requires PSRAM and a mounted/formatted LittleFS partition. |
-| [Record to SD](examples/RecordSD/RecordSD.cpp) | Generates the same short sine ping and records mono PCM WAV to an SD card using AudioOutputRecord. SD SPI pins can be supplied through the project configuration. |
+| [Record to LittleFS](examples/RecordLittleFS/RecordLittleFS.cpp) | Generates a short 880 Hz sine ping with an envelope and records mono PCM WAV to LittleFS using AudioRecordFile. Requires PSRAM and a mounted/formatted LittleFS partition. |
+| [Record to SD](examples/RecordSD/RecordSD.cpp) | Generates the same short sine ping and records mono PCM WAV to an SD card using AudioRecordFile. SD SPI pins can be supplied through the project configuration. |
 | [Delay effect](examples/Effects/Effect-Delay/Effect_Delay.cpp) | Generates a sine chirp, shapes it with an envelope and mixes several delayed taps to the opposite output channel. |
 | [FIR and Biquad filters](examples/Effects/Filter_FIR/Filter_FIR.cpp) | Sends white noise through FIR and low-pass biquad paths to the left and right outputs for comparison. |
 | [Guitar synthesis](examples/Synthesis/Guitar/Guitar.cpp) | Uses six Karplus–Strong string generators, mixers and chord data to synthesize strummed chords. |
@@ -104,7 +104,7 @@ These examples are present in the repository. Their board-specific pin and codec
 | **AudioOutputSPDIF** | Software IEC 60958 consumer S/PDIF output using a fixed BMC lookup table and I2S0. Requires an optical transmitter or a suitable coaxial line driver; do not connect GPIO directly to coax. |
 | **AudioOutputSPDIF2** | Same software S/PDIF encoder routed through I2S controller 1; availability and pins depend on the SoC and board. |
 | **AudioOutputSPDIF3** | Same software S/PDIF encoder routed through I2S controller 2; available only on SoCs that provide a third I2S controller. |
-| **AudioOutputRecord** | Stand-alone mono/stereo 16-bit PCM WAV recorder. Uses a PSRAM ring buffer (512 KiB by default) and a separate writer task, optionally pinned to a core. WAV sizes are finalized and the temporary file renamed on successful stop. |
+| **AudioRecordFile** | Stand-alone mono/stereo 16-bit PCM WAV recorder. Uses a PSRAM ring buffer (512 KiB by default) and a separate writer task, optionally pinned to a core. WAV sizes are finalized and the temporary file renamed on successful stop. |
 
 
 The I2S2/I2S3 wrappers do not add extra hardware: they select a controller index. Whether those controllers exist, can be used concurrently and expose suitable pins depends on the particular ESP32 variant and board. AudioControlES8311 and AudioControlES8388 are available as codec-control classes, not as audio-stream inputs or outputs themselves. PDM direct-DAC output requires a compatible SoC/ESP-IDF combination; see [I2S.md](lib/I2S.md) for pin mapping and clock configuration.

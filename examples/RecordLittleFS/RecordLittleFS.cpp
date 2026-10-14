@@ -1,5 +1,5 @@
 /*
- * AudioOutputRecord example: write one short sine ping to LittleFS as WAV.
+ * AudioRecordFile example: write one short sine ping to LittleFS as WAV.
  *
  * This example uses the library's default 44.1 kHz audio graph and records
  * mono, 16-bit PCM. It does not require an audio codec or I2S output.
@@ -18,7 +18,7 @@ constexpr bool FORMAT_LITTLEFS_ON_MOUNT_FAILURE = false;
 
 AudioSynthWaveformSine pingSine;
 AudioEffectEnvelope pingEnvelope;
-AudioOutputRecord recorder;
+AudioRecordFile recorder;
 
 AudioConnection sineToEnvelope(pingSine, pingEnvelope);
 AudioConnection envelopeToRecorder(pingEnvelope, recorder);
@@ -57,7 +57,7 @@ void setup() {
     // Creates /ping.tmp. On successful stop(), it becomes /ping.wav.
     // The PSRAM ring buffer defaults to 512 KiB.
     if (!recorder.begin(LittleFS, "/ping", RECORD_SAMPLE_RATE, 1,
-                        AudioOutputRecord::CORE_UNPINNED)) {
+                        AudioRecordFile::CORE_UNPINNED)) {
         haltWithError("Could not start recorder. Check PSRAM and LittleFS.");
     }
 

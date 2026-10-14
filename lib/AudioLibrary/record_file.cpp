@@ -13,10 +13,10 @@ const uint32_t WAV_RIFF_LIMIT = 0xFFFFFFFFUL;
 // Construction / lifetime
 // ============================================================================
 
-AudioOutputRecord::AudioOutputRecord()
+AudioRecordFile::AudioRecordFile()
     : AudioStream(2, inputQueueArray) {}
 
-AudioOutputRecord::~AudioOutputRecord() {
+AudioRecordFile::~AudioRecordFile() {
     stop();
 
     if (_writerWake != nullptr) {
@@ -39,7 +39,7 @@ AudioOutputRecord::~AudioOutputRecord() {
     }
 }
 
-bool AudioOutputRecord::setBufferSize(size_t bytes) {
+bool AudioRecordFile::setBufferSize(size_t bytes) {
     if (bytes < AUDIO_BLOCK_SAMPLES * sizeof(int16_t) * 2U || (bytes & 3U) != 0) {
         return false;
     }
@@ -60,7 +60,7 @@ bool AudioOutputRecord::setBufferSize(size_t bytes) {
 // Start
 // ============================================================================
 
-bool AudioOutputRecord::begin(fs::FS &filesystem, const char *basePath,
+bool AudioRecordFile::begin(fs::FS &filesystem, const char *basePath,
                               uint32_t sampleRate, uint8_t channels,
                               int8_t writerCore) {
     if (basePath == nullptr || basePath[0] == '\0' ||
@@ -178,10 +178,10 @@ bool AudioOutputRecord::begin(fs::FS &filesystem, const char *basePath,
 
     BaseType_t result;
     if (_writerCore == CORE_UNPINNED) {
-        result = xTaskCreate(&AudioOutputRecord::writerTaskEntry, "AudioRecord",
+        result = xTaskCreate(&AudioRecordFile::writerTaskEntry, "AudioRecord",
                              6144, this, configMAX_PRIORITIES - 5, nullptr);
     } else {
-        result = xTaskCreatePinnedToCore(&AudioOutputRecord::writerTaskEntry, "AudioRecord",
+        result = xTaskCreatePinnedToCore(&AudioRecordFile::writerTaskEntry, "AudioRecord",
                                          6144, this, configMAX_PRIORITIES - 5,
                                          nullptr, _writerCore);
     }
@@ -215,7 +215,7 @@ bool AudioOutputRecord::begin(fs::FS &filesystem, const char *basePath,
 // WAV header
 // ============================================================================
 
-bool AudioOutputRecord::writeBytes(const void *data, size_t size) {
+bool AudioRecordFile::writeBytes(const void *data, size_t size) {
     if (size == 0) {
         return true;
     }
@@ -223,18 +223,18 @@ bool AudioOutputRecord::writeBytes(const void *data, size_t size) {
     return _file.write((const uint8_t *)data, size) == size;
 }
 
-bool AudioOutputRecord::writeFourCC(const char *id) {
+bool AudioRecordFile::writeFourCC(const char *id) {
     return writeBytes(id, 4);
 }
 
-bool AudioOutputRecord::writeLE16(uint16_t value) {
+bool AudioRecordFile::writeLE16(uint16_t value) {
     uint8_t bytes[2];
     bytes[0] = value;
     bytes[1] = value >> 8;
     return writeBytes(bytes, sizeof(bytes));
 }
 
-bool AudioOutputRecord::writeLE32(uint32_t value) {
+bool AudioRecordFile::writeLE32(uint32_t value) {
     uint8_t bytes[4];
     bytes[0] = value;
     bytes[1] = value >> 8;
@@ -243,7 +243,7 @@ bool AudioOutputRecord::writeLE32(uint32_t value) {
     return writeBytes(bytes, sizeof(bytes));
 }
 
-bool AudioOutputRecord::writeInitialHeader() {
+bool AudioRecordFile::writeInitialHeader() {
     const uint16_t blockAlign = _channels * sizeof(int16_t);
     const uint32_t byteRate = _sampleRate * blockAlign;
 
@@ -273,7 +273,7 @@ bool AudioOutputRecord::writeInitialHeader() {
     return true;
 }
 
-bool AudioOutputRecord::writeFinalHeader() {
+bool AudioRecordFile::writeFinalHeader() {
     _file.flush();
 
     const uint64_t fileSize = (uint64_t)_dataOffset + _dataBytesWritten;
@@ -298,7 +298,7 @@ bool AudioOutputRecord::writeFinalHeader() {
 // Ring buffer helpers
 // ============================================================================
 
-void AudioOutputRecord::copyIntoRing(size_t index, const uint8_t *source, size_t size) {
+void AudioRecordFile::copyIntoRing(size_t index, const uint8_t *source, size_t size) {
     size_t first = _bufferSize - index;
     if (first > size) {
         first = size;
@@ -310,7 +310,7 @@ void AudioOutputRecord::copyIntoRing(size_t index, const uint8_t *source, size_t
     }
 }
 
-void AudioOutputRecord::copyFromRing(size_t index, uint8_t *destination, size_t size) {
+void AudioRecordFile::copyFromRing(size_t index, uint8_t *destination, size_t size) {
     size_t first = _bufferSize - index;
     if (first > size) {
         first = size;
@@ -326,7 +326,7 @@ void AudioOutputRecord::copyFromRing(size_t index, uint8_t *destination, size_t 
 // Audio graph input
 // ============================================================================
 
-void AudioOutputRecord::update() {
+void AudioRecordFile::update() {
     audio_block_t *left = receiveReadOnly(0);
     audio_block_t *right = receiveReadOnly(1);
 
@@ -403,13 +403,13 @@ void AudioOutputRecord::update() {
 // Writer task
 // ============================================================================
 
-void AudioOutputRecord::writerTaskEntry(void *parameter) {
-    AudioOutputRecord *self = (AudioOutputRecord *)parameter;
+void AudioRecordFile::writerTaskEntry(void *parameter) {
+    AudioRecordFile *self = (AudioRecordFile *)parameter;
     self->writerTaskLoop();
     vTaskDelete(nullptr);
 }
 
-void AudioOutputRecord::writerTaskLoop() {
+void AudioRecordFile::writerTaskLoop() {
     uint8_t chunk[WRITER_CHUNK_SIZE];
     bool writeFailed = false;
 
@@ -515,7 +515,7 @@ void AudioOutputRecord::writerTaskLoop() {
 // Stop / status
 // ============================================================================
 
-bool AudioOutputRecord::stop() {
+bool AudioRecordFile::stop() {
     bool running = false;
     bool finishing = false;
     bool notifyWriter = false;
@@ -570,7 +570,7 @@ bool AudioOutputRecord::stop() {
     return _lastResult;
 }
 
-bool AudioOutputRecord::isRecording() const {
+bool AudioRecordFile::isRecording() const {
     bool recording;
 
     portENTER_CRITICAL(&_bufferMux);
@@ -580,7 +580,7 @@ bool AudioOutputRecord::isRecording() const {
     return recording;
 }
 
-bool AudioOutputRecord::hasError() const {
+bool AudioRecordFile::hasError() const {
     bool error;
 
     portENTER_CRITICAL(&_bufferMux);

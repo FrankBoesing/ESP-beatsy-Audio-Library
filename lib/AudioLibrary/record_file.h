@@ -8,13 +8,13 @@
 #include <freertos/task.h>
 #include "AudioStream.h"
 
-class AudioOutputRecord : public AudioStream {
+class AudioRecordFile : public AudioStream {
   public:
     static const size_t DEFAULT_BUFFER_SIZE = 512U * 1024U;
     static const int8_t CORE_UNPINNED = -1;
 
-    AudioOutputRecord();
-    ~AudioOutputRecord() override;
+    AudioRecordFile();
+    ~AudioRecordFile() override;
 
     // Must be called while no recording or writer task is active.
     // The size must hold at least one stereo audio block and be 4-byte aligned.
