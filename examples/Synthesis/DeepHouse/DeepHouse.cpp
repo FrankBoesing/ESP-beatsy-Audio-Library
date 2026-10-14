@@ -55,6 +55,7 @@ AudioSynthWaveform chordSeventh;
 AudioMixer4 chordMixer;
 AudioFilterBiquad chordFilter;
 AudioEffectEnvelope chordEnvelope;
+AudioEffectFreeverbStereo chordReverb;
 
 // -----------------------------------------------------------------------------
 // Stereo output mix
@@ -83,6 +84,7 @@ AudioConnection fifthToChord(chordFifth, 0, chordMixer, 2);
 AudioConnection seventhToChord(chordSeventh, 0, chordMixer, 3);
 AudioConnection chordToFilter(chordMixer, chordFilter);
 AudioConnection chordToEnvelope(chordFilter, chordEnvelope);
+AudioConnection chordToReverb(chordEnvelope, chordReverb);
 
 // Main stereo routing: drums, bass and chord stabs are centred.
 AudioConnection drumsToLeft(drumMixer, 0, leftMixer, 0);
@@ -91,6 +93,8 @@ AudioConnection bassToLeft(bassEnvelope, 0, leftMixer, 1);
 AudioConnection bassToRight(bassEnvelope, 0, rightMixer, 1);
 AudioConnection dryChordToLeft(chordEnvelope, 0, leftMixer, 2);
 AudioConnection dryChordToRight(chordEnvelope, 0, rightMixer, 2);
+AudioConnection reverbToLeft(chordReverb, 0, leftMixer, 3);
+AudioConnection reverbToRight(chordReverb, 1, rightMixer, 3);
 AudioConnection leftToOutput(leftMixer, 0, audioOut, 0);
 AudioConnection rightToOutput(rightMixer, 0, audioOut, 1);
 
@@ -282,6 +286,16 @@ void setup()
 
     audioOut.setChannelCount(codec.channels());
 
+    Serial.println("Deep House: initializing reverb");
+    chordReverb.roomsize(0.38f);
+    chordReverb.damping(0.65f);
+    if (chordReverb.begin()) {
+        Serial.print("Deep House: reverb buffers in ");
+        Serial.println(chordReverb.usingPSRAM() ? "PSRAM" : "internal RAM");
+    } else {
+        Serial.println("WARNING: reverb allocation failed");
+    }
+
     Serial.println("Deep House: initializing audio memory");
     AudioMemory(40);
     Serial.println("Deep House: audio memory ready");
@@ -347,10 +361,12 @@ void setup()
 
     leftMixer.gain(0, 0.82f);  // drums
     leftMixer.gain(1, 0.78f);  // bass
-    leftMixer.gain(2, 0.55f);  // chord stabs
+    leftMixer.gain(2, 0.55f);  // dry chord stabs
+    leftMixer.gain(3, 0.40f);  // stereo reverb
     rightMixer.gain(0, 0.82f);
     rightMixer.gain(1, 0.78f);
     rightMixer.gain(2, 0.55f);
+    rightMixer.gain(3, 0.40f);
 
     Serial.println("Deep House: initializing codec");
     if (!codec.enable()) {
