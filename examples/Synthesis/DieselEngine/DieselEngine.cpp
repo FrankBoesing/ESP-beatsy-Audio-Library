@@ -24,11 +24,11 @@ constexpr uint32_t SAMPLE_RATE = 44100;
 constexpr uint32_t REFERENCE_RPM = 800;
 
 // Initial estimates only; adjust after listening to the actual source file.
-constexpr uint32_t START_END_MS = 3800;
-constexpr uint32_t IDLE_START_MS = 3800;
-constexpr uint32_t IDLE_END_MS = 10500;
+constexpr uint32_t START_END_MS = 2500;
+constexpr uint32_t IDLE_START_MS = 2500;
+constexpr uint32_t IDLE_END_MS = 11300;
 constexpr uint32_t REV_START_MS = 11500;
-constexpr uint32_t REV_END_MS = 17000;
+constexpr uint32_t REV_END_MS = 13500;
 
 constexpr uint16_t MIN_RPM = 400;
 constexpr uint16_t MAX_RPM = 2400;
