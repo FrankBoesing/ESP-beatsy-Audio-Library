@@ -75,6 +75,11 @@ static int16_t sampleAt(const unsigned int *data, uint8_t format, uint32_t index
 
 void AudioPlayMemory::play(const unsigned int *data)
 {
+    play(data, false);
+}
+
+void AudioPlayMemory::play(const unsigned int *data, bool loop)
+{
     if (data == nullptr) {
         stop();
         return;
@@ -83,13 +88,41 @@ void AudioPlayMemory::play(const unsigned int *data)
     const uint32_t formatWord = *data++;
     portENTER_CRITICAL(&playback_state_mux);
     beginning = data;
+    pcm_samples = nullptr;
+    pcm_sample_rate = 0;
+    raw_pcm = false;
     length = formatWord & 0xFFFFFFU;
     sample_index = 0;
     sample_fraction = 0.0f;
     current_playback_rate = target_playback_rate;
+    loop_enabled = loop;
     playing = (uint8_t)(formatWord >> 24);
     ++playback_generation;
     portEXIT_CRITICAL(&playback_state_mux);
+}
+
+bool AudioPlayMemory::play(const AudioSampleBuffer &buffer, bool loop)
+{
+    const uint32_t rate = buffer.sampleRate();
+    if (!buffer.isValid() ||
+        (rate != 11025 && rate != 22050 && rate != 44100)) {
+        return false;
+    }
+
+    portENTER_CRITICAL(&playback_state_mux);
+    beginning = nullptr;
+    pcm_samples = buffer.samples();
+    pcm_sample_rate = rate;
+    raw_pcm = true;
+    length = buffer.sampleCount();
+    sample_index = 0;
+    sample_fraction = 0.0f;
+    current_playback_rate = target_playback_rate;
+    loop_enabled = loop;
+    playing = 0x84; // signed 16-bit mono PCM supplied from AudioSampleBuffer
+    ++playback_generation;
+    portEXIT_CRITICAL(&playback_state_mux);
+    return true;
 }
 
 void AudioPlayMemory::stop()
@@ -104,6 +137,21 @@ bool AudioPlayMemory::isPlaying()
 {
     portENTER_CRITICAL(&playback_state_mux);
     const bool result = playing != 0;
+    portEXIT_CRITICAL(&playback_state_mux);
+    return result;
+}
+
+void AudioPlayMemory::setLoop(bool enabled)
+{
+    portENTER_CRITICAL(&playback_state_mux);
+    loop_enabled = enabled;
+    portEXIT_CRITICAL(&playback_state_mux);
+}
+
+bool AudioPlayMemory::isLooping() const
+{
+    portENTER_CRITICAL(&playback_state_mux);
+    const bool result = loop_enabled;
     portEXIT_CRITICAL(&playback_state_mux);
     return result;
 }
@@ -131,8 +179,12 @@ float AudioPlayMemory::playbackRate() const
 void AudioPlayMemory::update()
 {
     portENTER_CRITICAL(&playback_state_mux);
-    uint8_t play_format = playing;
+    const uint8_t play_format = playing;
     const unsigned int *data = beginning;
+    const int16_t *pcmData = pcm_samples;
+    const uint32_t pcmRate = pcm_sample_rate;
+    const bool rawPcm = raw_pcm;
+    const bool loop = loop_enabled;
     const uint32_t total_samples = length;
     const uint32_t generation = playback_generation;
     uint32_t index = sample_index;
@@ -150,8 +202,9 @@ void AudioPlayMemory::update()
         return;
     }
 
-    const uint32_t sourceRate = sampleRateForFormat(play_format);
-    if (data == nullptr || total_samples == 0 || sourceRate == 0) {
+    const uint32_t sourceRate = rawPcm ? pcmRate : sampleRateForFormat(play_format);
+    if ((rawPcm ? pcmData == nullptr : data == nullptr) ||
+        total_samples == 0 || sourceRate == 0) {
         portENTER_CRITICAL(&playback_state_mux);
         if (playback_generation == generation) {
             playing = 0;
@@ -168,14 +221,20 @@ void AudioPlayMemory::update()
 
     for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         if (index >= total_samples) {
-            out[i] = 0;
-            finished = true;
-            continue;
+            if (loop) {
+                index %= total_samples;
+            } else {
+                out[i] = 0;
+                finished = true;
+                continue;
+            }
         }
 
-        const uint32_t index1 = (index + 1U < total_samples) ? index + 1U : index;
-        const int32_t s0 = sampleAt(data, play_format, index);
-        const int32_t s1 = sampleAt(data, play_format, index1);
+        const uint32_t index1 = (index + 1U < total_samples)
+                                    ? index + 1U
+                                    : (loop ? 0U : index);
+        const int32_t s0 = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
+        const int32_t s1 = rawPcm ? pcmData[index1] : sampleAt(data, play_format, index1);
         out[i] = (int16_t)(s0 + (int32_t)((s1 - s0) * fraction));
 
         // Smooth rate changes to avoid abrupt pitch modulation.
@@ -184,9 +243,13 @@ void AudioPlayMemory::update()
         const uint32_t advance = (uint32_t)fraction;
         index += advance;
         fraction -= (float)advance;
+
+        if (loop && index >= total_samples) {
+            index %= total_samples;
+        }
     }
 
-    if (index >= total_samples) {
+    if (!loop && index >= total_samples) {
         finished = true;
     }
 
@@ -216,13 +279,15 @@ uint32_t AudioPlayMemory::positionMillis()
     const uint8_t format = playing;
     const uint32_t index = sample_index;
     const float fraction = sample_fraction;
+    const bool rawPcm = raw_pcm;
+    const uint32_t pcmRate = pcm_sample_rate;
     portEXIT_CRITICAL(&playback_state_mux);
 
     if (format == 0) {
         return 0;
     }
 
-    const uint32_t sourceRate = sampleRateForFormat(format);
+    const uint32_t sourceRate = rawPcm ? pcmRate : sampleRateForFormat(format);
     if (sourceRate == 0) {
         return 0;
     }
@@ -235,13 +300,15 @@ uint32_t AudioPlayMemory::lengthMillis()
     portENTER_CRITICAL(&playback_state_mux);
     const uint8_t format = playing;
     const uint32_t samples = length;
+    const bool rawPcm = raw_pcm;
+    const uint32_t pcmRate = pcm_sample_rate;
     portEXIT_CRITICAL(&playback_state_mux);
 
     if (format == 0) {
         return 0;
     }
 
-    const uint32_t sourceRate = sampleRateForFormat(format);
+    const uint32_t sourceRate = rawPcm ? pcmRate : sampleRateForFormat(format);
     if (sourceRate == 0) {
         return 0;
     }
