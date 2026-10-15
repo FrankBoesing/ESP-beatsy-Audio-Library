@@ -3477,7 +3477,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p class=func><span class=keyword>stop</span>(); <span class=keyword>isPlaying</span>();</p>
 	<p class=desc>Stop playback or query whether a sample is currently playing.</p>
 	<p class=func><span class=keyword>setLoop</span>(enabled); <span class=keyword>isLooping</span>();</p>
-	<p class=desc>Set or query the loop setting used by the next play() call. A loop repeats until stop() is called.</p>
+	<p class=desc>Set or query loop mode. Enabling it repeats playback; disabling it lets the current sample finish, and stop() halts playback.</p>
 	<p class=func><span class=keyword>setPlaybackRate</span>(rate); <span class=keyword>playbackRate</span>();</p>
 	<p class=desc>Set or query the playback-rate multiplier. The accepted range is 0.25 to 4.0; resampling changes pitch as well as speed.</p>
 	<p class=func><span class=keyword>positionMillis</span>(); <span class=keyword>lengthMillis</span>();</p>
