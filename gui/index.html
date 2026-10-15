@@ -24,7 +24,7 @@
   limitations under the License.
 -->
 <head>
-<title>Audio System Design Tool for Teensy Audio Library</title>
+<title>ESP-beatsy Audio System Design Tool</title>
 <link href="bootstrap/css/bootstrap.min.css" rel="stylesheet" media="screen">
 <link href="jquery/css/smoothness/jquery-ui-1.10.3.custom.min.css" rel="stylesheet" media="screen">
 <link rel="stylesheet" type="text/css" href="orion/built-editor.css"/>
@@ -53,7 +53,7 @@ span.mainfunction {color: #993300; font-weight: bolder}
 <div class="navbar navbar-inverse navbar-fixed-top">
 	<div class="navbar-inner">
 		<div class="container-fluid">
-			<span class="brand">Audio System Design Tool for <a href="http://www.pjrc.com/teensy/td_libs_Audio.html" target="_blank">Teensy Audio Library</a></span>
+			<span class="brand">ESP-beatsy Audio System Design Tool <small>for ESP32</small></span>
 			<div class="btn-group pull-right">
 				<a class="btn dropdown-toggle" data-toggle="dropdown" href="#"><i class="icon-align-justify"></i> <span class="caret"></span></a>
 				<ul class="dropdown-menu">
@@ -99,6 +99,7 @@ span.mainfunction {color: #993300; font-weight: bolder}
 				</ul>
 			</div>
 			<div class="btn-group pull-left">
+				<a class="btn" href="fir-calculator.html" target="_blank" title="Calculate FIR filter coefficients"><i class="icon-filter"></i> FIR Calculator</a>
 				<a id="btn-deploy" class="btn action-deploy disabled" href="#"><i id="btn-icn-deploy" class="icon-upload"></i>Export</a>
 				<a id="btn-import" class="btn action-import disabled" href="#"><i id="btn-icn-download" class="icon-download"></i>Import</a>
 			</div>
@@ -455,99 +456,929 @@ span.mainfunction {color: #993300; font-weight: bolder}
 
 
 <script  type="text/x-red" data-container-name="NodeDefinitions">
-	{"nodes":[
-		{"type":"AudioInputI2S","data":{"defaults":{"name":{"value":"new"}},"shortName":"i2s","inputs":0,"outputs":2,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioInputI2SQuad","data":{"defaults":{"name":{"value":"new"}},"shortName":"i2s_quad","inputs":0,"outputs":4,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioInputI2SHex","data":{"defaults":{"name":{"value":"new"}},"shortName":"i2s_hex","inputs":0,"outputs":6,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioInputI2SOct","data":{"defaults":{"name":{"value":"new"}},"shortName":"i2s_oct","inputs":0,"outputs":8,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioInputI2Sslave","data":{"defaults":{"name":{"value":"new"}},"shortName":"i2sslave","inputs":0,"outputs":2,"category":"input-function","color":"#F7D8F0","icon":"arrow-in.png"}},
-		{"type":"AudioInputI2S2","data":{"defaults":{"name":{"value":"new"}},"shortName":"i2s2","inputs":0,"outputs":2,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioInputSPDIF3","data":{"defaults":{"name":{"value":"new"}},"shortName":"spdif3","inputs":0,"outputs":2,"category":"input-function","color":"#F7D8F0","icon":"arrow-in.png"}},
-		{"type":"AsyncAudioInputSPDIF3","data":{"defaults":{"name":{"value":"new"}},"shortName":"spdif_async","inputs":0,"outputs":2,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioInputAnalog","data":{"defaults":{"name":{"value":"new"}},"shortName":"adc","inputs":0,"outputs":1,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioInputAnalogStereo","data":{"defaults":{"name":{"value":"new"}},"shortName":"adcs","inputs":0,"outputs":2,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioInputPDM","data":{"defaults":{"name":{"value":"new"}},"shortName":"pdm","inputs":0,"outputs":1,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioInputPDM2","data":{"defaults":{"name":{"value":"new"}},"shortName":"pdm2","inputs":0,"outputs":1,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioInputTDM","data":{"defaults":{"name":{"value":"new"}},"shortName":"tdm","inputs":0,"outputs":16,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioInputTDM2","data":{"defaults":{"name":{"value":"new"}},"shortName":"tdm2","inputs":0,"outputs":16,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioInputUSB","data":{"defaults":{"name":{"value":"new"}},"shortName":"usb","inputs":0,"outputs":2,"category":"input-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-
-		{"type":"AudioOutputI2S","data":{"defaults":{"name":{"value":"new"}},"shortName":"i2s","inputs":2,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputI2SQuad","data":{"defaults":{"name":{"value":"new"}},"shortName":"i2s_quad","inputs":4,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputI2SHex","data":{"defaults":{"name":{"value":"new"}},"shortName":"i2s_hex","inputs":6,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputI2SOct","data":{"defaults":{"name":{"value":"new"}},"shortName":"i2s_oct","inputs":8,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputI2Sslave","data":{"defaults":{"name":{"value":"new"}},"shortName":"i2sslave","inputs":2,"outputs":0,"category":"output-function","color":"#F7D8F0","icon":"arrow-in.png"}},
-		{"type":"AudioOutputI2S2","data":{"defaults":{"name":{"value":"new"}},"shortName":"i2s2","inputs":2,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputSPDIF","data":{"defaults":{"name":{"value":"new"}},"shortName":"spdif","inputs":2,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputSPDIF2","data":{"defaults":{"name":{"value":"new"}},"shortName":"spdif2","inputs":2,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputSPDIF3","data":{"defaults":{"name":{"value":"new"}},"shortName":"spdif3","inputs":2,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputPT8211","data":{"defaults":{"name":{"value":"new"}},"shortName":"pt8211","inputs":2,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputPT8211_2","data":{"defaults":{"name":{"value":"new"}},"shortName":"pt8211_2","inputs":2,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputAnalog","data":{"defaults":{"name":{"value":"new"}},"shortName":"dac","inputs":1,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputAnalogStereo","data":{"defaults":{"name":{"value":"new"}},"shortName":"dacs","inputs":2,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputPWM","data":{"defaults":{"name":{"value":"new"}},"shortName":"pwm","inputs":1,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputMQS","data":{"defaults":{"name":{"value":"new"}},"shortName":"mqs","inputs":2,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputTDM","data":{"defaults":{"name":{"value":"new"}},"shortName":"tdm","inputs":16,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputTDM2","data":{"defaults":{"name":{"value":"new"}},"shortName":"tdm2","inputs":16,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputADAT","data":{"defaults":{"name":{"value":"new"}},"shortName":"adat","inputs":8,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioOutputUSB","data":{"defaults":{"name":{"value":"new"}},"shortName":"usb","inputs":2,"outputs":0,"category":"output-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-
-		{"type":"AudioAmplifier","data":{"defaults":{"name":{"value":"new"}},"shortName":"amp","inputs":1,"outputs":1,"category":"mixer-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioMixer4","data":{"defaults":{"name":{"value":"new"}},"shortName":"mixer","inputs":4,"outputs":1,"category":"mixer-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioPlayMemory","data":{"defaults":{"name":{"value":"new"}},"shortName":"playMem","inputs":0,"outputs":1,"category":"play-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioPlaySdWav","data":{"defaults":{"name":{"value":"new"}},"shortName":"playSdWav","inputs":0,"outputs":2,"category":"play-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioPlaySdRaw","data":{"defaults":{"name":{"value":"new"}},"shortName":"playSdRaw","inputs":0,"outputs":1,"category":"play-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioPlaySerialflashRaw","data":{"defaults":{"name":{"value":"new"}},"shortName":"playFlashRaw","inputs":0,"outputs":1,"category":"play-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioPlayQueue","data":{"defaults":{"name":{"value":"new"}},"shortName":"queue","inputs":0,"outputs":1,"category":"play-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioRecordQueue","data":{"defaults":{"name":{"value":"new"}},"shortName":"queue","inputs":1,"outputs":0,"category":"record-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthWavetable","data":{"defaults":{"name":{"value":"new"}},"shortName":"wavetable","inputs":0,"outputs":1,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthSimpleDrum","data":{"defaults":{"name":{"value":"new"}},"shortName":"drum","inputs":0,"outputs":1,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthKarplusStrong","data":{"defaults":{"name":{"value":"new"}},"shortName":"string","inputs":0,"outputs":1,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthWaveformSine","data":{"defaults":{"name":{"value":"new"}},"shortName":"sine","inputs":0,"outputs":1,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthWaveformSineHires","data":{"defaults":{"name":{"value":"new"}},"shortName":"sine_hires","inputs":0,"outputs":2,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthWaveformSineModulated","data":{"defaults":{"name":{"value":"new"}},"shortName":"sine_fm","inputs":1,"outputs":1,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthWaveform","data":{"defaults":{"name":{"value":"new"}},"shortName":"waveform","inputs":0,"outputs":1,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthWaveformModulated","data":{"defaults":{"name":{"value":"new"}},"shortName":"waveformMod","inputs":2,"outputs":1,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthWaveformPWM","data":{"defaults":{"name":{"value":"new"}},"shortName":"pwm","inputs":1,"outputs":1,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthToneSweep","data":{"defaults":{"name":{"value":"new"}},"shortName":"tonesweep","inputs":0,"outputs":1,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthWaveformDc","data":{"defaults":{"name":{"value":"new"}},"shortName":"dc","inputs":0,"outputs":1,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthNoiseWhite","data":{"defaults":{"name":{"value":"new"}},"shortName":"noise","inputs":0,"outputs":1,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioSynthNoisePink","data":{"defaults":{"name":{"value":"new"}},"shortName":"pink","inputs":0,"outputs":1,"category":"synth-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectFade","data":{"defaults":{"name":{"value":"new"}},"shortName":"fade","inputs":1,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectChorus","data":{"defaults":{"name":{"value":"new"}},"shortName":"chorus","inputs":1,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectFlange","data":{"defaults":{"name":{"value":"new"}},"shortName":"flange","inputs":1,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectReverb","data":{"defaults":{"name":{"value":"new"}},"shortName":"reverb","inputs":1,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectFreeverb","data":{"defaults":{"name":{"value":"new"}},"shortName":"freeverb","inputs":1,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectFreeverbStereo","data":{"defaults":{"name":{"value":"new"}},"shortName":"freeverbs","inputs":1,"outputs":2,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectEnvelope","data":{"defaults":{"name":{"value":"new"}},"shortName":"envelope","inputs":1,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectMultiply","data":{"defaults":{"name":{"value":"new"}},"shortName":"multiply","inputs":2,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectRectifier","data":{"defaults":{"name":{"value":"new"}},"shortName":"rectify","inputs":1,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectDelay","data":{"defaults":{"name":{"value":"new"}},"shortName":"delay","inputs":1,"outputs":8,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectDelayExternal","data":{"defaults":{"name":{"value":"new"}},"shortName":"delayExt","inputs":1,"outputs":8,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectBitcrusher","data":{"shortName":"bitcrusher","inputs":1,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectMidSide","data":{"shortName":"midside","inputs":2,"outputs":2,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectWaveshaper","data":{"shortName":"waveshape","inputs":1,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectGranular","data":{"shortName":"granular","inputs":1,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectDigitalCombine","data":{"shortName":"combine","inputs":2,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioEffectWaveFolder","data":{"defaults":{"name":{"value":"new"}},"shortName":"wavefolder","inputs":2,"outputs":1,"category":"effect-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioFilterBiquad","data":{"defaults":{"name":{"value":"new"}},"shortName":"biquad","inputs":1,"outputs":1,"category":"filter-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioFilterFIR","data":{"defaults":{"name":{"value":"new"}},"shortName":"fir","inputs":1,"outputs":1,"category":"filter-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioFilterStateVariable","data":{"defaults":{"name":{"value":"new"}},"shortName":"filter","inputs":2,"outputs":3,"category":"filter-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioFilterLadder","data":{"defaults":{"name":{"value":"new"}},"shortName":"ladder","inputs":3,"outputs":1,"category":"filter-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioAnalyzePeak","data":{"defaults":{"name":{"value":"new"}},"shortName":"peak","inputs":1,"outputs":0,"category":"analyze-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioAnalyzeRMS","data":{"defaults":{"name":{"value":"new"}},"shortName":"rms","inputs":1,"outputs":0,"category":"analyze-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioAnalyzeFFT256","data":{"defaults":{"name":{"value":"new"}},"shortName":"fft256","inputs":1,"outputs":0,"category":"analyze-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioAnalyzeFFT1024","data":{"defaults":{"name":{"value":"new"}},"shortName":"fft1024","inputs":1,"outputs":0,"category":"analyze-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioAnalyzeToneDetect","data":{"defaults":{"name":{"value":"new"}},"shortName":"tone","inputs":1,"outputs":0,"category":"analyze-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioAnalyzeNoteFrequency","data":{"defaults":{"name":{"value":"new"}},"shortName":"notefreq","inputs":1,"outputs":0,"category":"analyze-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioAnalyzePrint","data":{"defaults":{"name":{"value":"new"}},"shortName":"print","inputs":1,"outputs":0,"category":"analyze-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioControlSGTL5000","data":{"defaults":{"name":{"value":"new"}},"shortName":"sgtl5000","inputs":0,"outputs":0,"category":"control-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioControlAK4558","data":{"defaults":{"name":{"value":"new"}},"shortName":"ak4558","inputs":0,"outputs":0,"category":"control-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioControlCS4272","data":{"defaults":{"name":{"value":"new"}},"shortName":"cs4272","inputs":0,"outputs":0,"category":"control-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioControlWM8731","data":{"defaults":{"name":{"value":"new"}},"shortName":"wm8731","inputs":0,"outputs":0,"category":"control-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioControlWM8731master","data":{"defaults":{"name":{"value":"new"}},"shortName":"wm8731m","inputs":0,"outputs":0,"category":"control-function","color":"#E6E0F8","icon":"arrow-in.png"}},
-		{"type":"AudioControlCS42448","data":{"defaults":{"name":{"value":"new"}},"shortName":"cs42448","inputs":0,"outputs":0,"category":"control-function","color":"#E6E0F8","icon":"arrow-in.png"}}
-	]}
+	{
+	"nodes": [
+		{
+			"type": "AudioInputI2S",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "i2s",
+				"inputs": 0,
+				"outputs": 2,
+				"category": "input-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioInputI2S2",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "i2s2",
+				"inputs": 0,
+				"outputs": 2,
+				"category": "input-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioOutputI2S",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "i2s",
+				"inputs": 2,
+				"outputs": 0,
+				"category": "output-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioOutputI2S2",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "i2s2",
+				"inputs": 2,
+				"outputs": 0,
+				"category": "output-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioOutputSPDIF",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "spdif",
+				"inputs": 2,
+				"outputs": 0,
+				"category": "output-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioOutputSPDIF2",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "spdif2",
+				"inputs": 2,
+				"outputs": 0,
+				"category": "output-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioOutputSPDIF3",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "spdif3",
+				"inputs": 2,
+				"outputs": 0,
+				"category": "output-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioAmplifier",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "amp",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "mixer-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioMixer4",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "mixer",
+				"inputs": 4,
+				"outputs": 1,
+				"category": "mixer-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioPlayMemory",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "playMem",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "play-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioPlaySdWav",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "playSdWav",
+				"inputs": 0,
+				"outputs": 2,
+				"category": "play-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioPlayQueue",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "queue",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "play-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioRecordQueue",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "queue",
+				"inputs": 1,
+				"outputs": 0,
+				"category": "record-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthWavetable",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "wavetable",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthSimpleDrum",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "drum",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthKarplusStrong",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "string",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthWaveformSine",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "sine",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthWaveformSineHires",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "sine_hires",
+				"inputs": 0,
+				"outputs": 2,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthWaveform",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "waveform",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthWaveformModulated",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "waveformMod",
+				"inputs": 2,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthWaveformPWM",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "pwm",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthToneSweep",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "tonesweep",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthWaveformDc",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "dc",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthNoiseWhite",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "noise",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthNoisePink",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "pink",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectFade",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "fade",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectChorus",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "chorus",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectFlange",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "flange",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectReverb",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "reverb",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectFreeverb",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "freeverb",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectFreeverbStereo",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "freeverbs",
+				"inputs": 1,
+				"outputs": 2,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectEnvelope",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "envelope",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectMultiply",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "multiply",
+				"inputs": 2,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectRectifier",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "rectify",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectDelay",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "delay",
+				"inputs": 1,
+				"outputs": 8,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectBitcrusher",
+			"data": {
+				"shortName": "bitcrusher",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectMidSide",
+			"data": {
+				"shortName": "midside",
+				"inputs": 2,
+				"outputs": 2,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectWaveshaper",
+			"data": {
+				"shortName": "waveshape",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectGranular",
+			"data": {
+				"shortName": "granular",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectDigitalCombine",
+			"data": {
+				"shortName": "combine",
+				"inputs": 2,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectWaveFolder",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "wavefolder",
+				"inputs": 2,
+				"outputs": 1,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioFilterBiquad",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "biquad",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "filter-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioFilterFIR",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "fir",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "filter-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioFilterStateVariable",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "filter",
+				"inputs": 2,
+				"outputs": 3,
+				"category": "filter-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioFilterLadder",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "ladder",
+				"inputs": 3,
+				"outputs": 1,
+				"category": "filter-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioAnalyzePeak",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "peak",
+				"inputs": 1,
+				"outputs": 0,
+				"category": "analyze-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioAnalyzeRMS",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "rms",
+				"inputs": 1,
+				"outputs": 0,
+				"category": "analyze-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioAnalyzeFFT256",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "fft256",
+				"inputs": 1,
+				"outputs": 0,
+				"category": "analyze-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioAnalyzeFFT1024",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "fft1024",
+				"inputs": 1,
+				"outputs": 0,
+				"category": "analyze-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioAnalyzePrint",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "print",
+				"inputs": 1,
+				"outputs": 0,
+				"category": "analyze-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioInputI2S3",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "i2s3_in",
+				"inputs": 0,
+				"outputs": 2,
+				"category": "input-function",
+				"color": "#D9EAF7",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioOutputI2S3",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "i2s3_out",
+				"inputs": 2,
+				"outputs": 0,
+				"category": "output-function",
+				"color": "#D9EAF7",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioOutputPDM",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "pdm",
+				"inputs": 2,
+				"outputs": 0,
+				"category": "output-function",
+				"color": "#D6F5D6",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioControlES8311",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "es8311",
+				"inputs": 0,
+				"outputs": 0,
+				"category": "control-function",
+				"color": "#F7D8F0",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioControlES8388",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "es8388",
+				"inputs": 0,
+				"outputs": 0,
+				"category": "control-function",
+				"color": "#F7D8F0",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioPlayMp3",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "mp3",
+				"inputs": 0,
+				"outputs": 2,
+				"category": "play-function",
+				"color": "#FCE6C9",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioPlayAac",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "aac",
+				"inputs": 0,
+				"outputs": 2,
+				"category": "play-function",
+				"color": "#FCE6C9",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioMixerN",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "mixerN",
+				"inputs": 32,
+				"outputs": 1,
+				"category": "mixer-function",
+				"color": "#D9EAF7",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioRecordFile",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "recordWav",
+				"inputs": 2,
+				"outputs": 0,
+				"category": "record-function",
+				"color": "#FCE6C9",
+				"icon": "arrow-in.png"
+			}
+		}
+	]
+}
 </script>
 
 <script type="text/x-red" data-help-name="AudioInputI2S">

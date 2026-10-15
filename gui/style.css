@@ -872,6 +872,85 @@ i.spinner {
     background: url("img/spin.svg") no-repeat 50% 50%;
     background-size: contain
 }
-    
-    
 
+/* ESP-beatsy refinements: preserve the upstream layout and improve density/readability. */
+body {
+  padding-top: 50px;
+  background: #f4f6f8;
+}
+.navbar-inverse .navbar-inner {
+  background: #202833;
+  border-color: #151b22;
+  background-image: none;
+}
+.navbar .brand {
+  color: #f1f5f9;
+  text-shadow: none;
+}
+.navbar .brand a {
+  color: #9fd5ff;
+}
+.navbar .brand small {
+  color: #aab7c4;
+  font-size: 11px;
+  margin-left: 5px;
+}
+#main-container {
+  top: 50px;
+}
+#palette, #sidebar, #workspace {
+  border-color: #c7d0da;
+  border-radius: 5px;
+  box-shadow: 0 1px 3px rgba(23, 36, 50, 0.08);
+}
+#palette {
+  background: #eef2f6;
+}
+.palette-category {
+  border-color: #c8d2dd;
+  border-radius: 4px;
+}
+.palette-header {
+  background: #e3eaf1;
+  font-weight: 600;
+  color: #253749;
+}
+.palette-content {
+  border-top-color: #d3dce5;
+}
+.palette_node {
+  border-radius: 5px;
+  border-width: 1px;
+  box-shadow: 0 1px 2px rgba(23, 36, 50, 0.08);
+}
+.palette_node:hover {
+  border-color: #2185d0;
+  box-shadow: 0 0 0 2px rgba(33, 133, 208, 0.13);
+}
+#workspace, #sidebar {
+  background: #fff;
+}
+#chart {
+  background-color: #f8fafc;
+}
+#sidebar-tabs {
+  border-bottom-color: #d5dde5;
+}
+#palette-search {
+  background: #eef2f6;
+  border-top-color: #c8d2dd;
+}
+#palette-search input {
+  border: 1px solid #c8d2dd;
+  border-radius: 4px;
+  background: #fff;
+}
+#palette-search input:focus {
+  border-color: #2185d0;
+  box-shadow: 0 0 0 2px rgba(33, 133, 208, 0.13);
+}
+@media (max-width: 900px) {
+  #workspace { left: 140px; right: 10px; }
+  #sidebar, #sidebar-separator { display: none; }
+  .sidebar-closed > #workspace { right: 10px !important; }
+}
