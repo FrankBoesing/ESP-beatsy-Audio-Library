@@ -364,6 +364,8 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
     }
 
     closeSource();
+    source_frame = 0;
+    source_frames_read = 0;
     have_previous = false;
     have_next = false;
     source_ended = false;
