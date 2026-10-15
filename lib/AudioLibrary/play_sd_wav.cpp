@@ -85,7 +85,7 @@ void AudioPlaySdWav::begin() {
     have_previous = false;
     have_next = false;
 
-    source_phase = 0.0;
+    source_phase = 0.0f;
     source_ended = false;
     current_playback_rate = target_playback_rate;
 }
@@ -240,7 +240,7 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
     have_previous = false;
     have_next = false;
 
-    source_phase = 0.0;
+    source_phase = 0.0f;
     source_ended = false;
     float initialRate;
     portENTER_CRITICAL(&playback_rate_mux);
@@ -773,7 +773,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right, float target
         have_previous = true;
         have_next = false;
         source_ended = false;
-        source_phase = 0.0;
+        source_phase = 0.0f;
     }
 
     if (!have_next && !source_ended) {
@@ -803,8 +803,8 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right, float target
         ((float)sample_rate / AUDIO_SAMPLE_RATE_EXACT) * current_playback_rate;
     source_phase += sourceStep;
 
-    while (source_phase >= 1.0) {
-        source_phase -= 1.0;
+    while (source_phase >= 1.0f) {
+        source_phase -= 1.0f;
 
         if (have_next) {
             previous_left = next_left;
@@ -816,7 +816,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right, float target
         } else if (source_ended) {
             // The final source frame has been played for its full interval.
             have_previous = false;
-            source_phase = 0.0;
+            source_phase = 0.0f;
             break;
         }
     }
