@@ -264,134 +264,45 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
 
 bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
                                   AudioSampleBuffer &buffer, size_t reserveBytes) {
-    if (filename == nullptr) {
-        ESP_LOGE(TAG, "WAV preload filename is null");
+    if (filename == nullptr || state != STOPPED || source != nullptr) {
+        ESP_LOGE(TAG, "WAV preload requires a stopped player with no active source");
         return false;
     }
 
-    File file = fs.open(filename, FILE_READ);
-    if (!file) {
+    AudioSourceFile *fileSource = new AudioSourceFile();
+    if (fileSource == nullptr) {
+        ESP_LOGE(TAG, "Could not allocate WAV source");
+        return false;
+    }
+
+    if (!fileSource->open(fs, filename, FILE_READ)) {
         ESP_LOGE(TAG, "Cannot open WAV for PSRAM preload: %s", filename);
+        delete fileSource;
         return false;
     }
 
-    auto readFileExact = [&file](void *destination, size_t bytes) -> bool {
-        uint8_t *p = static_cast<uint8_t *>(destination);
-        while (bytes > 0) {
-            const size_t received = file.read(p, bytes);
-            if (received == 0) return false;
-            p += received;
-            bytes -= received;
-        }
-        return true;
-    };
+    source = fileSource;
+    own_source = true;
 
-    uint8_t riff[12];
-    if (!readFileExact(riff, sizeof(riff)) ||
-        memcmp(riff, "RIFF", 4) != 0 ||
-        memcmp(riff + 8, "WAVE", 4) != 0) {
-        ESP_LOGE(TAG, "Not a RIFF/WAVE file: %s", filename);
-        file.close();
+    if (!parseWav()) {
+        ESP_LOGE(TAG, "WAV parsing failed during PSRAM preload");
+        closeSource();
         return false;
     }
 
-    bool fmtFound = false;
-    bool dataFound = false;
-    uint16_t format = 0;
-    uint16_t sourceChannels = 0;
-    uint16_t sourceBits = 0;
-    uint16_t sourceBlockAlign = 0;
-    uint32_t sourceRate = 0;
-    uint32_t dataOffset = 0;
-    uint32_t dataBytes = 0;
-    const uint64_t fileSize = file.size();
-
-    while ((uint64_t)file.position() + 8U <= fileSize) {
-        uint8_t chunkHeader[8];
-        if (!readFileExact(chunkHeader, sizeof(chunkHeader))) {
-            ESP_LOGE(TAG, "Could not read WAV chunk header");
-            file.close();
-            return false;
-        }
-
-        const uint32_t chunkSize = readLE32(chunkHeader + 4);
-        const uint64_t payloadOffset = file.position();
-        const uint64_t nextChunk = payloadOffset + chunkSize + (chunkSize & 1U);
-        if (nextChunk > fileSize || nextChunk > UINT32_MAX) {
-            ESP_LOGE(TAG, "Invalid WAV chunk length");
-            file.close();
-            return false;
-        }
-
-        if (memcmp(chunkHeader, "fmt ", 4) == 0) {
-            if (chunkSize < 16U) {
-                ESP_LOGE(TAG, "WAV fmt chunk too small");
-                file.close();
-                return false;
-            }
-
-            uint8_t fmt[40] = {};
-            const size_t amount = chunkSize < sizeof(fmt) ? chunkSize : sizeof(fmt);
-            if (!readFileExact(fmt, amount)) {
-                ESP_LOGE(TAG, "Could not read WAV fmt chunk");
-                file.close();
-                return false;
-            }
-
-            format = readLE16(fmt + 0);
-            sourceChannels = readLE16(fmt + 2);
-            sourceRate = readLE32(fmt + 4);
-            sourceBlockAlign = readLE16(fmt + 12);
-            sourceBits = readLE16(fmt + 14);
-
-            if (format == WAV_EXTENSIBLE) {
-                if (chunkSize < 40U || amount < 40U ||
-                    readLE32(fmt + 24) != WAV_PCM) {
-                    ESP_LOGE(TAG, "Only PCM WAVE_FORMAT_EXTENSIBLE is supported");
-                    file.close();
-                    return false;
-                }
-            } else if (format != WAV_PCM) {
-                ESP_LOGE(TAG, "Only uncompressed PCM WAV is supported");
-                file.close();
-                return false;
-            }
-            fmtFound = true;
-        } else if (memcmp(chunkHeader, "data", 4) == 0) {
-            dataOffset = (uint32_t)payloadOffset;
-            dataBytes = chunkSize;
-            dataFound = true;
-        }
-
-        if (!file.seek((uint32_t)nextChunk)) {
-            ESP_LOGE(TAG, "Could not seek to next WAV chunk");
-            file.close();
-            return false;
-        }
-    }
-
-    if (!fmtFound || !dataFound || dataBytes == 0 ||
-        (sourceChannels != 1 && sourceChannels != 2) ||
-        (sourceBits != 8 && sourceBits != 16 && sourceBits != 24 && sourceBits != 32) ||
-        (sourceRate != 11025 && sourceRate != 22050 && sourceRate != 44100)) {
-        ESP_LOGE(TAG, "Unsupported WAV format for AudioPlayMemory preload");
-        file.close();
+    if ((sample_rate != 11025 && sample_rate != 22050 && sample_rate != 44100) ||
+        channels == 0 || block_align == 0 || data_length == 0 ||
+        data_length % block_align != 0) {
+        ESP_LOGE(TAG, "Unsupported WAV format or sample length for memory playback");
+        closeSource();
         return false;
     }
 
-    const uint16_t bytesPerSample = (sourceBits + 7U) / 8U;
-    const uint16_t expectedAlign = bytesPerSample * sourceChannels;
-    if (sourceBlockAlign != expectedAlign || dataBytes % sourceBlockAlign != 0) {
-        ESP_LOGE(TAG, "Invalid WAV block alignment or data length");
-        file.close();
-        return false;
-    }
-
-    const uint64_t frames64 = dataBytes / sourceBlockAlign;
+    const uint64_t frames64 = data_length / block_align;
     if (frames64 == 0 || frames64 > UINT32_MAX ||
         frames64 > (uint64_t)SIZE_MAX / sizeof(int16_t)) {
-        ESP_LOGE(TAG, "WAV sample is too large for the memory player");
-        file.close();
+        ESP_LOGE(TAG, "WAV sample is too large for AudioPlayMemory");
+        closeSource();
         return false;
     }
 
@@ -404,89 +315,61 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
         freeBytes - bytesNeeded < reserveBytes ||
         largestBlock < bytesNeeded) {
         ESP_LOGW(TAG,
-                 "Not enough contiguous PSRAM for %s (%u bytes needed, %u free, %u largest block, %u reserve)",
+                 "Not enough contiguous PSRAM for %s (%u needed, %u free, %u largest, %u reserve)",
                  filename, (unsigned)bytesNeeded, (unsigned)freeBytes,
                  (unsigned)largestBlock, (unsigned)reserveBytes);
-        file.close();
+        closeSource();
         return false;
     }
 
     int16_t *newSamples = static_cast<int16_t *>(
         heap_caps_malloc(bytesNeeded, PSRAM_CAPS));
     if (newSamples == nullptr) {
-        ESP_LOGW(TAG, "PSRAM allocation failed for WAV preload (%u bytes)",
-                 (unsigned)bytesNeeded);
-        file.close();
+        ESP_LOGW(TAG, "PSRAM allocation failed (%u bytes)", (unsigned)bytesNeeded);
+        closeSource();
         return false;
     }
 
-    if (!file.seek(dataOffset)) {
-        ESP_LOGE(TAG, "Could not seek to WAV data");
+    if (!seekAbsolute(data_start)) {
+        ESP_LOGE(TAG, "Could not seek to WAV data for preload");
         heap_caps_free(newSamples);
-        file.close();
+        closeSource();
         return false;
     }
 
-    auto decodePcm = [](const uint8_t *p, uint16_t bits) -> int16_t {
-        switch (bits) {
-        case 8:
-            return (int16_t)(((int32_t)p[0] - 128) << 8);
-        case 16:
-            return (int16_t)readLE16(p);
-        case 24: {
-            int32_t value = (int32_t)p[0] |
-                            ((int32_t)p[1] << 8) |
-                            ((int32_t)p[2] << 16);
-            if (value & 0x00800000) value |= (int32_t)0xFF000000;
-            return (int16_t)(value >> 8);
-        }
-        case 32: {
-            const int32_t value = (int32_t)readLE32(p);
-            return (int16_t)(value >> 16);
-        }
-        default:
-            return 0;
-        }
-    };
-
-    // Small bounded staging buffer; the decoded samples themselves live in PSRAM.
-    uint8_t raw[1024];
-    const uint32_t framesPerChunk = sizeof(raw) / sourceBlockAlign;
-    uint32_t framesDone = 0;
-    while (framesDone < frames) {
-        uint32_t framesNow = frames - framesDone;
-        if (framesNow > framesPerChunk) framesNow = framesPerChunk;
-        const size_t bytesNow = (size_t)framesNow * sourceBlockAlign;
-        if (!readFileExact(raw, bytesNow)) {
-            ESP_LOGE(TAG, "Short read while loading WAV into PSRAM");
+    source_frames_read = 0;
+    for (uint32_t i = 0; i < frames; ++i) {
+        int32_t left;
+        int32_t right;
+        if (!readSourceFrame(left, right)) {
+            ESP_LOGE(TAG, "Unexpected end of WAV while preloading sample");
             heap_caps_free(newSamples);
-            file.close();
+            closeSource();
             return false;
         }
 
-        for (uint32_t i = 0; i < framesNow; ++i) {
-            const uint8_t *frame = raw + (size_t)i * sourceBlockAlign;
-            const int16_t left = decodePcm(frame, sourceBits);
-            const int16_t right = sourceChannels == 2
-                                      ? decodePcm(frame + bytesPerSample, sourceBits)
-                                      : left;
-            newSamples[framesDone + i] =
-                (int16_t)(((int32_t)left + (int32_t)right) / 2);
-        }
-        framesDone += framesNow;
+        // WAV decoding already scales all supported PCM depths to the upper
+        // 16 bits of int32_t. Downmix stereo to mono for AudioPlayMemory.
+        const int32_t left16 = left >> 16;
+        const int32_t right16 = right >> 16;
+        newSamples[i] = (int16_t)((left16 + right16) / 2);
     }
 
-    file.close();
+    closeSource();
+    have_previous = false;
+    have_next = false;
+    source_ended = false;
+    state = STOPPED;
 
-    // Replace the old contents only after the new WAV has been loaded completely.
+    // Preserve the old buffer unless the entire new sample was loaded successfully.
     buffer.release();
     buffer.samples_ = newSamples;
     buffer.sample_count_ = frames;
-    buffer.sample_rate_ = sourceRate;
+    buffer.sample_rate_ = sample_rate;
     buffer.is_psram_ = true;
 
     ESP_LOGI(TAG, "Loaded %s into PSRAM: %u mono samples, %lu Hz, %u bytes",
-             filename, (unsigned)frames, (unsigned long)sourceRate,
+             filename, (unsigned)frames, (unsigned long)sample_rate,
              (unsigned)bytesNeeded);
     return true;
 }
