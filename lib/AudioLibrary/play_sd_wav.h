@@ -56,6 +56,7 @@ class AudioPlaySdWav : public AudioPlayer {
     bool isLooping() const;
 
     // Load a PCM WAV into an owned mono int16_t PSRAM buffer for AudioPlayMemory.
+    // Use a dedicated, stopped loader instance with no active source.
     // Stereo files are downmixed to mono. Supported rates: 11025, 22050, 44100 Hz.
     // Fails without changing buffer if PSRAM cannot hold the entire decoded sample,
     // retaining reserveBytes (64 KiB by default) for the rest of the application.
