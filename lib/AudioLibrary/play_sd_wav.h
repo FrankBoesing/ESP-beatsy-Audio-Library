@@ -50,7 +50,8 @@ class AudioPlaySdWav : public AudioPlayer {
     bool setPlaybackRate(float rate);
     float playbackRate() const;
 
-    // Repeat the WAV data chunk until setLoop(false) or stop() is called.
+    // Repeat the WAV data chunk while enabled. stop() halts playback but
+    // keeps the loop setting for the next play() call.
     void setLoop(bool enabled);
     bool isLooping() const;
 
