@@ -762,7 +762,7 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
 // Output sample / variable-rate interpolation
 // ============================================================================
 OSPEED
-bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right) {
+bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right, float targetRate) {
     if (!have_previous) {
         if (!readSourceFrame(previous_left, previous_right)) {
             return false;
@@ -783,8 +783,8 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right) {
     }
 
     const double fraction = have_next ? source_phase : 0.0;
-    const int64_t leftDelta = (int64_t)next_left - previous_left;
-    const int64_t rightDelta = (int64_t)next_right - previous_right;
+    const int64_t leftDelta = have_next ? (int64_t)next_left - previous_left : 0;
+    const int64_t rightDelta = have_next ? (int64_t)next_right - previous_right : 0;
     const int64_t l = (int64_t)previous_left +
                       (have_next ? (int64_t)(leftDelta * fraction) : 0);
     const int64_t r = (int64_t)previous_right +
@@ -795,7 +795,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right) {
 
     // The target may be updated by the control task; smooth the change here.
     current_playback_rate +=
-        (target_playback_rate - current_playback_rate) * 0.0015f;
+        (targetRate - current_playback_rate) * 0.0015f;
 
     const double sourceStep =
         ((double)sample_rate / (double)AUDIO_SAMPLE_RATE_EXACT) *
@@ -912,11 +912,15 @@ void AudioPlaySdWav::update() {
 
     block_offset = 0;
 
+    portENTER_CRITICAL(&playback_rate_mux);
+    const float targetRate = target_playback_rate;
+    portEXIT_CRITICAL(&playback_rate_mux);
+
     while (block_offset < AUDIO_BLOCK_SAMPLES) {
         int16_t left;
         int16_t right;
 
-        if (!getOutputSample(left, right)) {
+        if (!getOutputSample(left, right, targetRate)) {
             finishPlayback();
             return;
         }
