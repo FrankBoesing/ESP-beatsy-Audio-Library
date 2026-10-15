@@ -379,8 +379,8 @@ void setup() {
     }
 
     // Load the complete ~2.35 MB PCM sample into PSRAM before audio starts.
-    if (!diesel.loadWav(SD_MMC, "/diesel.wav")) {
-        Serial.println("Copy the CC0 source WAV to the card as /diesel.wav.");
+    if (!diesel.loadWav(SD_MMC, "/443319__davestalker__diesel-start-idle-revs-mz000004.wav")) {
+        Serial.println("Copy the CC0 source WAV to the SD card using its original filename: /443319__davestalker__diesel-start-idle-revs-mz000004.wav.");
         while (true) delay(1000);
     }
 
