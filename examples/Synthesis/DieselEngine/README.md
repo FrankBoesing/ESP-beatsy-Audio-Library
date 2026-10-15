@@ -29,6 +29,6 @@ The RPM control changes the sample playback rate, including its pitch. The 800 R
 
 ## Sample boundaries
 
-The initial boundary times were estimated from the full 26.613 s original WAV's amplitude envelope; the cuts have **not yet been confirmed by listening for clean edit points**. They currently use 0–2.5 s as the start sequence, 2.5–11.3 s as the idle loop, and 11.5–13.5 s as a rev segment. Adjust `START_END_MS`, `IDLE_START_MS`, `IDLE_END_MS`, `REV_START_MS` and `REV_END_MS` near the top of `DieselEngine.cpp` to match clean sections of the downloaded recording. All values are offsets from the beginning of the original WAV.
+The initial boundary times were estimated from the full 26.613 s original WAV's amplitude envelope; the cuts have **not yet been confirmed by listening for clean edit points**. They currently use 0–2.5 s as the start sequence, 2.5–8.5 s as the idle loop, and 11.5–13.5 s as a rev segment. The idle loop ends before the voice noted at about 9 s; the rev cut avoids the voice noted at about 14.8–16.5 s. Adjust `START_END_MS`, `IDLE_START_MS`, `IDLE_END_MS`, `REV_START_MS` and `REV_END_MS` near the top of `DieselEngine.cpp` to match clean sections of the downloaded recording. All values are offsets from the beginning of the original WAV.
 
 The entire PCM payload is loaded into PSRAM where available (about 2.35 MB for the full recording). The example requires enough memory for that sample and does not stream the WAV from SD during the real-time audio callback.
