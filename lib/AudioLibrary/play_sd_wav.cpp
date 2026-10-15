@@ -242,15 +242,17 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
 
     source_phase = 0.0;
     source_ended = false;
+    float initialRate;
     portENTER_CRITICAL(&playback_rate_mux);
-    current_playback_rate = target_playback_rate;
+    initialRate = target_playback_rate;
+    current_playback_rate = initialRate;
     portEXIT_CRITICAL(&playback_rate_mux);
 
     state = PLAYING;
 
     ESP_LOGV(TAG, "Playback started: source=%lu Hz, output=%.1f Hz, rate=%.3f",
              (unsigned long)sample_rate, (double)AUDIO_SAMPLE_RATE_EXACT,
-             (double)target_playback_rate);
+             (double)initialRate);
 
     return true;
 }
