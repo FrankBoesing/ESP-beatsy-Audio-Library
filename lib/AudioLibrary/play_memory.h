@@ -27,27 +27,35 @@
 #ifndef play_memory_h_
 #define play_memory_h_
 
-#include <Arduino.h>     // github.com/PaulStoffregen/cores/blob/master/teensy4/Arduino.h
-#include <AudioStream.h> // github.com/PaulStoffregen/cores/blob/master/teensy4/AudioStream.h
+#include <Arduino.h>
+#include <AudioStream.h>
 
 class AudioPlayMemory : public AudioStream
 {
 public:
-	AudioPlayMemory(void) : AudioStream(0, NULL), next(NULL), beginning(NULL),
-		length(0), playback_generation(0), prior(0), playing(0) { }
-	void play(const unsigned int *data);
-	void stop(void);
-	bool isPlaying(void);
-	uint32_t positionMillis(void);
-	uint32_t lengthMillis(void);
-	virtual void update(void);
+    AudioPlayMemory() : AudioStream(0, nullptr) {}
+
+    void play(const unsigned int *data);
+    void stop();
+    bool isPlaying();
+
+    // Playback-rate multiplier: 1.0 = original speed/pitch.
+    // Accepted range: 0.25 ... 4.0. Returns false for invalid values.
+    bool setPlaybackRate(float rate);
+    float playbackRate() const;
+
+    uint32_t positionMillis();
+    uint32_t lengthMillis();
+    void update() override;
+
 private:
-	const unsigned int *next;
-	const unsigned int *beginning;
-	uint32_t length;
-	uint32_t playback_generation;
-	int16_t prior;
-	volatile uint8_t playing;
+    const unsigned int *beginning = nullptr;
+    uint32_t length = 0;                 // Source samples, not output samples
+    uint32_t playback_generation = 0;
+    double sample_position = 0.0;        // Fractional source-sample position
+    float current_playback_rate = 1.0f;  // Audio-update task only
+    float target_playback_rate = 1.0f;   // Protected by playback_state_mux
+    volatile uint8_t playing = 0;        // Encoded format from sample header
 };
 
 #endif
