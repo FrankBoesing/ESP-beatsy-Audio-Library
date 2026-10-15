@@ -5,6 +5,7 @@
 #if defined(ARDUINO_ARCH_ESP32)
 
 static const char *TAG = "AudioPlaySdWav";
+static portMUX_TYPE playback_rate_mux = portMUX_INITIALIZER_UNLOCKED;
 
 namespace {
 
@@ -84,8 +85,9 @@ void AudioPlaySdWav::begin() {
     have_previous = false;
     have_next = false;
 
-    resample_phase = 0;
-    resample_step = 1;
+    source_phase = 0.0;
+    source_ended = false;
+    current_playback_rate = target_playback_rate;
 }
 
 // ============================================================================
@@ -238,34 +240,41 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
     have_previous = false;
     have_next = false;
 
-    resample_phase = 0;
-
-    /*
-     * Output rate is AUDIO_SAMPLE_RATE_EXACT.
-     *
-     * Supported source rates are exact integer divisors
-     * of 44.1 kHz.
-     */
-    if (sample_rate == AUDIO_SAMPLE_RATE_EXACT) {
-        resample_step = 1;
-    } else if (sample_rate == 22050 && AUDIO_SAMPLE_RATE_EXACT == 44100) {
-        resample_step = 2;
-    } else if (sample_rate == 11025 && AUDIO_SAMPLE_RATE_EXACT == 44100) {
-        resample_step = 4;
-    } else {
-        ESP_LOGE(TAG, "Source rate %lu cannot be resampled to audio rate %.1f",
-                 (unsigned long)sample_rate, (double)AUDIO_SAMPLE_RATE_EXACT);
-
-        closeSource();
-        return false;
-    }
+    source_phase = 0.0;
+    source_ended = false;
+    portENTER_CRITICAL(&playback_rate_mux);
+    current_playback_rate = target_playback_rate;
+    portEXIT_CRITICAL(&playback_rate_mux);
 
     state = PLAYING;
 
-    ESP_LOGV(TAG, "Playback started, output rate=%.1f Hz, resample step=%lu",
-             (double)AUDIO_SAMPLE_RATE_EXACT, (unsigned long)resample_step);
+    ESP_LOGV(TAG, "Playback started: source=%lu Hz, output=%.1f Hz, rate=%.3f",
+             (unsigned long)sample_rate, (double)AUDIO_SAMPLE_RATE_EXACT,
+             (double)target_playback_rate);
 
     return true;
+}
+
+// ============================================================================
+// Playback rate
+// ============================================================================
+
+bool AudioPlaySdWav::setPlaybackRate(float rate) {
+    if (!(rate >= 0.25f && rate <= 4.0f)) {
+        return false;
+    }
+
+    portENTER_CRITICAL(&playback_rate_mux);
+    target_playback_rate = rate;
+    portEXIT_CRITICAL(&playback_rate_mux);
+    return true;
+}
+
+float AudioPlaySdWav::playbackRate() const {
+    portENTER_CRITICAL(&playback_rate_mux);
+    const float result = target_playback_rate;
+    portEXIT_CRITICAL(&playback_rate_mux);
+    return result;
 }
 
 // ============================================================================
@@ -750,63 +759,64 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
 }
 
 // ============================================================================
-// Output sample / interpolation
+// Output sample / variable-rate interpolation
 // ============================================================================
 OSPEED
 bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right) {
-    /*
-     * First get two source samples.
-     * Interpolation is relevant for 22.05 / 11.025 kHz.
-     */
     if (!have_previous) {
         if (!readSourceFrame(previous_left, previous_right)) {
             return false;
         }
 
         have_previous = true;
+        have_next = false;
+        source_ended = false;
+        source_phase = 0.0;
+    }
 
-        if (resample_step > 1) {
-            if (readSourceFrame(next_left, next_right)) {
-                have_next = true;
-            }
+    if (!have_next && !source_ended) {
+        if (readSourceFrame(next_left, next_right)) {
+            have_next = true;
+        } else {
+            source_ended = true;
         }
     }
 
-    if (resample_step == 1) {
-        left = (int16_t)(previous_left >> 16);
-        right = (int16_t)(previous_right >> 16);
-
-        have_previous = false;
-        return true;
-    }
-
-    if (!have_next) {
-        return false;
-    }
-
-    const uint32_t phase = resample_phase % resample_step;
-
-    const int64_t l =
-        (int64_t)previous_left +
-        ((int64_t)(next_left - previous_left) * phase) / resample_step;
-
-    const int64_t r =
-        (int64_t)previous_right +
-        ((int64_t)(next_right - previous_right) * phase) / resample_step;
+    const double fraction = have_next ? source_phase : 0.0;
+    const int64_t leftDelta = (int64_t)next_left - previous_left;
+    const int64_t rightDelta = (int64_t)next_right - previous_right;
+    const int64_t l = (int64_t)previous_left +
+                      (have_next ? (int64_t)(leftDelta * fraction) : 0);
+    const int64_t r = (int64_t)previous_right +
+                      (have_next ? (int64_t)(rightDelta * fraction) : 0);
 
     left = (int16_t)(l >> 16);
     right = (int16_t)(r >> 16);
 
-    ++resample_phase;
+    // The target may be updated by the control task; smooth the change here.
+    current_playback_rate +=
+        (target_playback_rate - current_playback_rate) * 0.0015f;
 
-    if ((resample_phase % resample_step) == 0) {
-        previous_left = next_left;
-        previous_right = next_right;
+    const double sourceStep =
+        ((double)sample_rate / (double)AUDIO_SAMPLE_RATE_EXACT) *
+        (double)current_playback_rate;
+    source_phase += sourceStep;
 
-        if (readSourceFrame(next_left, next_right)) {
-            have_next = true;
-        } else {
-            have_next = false;
+    while (source_phase >= 1.0) {
+        source_phase -= 1.0;
+
+        if (have_next) {
+            previous_left = next_left;
+            previous_right = next_right;
+            have_next = readSourceFrame(next_left, next_right);
+            if (!have_next) {
+                source_ended = true;
+            }
+        } else if (source_ended) {
+            // The final source frame has been played for its full interval.
+            have_previous = false;
+            source_phase = 0.0;
+            break;
         }
     }
 
