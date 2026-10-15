@@ -1,5 +1,6 @@
 #include <Arduino.h>
-#include <SD_MMC.h>
+#include <SPI.h>
+#include <SD.h>
 #include <Audio.h>
 #include <math.h>
 
@@ -174,7 +175,7 @@ void setup() {
     Serial.println();
     Serial.println("======================================");
     Serial.println(" Vintage Radio A/B test");
-    Serial.println(" SD_MMC file: /test.mp3");
+    Serial.println(" SPI SD file: /test.mp3");
     Serial.println("======================================");
 
     // AudioMixerN starts with all gains at 1. Mute its inputs before starting
@@ -211,14 +212,21 @@ void setup() {
     configureSaturation();
     selectMode(1);
 
-    if (!SD_MMC.begin("/sdcard", true)) {
-        Serial.println("ERROR: SD_MMC initialization failed");
+    // Use the SPI pins defined for this board in platformio.ini.
+#if !defined(PIN_SD_CS) || !defined(PIN_SPI_SCK) || !defined(PIN_SPI_MISO) || !defined(PIN_SPI_MOSI)
+#error "Define PIN_SD_CS, PIN_SPI_SCK, PIN_SPI_MISO and PIN_SPI_MOSI for this board"
+#endif
+
+    SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_SD_CS);
+
+    if (!SD.begin(PIN_SD_CS, SPI)) {
+        Serial.println("ERROR: SPI SD initialization failed");
         while (true) {
             delay(1000);
         }
     }
 
-    if (!source.open(SD_MMC, "/test.mp3")) {
+    if (!source.open(SD, "/test.mp3")) {
         Serial.println("ERROR: Could not open /test.mp3");
         while (true) {
             delay(1000);
