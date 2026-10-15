@@ -1,9 +1,9 @@
 #include <Arduino.h>
 #include "play_sd_wav.h"
 #include "softcodecs/AudioSourceFile.h"
-#include <esp_heap_caps.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
+#include <esp_heap_caps.h>
 
 static const char *TAG = "AudioPlaySdWav";
 static portMUX_TYPE playback_rate_mux = portMUX_INITIALIZER_UNLOCKED;
