@@ -103,7 +103,7 @@ class AudioPlaySdWav : public AudioPlayer {
     bool source_ended = false;
 
     // Fractional source-frame position between previous_* and next_*.
-    double source_phase = 0.0;
+    float source_phase = 0.0f;
     float current_playback_rate = 1.0f; // Audio-update task only
     float target_playback_rate = 1.0f;  // Protected by playback_rate_mux
 
