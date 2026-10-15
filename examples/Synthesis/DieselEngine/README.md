@@ -1,0 +1,34 @@
+# Diesel Engine Sample Player
+
+This example uses the CC0 recording **“Diesel Start-Idle-Revs MZ000004.wav”** by DAVESTALKER:
+
+- Source: https://freesound.org/people/DAVESTALKER/sounds/443319/
+- License: CC0 (the recording page identifies it as CC0)
+- Recording format: PCM WAV, mono, 44.1 kHz, 16 bit
+- Reported duration: 26.613 s
+
+## Prepare the sample
+
+1. Download the original WAV from Freesound.
+2. Copy it to the SD card as `/diesel.wav`.
+3. Build and upload the `DieselEngine.cpp` example for a board with compatible I2S output, codec pins and SD_MMC wiring.
+
+The sample is not copied into this repository; download it from the original source. The recording description notes that there is some background talking/directing, so check the chosen cut points before using it in a finished demo.
+
+## Controls over the serial monitor (115200 baud)
+
+- `s`: play the start portion once, then switch to the idle loop
+- `i`: loop the idle portion
+- `r`: play the rev portion once, then switch to the idle loop
+- `+` / `-`: increase/decrease the RPM setting by 100
+- `0`: reset to the reference value (800 RPM)
+- `x`: stop playback
+- `?`: print the controls
+
+The RPM control changes the sample playback rate, including its pitch. The 800 RPM reference is an approximation, not a measured RPM value for the recorded engine.
+
+## Sample boundaries
+
+The initial boundary times in the source are **assumptions and have not been verified by listening to the WAV**. Adjust `START_END_MS`, `IDLE_START_MS`, `IDLE_END_MS`, `REV_START_MS` and `REV_END_MS` near the top of `DieselEngine.cpp` to match clean sections of the downloaded recording. All values are offsets from the beginning of the original WAV.
+
+The entire PCM payload is loaded into PSRAM where available (about 2.35 MB for the full recording). The example requires enough memory for that sample and does not stream the WAV from SD during the real-time audio callback.
