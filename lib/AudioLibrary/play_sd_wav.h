@@ -141,7 +141,7 @@ class AudioPlaySdWav : public AudioPlayer {
 
     int32_t decodeSample(const uint8_t *data) const;
 
-    bool getOutputSample(int16_t &left, int16_t &right);
+    bool getOutputSample(int16_t &left, int16_t &right, float targetRate);
 
     void releaseBlocks();
     void finishPlayback();
