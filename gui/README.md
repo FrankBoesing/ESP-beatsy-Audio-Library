@@ -10,6 +10,7 @@ Teensy Audio System Design Tool for the ESP-beatsy Audio Library.
   as a starting point for an Arduino/PlatformIO sketch.
 - Biquad Calculator: standalone offline tool for low-pass, high-pass, band-pass, notch and shelf filters. It plots the response and exports normalized Q30 coefficients and `AudioFilterBiquad` setup code.
 - EQ Chain Designer: designs and plots up to four cascaded `AudioFilterBiquad` stages and exports the corresponding setup calls. It uses the filter types currently implemented by the library; there is no dedicated peaking-EQ method.
+- FFT Window Lab: offline simulator for `AudioAnalyzeFFT256` and `AudioAnalyzeFFT1024`, embedding the exact Q15 window coefficient tables from `lib/AudioLibrary/utility/data_windows.c`. Plots the window, input/windowed samples and FFT spectrum; reports bin spacing, timing, coherent gain and equivalent noise bandwidth. Models FFT256's default eight-frame power averaging and FFT1024's single-frame output, but does not reproduce target-specific FFT rounding bit for bit.
 - FIR Calculator: standalone offline tool for windowed-sinc low-pass, high-pass,
   band-pass and band-stop design. It plots the quantized response and exports
   signed 16-bit Q15 coefficients for `AudioFilterFIR` (up to 199 odd-numbered taps).
