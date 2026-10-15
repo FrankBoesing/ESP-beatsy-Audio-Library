@@ -52,7 +52,8 @@ private:
     const unsigned int *beginning = nullptr;
     uint32_t length = 0;                 // Source samples, not output samples
     uint32_t playback_generation = 0;
-    double sample_position = 0.0;        // Fractional source-sample position
+    uint32_t sample_index = 0;
+    float sample_fraction = 0.0f;        // Fractional source-sample position
     float current_playback_rate = 1.0f;  // Audio-update task only
     float target_playback_rate = 1.0f;   // Protected by playback_state_mux
     volatile uint8_t playing = 0;        // Encoded format from sample header
