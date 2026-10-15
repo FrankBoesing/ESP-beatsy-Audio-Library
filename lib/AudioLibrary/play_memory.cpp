@@ -84,7 +84,8 @@ void AudioPlayMemory::play(const unsigned int *data)
     portENTER_CRITICAL(&playback_state_mux);
     beginning = data;
     length = formatWord & 0xFFFFFFU;
-    sample_position = 0.0;
+    sample_index = 0;
+    sample_fraction = 0.0f;
     current_playback_rate = target_playback_rate;
     playing = (uint8_t)(formatWord >> 24);
     ++playback_generation;
@@ -134,7 +135,8 @@ void AudioPlayMemory::update()
     const unsigned int *data = beginning;
     const uint32_t total_samples = length;
     const uint32_t generation = playback_generation;
-    double position = sample_position;
+    uint32_t index = sample_index;
+    float fraction = sample_fraction;
     float currentRate = current_playback_rate;
     const float targetRate = target_playback_rate;
     portEXIT_CRITICAL(&playback_state_mux);
@@ -160,30 +162,31 @@ void AudioPlayMemory::update()
         return;
     }
 
-    const double baseStep = (double)sourceRate / (double)AUDIO_SAMPLE_RATE_EXACT;
+    const float baseStep = (float)sourceRate / AUDIO_SAMPLE_RATE_EXACT;
     int16_t *out = block->data;
     bool finished = false;
 
     for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        if (position >= (double)total_samples) {
+        if (index >= total_samples) {
             out[i] = 0;
             finished = true;
             continue;
         }
 
-        const uint32_t index0 = (uint32_t)position;
-        const uint32_t index1 = (index0 + 1U < total_samples) ? index0 + 1U : index0;
-        const float fraction = (float)(position - (double)index0);
-        const int32_t s0 = sampleAt(data, play_format, index0);
+        const uint32_t index1 = (index + 1U < total_samples) ? index + 1U : index;
+        const int32_t s0 = sampleAt(data, play_format, index);
         const int32_t s1 = sampleAt(data, play_format, index1);
         out[i] = (int16_t)(s0 + (int32_t)((s1 - s0) * fraction));
 
         // Smooth rate changes to avoid abrupt pitch modulation.
         currentRate += (targetRate - currentRate) * 0.0015f;
-        position += baseStep * (double)currentRate;
+        fraction += baseStep * currentRate;
+        const uint32_t advance = (uint32_t)fraction;
+        index += advance;
+        fraction -= (float)advance;
     }
 
-    if (position >= (double)total_samples) {
+    if (index >= total_samples) {
         finished = true;
     }
 
@@ -194,7 +197,8 @@ void AudioPlayMemory::update()
         return;
     }
 
-    sample_position = position;
+    sample_index = index;
+    sample_fraction = fraction;
     current_playback_rate = currentRate;
     if (finished) {
         playing = 0;
@@ -210,7 +214,8 @@ uint32_t AudioPlayMemory::positionMillis()
 {
     portENTER_CRITICAL(&playback_state_mux);
     const uint8_t format = playing;
-    const double position = sample_position;
+    const uint32_t index = sample_index;
+    const float fraction = sample_fraction;
     portEXIT_CRITICAL(&playback_state_mux);
 
     if (format == 0) {
@@ -222,7 +227,7 @@ uint32_t AudioPlayMemory::positionMillis()
         return 0;
     }
 
-    return (uint32_t)(position * 1000.0 / (double)sourceRate);
+    return (uint32_t)(((double)index + fraction) * 1000.0 / (double)sourceRate);
 }
 
 uint32_t AudioPlayMemory::lengthMillis()
