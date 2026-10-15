@@ -15,7 +15,8 @@
 // Copy the downloaded, unmodified PCM WAV file to the SD card as /diesel.wav.
 // Required format: PCM, mono, 44.1 kHz, 16 bit.
 //
-// The segment boundaries below are INITIAL GUESSES, not verified timings.
+// Segment boundaries below are initial estimates based on the full WAV waveform.
+// Verify by listening to the selected regions before treating them as final.
 // Adjust them after listening to the selected WAV on your setup.
 // -----------------------------------------------------------------------------
 
