@@ -513,6 +513,19 @@ float AudioPlaySdWav::playbackRate() const {
     return result;
 }
 
+void AudioPlaySdWav::setLoop(bool enabled) {
+    portENTER_CRITICAL(&playback_rate_mux);
+    loop_enabled = enabled;
+    portEXIT_CRITICAL(&playback_rate_mux);
+}
+
+bool AudioPlaySdWav::isLooping() const {
+    portENTER_CRITICAL(&playback_rate_mux);
+    const bool result = loop_enabled;
+    portEXIT_CRITICAL(&playback_rate_mux);
+    return result;
+}
+
 // ============================================================================
 // Stop
 // ============================================================================
@@ -994,13 +1007,28 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
     return true;
 }
 
+bool AudioPlaySdWav::readSourceFrameOrLoop(int32_t &left, int32_t &right, bool loop) {
+    // Restart only at the data-chunk boundary; never scan the RIFF header in the
+    // audio update path. Seeking is done by the current file-backed WAV path.
+    if ((uint64_t)source_frames_read * block_align >= data_length) {
+        if (!loop || data_length == 0 || !seekAbsolute(data_start)) {
+            return false;
+        }
+        source_frames_read = 0;
+        source_frame = 0;
+    }
+
+    return readSourceFrame(left, right);
+}
+
 // ============================================================================
 // Output sample / variable-rate interpolation
 // ============================================================================
 OSPEED
-bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right, float targetRate) {
+bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
+                                     float targetRate, bool loop) {
     if (!have_previous) {
-        if (!readSourceFrame(previous_left, previous_right)) {
+        if (!readSourceFrameOrLoop(previous_left, previous_right, loop)) {
             return false;
         }
 
@@ -1011,7 +1039,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right, float target
     }
 
     if (!have_next && !source_ended) {
-        if (readSourceFrame(next_left, next_right)) {
+        if (readSourceFrameOrLoop(next_left, next_right, loop)) {
             have_next = true;
         } else {
             source_ended = true;
@@ -1043,7 +1071,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right, float target
         if (have_next) {
             previous_left = next_left;
             previous_right = next_right;
-            have_next = readSourceFrame(next_left, next_right);
+            have_next = readSourceFrameOrLoop(next_left, next_right, loop);
             if (!have_next) {
                 source_ended = true;
             }
@@ -1149,13 +1177,14 @@ void AudioPlaySdWav::update() {
 
     portENTER_CRITICAL(&playback_rate_mux);
     const float targetRate = target_playback_rate;
+    const bool loop = loop_enabled;
     portEXIT_CRITICAL(&playback_rate_mux);
 
     while (block_offset < AUDIO_BLOCK_SAMPLES) {
         int16_t left;
         int16_t right;
 
-        if (!getOutputSample(left, right, targetRate)) {
+        if (!getOutputSample(left, right, targetRate, loop)) {
             finishPlayback();
             return;
         }
