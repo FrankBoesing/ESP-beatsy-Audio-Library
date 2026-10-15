@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include "AudioPlayer.h"
+#include "AudioSampleBuffer.h"
 #include "softcodecs/AudioSource.h"
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -48,6 +49,17 @@ class AudioPlaySdWav : public AudioPlayer {
     // Accepted range: 0.25 ... 4.0. Returns false for invalid values.
     bool setPlaybackRate(float rate);
     float playbackRate() const;
+
+    // Repeat the WAV data chunk until setLoop(false) or stop() is called.
+    void setLoop(bool enabled);
+    bool isLooping() const;
+
+    // Load a PCM WAV into an owned mono int16_t PSRAM buffer for AudioPlayMemory.
+    // Stereo files are downmixed to mono. Supported rates: 11025, 22050, 44100 Hz.
+    // Fails without changing buffer if PSRAM cannot hold the entire decoded sample,
+    // retaining reserveBytes (64 KiB by default) for the rest of the application.
+    bool loadToMemory(fs::FS &fs, const char *filename, AudioSampleBuffer &buffer,
+                      size_t reserveBytes = 64U * 1024U);
 
     const AudioPlayerInfo &info() const override {
         return INFO;
@@ -107,6 +119,7 @@ class AudioPlaySdWav : public AudioPlayer {
     float source_phase = 0.0f;
     float current_playback_rate = 1.0f; // Audio-update task only
     float target_playback_rate = 1.0f;  // Protected by playback_rate_mux
+    bool loop_enabled = false;          // Protected by playback_rate_mux
 
     /*
      * Gemeinsamer Startpfad für alle Sources.
@@ -139,10 +152,11 @@ class AudioPlaySdWav : public AudioPlayer {
      * PCM decoding.
      */
     bool readSourceFrame(int32_t &left, int32_t &right);
+    bool readSourceFrameOrLoop(int32_t &left, int32_t &right, bool loop);
 
     int32_t decodeSample(const uint8_t *data) const;
 
-    bool getOutputSample(int16_t &left, int16_t &right, float targetRate);
+    bool getOutputSample(int16_t &left, int16_t &right, float targetRate, bool loop);
 
     void releaseBlocks();
     void finishPlayback();
