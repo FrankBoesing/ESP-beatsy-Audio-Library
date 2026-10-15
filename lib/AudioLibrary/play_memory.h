@@ -40,6 +40,7 @@ public:
     bool isPlaying();
 
     // Playback-rate multiplier: 1.0 = original speed/pitch.
+    // Resampling changes pitch too; this is not pitch-preserving time-stretch.
     // Accepted range: 0.25 ... 4.0. Returns false for invalid values.
     bool setPlaybackRate(float rate);
     float playbackRate() const;
