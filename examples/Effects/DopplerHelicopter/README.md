@@ -30,7 +30,7 @@ and makes the sample play faster/higher; a positive radial velocity means it is 
 and makes the sample play slower/lower. Near the closest pass the radial velocity changes
 sign through zero.
 
-A small example-local stereo panner uses the WAV's left channel as its mono source signal.
+A small example-local panner sums the WAV's stereo channels to mono and then creates a new stereo image.
 Pan follows the helicopter's horizontal position, and gain decreases with distance.
 At the far left the model reverses direction and repeats the same path back to the right.
 
