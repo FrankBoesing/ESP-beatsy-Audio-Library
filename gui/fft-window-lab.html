@@ -266,9 +266,7 @@ function drawSignal(result){
 function drawSpectrum(result,s){
   const {ctx,w,h}=canvasContext($("spectrumCanvas"));
   const mags=result.magnitudes,fs=s.sampleRate,n=result.n,df=fs/n,maxHz=fs/2;
-  const positive=mags.slice(1),maxValue=Math.max(...positive,1e-12);
   const displayVals=mags.map(v=>s.correctAmplitude&&result.coherentGain!==0?v/Math.abs(result.coherentGain):v);
-  const peak=Math.max(...displayVals.slice(1),1e-12);
   const minFreq=df;
   const xMap=f=>s.xScale==="log"?Math.log(Math.max(minFreq,f)/minFreq)/Math.log(maxHz/minFreq):f/maxHz;
   let xTicks;
@@ -277,14 +275,13 @@ function drawSpectrum(result,s){
   const g=axes(ctx,w,h,null,{yMin:-100,yMax:0,yTicks:[0,-20,-40,-60,-80,-100],yFormat:v=>String(v),xTicks,xMap,xFormat:v=>v>=1000?format(v/1000,1)+"k":format(v,0)});
   ctx.beginPath();ctx.strokeStyle="#c47b21";ctx.lineWidth=1.6;
   for(let k=1;k<mags.length;k++){
-    const db=20*Math.log10(Math.max(displayVals[k]/peak,1e-5));
+    // Library read() convention: 1.0 is approximately a full-scale sine at an exact bin.
+    const db=20*Math.log10(Math.max(displayVals[k],1e-5));
     const x=g.x(k*df),y=g.y(Math.max(-100,db));
     if(k===1)ctx.moveTo(x,y);else ctx.lineTo(x,y);
   }
   ctx.stroke();
-  const peakDb=20*Math.log10(Math.max(displayVals[result.peakBin]/peak,1e-5));
-  $("spectrumSummary").textContent="Magnitude in dB relative to the strongest non-DC bin. Peak at bin "+result.peakBin+" ("+format(result.peakHz,1)+" Hz). Display gain correction "+(s.correctAmplitude?"enabled":"disabled")+".";
-  return {peakDb,maxValue};
+  $("spectrumSummary").textContent="Magnitude in dBFS using the library read() convention (1.0 ≈ full-scale sine at an exact bin). The coherent-gain checkbox changes the absolute level shown.";
 }
 function render(){
   const s=getSettings(),result=calculate(s);lastResult=result;
@@ -299,7 +296,6 @@ function render(){
   $("coherentGain").textContent=format(result.coherentGain,5);
   $("enbw").textContent=format(result.enbw,3)+" bins";
   $("peakFrequency").textContent=format(result.peakHz,1)+" Hz";
-  const peakText=s.correctAmplitude?result.correctedPeak:result.peakValue;
   $("peakLevel").textContent="read() model: "+format(result.peakValue,4)+"; corrected: "+(result.correctedPeak===null?"n/a":format(result.correctedPeak,4));
   drawWindow(result);drawSignal(result);drawSpectrum(result,s);
   const prefix=s.size===256?"AudioAnalyzeFFT256":"AudioAnalyzeFFT1024";
