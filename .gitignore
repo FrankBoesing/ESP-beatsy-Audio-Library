@@ -8,6 +8,8 @@
 compile_commands.json
 /docs/
 secrets.h
+/src/secrets.h
 .github/*
 copilot-instructions.md
 /src/
+platformio.ini

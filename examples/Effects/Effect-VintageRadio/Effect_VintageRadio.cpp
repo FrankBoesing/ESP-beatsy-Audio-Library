@@ -226,8 +226,8 @@ void setup() {
         }
     }
 
-    if (!source.open(SD, "/test.mp3")) {
-        Serial.println("ERROR: Could not open /test.mp3");
+    if (!source.open(SD, "/radiotest.mp3")) {
+        Serial.println("ERROR: Could not open /radiotest.mp3");
         while (true) {
             delay(1000);
         }
