@@ -29,6 +29,7 @@
 
 #include <Arduino.h>
 #include <AudioStream.h>
+#include "AudioSampleBuffer.h"
 
 class AudioPlayMemory : public AudioStream
 {
@@ -36,8 +37,15 @@ public:
     AudioPlayMemory() : AudioStream(0, nullptr) {}
 
     void play(const unsigned int *data);
+    void play(const unsigned int *data, bool loop);
+    // Plays mono PCM samples owned by AudioSampleBuffer without copying them.
+    // The buffer must outlive playback. Supported sample rates: 11025, 22050, 44100 Hz.
+    bool play(const AudioSampleBuffer &buffer, bool loop = false);
     void stop();
     bool isPlaying();
+
+    void setLoop(bool enabled);
+    bool isLooping() const;
 
     // Playback-rate multiplier: 1.0 = original speed/pitch.
     // Resampling changes pitch too; this is not pitch-preserving time-stretch.
@@ -50,14 +58,18 @@ public:
     void update() override;
 
 private:
-    const unsigned int *beginning = nullptr;
-    uint32_t length = 0;                 // Source samples, not output samples
+    const unsigned int *beginning = nullptr; // Legacy encoded sample data
+    const int16_t *pcm_samples = nullptr;    // Non-owning AudioSampleBuffer data
+    uint32_t length = 0;                    // Source samples, not output samples
+    uint32_t pcm_sample_rate = 0;
     uint32_t playback_generation = 0;
     uint32_t sample_index = 0;
-    float sample_fraction = 0.0f;        // Fractional source-sample position
-    float current_playback_rate = 1.0f;  // Audio-update task only
-    float target_playback_rate = 1.0f;   // Protected by playback_state_mux
-    volatile uint8_t playing = 0;        // Encoded format from sample header
+    float sample_fraction = 0.0f;           // Fractional source-sample position
+    float current_playback_rate = 1.0f;     // Audio-update task only
+    float target_playback_rate = 1.0f;      // Protected by playback_state_mux
+    bool raw_pcm = false;
+    bool loop_enabled = false;              // Protected by playback_state_mux
+    volatile uint8_t playing = 0;           // Encoded format or 0x84 for raw PCM
 };
 
 #endif
