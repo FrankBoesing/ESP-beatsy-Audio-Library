@@ -75,7 +75,7 @@ static int16_t sampleAt(const unsigned int *data, uint8_t format, uint32_t index
 
 void AudioPlayMemory::play(const unsigned int *data)
 {
-    play(data, false);
+    play(data, isLooping());
 }
 
 void AudioPlayMemory::play(const unsigned int *data, bool loop)
@@ -99,6 +99,11 @@ void AudioPlayMemory::play(const unsigned int *data, bool loop)
     playing = (uint8_t)(formatWord >> 24);
     ++playback_generation;
     portEXIT_CRITICAL(&playback_state_mux);
+}
+
+bool AudioPlayMemory::play(const AudioSampleBuffer &buffer)
+{
+    return play(buffer, isLooping());
 }
 
 bool AudioPlayMemory::play(const AudioSampleBuffer &buffer, bool loop)
