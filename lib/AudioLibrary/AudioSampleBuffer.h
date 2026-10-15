@@ -2,9 +2,10 @@
 
 #include <Arduino.h>
 
-// Owns an interleaved-to-mono, signed 16-bit PCM sample buffer.
-// AudioPlaySdWav allocates the samples in PSRAM; AudioPlayMemory reads them
-// without copying. Keep this object alive for the entire playback.
+// Owns a mono, signed 16-bit PCM sample buffer decoded from a WAV.
+// Stereo WAV files are downmixed. AudioPlaySdWav allocates the samples in
+// PSRAM; AudioPlayMemory reads them without copying. Keep this object alive
+// and do not release/reload it while playback is using the buffer.
 class AudioSampleBuffer {
 public:
     AudioSampleBuffer() = default;
