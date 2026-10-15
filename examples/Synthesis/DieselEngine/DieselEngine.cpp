@@ -210,7 +210,13 @@ public:
         if (rpm < MIN_RPM) rpm = MIN_RPM;
         if (rpm > MAX_RPM) rpm = MAX_RPM;
         currentRpm = rpm;
-        targetRate_ = (float)rpm / (float)REFERENCE_RPM;
+
+        // Do not scale playback rate linearly with RPM. At 2400 RPM a linear
+        //  RPM/800 mapping would play the whole recording 3x faster, raising
+        //  every mechanical/background sound into a cartoon-like pitch.
+        //  The quarter-power curve retains a perceptible response while
+        //  keeping the rate in a more useful range (~0.84x to ~1.32x).
+        targetRate_ = powf((float)rpm / (float)REFERENCE_RPM, 0.25f);
     }
 
     void playStart() {
