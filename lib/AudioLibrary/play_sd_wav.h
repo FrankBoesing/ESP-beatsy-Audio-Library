@@ -43,6 +43,11 @@ class AudioPlaySdWav : public AudioPlayer {
     uint32_t positionMillis() const override;
     uint32_t lengthMillis() const override;
 
+    // Playback-rate multiplier: 1.0 = original speed/pitch.
+    // Accepted range: 0.25 ... 4.0. Returns false for invalid values.
+    bool setPlaybackRate(float rate);
+    float playbackRate() const;
+
     const AudioPlayerInfo &info() const override {
         return INFO;
     }
@@ -95,9 +100,12 @@ class AudioPlaySdWav : public AudioPlayer {
 
     bool have_previous;
     bool have_next;
+    bool source_ended;
 
-    uint32_t resample_phase;
-    uint32_t resample_step;
+    // Fractional source-frame position between previous_* and next_*.
+    double source_phase;
+    float current_playback_rate; // Audio-update task only
+    float target_playback_rate;  // Protected by playback_rate_mux
 
     /*
      * Gemeinsamer Startpfad für alle Sources.
