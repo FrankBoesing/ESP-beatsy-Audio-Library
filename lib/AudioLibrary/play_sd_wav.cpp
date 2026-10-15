@@ -337,22 +337,30 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
         return false;
     }
 
-    source_frames_read = 0;
-    for (uint32_t i = 0; i < frames; ++i) {
-        int32_t left;
-        int32_t right;
-        if (!readSourceFrame(left, right)) {
+    // Decode in bounded chunks instead of invoking the source reader once per sample.
+    uint8_t raw[1024];
+    const uint32_t framesPerChunk = sizeof(raw) / block_align;
+    uint32_t framesDone = 0;
+    while (framesDone < frames) {
+        uint32_t framesNow = frames - framesDone;
+        if (framesNow > framesPerChunk) framesNow = framesPerChunk;
+        const size_t bytesNow = (size_t)framesNow * block_align;
+        if (!readExact(raw, bytesNow)) {
             ESP_LOGE(TAG, "Unexpected end of WAV while preloading sample");
             heap_caps_free(newSamples);
             closeSource();
             return false;
         }
 
-        // WAV decoding already scales all supported PCM depths to the upper
-        // 16 bits of int32_t. Downmix stereo to mono for AudioPlayMemory.
-        const int32_t left16 = left >> 16;
-        const int32_t right16 = right >> 16;
-        newSamples[i] = (int16_t)((left16 + right16) / 2);
+        for (uint32_t i = 0; i < framesNow; ++i) {
+            const uint8_t *frame = raw + (size_t)i * block_align;
+            const int32_t left = decodeSample(frame) >> 16;
+            const int32_t right = channels == 2
+                                      ? decodeSample(frame + bytes_per_sample) >> 16
+                                      : left;
+            newSamples[framesDone + i] = (int16_t)((left + right) / 2);
+        }
+        framesDone += framesNow;
     }
 
     closeSource();
