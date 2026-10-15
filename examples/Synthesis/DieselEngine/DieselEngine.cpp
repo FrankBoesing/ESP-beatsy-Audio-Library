@@ -15,8 +15,9 @@
 // Copy the downloaded, unmodified PCM WAV file to the SD card as /diesel.wav.
 // Required format: PCM, mono, 44.1 kHz, 16 bit.
 //
-// Segment boundaries below are initial estimates based on the full WAV waveform.
-// Verify by listening to the selected regions before treating them as final.
+// Segment boundaries are based on the full WAV and the user's voice timestamps.
+// The idle loop ends before speech heard at about 9 s; rev cut avoids speech at 14.8–16.5 s.
+// Verify the loop seam by listening before treating these cuts as final.
 // Adjust them after listening to the selected WAV on your setup.
 // -----------------------------------------------------------------------------
 
@@ -27,7 +28,7 @@ constexpr uint32_t REFERENCE_RPM = 800;
 // Initial estimates only; adjust after listening to the actual source file.
 constexpr uint32_t START_END_MS = 2500;
 constexpr uint32_t IDLE_START_MS = 2500;
-constexpr uint32_t IDLE_END_MS = 11300;
+constexpr uint32_t IDLE_END_MS = 8500;
 constexpr uint32_t REV_START_MS = 11500;
 constexpr uint32_t REV_END_MS = 13500;
 
