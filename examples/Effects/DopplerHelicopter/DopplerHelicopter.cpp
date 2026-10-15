@@ -156,7 +156,8 @@ void setup() {
     helicopter.setPlaybackRate(1.0f);
     pan.setPosition(1.0f, 0.0f);
 
-    if (!helicopter.play(helicopterSample, true)) {
+    helicopter.setLoop(true);
+    if (!helicopter.play(helicopterSample)) {
         Serial.println("ERROR: AudioPlayMemory rejected the loaded sample");
         while (true) delay(1000);
     }
