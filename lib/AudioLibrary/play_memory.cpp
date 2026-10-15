@@ -28,6 +28,10 @@
 #include "play_memory.h"
 #include "utility/dspinst.h"
 
+extern "C" {
+extern const int16_t ulaw_decode_table[256];
+};
+
 static portMUX_TYPE playback_state_mux = portMUX_INITIALIZER_UNLOCKED;
 
 
