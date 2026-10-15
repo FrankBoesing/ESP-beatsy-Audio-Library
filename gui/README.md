@@ -8,6 +8,9 @@ Teensy Audio System Design Tool for the ESP-beatsy Audio Library.
   ES8311/ES8388 codec control, MP3/AAC playback, AudioMixerN and WAV recording.
 - Export: generates the Audio graph declarations and `AudioConnection` lines
   as a starting point for an Arduino/PlatformIO sketch.
+- FIR Calculator: standalone offline tool for windowed-sinc low-pass, high-pass,
+  band-pass and band-stop design. It plots the quantized response and exports
+  signed 16-bit Q15 coefficients for `AudioFilterFIR` (up to 199 odd-numbered taps).
 - This tool remains a work in progress. It is an offline GUI for graph design,
   not a complete parser or code generator for every library API.
 
