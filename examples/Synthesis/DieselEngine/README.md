@@ -25,7 +25,7 @@ The sample is not copied into this repository; download it from the original sou
 - `x`: stop playback
 - `?`: print the controls
 
-The RPM control changes the sample playback rate, including its pitch. The 800 RPM reference is an approximation, not a measured RPM value for the recorded engine.
+The RPM control changes the sample playback rate, including its pitch. The mapping is deliberately compressed with a quarter-power curve: a linear RPM/800 mapping would play the sample 3× faster at 2400 RPM and make the whole recording sound cartoonishly high. With the current curve, 400–2400 RPM corresponds to approximately 0.84×–1.32× playback rate. RPM labels are therefore a demonstrator control, not a measured or calibrated engine speed.
 
 ## Sample boundaries
 
