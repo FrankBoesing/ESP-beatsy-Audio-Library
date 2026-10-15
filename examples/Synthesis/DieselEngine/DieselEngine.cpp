@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <SD_MMC.h>
 #include <esp_heap_caps.h>
+#include <math.h>
 #include <Audio.h>
 
 // -----------------------------------------------------------------------------
@@ -183,12 +184,11 @@ public:
             return false;
         }
 
-        Serial.printf("Loaded /%s: %u samples (%.2f s), %u bytes in %s\n",
-                      path[0] == '/' ? path + 1 : path,
+        Serial.printf("Loaded %s: %u samples (%.2f s), %u bytes\n",
+                      path,
                       (unsigned)sampleCount_,
                       (double)sampleCount_ / SAMPLE_RATE,
-                      (unsigned)dataBytes,
-                      heap_caps_check_integrity_all(true) ? "memory OK" : "memory check failed");
+                      (unsigned)dataBytes);
         return true;
     }
 
@@ -275,7 +275,9 @@ public:
             const uint32_t index0 = (uint32_t)position_;
             uint32_t index1 = index0 + 1;
             if (index1 >= rangeEnd_) {
-                index1 = rangeStart_;
+                index1 = (mode_ == PlaybackMode::IdleLoop)
+                             ? rangeStart_
+                             : (rangeEnd_ - 1);
             }
 
             const float fraction = (float)(position_ - (double)index0);
