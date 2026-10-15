@@ -784,7 +784,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right, float target
         }
     }
 
-    const double fraction = have_next ? source_phase : 0.0;
+    const float fraction = have_next ? source_phase : 0.0f;
     const int64_t leftDelta = have_next ? (int64_t)next_left - previous_left : 0;
     const int64_t rightDelta = have_next ? (int64_t)next_right - previous_right : 0;
     const int64_t l = (int64_t)previous_left +
@@ -799,9 +799,8 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right, float target
     current_playback_rate +=
         (targetRate - current_playback_rate) * 0.0015f;
 
-    const double sourceStep =
-        ((double)sample_rate / (double)AUDIO_SAMPLE_RATE_EXACT) *
-        (double)current_playback_rate;
+    const float sourceStep =
+        ((float)sample_rate / AUDIO_SAMPLE_RATE_EXACT) * current_playback_rate;
     source_phase += sourceStep;
 
     while (source_phase >= 1.0) {
