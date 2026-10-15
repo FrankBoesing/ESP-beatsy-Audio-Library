@@ -11,7 +11,7 @@ This example uses the CC0 recording **“Diesel Start-Idle-Revs MZ000004.wav”*
 
 1. Download the original WAV from Freesound.
 2. Copy it to the SD card as `/diesel.wav`.
-3. Build and upload the `DieselEngine.cpp` example for a board with compatible I2S output, codec pins and SD_MMC wiring.
+3. Use the repository's usual example workflow to compile `DieselEngine.cpp` as the active sketch (for example, copy it to the project's active `src/main.cpp`) for a board with compatible I2S output, codec pins and SD_MMC wiring.
 
 The sample is not copied into this repository; download it from the original source. The recording description notes that there is some background talking/directing, so check the chosen cut points before using it in a finished demo.
 
