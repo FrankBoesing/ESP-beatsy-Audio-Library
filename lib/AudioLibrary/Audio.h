@@ -5,6 +5,7 @@
 #include "common.h"
 
 #include "AudioStream.h"
+#include "AudioSampleBuffer.h"
 #include "softcodecs/AudioSourceFile.h"
 
 #include "analyze_fft1024.h"

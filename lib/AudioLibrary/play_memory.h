@@ -27,27 +27,50 @@
 #ifndef play_memory_h_
 #define play_memory_h_
 
-#include <Arduino.h>     // github.com/PaulStoffregen/cores/blob/master/teensy4/Arduino.h
-#include <AudioStream.h> // github.com/PaulStoffregen/cores/blob/master/teensy4/AudioStream.h
+#include <Arduino.h>
+#include <AudioStream.h>
+#include "AudioSampleBuffer.h"
 
 class AudioPlayMemory : public AudioStream
 {
 public:
-	AudioPlayMemory(void) : AudioStream(0, NULL), next(NULL), beginning(NULL),
-		length(0), playback_generation(0), prior(0), playing(0) { }
-	void play(const unsigned int *data);
-	void stop(void);
-	bool isPlaying(void);
-	uint32_t positionMillis(void);
-	uint32_t lengthMillis(void);
-	virtual void update(void);
+    AudioPlayMemory() : AudioStream(0, nullptr) {}
+
+    void play(const unsigned int *data);
+    void play(const unsigned int *data, bool loop);
+    // Plays mono PCM samples owned by AudioSampleBuffer without copying them.
+    // The buffer must outlive playback. Supported sample rates: 11025, 22050, 44100 Hz.
+    bool play(const AudioSampleBuffer &buffer);
+    bool play(const AudioSampleBuffer &buffer, bool loop);
+    void stop();
+    bool isPlaying();
+
+    void setLoop(bool enabled);
+    bool isLooping() const;
+
+    // Playback-rate multiplier: 1.0 = original speed/pitch.
+    // Resampling changes pitch too; this is not pitch-preserving time-stretch.
+    // Accepted range: 0.25 ... 4.0. Returns false for invalid values.
+    bool setPlaybackRate(float rate);
+    float playbackRate() const;
+
+    uint32_t positionMillis();
+    uint32_t lengthMillis();
+    void update() override;
+
 private:
-	const unsigned int *next;
-	const unsigned int *beginning;
-	uint32_t length;
-	uint32_t playback_generation;
-	int16_t prior;
-	volatile uint8_t playing;
+    const unsigned int *beginning = nullptr; // Legacy encoded sample data
+    const int16_t *pcm_samples = nullptr;    // Non-owning AudioSampleBuffer data
+    uint32_t length = 0;                    // Source samples, not output samples
+    uint32_t pcm_sample_rate = 0;
+    uint32_t playback_generation = 0;
+    uint32_t sample_index = 0;
+    float sample_fraction = 0.0f;           // Fractional source-sample position
+    float current_playback_rate = 1.0f;     // Audio-update task only
+    float target_playback_rate = 1.0f;      // Protected by playback_state_mux
+    bool raw_pcm = false;
+    bool loop_enabled = false;              // Protected by playback_state_mux
+    volatile uint8_t playing = 0;           // Encoded format or 0x84 for raw PCM
 };
 
 #endif
