@@ -40,7 +40,8 @@ public:
     void play(const unsigned int *data, bool loop);
     // Plays mono PCM samples owned by AudioSampleBuffer without copying them.
     // The buffer must outlive playback. Supported sample rates: 11025, 22050, 44100 Hz.
-    bool play(const AudioSampleBuffer &buffer, bool loop = false);
+    bool play(const AudioSampleBuffer &buffer);
+    bool play(const AudioSampleBuffer &buffer, bool loop);
     void stop();
     bool isPlaying();
 
