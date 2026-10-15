@@ -47,7 +47,6 @@ These examples are present in the repository. Their board-specific pin and codec
 | [Polyphonic synth music](examples/Synthesis/PlaySynthMusic/main.cpp) | Plays a score stored in memory using 16 waveform voices, envelopes and left/right AudioMixerN instances. |
 | [Simple Drum](examples/Synthesis/SimpleDrum/SimpleDrum.cpp) | Triggers four simple-drum synthesizers and mixes them to stereo output. |
 | [Wavetable Drum Computer](examples/Synthesis/WavetableDrumComputer/WavetableDrumComputer.cpp) | Plays a four-bar, alternative-rock-style intro before looping an original groove. Uses one-shot wavetable playback with CC0 kick, snare, closed/open hi-hat and two tom samples prepared from [Aspirin DX Soundbank — Fairytale Edition](https://github.com/NeoSoundFonts/Aspirin-DX-Soundbank). Records about 60 seconds as mono PCM WAV to SD (`/DrumComputer.wav`); skips recording if `/DrumComputer.wav` or `/DrumComputer.tmp` already exists. Requires SD wiring, a writable card and PSRAM. |
-| [Diesel Engine Sample Player](examples/Synthesis/DieselEngine/DieselEngine.cpp) | Loads the CC0 “Diesel Start-Idle-Revs” WAV from an SPI SD card into PSRAM, with start/rev one-shots, an idle loop and serial RPM control by changing playback rate. Requires `/443319__davestalker__diesel-start-idle-revs-mz000004.wav`; segment boundaries are initial, unverified estimates. |
 | [Doppler Helicopter](examples/Effects/DopplerHelicopter/DopplerHelicopter.cpp) | Loads a short mono rotor-loop WAV from SPI SD into a PSRAM `AudioSampleBuffer`, then plays it from `AudioPlayMemory` with looping and Doppler playback-rate control, stereo panning and distance-dependent gain. Requires `/Helicopter.wav` to fit in available PSRAM. |
 | [Generative Melody](examples/Synthesis/GenerativeMelody/GenerativeMelody.cpp) | Creates C64-inspired, ever-changing melodies with a repeating motif, chord-aware notes, a bass line, a sustained chord pad and four tempo-synchronised melody echoes. |
 | [Deep House Groove](examples/Synthesis/DeepHouse/DeepHouse.cpp) | Generates a 125 BPM four-on-the-floor beat with kick, noise clap, closed/open hi-hats with occasional ghost notes, syncopated filtered bass, offbeat seventh-chord stabs and stereo Freeverb ambience. |
@@ -122,8 +121,8 @@ TDM is planned; PDM output is implemented on supported targets.
 | --- | --- |
 | **AudioPlayMp3** | MP3 decoder/player. Can play from an Arduino filesystem or a generic AudioSource; used by the radio example for MP3 streams. |
 | **AudioPlayAac** | AAC decoder/player. Can play from an Arduino filesystem or a generic AudioSource; used by the radio example for AAC streams. |
-| **AudioPlaySdWav** | WAV/PCM file player supporting filesystem and seekable AudioSource input. It requires seeking and therefore is not suitable for a non-seekable network stream such as AudioSourceStream. |
-| **AudioPlayMemory** | Plays sample data stored in memory using the familiar Teensy-style API. |
+| **AudioPlaySdWav** | WAV/PCM file player for filesystems and seekable AudioSource objects. Supports loop and playback-rate control, and can preload a supported PCM WAV into a mono PSRAM AudioSampleBuffer for AudioPlayMemory. |
+| **AudioPlayMemory** | Plays legacy wav2sketch sample arrays or mono PCM from AudioSampleBuffer without copying; supports looping and variable playback rate. The buffer must outlive playback. |
 | **AudioPlayQueue** | Supplies application-generated samples or blocks into the audio graph; includes ORIGINAL and NON_STALLING queue behaviours. |
 | **AudioPlayer** | Common player interface used by the decoder/file-player architecture, with codec metadata, MIME matching, playback state, position and duration methods. It is an abstract interface, not a concrete decoder. |
 
