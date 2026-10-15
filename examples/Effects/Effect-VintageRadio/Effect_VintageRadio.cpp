@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <SD_MMC.h>
 #include <Audio.h>
+#include <math.h>
 
 // Compare the same MP3 stream through several processing paths.
 // Copy a test file to the SD card as /test.mp3.
@@ -126,17 +127,20 @@ static void selectMode(uint8_t mode) {
     }
 
     // Keep the two stereo selectors consistent across an audio update.
-    audio_detail::GraphUpdateLock lock;
+    {
+        audio_detail::GraphUpdateLock lock;
 
-    for (uint8_t channel = 0; channel < MODE_COUNT; ++channel) {
-        const float gain = (channel == mode)
-                               ? ((mode >= 3) ? SATURATION_LEVEL : 1.0f)
-                               : 0.0f;
-        selectL.gain(channel, gain);
-        selectR.gain(channel, gain);
+        for (uint8_t channel = 0; channel < MODE_COUNT; ++channel) {
+            const float gain = (channel == mode)
+                                   ? ((mode >= 3) ? SATURATION_LEVEL : 1.0f)
+                                   : 0.0f;
+            selectL.gain(channel, gain);
+            selectR.gain(channel, gain);
+        }
+
+        currentMode = mode;
     }
 
-    currentMode = mode;
     Serial.printf("Mode %u: %s\n", currentMode, MODE_NAMES[currentMode]);
 }
 
