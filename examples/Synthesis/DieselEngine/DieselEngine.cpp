@@ -1,5 +1,6 @@
 #include <Arduino.h>
-#include <SD_MMC.h>
+#include <SPI.h>
+#include <SD.h>
 #include <esp_heap_caps.h>
 #include <math.h>
 #include <Audio.h>
@@ -12,7 +13,7 @@
 //   https://freesound.org/people/DAVESTALKER/sounds/443319/
 //   License: CC0
 //
-// Copy the downloaded, unmodified PCM WAV file to the SD card as /diesel.wav.
+// Copy the downloaded, unmodified PCM WAV file to the SD card using its original filename.
 // Required format: PCM, mono, 44.1 kHz, 16 bit.
 //
 // Segment boundaries are based on the full WAV and the user's voice timestamps.
@@ -68,6 +69,17 @@ uint32_t msToFrame(uint32_t ms) {
     return (uint32_t)(((uint64_t)ms * SAMPLE_RATE) / 1000U);
 }
 } // namespace
+
+// Mount the Audio Kit's onboard SD card via SPI using pins from platformio.ini.
+// The current ESP32-Audio-Kit environment defines CS=13, MOSI=15, MISO=2, SCK=14.
+static bool mountSD() {
+#if defined(PIN_SD_CS) && defined(PIN_SPI_MOSI) && defined(PIN_SPI_MISO) && defined(PIN_SPI_SCK)
+    SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_SD_CS);
+    return SD.begin(PIN_SD_CS, SPI);
+#else
+    return SD.begin();
+#endif
+}
 
 class AudioPlayDiesel : public AudioStream {
 public:
@@ -373,13 +385,13 @@ void setup() {
     Serial.println(" Diesel Engine Sample Player");
     Serial.println("======================================");
 
-    if (!SD_MMC.begin("/sdcard", true)) {
-        Serial.println("ERROR: SD_MMC initialization failed");
+    if (!mountSD()) {
+        Serial.println("ERROR: SD (SPI) initialization failed. Check the card, SPI wiring and platformio.ini pins.");
         while (true) delay(1000);
     }
 
     // Load the complete ~2.35 MB PCM sample into PSRAM before audio starts.
-    if (!diesel.loadWav(SD_MMC, "/443319__davestalker__diesel-start-idle-revs-mz000004.wav")) {
+    if (!diesel.loadWav(SD, "/443319__davestalker__diesel-start-idle-revs-mz000004.wav")) {
         Serial.println("Copy the CC0 source WAV to the SD card using its original filename: /443319__davestalker__diesel-start-idle-revs-mz000004.wav.");
         while (true) delay(1000);
     }
