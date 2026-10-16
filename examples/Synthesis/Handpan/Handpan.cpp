@@ -5,6 +5,16 @@
 // startup, so no third-party recording is bundled with the library. For a
 // closer match to the reference prototype, replace this buffer with a licensed
 // mono PCM16 attack sample, preferably 20-60 ms long and stored in flash.
+// Select 48000 for the primary stress test; set to 44100 for an A/B run.
+// The output rate is applied before configureHandpan() computes its coefficients.
+#ifndef HANDPAN_TEST_SAMPLE_RATE
+#define HANDPAN_TEST_SAMPLE_RATE 48000
+#endif
+#if HANDPAN_TEST_SAMPLE_RATE != 44100 && HANDPAN_TEST_SAMPLE_RATE != 48000
+#error "HANDPAN_TEST_SAMPLE_RATE must be 44100 or 48000"
+#endif
+constexpr uint32_t OUTPUT_SAMPLE_RATE = HANDPAN_TEST_SAMPLE_RATE;
+
 constexpr uint32_t ATTACK_SAMPLE_RATE = 44100;
 constexpr uint32_t ATTACK_SAMPLE_COUNT = 1323; // 30 ms at 44.1 kHz
 static int16_t attackSample[ATTACK_SAMPLE_COUNT];
@@ -138,15 +148,38 @@ bool configureHandpan()
 }
 
 constexpr uint8_t MELODY_SEQUENCE[] = {0, 4, 2, 5, 1, 6, 4, 7, 3, 2, 6, 0, 5, 1, 7, 2};
+
+// A loose, handpan-inspired 96-BPM phrase: eighth-note pulse, varied velocity,
+// occasional quiet grace notes and ringing notes from other parts of the pad bank.
+// Times and tuning are illustrative rather than a transcription of a real piece.
+struct PatternEvent {
+    uint16_t atMs;
+    uint8_t pad;
+    uint8_t velocity;
+};
+constexpr PatternEvent REALISTIC_PATTERN[] = {
+    {0,    0, 104}, {165,  7,  50}, {312,  4, 74}, {626,  2, 88},
+    {795, 10,  38}, {938,  6,  66}, {1250, 4, 70}, {1563, 7, 92},
+    {1730,12,  36}, {1875, 3,  69}, {2188,  6, 76}, {2500, 0, 96},
+    {2650, 8,  42}, {2813, 4,  64}, {3125,  2, 81}, {3438, 7, 74},
+    {3750, 5,  72}, {4063, 1,  60}, {4375,  6, 84}, {4688, 3, 68},
+    {5000, 0,  98}, {5165, 9,  40}, {5313, 4, 63}, {5625, 2, 78},
+    {5938, 5,  70}, {6250, 7,  90}, {6400,13,  34}, {6563, 3, 66},
+    {6875, 6,  80}, {7188, 1,  58}, {7500, 4, 72}, {7813, 2, 82}
+};
+
 constexpr uint32_t PHASE_DURATION_MS = 8000;
 constexpr uint16_t MELODY_STEP_MS = 260;
 constexpr uint16_t ALL_PADS_STEP_MS = 62;
 constexpr uint16_t CHORD_STRESS_STEP_MS = 24;
+constexpr uint16_t DENSE_PAD_STEP_MS = 12;
 
 enum class TestPhase : uint8_t {
     MELODY,
+    REALISTIC_PATTERN,
     ALL_PADS_RINGING,
-    RAPID_CHORDS
+    RAPID_CHORDS,
+    DENSE_16_PAD_LOAD
 };
 
 TestPhase testPhase = TestPhase::MELODY;
@@ -160,8 +193,10 @@ const char *phaseName(TestPhase phase)
 {
     switch (phase) {
     case TestPhase::MELODY: return "MELODY + HALL";
+    case TestPhase::REALISTIC_PATTERN: return "REALISTIC HANDPAN PATTERN";
     case TestPhase::ALL_PADS_RINGING: return "ALL 16 PADS / BODY TAILS";
     case TestPhase::RAPID_CHORDS: return "RAPID 4-NOTE BURSTS";
+    case TestPhase::DENSE_16_PAD_LOAD: return "DENSE 16-PAD SWEEP / MODAL LOAD";
     default: return "UNKNOWN";
     }
 }
@@ -179,7 +214,7 @@ void enterPhase(TestPhase phase, uint32_t now)
     testPhase = phase;
     phaseStartedAt = now;
     stepIndex = 0;
-    nextStepAt = now + 20;
+    nextStepAt = (phase == TestPhase::REALISTIC_PATTERN) ? now : now + 20;
     resetUsagePeaks();
 
     Serial.print("\n--- Handpan load-test phase: ");
@@ -204,6 +239,26 @@ void playMelodyStep()
     ++stepIndex;
 }
 
+void playRealisticPatternStep()
+{
+    constexpr size_t PATTERN_COUNT = sizeof(REALISTIC_PATTERN) / sizeof(REALISTIC_PATTERN[0]);
+    if (stepIndex >= PATTERN_COUNT) {
+        nextStepAt = phaseStartedAt + PHASE_DURATION_MS;
+        return;
+    }
+
+    const PatternEvent &event = REALISTIC_PATTERN[stepIndex];
+    if (!handpan.noteOn(event.pad, event.velocity)) {
+        ++droppedEvents;
+    }
+    ++stepIndex;
+
+    // Use the phase-relative schedule instead of accumulating loop jitter.
+    nextStepAt = (stepIndex < PATTERN_COUNT)
+                     ? phaseStartedAt + REALISTIC_PATTERN[stepIndex].atMs
+                     : phaseStartedAt + PHASE_DURATION_MS;
+}
+
 void playAllPadsStep()
 {
     // Strike every one of the 16 pads once per roughly one-second sweep.
@@ -212,6 +267,21 @@ void playAllPadsStep()
     const uint8_t velocity = (uint8_t)(62U + ((stepIndex % 4U) * 4U));
     if (!handpan.noteOn(slot, velocity)) {
         ++droppedEvents;
+    }
+    ++stepIndex;
+}
+
+void playDensePadLoadStep()
+{
+    // Four notes every 12 ms visits all 16 pads in 36 ms. The short metallic
+    // modes can therefore overlap while all three long body modes keep ringing.
+    // This is deliberately synthetic worst-case material, not a musical phrase.
+    for (uint8_t i = 0; i < 4; ++i) {
+        const uint8_t slot = (uint8_t)(((stepIndex * 4U) + i) % PAD_COUNT);
+        const uint8_t velocity = (uint8_t)(28U + (((stepIndex + i) % 4U) * 3U));
+        if (!handpan.noteOn(slot, velocity)) {
+            ++droppedEvents;
+        }
     }
     ++stepIndex;
 }
@@ -265,6 +335,20 @@ void setup()
     Serial.begin(115200);
     delay(200);
 
+    Serial.println();
+    Serial.println("======================================");
+    Serial.println(" Handpan hybrid synth + load test");
+    Serial.printf(" Output sample rate: %lu Hz\\n", (unsigned long)OUTPUT_SAMPLE_RATE);
+    Serial.println("======================================");
+
+    // Set the output rate before AudioMemory() and before configuring the
+    // resonators, otherwise their coefficients would still assume 44.1 kHz.
+    if (!audioOut.setSampleRate((float)OUTPUT_SAMPLE_RATE)) {
+        Serial.printf("ERROR: Could not set output sample rate to %lu Hz\\n",
+                      (unsigned long)OUTPUT_SAMPLE_RATE);
+        while (true) delay(1000);
+    }
+
     buildExampleAttack();
     if (!configureHandpan()) {
         while (true) delay(1000);
@@ -285,7 +369,15 @@ void setup()
     audioOut.setChannelCount(codec.channels());
     AudioMemory(32);
 
-    if (!codec.enable()) {
+    bool codecReady = false;
+#if defined(AUDIO_CODEC_ES8311)
+    // The ES8311 requires its sample-rate-specific clock configuration.
+    codecReady = codec.enable(OUTPUT_SAMPLE_RATE);
+#else
+    // The ES8388 follows the configured I2S clock.
+    codecReady = codec.enable();
+#endif
+    if (!codecReady) {
         Serial.println("ERROR: audio codec initialization failed");
         while (true) delay(1000);
     }
@@ -303,8 +395,10 @@ void loop()
 
     if ((uint32_t)(now - phaseStartedAt) >= PHASE_DURATION_MS) {
         const TestPhase nextPhase =
-            testPhase == TestPhase::MELODY ? TestPhase::ALL_PADS_RINGING :
+            testPhase == TestPhase::MELODY ? TestPhase::REALISTIC_PATTERN :
+            testPhase == TestPhase::REALISTIC_PATTERN ? TestPhase::ALL_PADS_RINGING :
             testPhase == TestPhase::ALL_PADS_RINGING ? TestPhase::RAPID_CHORDS :
+            testPhase == TestPhase::RAPID_CHORDS ? TestPhase::DENSE_16_PAD_LOAD :
             TestPhase::MELODY;
         enterPhase(nextPhase, now);
     }
@@ -315,6 +409,9 @@ void loop()
             nextStepAt = now + MELODY_STEP_MS;
             playMelodyStep();
             break;
+        case TestPhase::REALISTIC_PATTERN:
+            playRealisticPatternStep();
+            break;
         case TestPhase::ALL_PADS_RINGING:
             nextStepAt = now + ALL_PADS_STEP_MS;
             playAllPadsStep();
@@ -322,6 +419,10 @@ void loop()
         case TestPhase::RAPID_CHORDS:
             nextStepAt = now + CHORD_STRESS_STEP_MS;
             playRapidChordStep();
+            break;
+        case TestPhase::DENSE_16_PAD_LOAD:
+            nextStepAt = now + DENSE_PAD_STEP_MS;
+            playDensePadLoadStep();
             break;
         }
     }
