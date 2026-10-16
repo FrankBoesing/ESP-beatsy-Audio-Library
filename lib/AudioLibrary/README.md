@@ -148,7 +148,7 @@ Multipliziert die beiden Eingangssignale sampleweise. Das Produkt wird in 32 Bit
 
 ### `AudioFilterBiquad`
 
-Bietet bis zu vier kaskadierte Filterstufen. Verfügbare Entwurfsfunktionen sind `setLowpass()`, `setHighpass()`, `setBandpass()`, `setNotch()`, `setLowShelf()` und `setHighShelf()`.
+Bietet bis zu vier kaskadierte Filterstufen. Verfügbare Entwurfsfunktionen sind `setLowpass()`, `setHighpass()`, `setBandpass()`, `setNotch()`, `setPeaking()`, `setLowShelf()` und `setHighShelf()`. `setPeaking(stage, frequency, gain, q)` implementiert einen parametrischen Bell-EQ nach der RBJ Audio EQ Cookbook-Formel: `frequency` ist die Mittenfrequenz in Hz, `gain` die Anhebung/Absenkung in dB (positiv = Boost, negativ = Cut) und `q` die Güte/Bandbreite. Bei `gain == 0` ist die Stufe frequenzneutral.
 
 `setCoefficients(stage, int*)` erwartet fünf bereits in Q30 kodierte Koeffizienten in der Reihenfolge `b0, b1, b2, a1, a2`. Die `double*`-Variante erwartet normalisierte Fließkomma-Koeffizienten – insbesondere bereits auf `a0 = 1` normiert – und wandelt sie intern in Q30 um. Die Filterlaufzeit verwendet Q30-Koeffizienten und 64-Bit-Zustände beziehungsweise Akkumulatoren; die Ausgabe wird auf 16-Bit-PCM begrenzt.
 
