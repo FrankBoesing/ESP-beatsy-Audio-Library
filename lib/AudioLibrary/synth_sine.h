@@ -8,13 +8,14 @@ class AudioSynthWaveformSine : public AudioStream {
     AudioSynthWaveformSine() : AudioStream(0, nullptr), phase_accumulator(0), phase_increment(0), magnitude(16384) {}
 
     void frequency(float freq) {
+        const float currentSampleRate = sampleRate();
         if (!(freq >= 0.0f)) {
             freq = 0.0f;
-        } else if (freq > AUDIO_SAMPLE_RATE_EXACT / 2.0f) {
-            freq = AUDIO_SAMPLE_RATE_EXACT / 2.0f;
+        } else if (freq > currentSampleRate / 2.0f) {
+            freq = currentSampleRate / 2.0f;
         }
 
-        phase_increment = (uint32_t)(freq * (4294967296.0f / AUDIO_SAMPLE_RATE_EXACT));
+        phase_increment = (uint32_t)(freq * (4294967296.0f / currentSampleRate));
     }
 
     void phase(float angle) {
