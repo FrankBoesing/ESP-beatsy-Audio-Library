@@ -99,6 +99,7 @@ static inline int32_t decodeWavSample(uint16_t bits_per_sample, const uint8_t *d
 // Destructor
 // ============================================================================
 
+OSIZE
 AudioPlaySdWav::~AudioPlaySdWav() {
     stop();
     closeSource();
