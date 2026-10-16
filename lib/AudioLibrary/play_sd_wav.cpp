@@ -19,18 +19,15 @@ constexpr uint32_t DATA_ID = 0x61746164UL; // "data"
 constexpr uint16_t WAV_PCM = 1;
 constexpr uint16_t WAV_EXTENSIBLE = 0xFFFE;
 
-OSIZE
 static inline uint16_t readLE16(const uint8_t *p) {
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
 }
 
-OSIZE
 static inline uint32_t readLE32(const uint8_t *p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
            ((uint32_t)p[3] << 24);
 }
 
-OSIZE
 static inline void printChunk(uint32_t id, uint32_t size, uint32_t position) {
     #if CORE_DEBUG_LEVEL >= 5
     char name[5];
@@ -46,7 +43,6 @@ static inline void printChunk(uint32_t id, uint32_t size, uint32_t position) {
     #endif
 }
 
-OSPEED
 static inline int32_t decodeWavSample(uint16_t bits_per_sample, const uint8_t *data) {
     switch (bits_per_sample) {
     case 8:
