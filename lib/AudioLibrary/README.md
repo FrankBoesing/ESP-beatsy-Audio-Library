@@ -15,6 +15,7 @@ Diese Datei dokumentiert die Task-Architektur, das Timing, die wesentlichen Puff
 - [7. Dynamische Lebensdauer von AudioStream-Objekten](#7-dynamische-lebensdauer-von-audiostream-objekten)
 - [8. Hinweise für die Praxis](#8-hinweise-für-die-praxis)
 - [9. Freeverb: Messstand und Optimierungspotenzial](#9-freeverb-messstand-und-optimierungspotenzial)
+- [10. Hybrid Handpan Synthesizer](#10-hybrid-handpan-synthesizer)
 
 ---
 
@@ -304,3 +305,8 @@ Die Reihenfolge ist bewusst konservativ gewählt: zuerst begrenzte Änderungen m
 Als grobe, nicht gemessene Schätzung erscheinen weitere **3–6 Prozentpunkte weniger CPU-Auslastung des gesamten Audio-Graphen** als möglich, sofern einzelne Optimierungen messbar greifen. Das ist weder garantiert noch additiv für jeden genannten Ansatz.
 
 Der sinnvollste nächste Schritt ist, zuerst die gemeinsame Eingangsskalierung im Stereo-Pfad zu untersuchen und getrennt zu messen. Anschließend kann die Ringpuffer-Adressierung folgen. Nach jeder Änderung sollten Klang, aktuelle und maximale CPU-Last sowie der Audio-Blockverbrauch erneut geprüft werden. Bei der derzeitigen Graph-Auslastung von ungefähr 40–44 % besteht kein unmittelbarer Zwang zu riskanteren Änderungen.
+
+
+## 10. Hybrid Handpan Synthesizer
+
+A hybrid handpan source combines a short PCM16 strike sample with up to six damped resonators per configured pad. The implementation supports up to 16 pad slots, eight overlapping attack samples, and retriggers that add energy to existing resonator states. The example and detailed API notes are in [`docs/handpan-synth.md`](../../docs/handpan-synth.md) and [`examples/Synthesis/Handpan/Handpan.cpp`](../../examples/Synthesis/Handpan/Handpan.cpp). CPU usage must be measured on the target; the example reports `AudioProcessorUsage()` and audio memory usage.

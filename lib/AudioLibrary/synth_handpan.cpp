@@ -1,0 +1,274 @@
+#include "synth_handpan.h"
+
+#include <math.h>
+#include <stdint.h>
+
+#include "utility/dspinst.h"
+
+AudioSynthHandpan::AudioSynthHandpan() : AudioStream(0, nullptr) {}
+
+bool AudioSynthHandpan::configureNote(uint8_t slot, const ModeConfig *modes,
+                                      uint8_t modeCount,
+                                      const int16_t *attackSample,
+                                      uint32_t attackSampleCount,
+                                      uint32_t attackSampleRate,
+                                      float attackGain) {
+    if (slot >= MAX_NOTES || modes == nullptr || modeCount == 0 ||
+        modeCount > MAX_MODES) {
+        return false;
+    }
+
+    if ((attackSample == nullptr) != (attackSampleCount == 0)) {
+        return false;
+    }
+    if (attackSampleCount > MAX_ATTACK_SAMPLES) {
+        return false;
+    }
+    if (attackSample != nullptr && (attackSampleCount < 2 || attackSampleRate == 0)) {
+        return false;
+    }
+    if (!isfinite(attackGain) || attackGain < 0.0f || attackGain > 1.0f) {
+        return false;
+    }
+
+    const float fs = sampleRate();
+    if (!isfinite(fs) || fs <= 0.0f) {
+        return false;
+    }
+
+    Note &note = notes[slot];
+    for (uint8_t i = 0; i < MAX_MODES; ++i) {
+        note.modes[i] = Resonator{};
+    }
+
+    for (uint8_t i = 0; i < modeCount; ++i) {
+        const ModeConfig &cfg = modes[i];
+        if (!isfinite(cfg.frequencyHz) || cfg.frequencyHz <= 0.0f ||
+            cfg.frequencyHz >= fs * 0.48f || !isfinite(cfg.gain) ||
+            cfg.gain < 0.0f || cfg.gain > 1.0f ||
+            !isfinite(cfg.decaySeconds) || cfg.decaySeconds < 0.005f ||
+            cfg.decaySeconds > 10.0f || !isfinite(cfg.phaseRadians)) {
+            note.configured = false;
+            return false;
+        }
+
+        Resonator &mode = note.modes[i];
+        mode.config = cfg;
+
+        const float omega = 6.2831853071795864769f * cfg.frequencyHz / fs;
+        // r is the per-sample amplitude multiplier for the configured T60.
+        const float r = powf(10.0f, -3.0f / (cfg.decaySeconds * fs));
+        mode.coefficient1 = 2.0f * r * cosf(omega);
+        mode.coefficient2 = -(r * r);
+        mode.sinPhase = sinf(cfg.phaseRadians);
+        mode.previousStateScale = sinf(cfg.phaseRadians - omega) / r;
+    }
+
+    note.modeCount = modeCount;
+    note.attackSample = attackSample;
+    note.attackSampleCount = attackSampleCount;
+    note.attackGain = attackGain;
+    note.attackIncrementQ16 = 0;
+    if (attackSample != nullptr) {
+        const uint64_t increment = ((uint64_t)attackSampleRate << 16) / (uint32_t)(fs + 0.5f);
+        if (increment == 0 || increment > UINT32_MAX) {
+            note.configured = false;
+            return false;
+        }
+        note.attackIncrementQ16 = (uint32_t)increment;
+    }
+    note.configured = true;
+    return true;
+}
+
+bool AudioSynthHandpan::noteOn(uint8_t slot, uint8_t velocity) {
+    if (slot >= MAX_NOTES || !notes[slot].configured || velocity == 0) {
+        return false;
+    }
+
+    portENTER_CRITICAL(&eventMux);
+    const uint8_t nextWrite = (uint8_t)((eventWrite + 1U) % MAX_PENDING_EVENTS);
+    if (nextWrite == eventRead) {
+        portEXIT_CRITICAL(&eventMux);
+        return false;
+    }
+
+    eventQueue[eventWrite].slot = slot;
+    eventQueue[eventWrite].velocity = velocity;
+    eventWrite = nextWrite;
+    portEXIT_CRITICAL(&eventMux);
+    return true;
+}
+
+bool AudioSynthHandpan::popEvent(NoteEvent &event) {
+    bool available = false;
+    portENTER_CRITICAL(&eventMux);
+    if (eventRead != eventWrite) {
+        event = eventQueue[eventRead];
+        eventRead = (uint8_t)((eventRead + 1U) % MAX_PENDING_EVENTS);
+        available = true;
+    }
+    portEXIT_CRITICAL(&eventMux);
+    return available;
+}
+
+void AudioSynthHandpan::startAttack(uint8_t slot, float velocity) {
+    const Note &note = notes[slot];
+    if (note.attackSample == nullptr || note.attackSampleCount < 2 ||
+        note.attackGain <= 0.0f) {
+        return;
+    }
+
+    int selected = -1;
+    uint32_t shortestRemaining = UINT32_MAX;
+    for (uint8_t i = 0; i < MAX_ATTACK_VOICES; ++i) {
+        AttackVoice &voice = attackVoices[i];
+        if (!voice.active) {
+            selected = (int)i;
+            break;
+        }
+        const uint32_t endQ16 = voice.sampleCount << 16;
+        const uint32_t remaining = voice.positionQ16 < endQ16
+                                       ? endQ16 - voice.positionQ16
+                                       : 0;
+        if (remaining < shortestRemaining) {
+            shortestRemaining = remaining;
+            selected = (int)i;
+        }
+    }
+
+    if (selected < 0) {
+        return;
+    }
+    AttackVoice &voice = attackVoices[selected];
+    voice.sample = note.attackSample;
+    voice.sampleCount = note.attackSampleCount;
+    voice.positionQ16 = 0;
+    voice.incrementQ16 = note.attackIncrementQ16;
+    voice.gain = note.attackGain * velocity;
+    voice.active = voice.incrementQ16 != 0 && voice.gain > 0.0f;
+}
+
+void AudioSynthHandpan::triggerNote(uint8_t slot, uint8_t velocity) {
+    if (slot >= MAX_NOTES || !notes[slot].configured || velocity == 0) {
+        return;
+    }
+
+    Note &note = notes[slot];
+    const float velocityScale = (float)velocity * (1.0f / 127.0f);
+
+    // Inject a new phase-shaped oscillation into the current state. Existing
+    // y1/y2 values are retained, so retriggers add energy instead of restarting
+    // or cutting off the previous ring.
+    for (uint8_t i = 0; i < note.modeCount; ++i) {
+        Resonator &mode = note.modes[i];
+        const float amplitude = mode.config.gain * velocityScale;
+        mode.y1 += amplitude * mode.sinPhase;
+        mode.y2 += amplitude * mode.previousStateScale;
+        if (!mode.active) {
+            // Keep the hot loop compact: only resonators that are ringing are
+            // visited for each sample. One entry exists per active mode.
+            if (activeModeCount < (MAX_NOTES * MAX_MODES)) {
+                activeModes[activeModeCount].slot = slot;
+                activeModes[activeModeCount].mode = i;
+                ++activeModeCount;
+                mode.active = true;
+            }
+        }
+    }
+
+    startAttack(slot, velocityScale);
+}
+
+bool AudioSynthHandpan::hasActiveSound() const {
+    if (activeModeCount != 0) {
+        return true;
+    }
+    for (uint8_t i = 0; i < MAX_ATTACK_VOICES; ++i) {
+        if (attackVoices[i].active) {
+            return true;
+        }
+    }
+    return false;
+}
+
+OSPEED
+void AudioSynthHandpan::update() {
+    NoteEvent event;
+    while (popEvent(event)) {
+        triggerNote(event.slot, event.velocity);
+    }
+
+    if (!hasActiveSound()) {
+        return;
+    }
+
+    // Even if the block pool is exhausted, advance resonators and sample
+    // positions so memory pressure cannot stretch the sound's decay in time.
+    audio_block_t *block = allocate();
+
+    for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        float mix = 0.0f;
+
+        uint8_t activeIndex = 0;
+        while (activeIndex < activeModeCount) {
+            const ActiveModeRef ref = activeModes[activeIndex];
+            Resonator &mode = notes[ref.slot].modes[ref.mode];
+
+            mix += mode.y1;
+            const float next = mode.coefficient1 * mode.y1 +
+                               mode.coefficient2 * mode.y2;
+            mode.y2 = mode.y1;
+            mode.y1 = next;
+
+            if (fabsf(mode.y1) < SILENCE_THRESHOLD &&
+                fabsf(mode.y2) < SILENCE_THRESHOLD) {
+                mode.y1 = 0.0f;
+                mode.y2 = 0.0f;
+                mode.active = false;
+                --activeModeCount;
+                activeModes[activeIndex] = activeModes[activeModeCount];
+            } else {
+                ++activeIndex;
+            }
+        }
+
+        for (uint8_t v = 0; v < MAX_ATTACK_VOICES; ++v) {
+            AttackVoice &voice = attackVoices[v];
+            if (!voice.active) {
+                continue;
+            }
+
+            const uint32_t index = voice.positionQ16 >> 16;
+            if (index >= voice.sampleCount) {
+                voice.active = false;
+                continue;
+            }
+
+            const uint32_t nextIndex = (index + 1U < voice.sampleCount) ? index + 1U : index;
+            const int32_t sample0 = voice.sample[index];
+            const int32_t sample1 = voice.sample[nextIndex];
+            const uint32_t fraction = voice.positionQ16 & 0xFFFFU;
+            const int32_t interpolated = sample0 +
+                (int32_t)(((int64_t)(sample1 - sample0) * fraction) >> 16);
+            mix += ((float)interpolated * (1.0f / 32768.0f)) * voice.gain;
+
+            voice.positionQ16 += voice.incrementQ16;
+            if ((voice.positionQ16 >> 16) >= voice.sampleCount) {
+                voice.active = false;
+            }
+        }
+
+        if (block != nullptr) {
+            if (mix > 1.0f) mix = 1.0f;
+            if (mix < -1.0f) mix = -1.0f;
+            const int32_t value = (int32_t)(mix * OUTPUT_SCALE);
+            block->data[i] = saturate16(value);
+        }
+    }
+
+    if (block != nullptr) {
+        transmit(block, 0);
+        release(block);
+    }
+}

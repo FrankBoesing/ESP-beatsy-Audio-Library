@@ -65,5 +65,6 @@
 #include "synth_pwm.h"
 #include "synth_simple_drum.h"
 #include "synth_karplusstrong.h"
+#include "synth_handpan.h"
 
 #endif
