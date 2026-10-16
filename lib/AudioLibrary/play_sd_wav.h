@@ -91,7 +91,7 @@ class AudioPlaySdWav : public AudioPlayer {
 
     uint64_t data_start;
     uint64_t data_length;
-    uint64_t total_length;
+    uint32_t data_frames;
 
     uint32_t sample_rate;
     uint16_t channels;
@@ -99,8 +99,12 @@ class AudioPlaySdWav : public AudioPlayer {
     uint16_t bytes_per_sample;
     uint16_t block_align;
 
-    uint32_t source_frame;
     uint32_t source_frames_read;
+
+    // Batch file/source reads instead of calling AudioSource::read() per frame.
+    alignas(4) uint8_t source_buffer[512];
+    uint16_t source_buffer_offset = 0;
+    uint16_t source_buffer_size = 0;
 
     audio_block_t *block_left;
     audio_block_t *block_right;
@@ -115,7 +119,8 @@ class AudioPlaySdWav : public AudioPlayer {
 
     bool have_previous;
     bool have_next;
-    bool source_ended = false;
+    bool source_ended = false; // End of the declared data chunk reached
+    bool source_error = false; // Read/seek failed before the declared end
 
     // Fractional source-frame position between previous_* and next_*.
     float source_phase = 0.0f;
@@ -154,14 +159,11 @@ class AudioPlaySdWav : public AudioPlayer {
      * PCM decoding.
      */
     bool readSourceFrame(int32_t &left, int32_t &right);
-    bool readSourceFrameOrLoop(int32_t &left, int32_t &right, bool loop);
 
-    int32_t decodeSample(const uint8_t *data) const;
-
-    bool getOutputSample(int16_t &left, int16_t &right, float targetRate, bool loop);
+    inline bool getOutputSample(int16_t &left, int16_t &right, float targetRate);
 
     void releaseBlocks();
-    void finishPlayback();
+    void finishPlayback(bool stopPlayback = true);
 };
 
 #endif
