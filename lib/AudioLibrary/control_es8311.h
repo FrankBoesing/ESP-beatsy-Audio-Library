@@ -45,6 +45,21 @@ class AudioControlES8311 : public AudioControl {
     bool inputLevel(float level) override;
     bool inputSelect(int n) override;
 
+    // ADC ALC. maxVolume is the ADC volume register value (0xBF = 0 dB).
+    // maxLevel/minLevel: 0..15 (-30.1..-6 dB target levels); windowSize: 0..15.
+    bool alcEnable(bool enable);
+    bool alcConfig(uint8_t maxVolume, uint8_t maxLevel,
+                   uint8_t minLevel, uint8_t windowSize);
+
+    // ADC automute/noise gate. threshold: 0..15 (-96..-30 dB); windowSize: 0..15;
+    // attenuation: 0..7 (mute attenuation of 0..-28 dB).
+    bool noiseGate(bool enable, uint8_t threshold, uint8_t windowSize = 0,
+                   uint8_t attenuation = 7);
+
+    // Enable dynamic ADC high-pass filtering (false freezes the DC offset).
+    // The two HPF coefficients and ADC EQ bypass setting are left unchanged.
+    bool adcHighPassFilter(bool enable);
+
     bool mute();
     bool unmute();
 
@@ -78,7 +93,12 @@ class AudioControlES8311 : public AudioControl {
     static constexpr uint8_t REG_SYSTEM13 = 0x13;
     static constexpr uint8_t REG_SYSTEM14 = 0x14; // input select and analog PGA gain
 
-    static constexpr uint8_t REG_ADC16 = 0x16; // ADC digital scale
+    static constexpr uint8_t REG_ADC16 = 0x16; // ADC scale
+    static constexpr uint8_t REG_ADC17 = 0x17; // ADC digital volume
+    static constexpr uint8_t REG_ADC18 = 0x18; // ADC ALC/automute control
+    static constexpr uint8_t REG_ADC19 = 0x19; // ALC target levels
+    static constexpr uint8_t REG_ADC1A = 0x1A; // ADC automute window/threshold
+    static constexpr uint8_t REG_ADC1B = 0x1B; // ADC automute attenuation / HPF stage 1
     static constexpr uint8_t REG_ADC1C = 0x1C; // ADC equalizer/HPF
 
     static constexpr uint8_t REG_DAC31 = 0x31; // mute
