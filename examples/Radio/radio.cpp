@@ -62,12 +62,12 @@ static float outputVolume = DEFAULT_OUTPUT_VOLUME;
 static float radioSampleRate = AUDIO_SAMPLE_RATE_EXACT;
 static bool loudnessEnabled = true;
 
-AudioConnection *patchCordPlayerLeft = nullptr;
-AudioConnection *patchCordPlayerRight = nullptr;
-AudioConnection *patchCordPreFilterLeft = nullptr;
-AudioConnection *patchCordPreFilterRight = nullptr;
-AudioConnection *patchCordOutputLeft = nullptr;
-AudioConnection *patchCordOutputRight = nullptr;
+AudioConnection patchCordPlayerLeft;
+AudioConnection patchCordPlayerRight;
+AudioConnection patchCordPreFilterLeft;
+AudioConnection patchCordPreFilterRight;
+AudioConnection patchCordOutputLeft;
+AudioConnection patchCordOutputRight;
 
 static float loudnessAmount() {
     if (!loudnessEnabled) {
@@ -214,51 +214,37 @@ AudioPlayer *findPlayer(const char *contentType) {
 // ============================================================================
 
 bool connectPlayer(AudioPlayer &player) {
-    patchCordPlayerLeft = new AudioConnection();
-    patchCordPlayerRight = new AudioConnection();
-    patchCordPreFilterLeft = new AudioConnection();
-    patchCordPreFilterRight = new AudioConnection();
-    patchCordOutputLeft = new AudioConnection();
-    patchCordOutputRight = new AudioConnection();
-
-    if (patchCordPlayerLeft == nullptr || patchCordPlayerRight == nullptr ||
-        patchCordPreFilterLeft == nullptr || patchCordPreFilterRight == nullptr ||
-        patchCordOutputLeft == nullptr || patchCordOutputRight == nullptr) {
-        ESP_LOGE(TAG, "Could not allocate audio connections");
-        return false;
-    }
-
-    const int leftInputResult = patchCordPlayerLeft->connect(player, 0, loudnessPreGainL, 0);
+    const int leftInputResult = patchCordPlayerLeft.connect(player, 0, loudnessPreGainL, 0);
     if (leftInputResult != 0) {
         ESP_LOGE(TAG, "Left player-to-pre-gain connection failed (%d)", leftInputResult);
         return false;
     }
 
-    const int rightInputResult = patchCordPlayerRight->connect(player, 1, loudnessPreGainR, 0);
+    const int rightInputResult = patchCordPlayerRight.connect(player, 1, loudnessPreGainR, 0);
     if (rightInputResult != 0) {
         ESP_LOGE(TAG, "Right player-to-pre-gain connection failed (%d)", rightInputResult);
         return false;
     }
 
-    const int leftFilterResult = patchCordPreFilterLeft->connect(loudnessPreGainL, 0, loudnessFilterL, 0);
+    const int leftFilterResult = patchCordPreFilterLeft.connect(loudnessPreGainL, 0, loudnessFilterL, 0);
     if (leftFilterResult != 0) {
         ESP_LOGE(TAG, "Left pre-gain-to-filter connection failed (%d)", leftFilterResult);
         return false;
     }
 
-    const int rightFilterResult = patchCordPreFilterRight->connect(loudnessPreGainR, 0, loudnessFilterR, 0);
+    const int rightFilterResult = patchCordPreFilterRight.connect(loudnessPreGainR, 0, loudnessFilterR, 0);
     if (rightFilterResult != 0) {
         ESP_LOGE(TAG, "Right pre-gain-to-filter connection failed (%d)", rightFilterResult);
         return false;
     }
 
-    const int leftOutputResult = patchCordOutputLeft->connect(loudnessFilterL, 0, i2s, 0);
+    const int leftOutputResult = patchCordOutputLeft.connect(loudnessFilterL, 0, i2s, 0);
     if (leftOutputResult != 0) {
         ESP_LOGE(TAG, "Left filter-to-I2S connection failed (%d)", leftOutputResult);
         return false;
     }
 
-    const int rightOutputResult = patchCordOutputRight->connect(loudnessFilterR, 0, i2s, 1);
+    const int rightOutputResult = patchCordOutputRight.connect(loudnessFilterR, 0, i2s, 1);
     if (rightOutputResult != 0) {
         ESP_LOGE(TAG, "Right filter-to-I2S connection failed (%d)", rightOutputResult);
         return false;
