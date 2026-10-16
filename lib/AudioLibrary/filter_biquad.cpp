@@ -100,7 +100,7 @@ void AudioFilterBiquad::setCoefficients(uint32_t stage, const int *coefficients)
     _coefficients[stage] = converted;
 
     if (_stageCount <= stage) {
-        _stageCount = (uint8_t)(stage + 1U);
+        _stageCount = stage + 1U;
     }
 
     portEXIT_CRITICAL(&_configMux);
