@@ -53,7 +53,7 @@ namespace {
 
 constexpr uint8_t PAD_COUNT = 16;
 
-// A wide, handpan-inspired range for the load test. Frequencies are adjustable
+// The 16 pads cover a broad handpan-inspired register. Frequencies are adjustable
 // starter values, not a measured tuning for a specific commercial instrument.
 constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
     139.6f, 156.8f, 185.0f, 209.4f,
