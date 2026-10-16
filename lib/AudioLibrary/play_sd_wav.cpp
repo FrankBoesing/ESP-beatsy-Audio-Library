@@ -933,40 +933,10 @@ bool AudioPlaySdWav::readSourceFrameOrLoop(int32_t &left, int32_t &right, bool l
 OSPEED
 bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
                                      float targetRate, bool loop) {
-    // Exact-rate fast path: 44.1 kHz source, unity playback rate and no
-    // fractional phase. Read each frame once and skip interpolation entirely.
-    if ((float)sample_rate == AUDIO_SAMPLE_RATE_EXACT &&
-        targetRate == 1.0f && current_playback_rate == 1.0f &&
-        source_phase == 0.0f) {
-        if (have_previous && source_ended && !have_next) {
-            return false;
-        }
-
-        if (!have_previous) {
-            if (!readSourceFrameOrLoop(previous_left, previous_right, loop)) {
-                return false;
-            }
-            have_previous = true;
-            have_next = false;
-            source_ended = false;
-        } else if (have_next) {
-            previous_left = next_left;
-            previous_right = next_right;
-            have_next = false;
-        }
-
-        left = (int16_t)(previous_left >> 16);
-        right = (int16_t)(previous_right >> 16);
-
-        if (!have_next && !source_ended) {
-            if (readSourceFrameOrLoop(next_left, next_right, loop)) {
-                have_next = true;
-            } else {
-                source_ended = true;
-            }
-        }
-        return true;
-    }
+    const bool unityRate = targetRate == 1.0f && current_playback_rate == 1.0f;
+    const bool directRate = unityRate &&
+                            (float)sample_rate == AUDIO_SAMPLE_RATE_EXACT &&
+                            source_phase == 0.0f;
 
     if (!have_previous) {
         if (!readSourceFrameOrLoop(previous_left, previous_right, loop)) {
@@ -987,27 +957,32 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
         }
     }
 
-    const float fraction = have_next ? source_phase : 0.0f;
-    const int64_t leftDelta = have_next ? (int64_t)next_left - previous_left : 0;
-    const int64_t rightDelta = have_next ? (int64_t)next_right - previous_right : 0;
-    const int64_t l = (int64_t)previous_left +
-                      (have_next ? (int64_t)(leftDelta * fraction) : 0);
-    const int64_t r = (int64_t)previous_right +
-                      (have_next ? (int64_t)(rightDelta * fraction) : 0);
-
-    left = (int16_t)(l >> 16);
-    right = (int16_t)(r >> 16);
-
-    // Avoid the rate smoothing and multiplication for fixed unity-rate
-    // playback. Lower-rate WAVs still need interpolation for sample-rate
-    // conversion, but their source-step is simply sample_rate / output_rate.
-    if (targetRate == 1.0f && current_playback_rate == 1.0f) {
-        source_phase += (float)sample_rate / AUDIO_SAMPLE_RATE_EXACT;
+    if (directRate) {
+        // 44.1 kHz at unity rate needs no interpolation or rate smoothing.
+        left = (int16_t)(previous_left >> 16);
+        right = (int16_t)(previous_right >> 16);
+        source_phase = 1.0f;
     } else {
-        current_playback_rate +=
-            (targetRate - current_playback_rate) * 0.0015f;
-        source_phase +=
-            ((float)sample_rate / AUDIO_SAMPLE_RATE_EXACT) * current_playback_rate;
+        const float fraction = have_next ? source_phase : 0.0f;
+        const int64_t leftDelta = have_next ? (int64_t)next_left - previous_left : 0;
+        const int64_t rightDelta = have_next ? (int64_t)next_right - previous_right : 0;
+        const int64_t l = (int64_t)previous_left +
+                          (have_next ? (int64_t)(leftDelta * fraction) : 0);
+        const int64_t r = (int64_t)previous_right +
+                          (have_next ? (int64_t)(rightDelta * fraction) : 0);
+
+        left = (int16_t)(l >> 16);
+        right = (int16_t)(r >> 16);
+
+        // Lower-rate WAVs still need interpolation for sample-rate conversion.
+        if (unityRate) {
+            source_phase += (float)sample_rate / AUDIO_SAMPLE_RATE_EXACT;
+        } else {
+            current_playback_rate +=
+                (targetRate - current_playback_rate) * 0.0015f;
+            source_phase +=
+                ((float)sample_rate / AUDIO_SAMPLE_RATE_EXACT) * current_playback_rate;
+        }
     }
 
     while (source_phase >= 1.0f) {
