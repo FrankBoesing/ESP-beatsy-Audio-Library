@@ -119,7 +119,8 @@ class AudioPlaySdWav : public AudioPlayer {
 
     bool have_previous;
     bool have_next;
-    bool source_ended = false;
+    bool source_ended = false; // End of the declared data chunk reached
+    bool source_error = false; // Read/seek failed before the declared end
 
     // Fractional source-frame position between previous_* and next_*.
     float source_phase = 0.0f;
@@ -158,13 +159,11 @@ class AudioPlaySdWav : public AudioPlayer {
      * PCM decoding.
      */
     bool readSourceFrame(int32_t &left, int32_t &right);
-    bool readSourceFrameOrLoop(int32_t &left, int32_t &right, bool loop);
 
-
-    inline bool getOutputSample(int16_t &left, int16_t &right, float targetRate, bool loop);
+    inline bool getOutputSample(int16_t &left, int16_t &right, float targetRate);
 
     void releaseBlocks();
-    void finishPlayback();
+    void finishPlayback(bool stopPlayback = true);
 };
 
 #endif
