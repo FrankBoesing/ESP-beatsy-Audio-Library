@@ -55,13 +55,14 @@ void AudioSynthSimpleDrum::frequency(float freq) {
     if (!isfinite(freq)) {
         return;
     }
+    const float currentSampleRate = sampleRate();
     if (freq < 0.0f) {
         freq = 0.0f;
-    } else if (freq > AUDIO_SAMPLE_RATE_EXACT / 2.0f) {
-        freq = AUDIO_SAMPLE_RATE_EXACT / 2.0f;
+    } else if (freq > currentSampleRate / 2.0f) {
+        freq = currentSampleRate / 2.0f;
     }
 
-    const uint32_t increment =  (uint32_t)(freq * (2147483647.0f / AUDIO_SAMPLE_RATE_EXACT) + 0.5f);
+    const uint32_t increment = (uint32_t)(freq * (2147483647.0f / currentSampleRate) + 0.5f);
 
     portENTER_CRITICAL(&configMux);
     wav_increment = increment;
@@ -77,11 +78,12 @@ void AudioSynthSimpleDrum::length(int32_t milliseconds) {
     }
 
     // Avoid the divide-by-zero case in the upstream implementation.
+    const float currentSampleRate = sampleRate();
     uint32_t lengthSamples;
     if (milliseconds == 0) {
         lengthSamples = 1;
     } else {
-        lengthSamples = (uint32_t)((float)milliseconds * (AUDIO_SAMPLE_RATE_EXACT / 1000.0f));
+        lengthSamples = (uint32_t)((float)milliseconds * (currentSampleRate / 1000.0f));
         if (lengthSamples == 0) {
             lengthSamples = 1;
         }
