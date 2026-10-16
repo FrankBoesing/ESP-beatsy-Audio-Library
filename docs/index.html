@@ -1109,6 +1109,22 @@ span.mainfunction {color: #993300; font-weight: bolder}
 			}
 		},
 		{
+			"type": "AudioFilterDCBlock",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "dcblock",
+				"inputs": 1,
+				"outputs": 1,
+				"category": "filter-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
 			"type": "AudioFilterFIR",
 			"data": {
 				"defaults": {
@@ -5333,6 +5349,11 @@ double s_freq = .0625;</p>
 	<p class=func><span class=keyword>setNotch</span>(stage, frequency, Q);</p>
 	<p class=desc>Configures a band-reject (notch) filter centered on the specified
 		frequency. Q controls the width of the rejected frequency band.</p>
+	<p class=func><span class=keyword>setAllpass</span>(stage, frequency, Q);</p>
+	<p class=desc>Configures a second-order all-pass filter. Its magnitude response
+		is unity across the frequency range, while its phase response varies with
+		frequency. This is useful for phase correction and as a building block for
+		phaser effects.</p>
 	<p class=func><span class=keyword>setPeaking</span>(stage, frequency, gain, Q);</p>
 	<p class=desc>Configures a peaking (bell-shaped) EQ centered on the specified
 		frequency. Gain is in dB: positive values boost the band and negative values
@@ -5367,6 +5388,35 @@ double s_freq = .0625;</p>
 	<p><a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/examples/Effects/Effect-VintageRadio/Effect_VintageRadio.cpp" target="_blank">Effect_VintageRadio.cpp</a> uses cascaded biquad filters.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioFilterBiquad">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
+<script type="text/x-red" data-help-name="AudioFilterDCBlock">
+	<h3>Summary</h3>
+	<div class=tooltipinfo>
+	<p>First-order high-pass filter (DC blocker) that removes DC offset and very
+		low-frequency content below the selected cutoff frequency.</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class=doc align=center cellpadding=3>
+		<tr class=top><th>Port</th><th>Purpose</th></tr>
+		<tr class=odd><td align=center>In 0</td><td>Signal to be filtered</td></tr>
+		<tr class=odd><td align=center>Out 0</td><td>Signal with reduced DC offset</td></tr>
+	</table>
+	<h3>Functions</h3>
+	<p class=func><span class=keyword>frequency</span>(cutoffHz);</p>
+	<p class=desc>Sets the cutoff frequency in Hz. The default is 10 Hz. The
+		implementation clamps the effective cutoff to 0.1 Hz through 45% of the
+		current sample rate. A lower cutoff preserves more very-low-frequency
+		content but removes DC more slowly.</p>
+	<h3>Notes</h3>
+	<p>The filter uses the recurrence y[n] = x[n] - x[n-1] + R*y[n-1],
+		where R = exp(-2*pi*cutoff/sampleRate). The coefficient is recalculated
+		per audio block, so a changed sample rate is picked up automatically.</p>
+</script>
+<script type="text/x-red" data-template-name="AudioFilterDCBlock">
 	<div class="form-row">
 		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
 		<input type="text" id="node-input-name" placeholder="Name">

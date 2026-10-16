@@ -149,9 +149,13 @@ Multipliziert die beiden Eingangssignale sampleweise. Das Produkt wird in 32 Bit
 
 ### `AudioFilterBiquad`
 
-Bietet bis zu vier kaskadierte Filterstufen. Verfügbare Entwurfsfunktionen sind `setLowpass()`, `setHighpass()`, `setBandpass()`, `setNotch()`, `setPeaking()`, `setLowShelf()` und `setHighShelf()`. `setPeaking(stage, frequency, gain, q)` implementiert einen parametrischen Bell-EQ nach der RBJ Audio EQ Cookbook-Formel: `frequency` ist die Mittenfrequenz in Hz, `gain` die Anhebung/Absenkung in dB (positiv = Boost, negativ = Cut) und `q` die Güte/Bandbreite. Bei `gain == 0` ist die Stufe frequenzneutral.
+Bietet bis zu vier kaskadierte Filterstufen. Verfügbare Entwurfsfunktionen sind `setLowpass()`, `setHighpass()`, `setBandpass()`, `setNotch()`, `setAllpass()`, `setPeaking()`, `setLowShelf()` und `setHighShelf()`. `setAllpass(stage, frequency, q)` erhält den Betragsfrequenzgang und verändert den Phasengang. `setPeaking(stage, frequency, gain, q)` implementiert einen parametrischen Bell-EQ nach der RBJ Audio EQ Cookbook-Formel: `frequency` ist die Mittenfrequenz in Hz, `gain` die Anhebung/Absenkung in dB (positiv = Boost, negativ = Cut) und `q` die Güte/Bandbreite. Bei `gain == 0` ist die Stufe frequenzneutral.
 
 `setCoefficients(stage, int*)` erwartet fünf bereits in Q30 kodierte Koeffizienten in der Reihenfolge `b0, b1, b2, a1, a2`. Die `double*`-Variante erwartet normalisierte Fließkomma-Koeffizienten – insbesondere bereits auf `a0 = 1` normiert – und wandelt sie intern in Q30 um. Die Filterlaufzeit verwendet Q30-Koeffizienten und 64-Bit-Zustände beziehungsweise Akkumulatoren; die Ausgabe wird auf 16-Bit-PCM begrenzt.
+
+### `AudioFilterDCBlock`
+
+Ein DC-Blocker erster Ordnung mit der Rekursion `y[n] = x[n] - x[n-1] + R*y[n-1]` und `R = exp(-2*pi*fc/fs)`. Die Standard-Grenzfrequenz beträgt 10 Hz und kann über `frequency(cutoffHz)` geändert werden. Der effektive Wert wird auf 0,1 Hz bis 45 % der aktuellen Sample-Rate begrenzt. Der Koeffizient wird pro Audio-Block berechnet, sodass auch eine geänderte Sample-Rate berücksichtigt wird. Intern wird der Rückkopplungskoeffizient in Q31 quantisiert; die Ausgabe wird auf 16-Bit-PCM begrenzt.
 
 ### `AudioFilterFIR`
 

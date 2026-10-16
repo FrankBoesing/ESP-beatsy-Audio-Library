@@ -58,7 +58,8 @@ These examples are present in the repository. Their board-specific pin and codec
 
 | Class | Functionality and notes |
 | --- | --- |
-| **AudioFilterBiquad** | Multi-stage biquad filter. Supports low-pass, high-pass, band-pass, notch, peaking EQ, low-shelf and high-shelf coefficient setup. `setPeaking(stage, frequency, gain, q)` controls a bell-shaped frequency band; gain is in dB and Q controls bandwidth. Up to four stages; coefficient handling uses Q30 internally. |
+| **AudioFilterBiquad** | Multi-stage biquad filter. Supports low-pass, high-pass, band-pass, notch, all-pass, peaking EQ, low-shelf and high-shelf coefficient setup. `setAllpass(stage, frequency, q)` preserves magnitude while changing phase; `setPeaking(stage, frequency, gain, q)` controls a bell-shaped frequency band. Up to four stages; coefficient handling uses Q30 internally. |
+| **AudioFilterDCBlock** | First-order high-pass/DC blocker for removing DC offset. Default cutoff is 10 Hz; `frequency(cutoffHz)` sets another positive cutoff. Its Q31 feedback coefficient is recalculated per audio block, including after sample-rate changes. |
 | **AudioFilterFIR** | FIR filter with caller-provided coefficients; supports up to 200 coefficients/taps. Coefficients must be designed for the current audio sample rate and recalculated when it changes. |
 | **AudioFilterLadder** | Nonlinear ladder low-pass filter based on the Huovilainen/New Moog model. Offers linear or polyphase-FIR interpolation and uses 4× internal oversampling. |
 | **AudioFilterStateVariable** | State-variable filter providing low-pass, band-pass and high-pass outputs; also supports a control input for variable cutoff. |

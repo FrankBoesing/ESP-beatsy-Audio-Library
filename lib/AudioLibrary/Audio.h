@@ -31,6 +31,7 @@
 #include "effect_waveshaper.h"
 #include "effect_wavefolder.h"
 #include "filter_biquad.h"
+#include "filter_dcblock.h"
 #include "filter_fir.h"
 #include "filter_ladder.h"
 #include "filter_variable.h"
