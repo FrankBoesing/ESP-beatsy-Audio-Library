@@ -35,6 +35,7 @@ class AudioControlES8388 : public AudioControl {
 
     bool isConnected();
 
+    // Linear amplitude level 0.0..1.0; 1.0 maps to 0 dB DAC gain.
     bool volume(float level) override;
     bool volume(float left, float right);
 
