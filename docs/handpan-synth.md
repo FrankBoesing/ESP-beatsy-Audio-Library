@@ -74,3 +74,32 @@ exhausted, oscillator states and attack positions still advance to preserve
 wall-clock decay. Actual CPU cost must be measured on the target, particularly
 with all 16 pads ringing and eight attack voices active; the included example
 prints `AudioProcessorUsage()` and audio memory usage on the device.
+
+
+## Reverb and worst-case load test
+
+The Handpan example routes the source to a dry path and to mono
+`AudioEffectFreeverb`, then blends them through `AudioMixer4`. The starting
+mix is 0.82 dry / 0.22 wet, room size 0.68 and damping 0.46. These are
+listening defaults, not calibrated acoustic-room parameters. Freeverb allocates
+its delay lines once in `setup()`; the example requests 32 audio blocks to cover
+the source, reverb return and final mixer.
+
+The example cycles through three eight-second phases:
+
+1. `MELODY + HALL`: a moderate overlapping melody.
+2. `ALL 16 PADS / 96 MODES`: each pad is struck in turn, about once per second,
+   so its long body resonances overlap with the tails of the other pads.
+3. `RAPID 4-NOTE BURSTS`: four pad events every 24 ms, stressing the fixed event
+   queue and the eight attack-sample voice limit while modal tails remain active.
+
+Once per second the serial log reports graph-wide CPU, per-stream CPU for the
+handpan source and Freeverb, current/peak audio-block use, and note events
+rejected by the synthesizer. Let each phase run for several seconds when
+comparing boards. The measured maximum is specific to the test run; it is not
+a guarantee for every sample rate, compiler optimization, Wi-Fi load or effect
+chain. Listen for clipping or roughness during the intentionally extreme stress
+phase as well as checking CPU headroom.
+
+The example generates its own short procedural attack. A licensed PCM16 attack
+sample can be substituted without changing the synth architecture.
