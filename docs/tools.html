@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESP-beatsy Audio Tools</title>
+<style>
+:root{color-scheme:light;--ink:#192433;--muted:#586779;--line:#d9e1e9;--paper:#f4f7fa;--card:#fff;--accent:#1264a3;--accent-dark:#0c4b7c;--good:#126742;--bad:#a83232}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:#17283c;color:#fff;padding:26px 22px}
+header .top,main{max-width:1040px;margin:0 auto}
+.eyebrow{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:#9ccbf0;font-weight:700}
+h1{font-size:clamp(1.7rem,4vw,2.4rem);line-height:1.15;margin:8px 0}
+header p{max-width:760px;margin:10px 0 14px;color:#d6e0eb}
+nav a{color:#fff;margin-right:16px;font-size:.9rem}
+main{padding:24px 18px 56px}
+.intro{color:var(--muted);margin:0 0 22px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 4px 16px rgba(24,48,72,.05);min-width:0}
+.card h2{margin:0 0 6px;font-size:1.3rem}
+.card .lede{margin:0 0 18px;color:var(--muted)}
+label{display:block;font-weight:650;margin:14px 0 5px}
+input[type=file],input[type=text],select,textarea{font:inherit;width:100%;border:1px solid #bac7d4;border-radius:7px;background:#fff;color:var(--ink);padding:9px 10px}
+input[type=file]{font-size:.9rem}
+small,.help{color:var(--muted);font-size:.88rem}
+button{font:inherit;font-weight:650;border:1px solid var(--accent);border-radius:7px;background:var(--accent);color:#fff;padding:9px 14px;cursor:pointer;margin:12px 7px 0 0}
+button:hover{background:var(--accent-dark)}
+button.secondary{background:white;color:var(--accent)}
+button.secondary:hover{background:#eaf3fb}
+button:disabled{opacity:.45;cursor:not-allowed}
+.status{border-radius:8px;padding:11px 13px;margin-top:14px;background:#eef3f7;color:var(--ink);overflow-wrap:anywhere}
+.status.good{background:#e9f7ef;color:var(--good)}
+.status.bad{background:#fff0f0;color:var(--bad)}
+.status:empty{display:none}
+.result{margin-top:14px}
+textarea{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.83rem;line-height:1.4;min-height:220px;resize:vertical;white-space:pre;tab-size:2}
+.hidden{display:none!important}
+.note{border-left:3px solid #8ba3ba;padding:8px 12px;background:#f7f9fb;color:var(--muted);font-size:.9rem;margin-top:14px}
+footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:.88rem}
+@media(max-width:560px){header{padding:22px 17px}.card{padding:17px}main{padding:18px 12px 40px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="eyebrow">ESP-beatsy · Offline utilities</div>
+    <h1>Audio Tools</h1>
+    <p>Small browser-based utilities for audio files created or used by ESP-beatsy. The files are processed locally; this page does not upload them.</p>
+    <nav><a href="index.html">← Audio System Design Tool</a><a href="README.md">Tool notes</a></nav>
+  </div>
+</header>
+<main>
+  <p class="intro">These tools are designed as a home for additional project utilities in the future.</p>
+  <div class="grid">
+    <section class="card" aria-labelledby="repair-heading">
+      <h2 id="repair-heading">1. Repair recorder .tmp file</h2>
+      <p class="lede">Recover a WAV file left unfinished by <code>AudioRecordFile</code>, for example after a reset or power loss.</p>
+      <label for="tmpFile">Recorder temporary file (.tmp)</label>
+      <input id="tmpFile" type="file" accept=".tmp,application/octet-stream">
+      <p class="help">The source file is not modified. The tool downloads a repaired .wav file that you can copy back to the SD card or LittleFS after checking it.</p>
+      <button id="repairButton" type="button" disabled>Repair and download WAV</button>
+      <div id="repairStatus" class="status" role="status" aria-live="polite"></div>
+      <div class="note">The tool uses the recorder's 44-byte, 16-bit PCM WAV header. It recalculates the RIFF and data-chunk sizes from the file length and drops any incomplete final mono sample or stereo frame.</div>
+    </section>
+    <section class="card" aria-labelledby="sketch-heading">
+      <h2 id="sketch-heading">2. WAV to Sketch</h2>
+      <p class="lede">Convert a PCM WAV into a constant packed sample table for <code>AudioPlayMemory</code>.</p>
+      <label for="wavFile">Input WAV file</label>
+      <input id="wavFile" type="file" accept=".wav,audio/wav,audio/x-wav">
+      <label for="sampleRate">Output sample rate</label>
+      <select id="sampleRate">
+        <option value="auto">Keep source rate when supported (otherwise 44100 Hz)</option>
+        <option value="44100">44100 Hz</option>
+        <option value="22050">22050 Hz</option>
+        <option value="11025">11025 Hz</option>
+      </select>
+      <label for="arraySuffix">Table name suffix</label>
+      <input id="arraySuffix" type="text" value="MySound" autocomplete="off" spellcheck="false">
+      <p class="help">The generated symbol will be <code>AudioSample</code> plus this suffix. Mono and stereo, 16-bit integer PCM WAV files are supported; stereo is downmixed to mono and the samples are resampled when needed.</p>
+      <button id="convertButton" type="button" disabled>Convert WAV</button>
+      <div id="convertStatus" class="status" role="status" aria-live="polite"></div>
+      <div id="outputPanel" class="result hidden">
+        <label for="outputCode">Generated .h file contents</label>
+        <textarea id="outputCode" readonly spellcheck="false"></textarea>
+        <button id="downloadHeader" type="button">Download .h</button>
+        <button id="copyHeader" type="button" class="secondary">Copy code</button>
+        <p class="help">Include the header in one sketch source file, then call <code>player.play(AudioSampleYourName);</code>. The table format is for <code>AudioPlayMemory</code>, not the filesystem-based <code>AudioPlaySdWav</code>.</p>
+      </div>
+      <div class="note">To keep browser memory usage reasonable and match the table format, output is limited to 100 seconds and the 24-bit sample-count limit of <code>AudioPlayMemory</code>.</div>
+    </section>
+  </div>
+  <footer>ESP-beatsy Audio Tools · File handling runs locally in your browser. No network upload is performed by these utilities.</footer>
+</main>
+<script>
+(function () {
+  "use strict";
+
+  var tmpFile = document.getElementById("tmpFile");
+  var repairButton = document.getElementById("repairButton");
+  var repairStatus = document.getElementById("repairStatus");
+  var wavFile = document.getElementById("wavFile");
+  var sampleRateSelect = document.getElementById("sampleRate");
+  var arraySuffix = document.getElementById("arraySuffix");
+  var convertButton = document.getElementById("convertButton");
+  var convertStatus = document.getElementById("convertStatus");
+  var outputPanel = document.getElementById("outputPanel");
+  var outputCode = document.getElementById("outputCode");
+  var downloadHeader = document.getElementById("downloadHeader");
+  var copyHeader = document.getElementById("copyHeader");
+  var generatedName = "";
+  var generatedCode = "";
+
+  function setStatus(element, message, kind) {
+    element.textContent = message;
+    element.className = "status" + (kind ? " " + kind : "");
+  }
+
+  function readAscii(view, offset, length) {
+    var value = "";
+    for (var i = 0; i < length; i++) value += String.fromCharCode(view.getUint8(offset + i));
+    return value;
+  }
+
+  function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
+  tmpFile.addEventListener("change", function () {
+    repairButton.disabled = !(tmpFile.files && tmpFile.files.length);
+    setStatus(repairStatus, "", "");
+  });
+
+  repairButton.addEventListener("click", async function () {
+    var file = tmpFile.files && tmpFile.files[0];
+    if (!file) return;
+    try {
+      if (file.size < 44) throw new Error("File is shorter than the recorder's 44-byte WAV header.");
+      var buffer = await file.arrayBuffer();
+      var view = new DataView(buffer);
+      if (readAscii(view, 0, 4) !== "RIFF" ||
+          readAscii(view, 8, 4) !== "WAVE" ||
+          readAscii(view, 12, 4) !== "fmt " ||
+          readAscii(view, 36, 4) !== "data" ||
+          view.getUint32(16, true) !== 16) {
+        throw new Error("This is not the standard WAV layout written by AudioRecordFile.");
+      }
+      var format = view.getUint16(20, true);
+      var channels = view.getUint16(22, true);
+      var sampleRate = view.getUint32(24, true);
+      var blockAlign = view.getUint16(32, true);
+      var bitsPerSample = view.getUint16(34, true);
+      if (format !== 1 || (channels !== 1 && channels !== 2) ||
+          bitsPerSample !== 16 || blockAlign !== channels * 2 || sampleRate === 0) {
+        throw new Error("Expected mono/stereo, 16-bit PCM from AudioRecordFile.");
+      }
+      var rawDataBytes = buffer.byteLength - 44;
+      var dataBytes = rawDataBytes - (rawDataBytes % blockAlign);
+      var outputSize = 44 + dataBytes;
+      if (outputSize - 8 > 0xFFFFFFFF || dataBytes > 0xFFFFFFFF) {
+        throw new Error("The repaired file is too large for a standard RIFF/WAV file.");
+      }
+      if (dataBytes === 0) throw new Error("No complete PCM sample frames were found in the file.");
+      view.setUint32(4, outputSize - 8, true);
+      view.setUint32(40, dataBytes, true);
+      var outputName = file.name.replace(/\.tmp$/i, "");
+      if (!/\.wav$/i.test(outputName)) outputName += ".wav";
+      downloadBlob(new Blob([buffer.slice(0, outputSize)], { type: "audio/wav" }), outputName);
+      var frames = dataBytes / blockAlign;
+      var trimmed = rawDataBytes - dataBytes;
+      setStatus(repairStatus,
+        "Repaired and downloaded " + outputName + ". " +
+        frames.toLocaleString() + " sample frames (" + channels + " channel" + (channels === 1 ? "" : "s") +
+        "), " + dataBytes.toLocaleString() + " data bytes at " + sampleRate + " Hz." +
+        (trimmed ? " Dropped " + trimmed + " trailing byte(s) that did not form a complete sample frame." : ""),
+        "good");
+    } catch (error) {
+      setStatus(repairStatus, "Repair failed: " + error.message, "bad");
+    }
+  });
+
+  function suggestedSuffix(filename) {
+    var suffix = filename.replace(/\.[^.]+$/, "").replace(/[^A-Za-z0-9_]/g, "_");
+    if (!suffix) suffix = "Sample";
+    if (/^[0-9]/.test(suffix)) suffix = "_" + suffix;
+    return suffix;
+  }
+
+  wavFile.addEventListener("change", function () {
+    convertButton.disabled = !(wavFile.files && wavFile.files.length);
+    setStatus(convertStatus, "", "");
+    outputPanel.classList.add("hidden");
+    generatedCode = "";
+    if (wavFile.files && wavFile.files.length && (!arraySuffix.value || arraySuffix.value === "MySound")) {
+      arraySuffix.value = suggestedSuffix(wavFile.files[0].name);
+    }
+  });
+
+  function findWavChunks(view) {
+    if (view.byteLength < 12 || readAscii(view, 0, 4) !== "RIFF" || readAscii(view, 8, 4) !== "WAVE") {
+      throw new Error("The selected file does not have a RIFF/WAVE header.");
+    }
+    var fmt = null;
+    var data = null;
+    var offset = 12;
+    while (offset + 8 <= view.byteLength) {
+      var id = readAscii(view, offset, 4);
+      var length = view.getUint32(offset + 4, true);
+      var start = offset + 8;
+      if (start + length > view.byteLength) throw new Error("The WAV contains a truncated chunk.");
+      if (id === "fmt " && fmt === null) fmt = { start: start, length: length };
+      if (id === "data" && data === null) data = { start: start, length: length };
+      offset = start + length + (length & 1);
+    }
+    if (!fmt || fmt.length < 16 || !data) throw new Error("Could not find a complete fmt chunk and data chunk.");
+    var format = view.getUint16(fmt.start, true);
+    var channels = view.getUint16(fmt.start + 2, true);
+    var sampleRate = view.getUint32(fmt.start + 4, true);
+    var blockAlign = view.getUint16(fmt.start + 12, true);
+    var bitsPerSample = view.getUint16(fmt.start + 14, true);
+    if (format !== 1) throw new Error("Only integer PCM WAV is supported (not ADPCM or IEEE float).");
+    if ((channels !== 1 && channels !== 2) || bitsPerSample !== 16 || blockAlign !== channels * 2) {
+      throw new Error("Only mono or stereo, 16-bit PCM WAV files are supported.");
+    }
+    if (sampleRate < 1) throw new Error("The WAV sample rate is invalid.");
+    var frameCount = Math.floor(data.length / blockAlign);
+    if (frameCount < 1) throw new Error("The WAV data chunk contains no complete sample frames.");
+    return {
+      dataStart: data.start, dataBytes: data.length, channels: channels,
+      sampleRate: sampleRate, blockAlign: blockAlign, frameCount: frameCount
+    };
+  }
+
+  function readMonoSample(view, wav, frameIndex) {
+    var offset = wav.dataStart + frameIndex * wav.blockAlign;
+    var left = view.getInt16(offset, true);
+    if (wav.channels === 1) return left;
+    var right = view.getInt16(offset + 2, true);
+    return Math.round((left + right) / 2);
+  }
+
+  function safeIdentifier(value) {
+    var result = value.trim().replace(/[^A-Za-z0-9_]/g, "_");
+    if (!result) result = "MySound";
+    if (/^[0-9]/.test(result)) result = "_" + result;
+    return "AudioSample" + result;
+  }
+
+  function formatWord(value) {
+    return "0x" + (value >>> 0).toString(16).padStart(8, "0");
+  }
+
+  function makeHeader(view, wav, rate, name, sourceName) {
+    var sampleCount = Math.round(wav.frameCount * rate / wav.sampleRate);
+    if (sampleCount < 1) throw new Error("No output samples would be generated.");
+    if (sampleCount > 0xFFFFFF) throw new Error("The sample count exceeds AudioPlayMemory's 24-bit limit.");
+    if (sampleCount > rate * 100) throw new Error("The output exceeds the 100-second limit for one table.");
+    var rateCode = rate === 44100 ? 0x81 : (rate === 22050 ? 0x82 : 0x83);
+    var format = ((rateCode << 24) | sampleCount) >>> 0;
+    var wordCount = Math.ceil(sampleCount / 2);
+    var lines = [];
+    var line = [];
+    var wordInLine = 0;
+    function pushWord(value) {
+      line.push(formatWord(value));
+      wordInLine++;
+      if (wordInLine === 8) {
+        lines.push(line.join(", ") + ",");
+        line = [];
+        wordInLine = 0;
+      }
+    }
+    pushWord(format);
+    var lowSample = 0;
+    for (var outIndex = 0; outIndex < sampleCount; outIndex++) {
+      var sourcePos = outIndex * wav.sampleRate / rate;
+      var source0 = Math.min(wav.frameCount - 1, Math.floor(sourcePos));
+      var source1 = Math.min(wav.frameCount - 1, source0 + 1);
+      var fraction = sourcePos - source0;
+      var sample0 = readMonoSample(view, wav, source0);
+      var sample1 = readMonoSample(view, wav, source1);
+      var sample = Math.round(sample0 + (sample1 - sample0) * fraction);
+      if (sample > 32767) sample = 32767;
+      if (sample < -32768) sample = -32768;
+      var encoded = sample & 0xFFFF;
+      if ((outIndex & 1) === 0) {
+        lowSample = encoded;
+      } else {
+        pushWord(((encoded << 16) | lowSample) >>> 0);
+      }
+    }
+    if (sampleCount & 1) pushWord(lowSample >>> 0);
+    if (line.length) lines.push(line.join(", ") + ",");
+    var duration = sampleCount / rate;
+    var output = "// Generated by ESP-beatsy Audio Tools (WAV to Sketch).\n";
+    output += "// Source: " + sourceName.replace(/[\r\n]/g, " ").replace(/\*\//g, "* /") + "\n";
+    output += "// Mono signed 16-bit PCM, " + rate + " Hz, " + sampleCount + " samples (" + duration.toFixed(3) + " s).\n";
+    output += "// First word: AudioPlayMemory format/rate plus 24-bit sample count.\n";
+    output += "#pragma once\n#include <Arduino.h>\n\n";
+    output += "const unsigned int " + name + "[] PROGMEM = {\n  ";
+    output += lines.join("\n  ");
+    output += "\n};\n";
+    return output;
+  }
+
+  convertButton.addEventListener("click", async function () {
+    var file = wavFile.files && wavFile.files[0];
+    if (!file) return;
+    convertButton.disabled = true;
+    outputPanel.classList.add("hidden");
+    setStatus(convertStatus, "Reading WAV data and generating the sample table…", "");
+    try {
+      var buffer = await file.arrayBuffer();
+      var view = new DataView(buffer);
+      var wav = findWavChunks(view);
+      var selectedRate = sampleRateSelect.value;
+      var rate = selectedRate === "auto" ?
+        ([11025, 22050, 44100].indexOf(wav.sampleRate) >= 0 ? wav.sampleRate : 44100) :
+        parseInt(selectedRate, 10);
+      var name = safeIdentifier(arraySuffix.value);
+      generatedCode = makeHeader(view, wav, rate, name, file.name);
+      generatedName = name + ".h";
+      outputCode.value = generatedCode;
+      outputPanel.classList.remove("hidden");
+      var sourceDuration = wav.frameCount / wav.sampleRate;
+      var outputCount = Math.round(wav.frameCount * rate / wav.sampleRate);
+      setStatus(convertStatus,
+        "Converted " + file.name + ": " + wav.channels + " input channel(s), " +
+        wav.sampleRate + " Hz → mono " + rate + " Hz, " + outputCount.toLocaleString() +
+        " samples (" + sourceDuration.toFixed(2) + " s). Header: " + generatedName + ".",
+        "good");
+    } catch (error) {
+      generatedCode = "";
+      setStatus(convertStatus, "Conversion failed: " + error.message, "bad");
+    } finally {
+      convertButton.disabled = false;
+    }
+  });
+
+  downloadHeader.addEventListener("click", function () {
+    if (!generatedCode) return;
+    downloadBlob(new Blob([generatedCode], { type: "text/plain;charset=utf-8" }), generatedName);
+  });
+
+  copyHeader.addEventListener("click", async function () {
+    if (!generatedCode) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(generatedCode);
+      } else {
+        outputCode.focus();
+        outputCode.select();
+        if (!document.execCommand("copy")) throw new Error("The browser did not allow clipboard access.");
+      }
+      setStatus(convertStatus, "Header copied to the clipboard.", "good");
+    } catch (error) {
+      outputCode.focus();
+      outputCode.select();
+      setStatus(convertStatus, "Clipboard access was blocked. The generated code is selected; use Ctrl+C / Copy to copy it.", "");
+    }
+  });
+})();
+</script>
+</body>
+</html>
