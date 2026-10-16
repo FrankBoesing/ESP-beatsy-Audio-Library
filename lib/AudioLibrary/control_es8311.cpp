@@ -249,14 +249,28 @@ bool AudioControlES8311::disable() {
 }
 
 bool AudioControlES8311::volume(float level) {
+    if (!std::isfinite(level)) {
+        return false;
+    }
     if (level < 0.0f) {
         level = 0.0f;
     } else if (level > 1.0f) {
         level = 1.0f;
     }
 
-    // DAC volume register: 0x00 = mute, 0xFF = 0 dB (linear 256-step scale).
-    const uint8_t reg32 = (level <= 0.0f) ? 0x00 : (uint8_t)(level * 256.0f - 1.0f + 0.5f);
+    // Map linear amplitude to the ES8311 DAC's 0 dB range.
+    // REG_DAC32: 0x00 = -95.5 dB, 0xBF = 0 dB, 0xFF = +32 dB.
+    // Keep the API's maximum at 0 dB rather than allowing positive DAC gain.
+    if (level <= 0.0f) {
+        return writeReg(REG_DAC32, 0x00);
+    }
+
+    const float db = 20.0f * std::log10(level);
+    if (db <= -95.5f) {
+        return writeReg(REG_DAC32, 0x00);
+    }
+
+    const uint8_t reg32 = (uint8_t)((db + 95.5f) * 2.0f + 0.5f);
     return writeReg(REG_DAC32, reg32);
 }
 
