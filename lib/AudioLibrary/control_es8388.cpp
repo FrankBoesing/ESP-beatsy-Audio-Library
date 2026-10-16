@@ -1,5 +1,9 @@
 #include "control_es8388.h"
 
+#if defined(ARDUINO_ARCH_ESP32)
+#include <esp32-hal-i2c.h>
+#endif
+
 #include <cmath>
 
 #pragma GCC optimize("Os")
@@ -57,6 +61,17 @@ bool AudioControlES8388::isConnected() {
 }
 
 bool AudioControlES8388::enable() {
+#if defined(ARDUINO_ARCH_ESP32)
+    const bool wireInitialized = i2cIsInit(wire_->getBusNum());
+    if (initialized_ && wireInitialized) {
+        return true;
+    }
+#else
+    if (initialized_) {
+        return true;
+    }
+#endif
+
     initialized_ = false;
     adcEnabled_ = false;
 
@@ -67,7 +82,13 @@ bool AudioControlES8388::enable() {
         digitalWrite(pins_.pa_enable, !pins_.pa_active);
     }
 
+#if defined(ARDUINO_ARCH_ESP32)
+    if (!i2cIsInit(wire_->getBusNum())) {
+        wire_->begin(pins_.sda, pins_.scl, ES8388_I2C_FREQUENCY);
+    }
+#else
     wire_->begin(pins_.sda, pins_.scl, ES8388_I2C_FREQUENCY);
+#endif
 
     if (!isConnected()) {
         return false;
