@@ -187,13 +187,14 @@ bool AudioControlES8311::enable(uint32_t sampleRate) {
     } else {
         ok = false;
     }
+    ok &= writeReg(REG_ADC17, 0xBF); // ADC digital volume: 0 dB.
 
     // Power up the DAC and output drivers only after mute and minimum volume
     // are in place.
     ok &= writeReg(REG_SYSTEM12, 0x00); // DAC on.
     ok &= writeReg(REG_SYSTEM13, 0x10); // Headphone/line driver.
     ok &= writeReg(REG_ADC1C, 0x6A);   // ADC EQ bypass, DC-offset correction.
-    ok &= writeReg(REG_DAC37, 0x08);   // DAC EQ bypass.
+    ok &= writeReg(REG_DAC37, 0x18);   // DAC soft-ramp (rate 1) + EQ bypass.
 
     if (!ok) {
         initialized_ = false;
@@ -281,6 +282,77 @@ bool AudioControlES8311::inputLevel(float level) {
 
     reg = (uint8_t)((reg & 0xF0U) | (gain & 0x0FU));
     return writeReg(REG_SYSTEM14, reg);
+}
+
+
+bool AudioControlES8311::alcEnable(bool enable) {
+    if (!initialized_) {
+        return false;
+    }
+
+    uint8_t reg = 0;
+    if (!readReg(REG_ADC18, reg)) {
+        return false;
+    }
+
+    reg = (uint8_t)((reg & 0x7FU) | (enable ? 0x80U : 0x00U));
+    return writeReg(REG_ADC18, reg);
+}
+
+bool AudioControlES8311::alcConfig(uint8_t maxVolume, uint8_t maxLevel,
+                                   uint8_t minLevel, uint8_t windowSize) {
+    if (!initialized_ || maxLevel > 15 || minLevel > 15 ||
+        windowSize > 15 || maxLevel < minLevel) {
+        return false;
+    }
+
+    uint8_t reg = 0;
+    if (!readReg(REG_ADC18, reg)) {
+        return false;
+    }
+
+    // The ADC volume register doubles as the ALC maximum gain setting.
+    // Preserve ALC/automute enable bits and update only ALC_WINSIZE.
+    reg = (uint8_t)((reg & 0xF0U) | windowSize);
+
+    return writeReg(REG_ADC17, maxVolume) &&
+           writeReg(REG_ADC19, (uint8_t)((maxLevel << 4) | minLevel)) &&
+           writeReg(REG_ADC18, reg);
+}
+
+bool AudioControlES8311::noiseGate(bool enable, uint8_t threshold,
+                                   uint8_t windowSize, uint8_t attenuation) {
+    if (!initialized_ || threshold > 15 || windowSize > 15 || attenuation > 7) {
+        return false;
+    }
+
+    uint8_t control = 0;
+    uint8_t attenuationReg = 0;
+    if (!readReg(REG_ADC18, control) || !readReg(REG_ADC1B, attenuationReg)) {
+        return false;
+    }
+
+    control = (uint8_t)((control & 0xBFU) | (enable ? 0x40U : 0x00U));
+    attenuationReg = (uint8_t)((attenuationReg & 0x1FU) | (attenuation << 5));
+
+    return writeReg(REG_ADC1A, (uint8_t)((windowSize << 4) | threshold)) &&
+           writeReg(REG_ADC1B, attenuationReg) &&
+           writeReg(REG_ADC18, control);
+}
+
+bool AudioControlES8311::adcHighPassFilter(bool enable) {
+    if (!initialized_) {
+        return false;
+    }
+
+    uint8_t reg = 0;
+    if (!readReg(REG_ADC1C, reg)) {
+        return false;
+    }
+
+    // ADC_HPF bit 5: 1 = dynamic HPF, 0 = freeze DC offset.
+    reg = (uint8_t)((reg & 0xDFU) | (enable ? 0x20U : 0x00U));
+    return writeReg(REG_ADC1C, reg);
 }
 
 bool AudioControlES8311::inputSelect(int) {
