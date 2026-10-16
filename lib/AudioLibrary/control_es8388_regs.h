@@ -21,11 +21,11 @@
     static constexpr uint8_t REG_ADCCONTROL7 = 0x0f;
     static constexpr uint8_t REG_ADCCONTROL8 = 0x10;
     static constexpr uint8_t REG_ADCCONTROL9 = 0x11;
-    static constexpr uint8_t REG_ADCCONTROL10 = 0x12;
-    static constexpr uint8_t REG_ADCCONTROL11 = 0x13;
-    static constexpr uint8_t REG_ADCCONTROL12 = 0x14;
-    static constexpr uint8_t REG_ADCCONTROL13 = 0x15;
-    static constexpr uint8_t REG_ADCCONTROL14 = 0x16;
+    static constexpr uint8_t REG_ADCCONTROL10 = 0x12; // ALC channel/gain limits
+    static constexpr uint8_t REG_ADCCONTROL11 = 0x13; // ALC target/hold
+    static constexpr uint8_t REG_ADCCONTROL12 = 0x14; // ALC decay/attack
+    static constexpr uint8_t REG_ADCCONTROL13 = 0x15; // ALC mode/window
+    static constexpr uint8_t REG_ADCCONTROL14 = 0x16; // Noise gate
 
     /* DAC */
     static constexpr uint8_t REG_DACCONTROL1 = 0x17;
