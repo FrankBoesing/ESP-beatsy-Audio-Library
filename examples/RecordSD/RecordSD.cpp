@@ -30,13 +30,18 @@ static void haltWithError(const char *message) {
 }
 
 static bool mountSD() {
+#if defined(PIN_SD_MMC_CLK) && defined(PIN_SD_MMC_CMD) && \
+    defined(PIN_SD_MMC_D0) && defined(PIN_SD_MMC_D1) && \
+    defined(PIN_SD_MMC_D2) && defined(PIN_SD_MMC_D3)
     if (!SD_MMC.setPins(PIN_SD_MMC_CLK, PIN_SD_MMC_CMD,
                         PIN_SD_MMC_D0, PIN_SD_MMC_D1,
                         PIN_SD_MMC_D2, PIN_SD_MMC_D3)) {
         return false;
     }
+#endif
 
     // mode1bit=false selects the 4-bit SD_MMC bus.
+    // Boards without explicit pin definitions use the framework defaults.
     return SD_MMC.begin("/sdcard", false);
 }
 
