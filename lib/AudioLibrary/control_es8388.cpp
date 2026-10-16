@@ -98,7 +98,7 @@ bool AudioControlES8388::enable() {
     // codec power state machine. Unlike CONTROL1.SCPReset, this keeps the codec's
     // control registers available for a deterministic reinitialization and avoids
     // clearing the DAC mute bit as a side effect of a register reset.
-    if (!writeReg(REG_DACCONTROL3, 0x04) ||
+    if (!writeReg(REG_DACCONTROL3, 0x24) || // mute + DAC soft-ramp enabled
         !setDacVolume(0xC0, 0xC0) ||
         !writeReg(REG_DACPOWER, 0xC0)) {
         return false;
@@ -121,8 +121,8 @@ bool AudioControlES8388::enable() {
     };
 
     static constexpr RegisterValue initSequence[] = {
-        // Keep DAC muted while configuring the codec.
-        {REG_DACCONTROL3, 0x04},
+        // Keep DAC muted and enable digital volume soft-ramp.
+        {REG_DACCONTROL3, 0x24},
 
         // Chip control and power.
         {REG_CONTROL2, 0x50},
@@ -318,4 +318,64 @@ bool AudioControlES8388::inputSelect(int input) {
 
     adcEnabled_ = true;
     return true;
+}
+
+bool AudioControlES8388::alcEnable(bool enable, bool limiterMode) {
+    if (!initialized_ || !adcEnabled_) {
+        return false;
+    }
+
+    uint8_t alcControl = 0;
+    uint8_t alcMode = 0;
+    if (!readReg(REG_ADCCONTROL10, alcControl) ||
+        !readReg(REG_ADCCONTROL13, alcMode)) {
+        return false;
+    }
+
+    // ALCSEL=11 selects stereo ALC. REG_ADCCONTROL13 bit 7 selects limiter mode.
+    alcControl = (uint8_t)((alcControl & 0x3FU) | (enable ? 0xC0U : 0x00U));
+    alcMode = (uint8_t)((alcMode & 0x7FU) | (limiterMode ? 0x80U : 0x00U));
+
+    return writeReg(REG_ADCCONTROL13, alcMode) &&
+           writeReg(REG_ADCCONTROL10, alcControl);
+}
+
+bool AudioControlES8388::alcConfig(uint8_t maxGain, uint8_t minGain,
+                                   uint8_t targetLevel, uint8_t holdTime,
+                                   uint8_t decayTime, uint8_t attackTime,
+                                   uint8_t windowSize) {
+    if (!initialized_ || !adcEnabled_ ||
+        maxGain > 7 || minGain > 7 || targetLevel > 15 ||
+        holdTime > 15 || decayTime > 15 || attackTime > 15 ||
+        windowSize > 31) {
+        return false;
+    }
+
+    uint8_t alcControl = 0;
+    uint8_t alcMode = 0;
+    if (!readReg(REG_ADCCONTROL10, alcControl) ||
+        !readReg(REG_ADCCONTROL13, alcMode)) {
+        return false;
+    }
+
+    // Preserve ALC channel selection, limiter/zero-cross/timeout settings.
+    alcControl = (uint8_t)((alcControl & 0xC0U) | (maxGain << 3) | minGain);
+    alcMode = (uint8_t)((alcMode & 0xE0U) | windowSize);
+
+    return writeReg(REG_ADCCONTROL10, alcControl) &&
+           writeReg(REG_ADCCONTROL11, (uint8_t)((targetLevel << 4) | holdTime)) &&
+           writeReg(REG_ADCCONTROL12, (uint8_t)((decayTime << 4) | attackTime)) &&
+           writeReg(REG_ADCCONTROL13, alcMode);
+}
+
+bool AudioControlES8388::noiseGate(bool enable, uint8_t threshold, bool muteAdcOutput) {
+    if (!initialized_ || !adcEnabled_ || threshold > 31) {
+        return false;
+    }
+
+    // NGTH occupies bits 7:3, NGG bits 2:1, and NGAT bit 0.
+    // NGG=00 holds the PGA; NGG=01 mutes the ADC output.
+    const uint8_t mode = muteAdcOutput ? 0x02U : 0x00U;
+    const uint8_t reg = (uint8_t)((threshold << 3) | mode | (enable ? 0x01U : 0x00U));
+    return writeReg(REG_ADCCONTROL14, reg);
 }
