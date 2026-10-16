@@ -5533,9 +5533,11 @@ double s_freq = .0625;</p>
 		<span class=literal>LADDER_FILTER_INTERPOLATION_LINEAR</span> uses linear
 		interpolation with lower processing cost.</p>
 
-<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; Synthesis &gt; LadderFilter
-	</p>
+<h3>Implementation</h3>
+	<p>No dedicated Ladder Filter example is currently included in this repository.
+		See <a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/lib/AudioLibrary/filter_ladder.h" target="_blank">filter_ladder.h</a>
+		for the API and <a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/lib/AudioLibrary/filter_ladder.cpp" target="_blank">filter_ladder.cpp</a>
+		for the implementation.</p>
 	<h3>Notes</h3>
 	<p>This port uses floating-point math and internally oversamples by 4x. Processing
 		cost depends on the target platform and interpolation method.</p>
