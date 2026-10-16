@@ -52,13 +52,14 @@ AudioAmplifier loudnessPreGainR;
 AudioFilterBiquad loudnessFilterL;
 AudioFilterBiquad loudnessFilterR;
 
-static constexpr float DEFAULT_OUTPUT_VOLUME = 0.60f;
+static constexpr float DEFAULT_OUTPUT_VOLUME = 0.20f;
 static constexpr float LOUDNESS_LOW_VOLUME = 0.20f;
 static constexpr float LOUDNESS_FLAT_VOLUME = 0.85f;
 static constexpr float LOUDNESS_MAX_BASS_DB = 6.0f;
 static constexpr float LOUDNESS_MAX_TREBLE_DB = 2.0f;
 
 static float outputVolume = DEFAULT_OUTPUT_VOLUME;
+static float radioSampleRate = AUDIO_SAMPLE_RATE_EXACT;
 static bool loudnessEnabled = false;
 
 AudioConnection *patchCordPlayerLeft = nullptr;
@@ -101,7 +102,7 @@ static void updateLoudnessFilters() {
     const float preGain = loudnessPreGain(amount);
 
     // Keep the treble shelf below Nyquist for low-rate radio streams too.
-    const float rate = AudioStream::sampleRate();
+    const float rate = radioSampleRate;
     float trebleFrequency = 6000.0f;
     if (trebleFrequency >= rate * 0.5f) {
         trebleFrequency = rate * 0.4f;
@@ -168,6 +169,7 @@ bool onStreamSampleRate(uint32_t rate, void *) {
     if (!i2s.setSampleRate((float)(rate))) {
         return false;
     }
+    radioSampleRate = (float)rate;
 
     // Biquad coefficients depend on sample rate; recalculate after renegotiation.
     updateLoudnessFilters();
