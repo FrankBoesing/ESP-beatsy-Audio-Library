@@ -35,7 +35,7 @@ textarea{width:100%;min-height:240px;resize:vertical;padding:10px;border:1px sol
 <div class="field" id="cut1"><label for="f1">Cutoff frequency (Hz)</label><input id="f1" type="number" min="1" step="1" value="4000" required></div>
 <div class="field" id="cut2" hidden><label for="f2">Upper cutoff (Hz)</label><input id="f2" type="number" min="1" step="1" value="8000"></div>
 </div>
-<div class="field"><label for="taps">Number of coefficients (taps)</label><input id="taps" type="number" min="4" max="200" step="2" value="64" required><div class="help">Even number, 4–200. AudioFilterFIR requires an even coefficient count.</div></div>
+<div class="field"><label for="taps">Number of coefficients (taps)</label><input id="taps" type="number" min="4" max="200" step="2" value="64" required><div class="help">Even number, 4–200. The filter is designed with one fewer (odd) tap, then padded with a zero for AudioFilterFIR.</div></div>
 <div class="field"><label for="window">Window function</label><select id="window"><option value="hamming">Hamming</option><option value="hann">Hann</option><option value="blackman">Blackman</option><option value="rectangular">Rectangular</option></select></div>
 <div class="actions"><button type="submit">Calculate filter</button><button class="secondary" type="button" id="reset">Reset defaults</button></div>
 <div id="error" role="alert"></div>
@@ -64,13 +64,16 @@ function calculate(){
  if(!Number.isInteger(N)||N<4||N>200||N%2!==0)return fail('Tap count must be an even integer between 4 and 200.');
  if(!Number.isFinite(f1)||f1<=0||f1>=fs/2)return fail('Cutoff must be above 0 Hz and below Nyquist (sample rate / 2).');
  if((type==='bandpass'||type==='bandstop')&&(!Number.isFinite(f2)||f2<=f1||f2>=fs/2))return fail('Band filters need an upper cutoff greater than the lower cutoff and below Nyquist.');
- const M=(N-1)/2,raw=[];
- for(let n=0;n<N;n++){const k=n-M,lp1=2*f1/fs*sinc(2*f1*k/fs),lp2=2*f2/fs*sinc(2*f2*k/fs);let v;
+ // Design with an odd number of taps so the impulse has an integer center.
+ // AudioFilterFIR requires an even coefficient count, so append one zero afterward.
+ const designN=N-1,M=(designN-1)/2,raw=[];
+ for(let n=0;n<designN;n++){const k=n-M,lp1=2*f1/fs*sinc(2*f1*k/fs),lp2=2*f2/fs*sinc(2*f2*k/fs);let v;
  if(type==='lowpass')v=lp1;else if(type==='highpass')v=(n===M?1:0)-lp1;else if(type==='bandpass')v=lp2-lp1;else v=(n===M?1:0)-(lp2-lp1);
- raw.push(v*windowValue(win,n,N))}
+ raw.push(v*windowValue(win,n,designN))}
  let normFreq=0;if(type==='highpass')normFreq=fs/2;if(type==='bandpass')normFreq=(f1+f2)/2;
  const gain=response(normFreq,fs,raw);if(!Number.isFinite(gain)||gain<1e-12)return fail('Could not normalize this filter; try a different tap count or cutoff.');
  coeffs=raw.map(v=>Math.max(-32768,Math.min(32767,Math.round(v/gain*32768))));
+ coeffs.push(0); // Pad to the even coefficient count required by AudioFilterFIR.
  renderOutput(N,fs,type);drawPlot(fs);$('statTaps').textContent=N;$('statDelay').textContent=(M/fs*1000).toFixed(3)+' ms';$('statDc').textContent=(response(0,fs,coeffs)/32768).toFixed(4);
 }
 function fail(msg){const e=$('error');e.textContent=msg;e.style.display='block'}
