@@ -5660,5 +5660,63 @@ value  frequency
 
 
 
+
+<script type="text/x-red" data-help-name="AudioControlES8388">
+	<h3>Summary</h3>
+	<div class=tooltipinfo>
+	<p>Control the stereo ES8388 audio codec over I²C. The codec-control object has no audio ports; use separate I²S objects to move audio data.</p>
+	<p>The GUI node documents the class but does not automatically generate the codec's I²C setup or these method calls. Add the calls to your sketch using your <code>AudioControlES8388</code> instance.</p>
+	</div>
+	<h3>Functions</h3>
+	<p class=func><span class=keyword>enable</span>();</p>
+	<p class=desc>Initializes the codec. DAC soft-ramp is enabled automatically, so hardware volume transitions are smoothed when <code>volume()</code> changes. No separate ramp API is required. The independent <code>mute()</code>/<code>unmute()</code> controls remain available.</p>
+	<p class=func><span class=keyword>disable</span>();</p>
+	<p class=desc>Mutes and powers down the codec.</p>
+	<p class=func><span class=keyword>volume</span>(level); / <span class=keyword>volume</span>(left, right);</p>
+	<p class=desc>Set the DAC volume. Values are in the range 0.0 to 1.0; the two-argument overload sets the left and right channels independently.</p>
+	<p class=func><span class=keyword>mute</span>(); / <span class=keyword>unmute</span>();</p>
+	<p class=desc>Control the codec's DAC mute bit. Hardware soft-ramp is enabled separately and does not replace these mute operations.</p>
+	<p class=func><span class=keyword>inputSelect</span>(input);</p>
+	<p class=desc>Select <code>AUDIO_INPUT_MIC</code> or <code>AUDIO_INPUT_LINEIN</code> and enables/configures the ADC path. Call this before using ADC processing controls.</p>
+	<p class=func><span class=keyword>inputLevel</span>(level);</p>
+	<p class=desc>Set the analog ADC PGA gain. The normalized input range 0.0 to 1.0 maps to 0 to 24 dB in 3 dB steps.</p>
+	<p class=func><span class=keyword>alcConfig</span>(maxGain, minGain, targetLevel, holdTime, decayTime, attackTime, windowSize = 6);</p>
+	<p class=desc>Configure the ADC's automatic level control (ALC). The parameters are register codes: <code>maxGain</code> and <code>minGain</code> are 0–7, <code>targetLevel</code>, <code>holdTime</code>, <code>decayTime</code> and <code>attackTime</code> are 0–15, and <code>windowSize</code> is 0–31. Configure ALC before enabling it.</p>
+	<p class=func><span class=keyword>alcEnable</span>(enable, limiterMode = false);</p>
+	<p class=desc>Enable or disable stereo ALC. Set <code>limiterMode</code> to true to select limiter mode instead of normal ALC mode. ALC is not enabled automatically.</p>
+	<p class=func><span class=keyword>noiseGate</span>(enable, threshold, muteAdcOutput = false);</p>
+	<p class=desc>Enable or disable the ADC noise gate. <code>threshold</code> is 0–31 in 1.5 dB steps (−76.5 to −30 dBFS). When <code>muteAdcOutput</code> is false, the gate holds PGA gain; when true, it mutes the ADC output. The gate is not enabled automatically.</p>
+	<h3>Notes</h3>
+	<p>ALC, limiter and noise gate operate on the codec ADC input path, not on the I²S playback stream. They require a supported board wiring and an enabled ADC. The parameters above are chip register codes rather than physical units except where stated.</p>
+</script>
+<script type="text/x-red" data-help-name="AudioControlES8311">
+	<h3>Summary</h3>
+	<div class=tooltipinfo>
+	<p>Control the mono ES8311 audio codec over I²C. The codec-control object has no audio ports; use separate I²S objects to move audio data.</p>
+	<p>The GUI node documents the class but does not automatically generate the codec's I²C setup or these method calls. Add the calls to your sketch using your <code>AudioControlES8311</code> instance.</p>
+	</div>
+	<h3>Functions</h3>
+	<p class=func><span class=keyword>enable</span>(sampleRate);</p>
+	<p class=desc>Initializes the codec for the specified supported sample rate. The no-argument <code>enable()</code> overload uses 44100 Hz. DAC soft-ramp is enabled automatically and smooths hardware DAC-volume transitions; no separate ramp API is needed.</p>
+	<p class=func><span class=keyword>disable</span>();</p>
+	<p class=desc>Mutes and powers down the codec.</p>
+	<p class=func><span class=keyword>volume</span>(level);</p>
+	<p class=desc>Set the mono DAC volume. Values are in the range 0.0 to 1.0.</p>
+	<p class=func><span class=keyword>mute</span>(); / <span class=keyword>unmute</span>();</p>
+	<p class=desc>Control the codec's DAC mute bits. Soft-ramp is enabled separately and does not replace these mute operations.</p>
+	<p class=func><span class=keyword>inputLevel</span>(level);</p>
+	<p class=desc>Set the analog microphone PGA gain. The normalized input range 0.0 to 1.0 maps to 0 to 30 dB in 3 dB steps.</p>
+	<p class=func><span class=keyword>alcConfig</span>(maxVolume, maxLevel, minLevel, windowSize);</p>
+	<p class=desc>Configure the ADC automatic level control. <code>maxVolume</code> is the ADC digital-volume register code (0xBF corresponds to 0 dB in this driver); <code>maxLevel</code>, <code>minLevel</code> and <code>windowSize</code> are register codes in the range 0–15. Configure ALC before enabling it.</p>
+	<p class=func><span class=keyword>alcEnable</span>(enable);</p>
+	<p class=desc>Enable or disable ADC automatic level control. ALC is not enabled automatically.</p>
+	<p class=func><span class=keyword>noiseGate</span>(enable, threshold, windowSize = 0, attenuation = 7);</p>
+	<p class=desc>Enable or disable the ADC automute/noise-gate function. <code>threshold</code>, <code>windowSize</code> are register codes 0–15; <code>attenuation</code> is 0–7. These are codec register values, not normalized audio levels.</p>
+	<p class=func><span class=keyword>adcHighPassFilter</span>(enable);</p>
+	<p class=desc>Enable or disable the ADC's dynamic high-pass/DC-offset tracking function. This API does not change the HPF coefficients or enable the ADC equalizer.</p>
+	<h3>Notes</h3>
+	<p>The ES8311 has a fixed analog input path, so <code>inputSelect()</code> is not supported by this class. ALC, noise gate and high-pass filtering affect the ADC input path, not the I²S playback stream. The ADC equalizer remains bypassed by default; DAC dynamic-range control and direct ADC-to-DAC routing are not exposed by this API.</p>
+</script>
+
 </body>
 </html>
