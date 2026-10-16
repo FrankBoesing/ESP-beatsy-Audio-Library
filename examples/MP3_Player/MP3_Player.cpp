@@ -174,9 +174,9 @@ void loop() {
 #if SOFTCODEC_METRICS
         Serial.printf("MP3 decode: avg %.2f%%, frame max %.2f%%, "
                       "frames %lu, decode %.3f s\n",
-                      aac.decodeProcessorUsage(), aac.decodeProcessorUsageMax(),
-                      (unsigned long)aac.decodeFrames(),
-                      (double)aac.decodeTimeUsTotal() / 1000000.0);
+                      mp3.decodeProcessorUsage(), mp3.decodeProcessorUsageMax(),
+                      (unsigned long)mp3.decodeFrames(),
+                      (double)mp3.decodeTimeUsTotal() / 1000000.0);
 #endif
         Serial.printf("Position: %lu ms / %lu ms\n",
                       (unsigned long)mp3.positionMillis(),
