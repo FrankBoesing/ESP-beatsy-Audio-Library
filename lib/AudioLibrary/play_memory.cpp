@@ -272,7 +272,12 @@ void AudioPlayMemory::update()
             if (unityRate) {
                 fraction += baseStep;
             } else {
-                currentRate += (targetRate - currentRate) * 0.0015f;
+                const float rateDelta = targetRate - currentRate;
+                if (rateDelta > -0.0001f && rateDelta < 0.0001f) {
+                    currentRate = targetRate;
+                } else {
+                    currentRate += rateDelta * 0.0015f;
+                }
                 fraction += baseStep * currentRate;
             }
             const uint32_t advance = (uint32_t)fraction;
