@@ -87,13 +87,33 @@ listening defaults, not calibrated acoustic-room parameters. Freeverb allocates
 its delay lines once in `setup()`; the example requests 32 audio blocks to cover
 the source, reverb return and final mixer.
 
-The example cycles through three eight-second phases:
+The example defaults to **48 kHz**. It calls `audioOut.setSampleRate()` before
+`AudioMemory()` and before configuring the resonators, so the modal coefficients
+match the selected rate. For a direct 44.1-kHz comparison, change
+`HANDPAN_TEST_SAMPLE_RATE` from `48000` to `44100` near the top of
+`examples/Synthesis/Handpan/Handpan.cpp`, rebuild, and compare the same phases.
+The generated attack remains a 44.1-kHz source sample and is resampled by the
+synthesizer during playback. The ES8311 is initialized with its sample-rate-specific
+clock configuration; the ES8388 follows the I2S output clock.
 
-1. `MELODY + HALL`: a moderate overlapping melody.
-2. `ALL 16 PADS / BODY TAILS`: each pad is struck in turn, about once per second,
-   so the long body resonances overlap with the tails of the other pads. This phase checks all pad slots and tail overlap; it does not guarantee that every short metallic mode remains active at once.
-3. `RAPID 4-NOTE BURSTS`: four pad events every 24 ms, stressing the fixed event
-   queue and the eight attack-sample voice limit while modal tails remain active. Repeated visits to every pad also exercise the short metallic modes; inspect the per-stream maximum on the target to quantify this worst case.
+The example cycles through five eight-second phases:
+
+1. `MELODY + HALL`: a moderate overlapping melody, useful as a baseline.
+2. `REALISTIC HANDPAN PATTERN`: a looser 96-BPM-inspired phrase with varied
+   velocities, rests, occasional quiet grace notes and longer ringing overlaps.
+   The phrase is illustrative, not a transcription of a real performance.
+3. `ALL 16 PADS / BODY TAILS`: each pad is struck in turn, about once per
+   second, so the long body resonances overlap. This checks every pad slot and
+   tail overlap, but by itself does not guarantee that all short metallic modes
+   remain active simultaneously.
+4. `RAPID 4-NOTE BURSTS`: four pad events every 24 ms, stressing the event queue
+   and the eight attack-sample voice limit while modal tails remain active.
+5. `DENSE 16-PAD SWEEP / MODAL LOAD`: four pad events every 12 ms, covering all
+   16 pads within 36 ms and revisiting each pad about every 48 ms. Since even the
+   short metallic modes have longer decay than that revisit interval, this phase
+   is intended to keep the full 96-mode bank active together after startup. It is
+   a synthetic worst-case load test, not a realistic playing pattern, and may
+   sound rough or clipped. Keep the output volume low during this phase.
 
 Once per second the serial log reports graph-wide CPU, per-stream CPU for the
 handpan source and Freeverb, current/peak audio-block use, and note events
