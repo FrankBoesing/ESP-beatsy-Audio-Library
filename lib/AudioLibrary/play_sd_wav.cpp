@@ -433,7 +433,7 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
     buffer.sample_rate_ = sample_rate;
     buffer.is_psram_ = true;
 
-    ESP_LOGI(TAG, "Loaded %s into PSRAM: %u mono samples, %lu Hz, %u bytes",
+    ESP_LOGV(TAG, "Loaded %s into PSRAM: %u mono samples, %lu Hz, %u bytes",
              filename, (unsigned)frames, (unsigned long)sample_rate,
              (unsigned)bytesNeeded);
     return true;
@@ -955,7 +955,7 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
 }
 
 // ============================================================================
-// Output sample / variable-rate interpolation
+// Output sample / variable-rate interpolation TODO: Optimize this.
 // ============================================================================
 inline OSPEED
 bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
