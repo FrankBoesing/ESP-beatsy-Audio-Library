@@ -122,15 +122,12 @@ void AudioPlaySdWav::begin() {
 
     data_start = 0;
     data_length = 0;
-    total_length = 0;
 
     sample_rate = 0;
     channels = 0;
     bits_per_sample = 0;
     bytes_per_sample = 0;
     block_align = 0;
-
-    source_frame = 0;
     source_frames_read = 0;
 
     previous_left = 0;
@@ -292,8 +289,6 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
         closeSource();
         return false;
     }
-
-    source_frame = 0;
     source_frames_read = 0;
 
     have_previous = false;
@@ -423,7 +418,6 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
     }
 
     closeSource();
-    source_frame = 0;
     source_frames_read = 0;
     have_previous = false;
     have_next = false;
@@ -750,6 +744,12 @@ bool AudioPlaySdWav::parseFmtChunk(uint64_t position, uint32_t size) {
         return false;
     }
 
+    // Continue at the next chunk header, including the RIFF padding byte.
+    if (!seekAbsolute(position + size + (size & 1U))) {
+        ESP_LOGE(TAG, "Could not seek past fmt chunk");
+        return false;
+    }
+
     return true;
 }
 
@@ -780,7 +780,7 @@ bool AudioPlaySdWav::findDataChunk() {
         if (id == DATA_ID) {
             data_start = source->position();
             data_length = size;
-            total_length = size;
+            data_frames = size / block_align;
 
             ESP_LOGV(TAG, "Found data chunk: start=%lu size=%lu",
                      (unsigned long)data_start, (unsigned long)data_length);
@@ -912,7 +912,7 @@ bool AudioPlaySdWav::parseWav() {
 
 OSPEED
 bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
-    if ((uint64_t)source_frames_read * block_align >= data_length) {
+    if (source_frames_read >= data_frames) {
         return false;
     }
 
@@ -942,12 +942,11 @@ OSPEED
 bool AudioPlaySdWav::readSourceFrameOrLoop(int32_t &left, int32_t &right, bool loop) {
     // Restart only at the data-chunk boundary; never scan the RIFF header in the
     // audio update path. Seeking is done by the current file-backed WAV path.
-    if ((uint64_t)source_frames_read * block_align >= data_length) {
-        if (!loop || data_length == 0 || !seekAbsolute(data_start)) {
+    if (source_frames_read >= data_frames) {
+        if (!loop || data_frames == 0 || !seekAbsolute(data_start)) {
             return false;
         }
         source_frames_read = 0;
-        source_frame = 0;
     }
 
     return readSourceFrame(left, right);
@@ -1004,8 +1003,12 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
         if (unityRate) {
             source_phase += (float)sample_rate / AUDIO_SAMPLE_RATE_EXACT;
         } else {
-            current_playback_rate +=
-                (targetRate - current_playback_rate) * 0.0015f;
+            const float rateDelta = targetRate - current_playback_rate;
+            if (rateDelta > -0.0001f && rateDelta < 0.0001f) {
+                current_playback_rate = targetRate;
+            } else {
+                current_playback_rate += rateDelta * 0.0015f;
+            }
             source_phase +=
                 ((float)sample_rate / AUDIO_SAMPLE_RATE_EXACT) * current_playback_rate;
         }
