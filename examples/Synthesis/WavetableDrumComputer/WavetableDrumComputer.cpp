@@ -11,8 +11,8 @@
  */
 
 #include <Audio.h>
-#include <SD.h>
-#include <SPI.h>
+#include <FS.h>
+#include <SD_MMC.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -76,17 +76,19 @@ bool recordingActive = false;
 
 bool mountSD()
 {
-#if defined(PIN_SD_CS) && defined(PIN_SPI_MOSI) && defined(PIN_SPI_MISO) && defined(PIN_SPI_SCK)
-    SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_SD_CS);
-    return SD.begin(PIN_SD_CS, SPI);
-#else
-    return SD.begin();
-#endif
+    if (!SD_MMC.setPins(PIN_SD_MMC_CLK, PIN_SD_MMC_CMD,
+                        PIN_SD_MMC_D0, PIN_SD_MMC_D1,
+                        PIN_SD_MMC_D2, PIN_SD_MMC_D3)) {
+        return false;
+    }
+
+    // mode1bit=false selects the 4-bit SD_MMC bus.
+    return SD_MMC.begin("/sdcard", false);
 }
 
 bool recordingFilesExist()
 {
-    return SD.exists("/DrumComputer.wav") || SD.exists("/DrumComputer.tmp");
+    return SD_MMC.exists("/DrumComputer.wav") || SD.exists("/DrumComputer.tmp");
 }
 
 constexpr uint16_t stepBit(uint8_t step)
@@ -241,7 +243,7 @@ void setup()
     Serial.println("Wavetable Drum Computer");
 
     if (!mountSD()) {
-        Serial.println("ERROR: SD mount failed. Check card, wiring and SPI pin configuration.");
+        Serial.println("ERROR: SD_MMC mount failed. Check card, DIP switches and pin configuration.");
         while (true) {
             delay(1000);
         }
@@ -282,7 +284,7 @@ void setup()
     if (recordingFilesExist()) {
         Serial.println("Recording skipped: /DrumComputer.wav or /DrumComputer.tmp already exists.");
     } else {
-        if (!recorder.begin(SD, RECORDING_BASE_PATH, RECORD_SAMPLE_RATE, 1,
+        if (!recorder.begin(SD_MMC, RECORDING_BASE_PATH, RECORD_SAMPLE_RATE, 1,
                             AudioRecordFile::CORE_UNPINNED)) {
             Serial.println("ERROR: could not start SD recorder. Check PSRAM, SD card space and filenames.");
             while (true) {
