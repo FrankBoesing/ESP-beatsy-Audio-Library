@@ -20,8 +20,8 @@ const char TAG[] = "";
 // Weitere Teststreams:
 // constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/mid/aac/stream.aac";
 // constexpr char STREAM_URL[] = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac";
-// constexpr char STREAM_URL[] = "https://wdr-wdr2-rheinruhr.icecastssl.wdr.de/wdr/wdr2/rheinruhr/mp3/128/stream.mp3";
-constexpr char STREAM_URL[] = "http://mp3.ffh.de/radioffh/hqlivestream.aac";
+ constexpr char STREAM_URL[] = "https://wdr-wdr2-rheinruhr.icecastssl.wdr.de/wdr/wdr2/rheinruhr/mp3/128/stream.mp3";
+//constexpr char STREAM_URL[] = "http://mp3.ffh.de/radioffh/hqlivestream.aac";
 
 AudioPlayer *selectedPlayer = nullptr;
 AudioSourceStream audioSource;
@@ -60,7 +60,7 @@ static constexpr float LOUDNESS_MAX_TREBLE_DB = 2.0f;
 
 static float outputVolume = DEFAULT_OUTPUT_VOLUME;
 static float radioSampleRate = AUDIO_SAMPLE_RATE_EXACT;
-static bool loudnessEnabled = false;
+static bool loudnessEnabled = true;
 
 AudioConnection *patchCordPlayerLeft = nullptr;
 AudioConnection *patchCordPlayerRight = nullptr;
