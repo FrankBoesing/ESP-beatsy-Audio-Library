@@ -55,6 +55,10 @@ class AudioEffectDelay : public AudioStream {
     AudioEffectDelay(const AudioEffectDelay &) = delete;
     AudioEffectDelay &operator=(const AudioEffectDelay &) = delete;
 
+    // Reinitialize after changing the global sample rate. This clears the
+    // current ring buffer; the next delay() allocates it for the new rate.
+    void begin();
+
     // Sets the delay of an output channel (0..7). The buffer is allocated on
     // first use; if no memory is available the channel stays disabled.
     void delay(uint8_t channel, float milliseconds);
@@ -71,6 +75,7 @@ class AudioEffectDelay : public AudioStream {
     void freeBuffer();
 
     uint32_t maxDelayMs;
+    float bufferSampleRate = 0.0f; // Sample rate used for the current buffer
     int16_t *volatile buffer = nullptr;
     uint32_t capacity = 0;   // samples in ring buffer
     uint32_t writeIndex = 0; // next sample to be written
