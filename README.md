@@ -1,5 +1,7 @@
 # ESP-beatsy Audio Library
 
+[Open the Audio System Design Tool (GUI)](docs/index.html) · [GUI notes and tools](docs/README.md)
+
 ESP-beatsy is an ESP32-oriented port and adaptation of the [Teensy Audio Library](https://www.pjrc.com/teensy/td_libs_Audio.html). The main goal is to retain the familiar Teensy programming model and public APIs wherever practical, while adapting audio scheduling, I/O, memory handling and codec support to ESP32 hardware.
 
 **The project is work in progress.**  It is not a claim that every class has full Teensy feature parity or has been tested on every ESP32 target.
