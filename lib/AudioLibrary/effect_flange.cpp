@@ -91,7 +91,7 @@ bool AudioEffectFlange::voices(int delay_offset,int d_depth,float delay_rate)
 
   delay_depth = d_depth;
 
-  delay_rate_incr =(uint32_t)((delay_rate * 2147483648.0) / AUDIO_SAMPLE_RATE_EXACT);
+  delay_rate_incr =(uint32_t)((delay_rate * 2147483648.0) / sampleRate());
 
   delay_offset_idx = delay_offset;
   // Allow the passthru code to go through
