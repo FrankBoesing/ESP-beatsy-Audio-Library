@@ -44,8 +44,81 @@ AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER
 #error "AUDIO_CODEC not defined"
 #endif
 
-AudioConnection *patchCordLeft = nullptr;
-AudioConnection *patchCordRight = nullptr;
+// Loudness is implemented as low/high shelves in the digital path. The filter
+// API has no bypass flag; 0 dB gain creates a flat response when disabled.
+// The stages stay in the graph so toggling does not require reconnecting audio.
+AudioFilterBiquad loudnessFilterL;
+AudioFilterBiquad loudnessFilterR;
+
+static constexpr float DEFAULT_OUTPUT_VOLUME = 0.60f;
+static constexpr float LOUDNESS_LOW_VOLUME = 0.20f;
+static constexpr float LOUDNESS_FLAT_VOLUME = 0.85f;
+static constexpr float LOUDNESS_MAX_BASS_DB = 6.0f;
+static constexpr float LOUDNESS_MAX_TREBLE_DB = 2.0f;
+
+static float outputVolume = DEFAULT_OUTPUT_VOLUME;
+static bool loudnessEnabled = false;
+
+AudioConnection *patchCordPlayerLeft = nullptr;
+AudioConnection *patchCordPlayerRight = nullptr;
+AudioConnection *patchCordOutputLeft = nullptr;
+AudioConnection *patchCordOutputRight = nullptr;
+
+static float loudnessAmount() {
+    if (!loudnessEnabled) {
+        return 0.0f;
+    }
+
+    float amount = (LOUDNESS_FLAT_VOLUME - outputVolume) /
+                   (LOUDNESS_FLAT_VOLUME - LOUDNESS_LOW_VOLUME);
+    if (amount < 0.0f) amount = 0.0f;
+    else if (amount > 1.0f) amount = 1.0f;
+    return amount;
+}
+
+static void updateLoudnessFilters() {
+    const float amount = loudnessAmount();
+    const float bassGainDb = LOUDNESS_MAX_BASS_DB * amount;
+    const float trebleGainDb = LOUDNESS_MAX_TREBLE_DB * amount;
+
+    // Keep the treble shelf below Nyquist for low-rate radio streams too.
+    const float rate = AudioStream::sampleRate();
+    float trebleFrequency = 6000.0f;
+    if (trebleFrequency >= rate * 0.5f) {
+        trebleFrequency = rate * 0.4f;
+    }
+    if (rate <= 0.0f || trebleFrequency <= 0.0f) {
+        return;
+    }
+
+    // Update both channels atomically with respect to AudioStream::update().
+    audio_detail::GraphUpdateLock lock;
+    loudnessFilterL.setLowShelf(0, 120.0f, bassGainDb);
+    loudnessFilterL.setHighShelf(1, trebleFrequency, trebleGainDb);
+    loudnessFilterR.setLowShelf(0, 120.0f, bassGainDb);
+    loudnessFilterR.setHighShelf(1, trebleFrequency, trebleGainDb);
+}
+
+static void setOutputVolume(float level) {
+    if (level < 0.0f) level = 0.0f;
+    else if (level > 1.0f) level = 1.0f;
+
+    outputVolume = level;
+    if (!codec.volume(outputVolume)) {
+        Serial.println("ERROR: codec volume update failed");
+    }
+    updateLoudnessFilters();
+    Serial.printf("Output volume: %.2f\n", outputVolume);
+}
+
+static void setLoudness(bool enabled) {
+    loudnessEnabled = enabled;
+    updateLoudnessFilters();
+    Serial.printf("Loudness %s (bass +%.1f dB, treble +%.1f dB)\n",
+                  loudnessEnabled ? "ON" : "OFF",
+                  LOUDNESS_MAX_BASS_DB * loudnessAmount(),
+                  LOUDNESS_MAX_TREBLE_DB * loudnessAmount());
+}
 
 // ============================================================================
 // Error handling
@@ -66,7 +139,13 @@ AudioConnection *patchCordRight = nullptr;
 bool onStreamSampleRate(uint32_t rate, void *) {
     ESP_LOGI(TAG, "Switching output sample rate to %u Hz", (unsigned)(rate));
 
-    return i2s.setSampleRate((float)(rate));
+    if (!i2s.setSampleRate((float)(rate))) {
+        return false;
+    }
+
+    // Biquad coefficients depend on sample rate; recalculate after renegotiation.
+    updateLoudnessFilters();
+    return true;
 }
 
 // ============================================================================
@@ -107,25 +186,38 @@ AudioPlayer *findPlayer(const char *contentType) {
 // ============================================================================
 
 bool connectPlayer(AudioPlayer &player) {
-    patchCordLeft = new AudioConnection();
-    patchCordRight = new AudioConnection();
+    patchCordPlayerLeft = new AudioConnection();
+    patchCordPlayerRight = new AudioConnection();
+    patchCordOutputLeft = new AudioConnection();
+    patchCordOutputRight = new AudioConnection();
 
-    if (patchCordLeft == nullptr || patchCordRight == nullptr) {
+    if (patchCordPlayerLeft == nullptr || patchCordPlayerRight == nullptr ||
+        patchCordOutputLeft == nullptr || patchCordOutputRight == nullptr) {
         ESP_LOGE(TAG, "Could not allocate audio connections");
         return false;
     }
 
-    const int leftResult = patchCordLeft->connect(player, 0, i2s, 0);
-
-    if (leftResult != 0) {
-        ESP_LOGE(TAG, "Left audio connection failed (%d)", leftResult);
+    const int leftInputResult = patchCordPlayerLeft->connect(player, 0, loudnessFilterL, 0);
+    if (leftInputResult != 0) {
+        ESP_LOGE(TAG, "Left player-to-filter connection failed (%d)", leftInputResult);
         return false;
     }
 
-    const int rightResult = patchCordRight->connect(player, 1, i2s, 1);
+    const int rightInputResult = patchCordPlayerRight->connect(player, 1, loudnessFilterR, 0);
+    if (rightInputResult != 0) {
+        ESP_LOGE(TAG, "Right player-to-filter connection failed (%d)", rightInputResult);
+        return false;
+    }
 
-    if (rightResult != 0) {
-        ESP_LOGE(TAG, "Right audio connection failed (%d)", rightResult);
+    const int leftOutputResult = patchCordOutputLeft->connect(loudnessFilterL, 0, i2s, 0);
+    if (leftOutputResult != 0) {
+        ESP_LOGE(TAG, "Left filter-to-I2S connection failed (%d)", leftOutputResult);
+        return false;
+    }
+
+    const int rightOutputResult = patchCordOutputRight->connect(loudnessFilterR, 0, i2s, 1);
+    if (rightOutputResult != 0) {
+        ESP_LOGE(TAG, "Right filter-to-I2S connection failed (%d)", rightOutputResult);
         return false;
     }
 
@@ -225,7 +317,8 @@ void setup() {
         stopWithError("Audio codec initialization failed");
     }
 
-    codec.volume(0.6f);
+    setOutputVolume(DEFAULT_OUTPUT_VOLUME);
+    updateLoudnessFilters();
 
     // Wi-Fi
     WiFi.mode(WIFI_STA);
@@ -307,6 +400,13 @@ void setup() {
 
     ESP_LOGI(TAG, "Playback started: %s", player.name());
 
+    Serial.println();
+    Serial.println("Radio controls:");
+    Serial.println("  l = toggle loudness compensation");
+    Serial.println("  + / - = increase/decrease output volume");
+    Serial.println("  ? = show these controls");
+    Serial.println("Loudness is initially OFF.");
+
     printFreeRam();
 }
 
@@ -317,6 +417,19 @@ void setup() {
 
 void loop() {
     static char icyMetadata[AudioSourceStream::ICY_STREAMTITLE_MAX_SIZE];
+
+    while (Serial.available() > 0) {
+        const char c = (char)Serial.read();
+        if (c == 'l' || c == 'L') {
+            setLoudness(!loudnessEnabled);
+        } else if (c == '+') {
+            setOutputVolume(outputVolume + 0.05f);
+        } else if (c == '-') {
+            setOutputVolume(outputVolume - 0.05f);
+        } else if (c == '?') {
+            Serial.println("l = toggle loudness, + / - = volume, ? = help");
+        }
+    }
 
     AudioPlayer &player = *selectedPlayer;
     printStatus(player);
