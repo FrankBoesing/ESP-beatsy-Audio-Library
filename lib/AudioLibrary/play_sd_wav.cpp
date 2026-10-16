@@ -296,11 +296,6 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
     source_frames_read = 0;
 
     const float currentOutputSampleRate = sampleRate();
-    if (!isfinite(currentOutputSampleRate) || currentOutputSampleRate <= 0.0f) {
-        ESP_LOGE(TAG, "Invalid output sample rate");
-        closeSource();
-        return false;
-    }
     output_sample_rate = currentOutputSampleRate;
     source_step = (float)sample_rate / currentOutputSampleRate;
 
