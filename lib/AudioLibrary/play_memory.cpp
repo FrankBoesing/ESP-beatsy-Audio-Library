@@ -32,7 +32,8 @@ static portMUX_TYPE playback_state_mux = portMUX_INITIALIZER_UNLOCKED;
 
 
 namespace {
-static uint32_t sampleRateForFormat(uint8_t format) {
+OSIZE
+static inline uint32_t sampleRateForFormat(uint8_t format) {
     switch (format) {
     case 0x81:
         return 44100;
@@ -45,7 +46,8 @@ static uint32_t sampleRateForFormat(uint8_t format) {
     }
 }
 
-static int16_t sampleAt(const unsigned int *data, uint8_t format, uint32_t index) {
+OSPEED
+static inline int16_t sampleAt(const unsigned int *data, uint8_t format, uint32_t index) {
     switch (format) {
     case 0x81:
     case 0x82:
@@ -59,11 +61,13 @@ static int16_t sampleAt(const unsigned int *data, uint8_t format, uint32_t index
 }
 } // namespace
 
+OSIZE
 void AudioPlayMemory::play(const unsigned int *data)
 {
     play(data, isLooping());
 }
 
+OSIZE
 void AudioPlayMemory::play(const unsigned int *data, bool loop)
 {
     if (data == nullptr) {
@@ -87,11 +91,13 @@ void AudioPlayMemory::play(const unsigned int *data, bool loop)
     portEXIT_CRITICAL(&playback_state_mux);
 }
 
+OSIZE
 bool AudioPlayMemory::play(const AudioSampleBuffer &buffer)
 {
     return play(buffer, isLooping());
 }
 
+OSIZE
 bool AudioPlayMemory::play(const AudioSampleBuffer &buffer, bool loop)
 {
     const uint32_t rate = buffer.sampleRate();
@@ -116,6 +122,7 @@ bool AudioPlayMemory::play(const AudioSampleBuffer &buffer, bool loop)
     return true;
 }
 
+OSIZE
 void AudioPlayMemory::stop()
 {
     portENTER_CRITICAL(&playback_state_mux);
@@ -124,6 +131,7 @@ void AudioPlayMemory::stop()
     portEXIT_CRITICAL(&playback_state_mux);
 }
 
+OSIZE
 bool AudioPlayMemory::isPlaying()
 {
     portENTER_CRITICAL(&playback_state_mux);
@@ -132,6 +140,7 @@ bool AudioPlayMemory::isPlaying()
     return result;
 }
 
+OSIZE
 void AudioPlayMemory::setLoop(bool enabled)
 {
     portENTER_CRITICAL(&playback_state_mux);
@@ -139,6 +148,7 @@ void AudioPlayMemory::setLoop(bool enabled)
     portEXIT_CRITICAL(&playback_state_mux);
 }
 
+OSIZE
 bool AudioPlayMemory::isLooping() const
 {
     portENTER_CRITICAL(&playback_state_mux);
@@ -147,6 +157,7 @@ bool AudioPlayMemory::isLooping() const
     return result;
 }
 
+OSIZE
 bool AudioPlayMemory::setPlaybackRate(float rate)
 {
     if (!(rate >= 0.25f && rate <= 4.0f)) {
@@ -159,6 +170,7 @@ bool AudioPlayMemory::setPlaybackRate(float rate)
     return true;
 }
 
+OSIZE
 float AudioPlayMemory::playbackRate() const
 {
     portENTER_CRITICAL(&playback_state_mux);
@@ -167,6 +179,7 @@ float AudioPlayMemory::playbackRate() const
     return result;
 }
 
+OSPEED
 void AudioPlayMemory::update()
 {
     portENTER_CRITICAL(&playback_state_mux);
@@ -294,6 +307,7 @@ void AudioPlayMemory::update()
     release(block);
 }
 
+OSIZE
 uint32_t AudioPlayMemory::positionMillis()
 {
     portENTER_CRITICAL(&playback_state_mux);
@@ -316,6 +330,7 @@ uint32_t AudioPlayMemory::positionMillis()
     return (uint32_t)(((double)index + fraction) * 1000.0 / (double)sourceRate);
 }
 
+OSIZE
 uint32_t AudioPlayMemory::lengthMillis()
 {
     portENTER_CRITICAL(&playback_state_mux);
