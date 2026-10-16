@@ -1403,19 +1403,8 @@ span.mainfunction {color: #993300; font-weight: bolder}
 <script type="text/x-red" data-help-name="AudioInputI2S">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Receive 16 bit stereo audio from the
-	<a href="http://www.pjrc.com/store/teensy3_audio.html" target="_blank">audio shield</a>
-		or another I2S device, using I2S master mode.</p>
-	<p align=center><img src="img/audioshield_inputs.jpg"></p>
+	<p>Receive 16 bit stereo audio from an I2S device, using I2S master mode.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -1427,7 +1416,6 @@ span.mainfunction {color: #993300; font-weight: bolder}
 		simply streams data from the I2S hardware to its 2 output ports.</p>
 	<h3>Hardware Teensy 4</h3>
 	<h3>Hardware Teensy 3</h3>
-	<p align=center><img src="img/audioshield_backside.jpg"></p>
 	<p>The I2S signals are used in "master" mode, where Teensy creates
 		all 3 clock signals and controls all data timing.</p>
 	<table class=doc align=center cellpadding=3>
@@ -1442,7 +1430,7 @@ span.mainfunction {color: #993300; font-weight: bolder}
 		PWM signals, because all remain in sync to Teensy's timing</p>
 	<p>Compatible CODEC Chips:
 		<ul>
-		<li><a href="https://www.pjrc.com/store/teensy3_audio.html">STGL5000</a>
+		<li>STGL5000
 		<li><a href="https://forum.pjrc.com/threads/42665-New-Audio-Board!-TI-TLV320AIC3206">TLV320AIC3206</a>
 		<li><a href="https://forum.pjrc.com/threads/32276-HiFi-Audio-CODEC-Module-AK4558-evaluation-board-in-a-square-inch-PCB">AK4558</a>
 		<li>WM8731
@@ -1479,8 +1467,6 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Filter_FIR
 	</p>
 	<h3>Notes</h3>
-	<p>Normally, this object is used with the Audio Shield, which
-		is controlled separately by the "sgtl5000" object.</p>
 	<p>Only one I2S input and one I2S output object may be used.  Master
 		and slave modes may not be mixed (both must be of the same type).
 	</p>
@@ -1497,19 +1483,8 @@ span.mainfunction {color: #993300; font-weight: bolder}
 <script type="text/x-red" data-help-name="AudioInputI2SQuad">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Receive 16 bit quad (4) channel audio from two
-	<a href="http://www.pjrc.com/store/teensy3_audio.html" target="_blank">audio shields</a>
-		or another I2S devices, using I2S master mode.</p>
-	<p align=center><img src="img/audioshield_quad_in.jpg"></p>
+	<p>Receive 16 bit quad (4) channel audio from two I2S devices, using I2S master mode.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -1522,10 +1497,6 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from the I2S hardware to its 4 output ports.</p>
 	<h3>Hardware</h3>
-	<p>See this Sparkfun blog for <a href="https://www.sparkfun.com/news/2055" target="_blank">how
-		to connect two audio adaptors for 4 channel audio</a>.</p>
-	<p>For Teensy 4 and Rev D audio shields, see
-		<a href="https://forum.pjrc.com/threads/61123?p=242054&viewfull=1#post242054">this forum thread</a>.</p>
 	<p>The I2S signals are used in "master" mode, where Teensy creates
 		all 3 clock signals and controls all data timing.</p>
 	<table class=doc align=center cellpadding=3>
@@ -1546,8 +1517,6 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<p>On Teensy 3.x, the BCLK/LRCLK ratio is 32, which is not compatible with
 		most MEMS microphones.  Teensy 4.x uses BCLK/LRCLK ratio, which can
 		be used with I2S MEMS microphones.</p>
-	<p>Normally, this object is used with two Audio Shield, which
-		are controlled separately by a pair "sgtl5000" object.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioInputI2SQuad">
 	<div class="form-row">
@@ -1561,11 +1530,6 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<div class=tooltipinfo>
 	<p>Receive 6 channel audio from three I2S devices, using I2S master mode.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -1613,11 +1577,6 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<div class=tooltipinfo>
 	<p>Receive 8 channel audio from three I2S devices, using I2S master mode.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -1668,11 +1627,6 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<div class=tooltipinfo>
 	<p>Receive 16 bit stereo audio from an I2S device using the 2nd I2S port on Teensy 4.x.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -1711,11 +1665,6 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<p><span style="color:red">This input is incompatible with most other inputs and outputs</span>
 		which run at a speed controlled by Teensy's internal sample rate.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -1759,11 +1708,6 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<p>Receive S/PDIF digital audio and resample to Teensy's audio sample rate.</p>
 	<p>Asynchronous resampling contributed by <a href="https://github.com/alex6679">Alex Walch</a>.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -1836,14 +1780,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<div class=tooltipinfo>
 	<p>Receive audio using the built-in analog to digital converter.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -1904,8 +1840,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>Power Supply rejection issue with simple DC bias (bigger capacitor may be needed if 3.3V has low frequency noise)</p>
 	<p>Algorithm for automatic DC bias tracking</p>
 	<p>Noise coupling from digital circuitry inside the chip is always a problem when using
-		ADC inputs pin.  It's never as quiet as the audio shield and any good quality
-		audio ADC chip.  Stong low impedance drive to the analog input pin is critical
+		ADC input pins. Strong low-impedance drive to the analog input pin is critical
 		to minimizing noise coupling.  If an opamp is used, connect a low value resistor
 		(eg, 100 to 1000 ohms)
 		between the opamp output and ADC input pin, and a 1nF capacitor from the ADC pin
@@ -1926,12 +1861,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<div class=tooltipinfo>
 	<p>Receive stereo audio using the built-in analog to digital converters.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -1979,8 +1908,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		to capacitively couple... avoiding higher analog impedance is the solution.</p>
 	<p>Power Supply rejection issue with simple DC bias (bigger capacitor may be needed if 3.3V has low frequency noise)</p>
 	<p>Algorithm for automatic DC bias tracking</p>
-	<p>TODO: actual noise measurements with different input circuitry
-		(it's not as quiet as the audio shield)</p>
+	<p>TODO: actual noise measurements with different input circuitry.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioInputAnalogStereo">
 	<div class="form-row">
@@ -1997,14 +1925,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p><span style="color:red">This input is incompatible with most other inputs and outputs</span>
 		which run at a speed controlled by Teensy's internal sample rate.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2052,14 +1972,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		many audio channels.</p>
 	<p align=center><img src="img/tdm.jpg"></p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2128,11 +2040,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>Receive a 256 bit Time Division Multiplexed frame containing
 		many audio channels, using the I2S2 port.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2187,14 +2094,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		</p>
 	<p align=center><img src="img/pdmmic.jpg"><br><small>PDM MEMS Mic</small></p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2248,11 +2147,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		</p>
 	<p align=center><img src="img/pdmmic.jpg"><br><small>PDM MEMS Mic, using I2S2</small></p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2301,14 +2195,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		sound device.</p>
 	<p align=center><img src="img/usbtype_audio_in.png"></p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2346,19 +2232,8 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 <script type="text/x-red" data-help-name="AudioOutputI2S">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Transmit 16 bit stereo audio to the
-	<a href="http://www.pjrc.com/store/teensy3_audio.html" target="_blank">audio shield</a>
-		or another I2S device, using I2S master mode.</p>
-	<p align=center><img src="img/audioshield_outputs.jpg"></p>
+	<p>Transmit 16 bit stereo audio to an I2S device, using I2S master mode.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2369,7 +2244,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from its 2 input ports to the I2S hardware.</p>
 	<h3>Hardware</h3>
-	<p align=center><img src="img/audioshield_backside.jpg"></p>
 	<p>The I2S signals are used in "master" mode, where Teensy creates
 		all 3 clock signals and controls all data timing.</p>
 	<table class=doc align=center cellpadding=3>
@@ -2384,7 +2258,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		PWM signals, because all remain in sync to Teensy's timing</p>
 	<p>Compatible CODEC Chips:
 		<ul>
-		<li><a href="https://www.pjrc.com/store/teensy3_audio.html">STGL5000</a>
+		<li>STGL5000
 		<li><a href="https://forum.pjrc.com/threads/42665-New-Audio-Board!-TI-TLV320AIC3206">TLV320AIC3206</a>
 		<li><a href="https://forum.pjrc.com/threads/32276-HiFi-Audio-CODEC-Module-AK4558-evaluation-board-in-a-square-inch-PCB">AK4558</a>
 		</ul>
@@ -2412,8 +2286,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Synthesis &gt; PlaySynthMusic
 	</p>
 	<h3>Notes</h3>
-	<p>Normally, this object is used with the Audio Shield, which
-		is controlled separately by the "sgtl5000" object.</p>
 	<p>Only one I2S input and one I2S output object may be used.  Master
 		and slave modes may not be mixed (both must be of the same type).
 	</p>
@@ -2429,16 +2301,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
 	<p>Transmit quad (4) channel 16 bit audio, using I2S master mode.</p>
-	<p align=center><img src="img/audioshield_quad_out.jpg"></p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2451,11 +2314,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from its 4 input ports to the I2S hardware.</p>
 	<h3>Hardware</h3>
-	<p>See this Sparkfun blog for <a href="https://www.sparkfun.com/news/2055" target="_blank">how
-		to connect two audio adaptors for 4 channel audio</a>.  More
-		<a href="https://forum.pjrc.com/threads/29373-Bit-bang-multiple-I2S-inputs-simultaneously?p=79606#post79606" target="_blank">details</a> are also available.</p>
-	<p>For Teensy 4 and Rev D audio shields, see
-		<a href="https://forum.pjrc.com/threads/61123?p=242054&viewfull=1#post242054">this forum thread</a>.</p>
 	<p>The I2S signals are used in "master" mode, where Teensy creates
 		all 3 clock signals and controls all data timing.</p>
 	<table class=doc align=center cellpadding=3>
@@ -2475,8 +2333,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; SGTL5000 &gt; QuadChannelOutput
 	</p>
 	<h3>Notes</h3>
-	<p>Normally, this object is used with two Audio Shields, which
-		are controlled separately by a pair of "sgtl5000" objects.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputI2SQuad">
 	<div class="form-row">
@@ -2490,11 +2346,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<div class=tooltipinfo>
 	<p>Transmit 6 channel 16 bit audio, using I2S master mode.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2540,11 +2391,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<div class=tooltipinfo>
 	<p>Transmit 8 channel 16 bit audio, using I2S master mode.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2594,11 +2440,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<div class=tooltipinfo>
 	<p>Transmit 16 bit stereo audio to an I2S device, using I2S master mode, on the I2S2 port.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2634,14 +2475,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>Transmit 16 bit stereo audio as Digital S/PDIF by use of the I2S port.</p>
 	<p align=center><img src="img/spdif_proto.jpg"></p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2694,11 +2527,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<div class=tooltipinfo>
 	<p>Transmit 16 bit stereo audio as Digital S/PDIF by use of the I2S2 port.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2746,11 +2574,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<div class=tooltipinfo>
 	<p>Transmit 16 bit stereo audio as Digital S/PDIF by use of the native S/PDIF port.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2796,14 +2619,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		and filtering are automatically used to improve output quality.</p>
 	<p align=center><img src="img/pt8211.jpg"></p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2847,11 +2662,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>Transmit 16 bit stereo audio to a low-cost PT8211 DAC chip, using the I2S2 port.  4X oversampling
 		and filtering are automatically used to improve output quality.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2894,12 +2704,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p align=center><img src="img/dac_speaker.jpg"><br>
 	<small><a href="http://www.pjrc.com/store/prop_shield.html" target="_blank_">Prop Shield with 4&ohm; Speaker</a></small></p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -2954,11 +2758,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<!--<p align=center><img src="img/dac_speaker.jpg"><br>
 	<small><a href="http://www.pjrc.com/store/prop_shield.html" target="_blank_">Prop Shield with 4&ohm; Speaker</a></small></p>-->
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -3006,14 +2805,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		used for coarse and fine pulses, to be combined by scaled
 		resistors.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<!--<li>Teensy 4.0
-	<li>Teensy 4.1-->
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -3046,9 +2837,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		</p>
 	<p>Analog signals created by filtering PWM waveforms use the digital
 		power supply as their reference voltage.  Any noise on the digital
-		power line can directly couple to the output signal.  The built-in DAC or
-		<a href="http://www.pjrc.com/store/teensy3_audio.html" target="_blank">audio shield</a>
-		should be used when higher quality signals are needed.</p>
+		power line can directly couple to the output signal.  the built-in DAC should be used when higher quality signals are needed.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputPWM">
 	<div class="form-row">
@@ -3061,13 +2850,8 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
 	<p>Transmit 16 bit stereo audio using Medium Quality Sound pulses, usually better than PWM,
-		but not as good as a proper DAC or the audio shield.</p>
+		but not as good as a proper DAC.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -3102,14 +2886,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p><span style="color:red">This input is incompatible with most other inputs and outputs</span>
 		which run at a speed controlled by Teensy's internal sample rate.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -3155,14 +2931,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		many audio channels.</p>
 	<p align=center><img src="img/tdm.jpg"></p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -3232,11 +3000,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>Transmit a 256 bit Time Division Multiplexed frame containing
 		many audio channels, using the I2S2 port.</p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -3286,14 +3049,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>Transmit ADAT TOSLINK Optical Output</p>
 	<p align=center><img src="img/adat.jpg"></p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<!--<li>Teensy 4.0
-	<li>Teensy 4.1-->
-	</ul>
 	<p>ADAT output for Teensy 4.0 is discussed on
 	<a href="https://forum.pjrc.com/threads/60914?p=239824&viewfull=1#post239824">this forum thread</a>.</p>
 	<h3>Audio Connections</h3>
@@ -3343,14 +3098,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		sound device.</p>
 	<p align=center><img src="img/usbtype_audio_out.png"></p>
 	</div>
-	<h3>Boards Supported</h3>
-	<ul>
-	<li>Teensy 3.2
-	<li>Teensy 3.5
-	<li>Teensy 3.6
-	<li>Teensy 4.0
-	<li>Teensy 4.1
-	</ul>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -4890,7 +4637,6 @@ double s_freq = .0625;</p>
 <h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; WaveFolder</p>
 	<h3>Notes</h3>
-	<p>Assumes the AudioShield fitted.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioEffectWaveFolder">
 	<div class="form-row">
@@ -5977,12 +5723,7 @@ double s_freq = .0625;</p>
 <script type="text/x-red" data-help-name="AudioControlSGTL5000">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Control the SGTL5000 chip on the
-		<a href="http://www.pjrc.com/store/teensy3_audio.html" target="_blank">audio shield</a>.
-		SGTL5000 is always used in slave mode, where Teensy controls
-		all I2S timing.
-	</p>
-	<p align=center><img src="img/sgtl5000closeup.jpg"></p>
+	<p>Control the SGTL5000 audio codec. It operates in slave mode, where the host controls all I2S timing.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<p>This object has no audio inputs or outputs.  Separate i2s objects
