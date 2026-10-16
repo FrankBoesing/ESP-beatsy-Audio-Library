@@ -35,10 +35,7 @@
 #include "utility/dspinst.h"
 
 void AudioSynthWavetable::setInstrument(const instrument_data &newInstrument) {
-    float currentSampleRate = sampleRate();
-    if (!isfinite(currentSampleRate) || currentSampleRate <= 0.0f) {
-        currentSampleRate = AUDIO_SAMPLE_RATE_EXACT;
-    }
+    const float currentSampleRate = sampleRate();
 
     portENTER_CRITICAL(&stateMux);
     initialized_sample_rate = currentSampleRate;
