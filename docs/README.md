@@ -14,6 +14,7 @@ Teensy Audio System Design Tool for the ESP-beatsy Audio Library.
 - FIR Calculator: standalone offline tool for windowed-sinc low-pass, high-pass,
   band-pass and band-stop design. It plots the quantized response and exports
   signed 16-bit Q15 coefficients for `AudioFilterFIR` (up to 199 odd-numbered taps).
+- Audio Tools (`tools.html`): repairs unfinished `AudioRecordFile` `.tmp` recordings by recalculating WAV chunk lengths, and converts mono/stereo 16-bit PCM WAV files into packed constant sample tables for `AudioPlayMemory`. All processing is local in the browser.
 - This tool remains a work in progress. It is an offline GUI for graph design,
   not a complete parser or code generator for every library API.
 
