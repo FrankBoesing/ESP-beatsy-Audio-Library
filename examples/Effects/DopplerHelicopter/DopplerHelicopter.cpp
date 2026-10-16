@@ -1,6 +1,6 @@
 #include <Arduino.h>
-#include <SPI.h>
-#include <SD.h>
+#include <FS.h>
+#include <SD_MMC.h>
 #include <math.h>
 #include <Audio.h>
 
@@ -17,12 +17,20 @@ constexpr uint32_t LEG_DURATION_MS = 15500; // One direction
 constexpr float PI_F = 3.14159265358979323846f;
 
 bool mountSD() {
-#if defined(PIN_SD_CS) && defined(PIN_SPI_MOSI) && defined(PIN_SPI_MISO) && defined(PIN_SPI_SCK)
-    SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_SD_CS);
-    return SD.begin(PIN_SD_CS, SPI);
-#else
-    return SD.begin();
-#endif
+    if (!SD_MMC.setPins(PIN_SD_MMC_CLK, PIN_SD_MMC_CMD,
+                        PIN_SD_MMC_D0, PIN_SD_MMC_D1,
+                        PIN_SD_MMC_D2, PIN_SD_MMC_D3)) {
+        Serial.println("ERROR: SD_MMC pin configuration failed. Check platformio.ini.");
+        return false;
+    }
+
+    // mode1bit=false selects the 4-bit SD_MMC bus.
+    if (!SD_MMC.begin("/sdcard", false)) {
+        Serial.println("ERROR: SD_MMC initialization failed. Check the card, DIP switches and pin definitions.");
+        return false;
+    }
+
+    return true;
 }
 } // namespace
 
@@ -127,7 +135,7 @@ void setup() {
     Serial.println("======================================");
 
     if (!mountSD()) {
-        Serial.println("ERROR: SD (SPI) initialization failed. Check the card and platformio.ini pins.");
+        Serial.println("ERROR: SD_MMC initialization failed. See the preceding diagnostic message.");
         while (true) delay(1000);
     }
 
@@ -135,7 +143,7 @@ void setup() {
 
     // The whole decoded sample is loaded into PSRAM. Loading fails without
     // replacing an existing buffer if contiguous PSRAM or the reserve is insufficient.
-    if (!wavLoader.loadToMemory(SD, SAMPLE_FILE, helicopterSample)) {
+    if (!wavLoader.loadToMemory(SD_MMC, SAMPLE_FILE, helicopterSample)) {
         Serial.printf("ERROR: Could not preload %s into PSRAM.\n", SAMPLE_FILE);
         Serial.println("Use a shorter mono PCM WAV (44.1/22.05/11.025 kHz, 8/16/24/32 bit).");
         while (true) delay(1000);
