@@ -100,6 +100,10 @@ class AudioSynthHandpan : public AudioStream {
     ActiveModeRef activeModes[MAX_NOTES * MAX_MODES]{};
     uint8_t activeModeCount = 0;
 
+    // Block accumulator lets each resonator keep its state and coefficients in
+    // local variables for a whole block instead of reloading them per sample.
+    float mixBuffer[AUDIO_BLOCK_SAMPLES] = {};
+
     NoteEvent eventQueue[MAX_PENDING_EVENTS]{};
     uint8_t eventRead = 0;
     uint8_t eventWrite = 0;

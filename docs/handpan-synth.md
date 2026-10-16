@@ -103,3 +103,8 @@ phase as well as checking CPU headroom.
 
 The example generates its own short procedural attack. A licensed PCM16 attack
 sample can be substituted without changing the synth architecture.
+
+
+## Resonator-loop optimization
+
+The resonator bank processes each active mode over a complete audio block. Its coefficients and two delay states are kept in local variables inside that block loop; state is written back once per mode, and silence detection is performed once per block. This reduces repeated state loads and per-sample mode-management work when many pads are ringing. The `mixBuffer` adds `AUDIO_BLOCK_SAMPLES * sizeof(float)` bytes to each synthesizer instance (512 bytes with 128-sample blocks). Verify CPU load again on the target after rebuilding.

@@ -203,35 +203,59 @@ void AudioSynthHandpan::update() {
         return;
     }
 
-    // Even if the block pool is exhausted, advance resonators and sample
-    // positions so memory pressure cannot stretch the sound's decay in time.
+    // Allocate once per block. If unavailable, DSP state still advances so a
+    // temporary audio-pool shortage does not stretch note tails in time.
     audio_block_t *block = allocate();
 
     for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        float mix = 0.0f;
+        mixBuffer[i] = 0.0f;
+    }
 
-        uint8_t activeIndex = 0;
-        while (activeIndex < activeModeCount) {
-            const ActiveModeRef ref = activeModes[activeIndex];
-            Resonator &mode = notes[ref.slot].modes[ref.mode];
+    // Process one resonator for an entire block. Coefficients and the two
+    // delay states stay in local variables, and quiet-mode detection happens
+    // once per block instead of once per mode per sample. This is the hot path
+    // that matters when many pads are ringing simultaneously.
+    uint8_t activeIndex = 0;
+    while (activeIndex < activeModeCount) {
+        const ActiveModeRef ref = activeModes[activeIndex];
+        Resonator &mode = notes[ref.slot].modes[ref.mode];
 
-            mix += mode.y1;
-            const float next = mode.coefficient1 * mode.y1 +
-                               mode.coefficient2 * mode.y2;
-            mode.y2 = mode.y1;
-            mode.y1 = next;
+        const float coefficient1 = mode.coefficient1;
+        const float coefficient2 = mode.coefficient2;
+        float y1 = mode.y1;
+        float y2 = mode.y2;
 
-            if (fabsf(mode.y1) < SILENCE_THRESHOLD &&
-                fabsf(mode.y2) < SILENCE_THRESHOLD) {
-                mode.y1 = 0.0f;
-                mode.y2 = 0.0f;
-                mode.active = false;
-                --activeModeCount;
-                activeModes[activeIndex] = activeModes[activeModeCount];
-            } else {
-                ++activeIndex;
-            }
+        for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            mixBuffer[i] += y1;
+
+            const float next = coefficient1 * y1 + coefficient2 * y2;
+            y2 = y1;
+            y1 = next;
         }
+
+        mode.y1 = y1;
+        mode.y2 = y2;
+
+        // A stable damped resonator will not regrow after both state variables
+        // have become this small. Block-level culling avoids per-sample fabsf
+        // calls and dynamic-list mutations in the inner loop.
+        if (fabsf(y1) < SILENCE_THRESHOLD &&
+            fabsf(y2) < SILENCE_THRESHOLD) {
+            mode.y1 = 0.0f;
+            mode.y2 = 0.0f;
+            mode.active = false;
+            --activeModeCount;
+            activeModes[activeIndex] = activeModes[activeModeCount];
+        } else {
+            ++activeIndex;
+        }
+    }
+
+    // Attack samples are short and limited to eight voices, so sample-major
+    // playback is inexpensive. It is also processed when block allocation
+    // failed, preserving the sample/decay timeline.
+    for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        float mix = mixBuffer[i];
 
         for (uint8_t v = 0; v < MAX_ATTACK_VOICES; ++v) {
             AttackVoice &voice = attackVoices[v];
@@ -245,15 +269,17 @@ void AudioSynthHandpan::update() {
                 continue;
             }
 
-            const uint32_t nextIndex = (index + 1U < voice.sampleCount) ? index + 1U : index;
+            const uint32_t nextIndex =
+                (index + 1U < voice.sampleCount) ? index + 1U : index;
             const int32_t sample0 = voice.sample[index];
             const int32_t sample1 = voice.sample[nextIndex];
             const uint32_t fraction = voice.positionQ16 & 0xFFFFU;
-            const int32_t interpolated = sample0 +
-                (int32_t)(((int64_t)(sample1 - sample0) * fraction) >> 16);
-            mix += ((float)interpolated * (1.0f / 32768.0f)) * voice.gain;
+            const int32_t interpolated =
+                sample0 + (int32_t)(((int64_t)(sample1 - sample0) * fraction) >> 16);
 
+            mix += ((float)interpolated * (1.0f / 32768.0f)) * voice.gain;
             voice.positionQ16 += voice.incrementQ16;
+
             if ((voice.positionQ16 >> 16) >= voice.sampleCount) {
                 voice.active = false;
             }
@@ -262,8 +288,7 @@ void AudioSynthHandpan::update() {
         if (block != nullptr) {
             if (mix > 1.0f) mix = 1.0f;
             if (mix < -1.0f) mix = -1.0f;
-            const int32_t value = (int32_t)(mix * OUTPUT_SCALE);
-            block->data[i] = saturate16(value);
+            block->data[i] = saturate16((int32_t)(mix * OUTPUT_SCALE));
         }
     }
 
