@@ -32,7 +32,7 @@ static portMUX_TYPE playback_state_mux = portMUX_INITIALIZER_UNLOCKED;
 
 
 namespace {
-OSIZE
+OSPEED
 static inline uint32_t sampleRateForFormat(uint8_t format) {
     switch (format) {
     case 0x81:
