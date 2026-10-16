@@ -30,8 +30,6 @@
 #include <AudioStream.h> // github.com/PaulStoffregen/cores/blob/master/teensy4/AudioStream.h
 #include "utility/dspinst.h"
 
-#define SAMPLES_PER_MSEC (AUDIO_SAMPLE_RATE_EXACT/1000.0f)
-
 class AudioEffectEnvelope : public AudioStream
 {
 public:
@@ -101,7 +99,7 @@ public:
 private:
 	uint16_t milliseconds2count(float milliseconds) {
 		if (!(milliseconds > 0.0f)) return 0;
-		const float samples = milliseconds * SAMPLES_PER_MSEC;
+		const float samples = milliseconds * (sampleRate() / 1000.0f);
 		if (samples >= 524280.0f) return 65535;
 		return (uint16_t)(((uint32_t)(samples) + 7) >> 3);
 	}
@@ -125,5 +123,4 @@ private:
 
 };
 
-#undef SAMPLES_PER_MSEC
 #endif
