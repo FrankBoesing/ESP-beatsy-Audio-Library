@@ -202,6 +202,32 @@ void AudioFilterBiquad::setNotch(uint32_t stage, float frequency, float q) {
 }
 
 OSIZE
+void AudioFilterBiquad::setAllpass(uint32_t stage, float frequency, float q) {
+    if (!validFrequencyAndQ(frequency, q, sampleRate())) {
+        return;
+    }
+
+    const float w0 = 2.0f * BIQUAD_PI * frequency / sampleRate();
+    const float sine = std::sin(w0);
+    const float cosine = std::cos(w0);
+    const float alpha = sine / (2.0f * q);
+    const float a0 = 1.0f + alpha;
+
+    // A second-order all-pass has unity magnitude response and a frequency-
+    // dependent phase response. Numerator and denominator coefficients are
+    // mirrored around b1/a1.
+    const float coefficients[5] = {
+        (1.0f - alpha) / a0,
+        -2.0f * cosine / a0,
+        1.0f,
+        -2.0f * cosine / a0,
+        (1.0f - alpha) / a0
+    };
+
+    storeCoefficients(stage, coefficients);
+}
+
+OSIZE
 void AudioFilterBiquad::setPeaking(uint32_t stage, float frequency, float gain, float q) {
     if (!validFrequencyAndQ(frequency, q, sampleRate()) || !std::isfinite(gain)) {
         return;
