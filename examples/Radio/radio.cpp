@@ -62,12 +62,15 @@ static float outputVolume = DEFAULT_OUTPUT_VOLUME;
 static float radioSampleRate = AUDIO_SAMPLE_RATE_EXACT;
 static bool loudnessEnabled = true;
 
+// The selected player is only known after reading the stream's Content-Type.
 AudioConnection patchCordPlayerLeft;
 AudioConnection patchCordPlayerRight;
-AudioConnection patchCordPreFilterLeft;
-AudioConnection patchCordPreFilterRight;
-AudioConnection patchCordOutputLeft;
-AudioConnection patchCordOutputRight;
+
+// The remainder of the audio graph is fixed and can be connected immediately.
+AudioConnection patchCordPreFilterLeft(loudnessPreGainL, 0, loudnessFilterL, 0);
+AudioConnection patchCordPreFilterRight(loudnessPreGainR, 0, loudnessFilterR, 0);
+AudioConnection patchCordOutputLeft(loudnessFilterL, 0, i2s, 0);
+AudioConnection patchCordOutputRight(loudnessFilterR, 0, i2s, 1);
 
 static float loudnessAmount() {
     if (!loudnessEnabled) {
@@ -223,30 +226,6 @@ bool connectPlayer(AudioPlayer &player) {
     const int rightInputResult = patchCordPlayerRight.connect(player, 1, loudnessPreGainR, 0);
     if (rightInputResult != 0) {
         ESP_LOGE(TAG, "Right player-to-pre-gain connection failed (%d)", rightInputResult);
-        return false;
-    }
-
-    const int leftFilterResult = patchCordPreFilterLeft.connect(loudnessPreGainL, 0, loudnessFilterL, 0);
-    if (leftFilterResult != 0) {
-        ESP_LOGE(TAG, "Left pre-gain-to-filter connection failed (%d)", leftFilterResult);
-        return false;
-    }
-
-    const int rightFilterResult = patchCordPreFilterRight.connect(loudnessPreGainR, 0, loudnessFilterR, 0);
-    if (rightFilterResult != 0) {
-        ESP_LOGE(TAG, "Right pre-gain-to-filter connection failed (%d)", rightFilterResult);
-        return false;
-    }
-
-    const int leftOutputResult = patchCordOutputLeft.connect(loudnessFilterL, 0, i2s, 0);
-    if (leftOutputResult != 0) {
-        ESP_LOGE(TAG, "Left filter-to-I2S connection failed (%d)", leftOutputResult);
-        return false;
-    }
-
-    const int rightOutputResult = patchCordOutputRight.connect(loudnessFilterR, 0, i2s, 1);
-    if (rightOutputResult != 0) {
-        ESP_LOGE(TAG, "Right filter-to-I2S connection failed (%d)", rightOutputResult);
         return false;
     }
 
