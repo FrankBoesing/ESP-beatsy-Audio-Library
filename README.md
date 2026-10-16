@@ -158,4 +158,6 @@ A 513 entry sine table replaces the Teensy 257 entry table.
 
 Use the PlatformIO environments in [platformio.ini](platformio.ini) as the starting point for the intended board and framework configuration. Before running an example, check its pin definitions and codec selection (ES8311 or ES8388 where applicable). Network examples also need local credentials/configuration.
 
+All SD-card examples use `SD_MMC` in **4-bit mode**. The ESP32-A1S Audio Kit and Freenove ESP32-S3 Display pin mappings (`CLK`, `CMD`, `D0`–`D3`) are defined in `platformio.ini`; the old SPI SD pin definitions have been removed. On the ESP32-A1S Audio Kit, set the SD-card switches `CMD` and `DATA3` to ON.
+
 For board-specific requirements, implementation details and buffer/task notes, see the [library technical overview](lib/AudioLibrary/README.md). The current implementation is evolving, so treat the source in the selected branch as authoritative when an API or hardware detail matters.
