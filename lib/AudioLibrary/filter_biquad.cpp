@@ -18,7 +18,7 @@ static inline int32_t toQ30(float value) {
         return INT32_MIN;
     }
 
-    return (int32_t)((scaled >= 0.0f) ? scaled + 0.5f : scaled - 0.5f);
+    return (scaled >= 0.0f) ? (int32_t)(scaled + 0.5f) : (int32_t)(scaled - 0.5f);
 }
 
 static inline int64_t roundQ30(int64_t value) {
@@ -40,7 +40,7 @@ static inline int16_t saturatePcm(int64_t value) {
         return -32768;
     }
 
-    return (int16_t)value;
+    return (int16_t)(value);
 }
 
 bool validFrequencyAndQ(float frequency, float q) {
@@ -79,7 +79,7 @@ void AudioFilterBiquad::storeCoefficients(uint32_t stage, const float coefficien
     _coefficients[stage] = converted;
 
     if (_stageCount <= stage) {
-        _stageCount = stage + 1U;
+        _stageCount = (uint8_t)(stage + 1U);
     }
 
     portEXIT_CRITICAL(&_configMux);
@@ -94,13 +94,14 @@ void AudioFilterBiquad::setCoefficients(uint32_t stage, const int *coefficients)
     // Die Werte liegen bereits in Q30 vor.
     // Keine Rückwandlung über float/double und damit keine
     // zusätzliche Quantisierung.
-    const Coefficients converted = {(int32_t)coefficients[0], (int32_t)coefficients[1], (int32_t)coefficients[2], (int32_t)coefficients[3], (int32_t)coefficients[4]};
+    const Coefficients converted = {(int32_t)coefficients[0], (int32_t)coefficients[1], (int32_t)coefficients[2],
+                                    (int32_t)coefficients[3], (int32_t)coefficients[4]};
 
     portENTER_CRITICAL(&_configMux);
     _coefficients[stage] = converted;
 
     if (_stageCount <= stage) {
-        _stageCount = stage + 1U;
+        _stageCount = (uint8_t)(stage + 1U);
     }
 
     portEXIT_CRITICAL(&_configMux);
@@ -328,18 +329,13 @@ void AudioFilterBiquad::update() {
     for (uint8_t stage = 0; stage < stageCount; ++stage) {
         const Coefficients &c = coefficients[stage];
         State &state = _state[stage];
-        const int64_t b0 = c.b0;
-        const int64_t b1 = c.b1;
-        const int64_t b2 = c.b2;
-        const int64_t a1 = c.a1;
-        const int64_t a2 = c.a2;
 
         for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
             const int16_t input = block->data[i];
-            const int64_t outputQ30 = b0 * input + state.s1;
+            const int64_t outputQ30 = (int64_t)c.b0 * input + state.s1;
             const int16_t output = saturatePcm(roundQ30(outputQ30));
-            state.s1 = b1 * input + state.s2 - a1 * output;
-            state.s2 = b2 * input - a2 * output;
+            state.s1 = (int64_t)c.b1 * input + state.s2 - (int64_t)c.a1 * output;
+            state.s2 = (int64_t)c.b2 * input - (int64_t)c.a2 * output;
             block->data[i] = output;
         }
     }
