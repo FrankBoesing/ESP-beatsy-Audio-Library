@@ -24,16 +24,13 @@ AudioConnection patchCordRight(sine, 0, output, 1);
 namespace {
 constexpr uint32_t SAMPLE_RATES[] = {32000, 44100, 48000};
 constexpr size_t SAMPLE_RATE_COUNT = sizeof(SAMPLE_RATES) / sizeof(SAMPLE_RATES[0]);
-constexpr float FIRST_FREQUENCY_HZ = 440.0f;
-constexpr float SECOND_FREQUENCY_HZ = 880.0f;
+constexpr float TEST_FREQUENCY_HZ = 1000.0f;
 constexpr float TONE_AMPLITUDE = 0.25f;
 constexpr uint32_t TONE_DURATION_MS = 1000;
 constexpr uint32_t PAUSE_DURATION_MS = 500;
 
 enum class TestPhase : uint8_t {
-    FirstTone,
-    PauseBeforeFrequencyChange,
-    SecondTone,
+    TestTone,
     PauseBeforeNextSampleRate,
     Done
 };
@@ -47,12 +44,12 @@ void enterPhase(TestPhase newPhase) {
     phaseStartedAt = millis();
 }
 
-void startFirstTone() {
-    Serial.printf("\nTesting output sample rate: %lu Hz\n",
-                  (unsigned long)SAMPLE_RATES[sampleRateIndex]);
-    sine.frequency(FIRST_FREQUENCY_HZ);
+void startTestTone() {
+    Serial.printf("\nTesting output sample rate: %lu Hz, tone: %.0f Hz\n",
+                  (unsigned long)SAMPLE_RATES[sampleRateIndex], TEST_FREQUENCY_HZ);
+    sine.frequency(TEST_FREQUENCY_HZ);
     sine.amplitude(TONE_AMPLITUDE);
-    enterPhase(TestPhase::FirstTone);
+    enterPhase(TestPhase::TestTone);
 }
 
 bool initializeCodecForRate(uint32_t outputRate) {
@@ -92,7 +89,7 @@ bool changeSampleRate(uint32_t rate) {
     }
 
     // Recompute the oscillator phase increment for the new sample rate.
-    sine.frequency(FIRST_FREQUENCY_HZ);
+    sine.frequency(TEST_FREQUENCY_HZ);
     return true;
 }
 } // namespace
@@ -121,33 +118,17 @@ void setup() {
     }
 
     sine.amplitude(0.0f);
-    startFirstTone();
+    startTestTone();
 }
 
 void loop() {
     const uint32_t elapsed = millis() - phaseStartedAt;
 
     switch (phase) {
-    case TestPhase::FirstTone:
+    case TestPhase::TestTone:
         if (elapsed >= TONE_DURATION_MS) {
             sine.amplitude(0.0f);
             Serial.println("Pause 500 ms");
-            enterPhase(TestPhase::PauseBeforeFrequencyChange);
-        }
-        break;
-
-    case TestPhase::PauseBeforeFrequencyChange:
-        if (elapsed >= PAUSE_DURATION_MS) {
-            sine.frequency(SECOND_FREQUENCY_HZ);
-            sine.amplitude(TONE_AMPLITUDE);
-            Serial.printf("Frequency changed to %.0f Hz\n", SECOND_FREQUENCY_HZ);
-            enterPhase(TestPhase::SecondTone);
-        }
-        break;
-
-    case TestPhase::SecondTone:
-        if (elapsed >= TONE_DURATION_MS) {
-            sine.amplitude(0.0f);
             enterPhase(TestPhase::PauseBeforeNextSampleRate);
         }
         break;
