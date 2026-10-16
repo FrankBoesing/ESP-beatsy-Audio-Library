@@ -8,10 +8,8 @@
 
 #pragma GCC optimize("Os")
 
-// DAC main volume registers:
-//   0x00 = 0 dB
-//   0xC0 = approximately -96 dB
-// The scale is therefore inverted.
+// ES8388 DAC volume register: 0x00 = 0 dB, 0xC0 = -96 dB
+// (0.5 dB per register step). Map a linear amplitude to dB attenuation.
 static uint8_t volumeToRegister(float level) {
     if (level <= 0.0f) {
         return 0xC0;
@@ -20,8 +18,12 @@ static uint8_t volumeToRegister(float level) {
         return 0x00;
     }
 
-    const float attenuation = (1.0f - level) * 192.0f;
-    return (uint8_t)(attenuation + 0.5f);
+    const float attenuationDb = -20.0f * std::log10(level);
+    if (attenuationDb >= 96.0f) {
+        return 0xC0;
+    }
+
+    return (uint8_t)(attenuationDb * 2.0f + 0.5f);
 }
 
 /*
@@ -232,11 +234,25 @@ bool AudioControlES8388::setDacVolume(uint8_t left, uint8_t right) {
 }
 
 bool AudioControlES8388::volume(float level) {
+    if (!std::isfinite(level)) {
+        return false;
+    }
+    if (level < 0.0f) level = 0.0f;
+    else if (level > 1.0f) level = 1.0f;
+
     const uint8_t value = volumeToRegister(level);
     return setDacVolume(value, value);
 }
 
 bool AudioControlES8388::volume(float left, float right) {
+    if (!std::isfinite(left) || !std::isfinite(right)) {
+        return false;
+    }
+    if (left < 0.0f) left = 0.0f;
+    else if (left > 1.0f) left = 1.0f;
+    if (right < 0.0f) right = 0.0f;
+    else if (right > 1.0f) right = 1.0f;
+
     return setDacVolume(volumeToRegister(left), volumeToRegister(right));
 }
 
