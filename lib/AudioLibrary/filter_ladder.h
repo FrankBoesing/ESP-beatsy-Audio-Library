@@ -70,7 +70,7 @@ class AudioFilterLadder : public AudioStream {
     static float fastTanh(float x);
     static int16_t toPcm(float value);
 
-    void computeCoefficients(float fc, float &alpha, float &qAdjust) const;
+    void computeCoefficients(float fc, float currentSampleRate, float &alpha, float &qAdjust) const;
     float lpf(float sample, int stage);
     bool resonating() const;
     void interpolateBlock(const int16_t *input, float overdrive);

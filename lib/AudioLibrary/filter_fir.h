@@ -14,6 +14,8 @@ class AudioFilterFIR : public AudioStream {
   public:
     AudioFilterFIR();
 
+    // Coefficients must be designed for the current audio sample rate.
+    // Recalculate them whenever the sample rate changes.
     void begin(const short *coefficients, int coefficientCount);
     void end();
     void update() override;

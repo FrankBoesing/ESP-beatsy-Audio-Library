@@ -95,12 +95,13 @@ class AudioSynthWaveform : public AudioStream {
           sample(0), tone_type(WAVEFORM_SINE), tone_offset(0) {}
 
     void frequency(float freq) {
+        const float currentSampleRate = sampleRate();
         if (freq < 0.0f) {
             freq = 0.0;
-        } else if (freq > AUDIO_SAMPLE_RATE_EXACT / 2.0f) {
-            freq = AUDIO_SAMPLE_RATE_EXACT / 2.0f;
+        } else if (freq > currentSampleRate / 2.0f) {
+            freq = currentSampleRate / 2.0f;
         }
-        phase_increment = freq * (4294967296.0f / AUDIO_SAMPLE_RATE_EXACT);
+        phase_increment = freq * (4294967296.0f / currentSampleRate);
         if (phase_increment > 0x7FFE0000u)
             phase_increment = 0x7FFE0000;
     }
@@ -182,12 +183,13 @@ class AudioSynthWaveformModulated : public AudioStream {
           modulation_type(0) {}
 
     void frequency(float freq) {
+        const float currentSampleRate = sampleRate();
         if (freq < 0.0f) {
             freq = 0.0;
-        } else if (freq > AUDIO_SAMPLE_RATE_EXACT / 2.0f) {
-            freq = AUDIO_SAMPLE_RATE_EXACT / 2.0f;
+        } else if (freq > currentSampleRate / 2.0f) {
+            freq = currentSampleRate / 2.0f;
         }
-        phase_increment = freq * (4294967296.0f / AUDIO_SAMPLE_RATE_EXACT);
+        phase_increment = freq * (4294967296.0f / currentSampleRate);
         if (phase_increment > 0x7FFE0000u)
             phase_increment = 0x7FFE0000;
     }

@@ -64,7 +64,7 @@ void AudioSynthKarplusStrong::noteOn(float frequency, float velocity) {
         velocity = 1.0f;
     }
 
-    float requestedLength = AUDIO_SAMPLE_RATE_EXACT / frequency + 0.5f;
+    float requestedLength = sampleRate() / frequency + 0.5f;
     uint32_t length = requestedLength >= (float)MAX_BUFFER_LENGTH ? MAX_BUFFER_LENGTH : (uint32_t)requestedLength;
 
     // A positive frequency can still produce a zero-length delay at high

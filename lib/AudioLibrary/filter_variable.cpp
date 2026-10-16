@@ -51,13 +51,15 @@ void AudioFilterStateVariable::frequency(float freq) {
     if (!isfinite(freq)) {
         return;
     }
+    const float currentSampleRate = sampleRate();
+
     if (freq < 20.0f) {
         freq = 20.0f;
-    } else if (freq > AUDIO_SAMPLE_RATE_EXACT / 2.5f) {
-        freq = AUDIO_SAMPLE_RATE_EXACT / 2.5f;
+    } else if (freq > currentSampleRate / 2.5f) {
+        freq = currentSampleRate / 2.5f;
     }
 
-    const float scale = 3.141592654f / (AUDIO_SAMPLE_RATE_EXACT * 2.0f);
+    const float scale = 3.141592654f / (currentSampleRate * 2.0f);
     const int32_t fcenter = (int32_t)((freq * scale) * 2147483647.0f);
     const int32_t fmult = (int32_t)(sinf(freq * scale) * 2147483647.0f);
 

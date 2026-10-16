@@ -29,7 +29,6 @@
 
 #define MOOG_PI 3.14159265358979323846f
 #define MAX_RESONANCE 1.8f
-#define MAX_FREQUENCY (AUDIO_SAMPLE_RATE_EXACT * 0.425f)
 
 const float AudioFilterLadder::interpolation_coeffs[AudioFilterLadder::INTERPOLATION_TAPS] = {
     -14.30851541590154240E-6f,  0.001348560352009071f, 0.004029285548698377f, 0.007644563345368599f,
@@ -45,7 +44,7 @@ const float AudioFilterLadder::interpolation_coeffs[AudioFilterLadder::INTERPOLA
 
 AudioFilterLadder::AudioFilterLadder()
     : AudioStream(3, inputQueueArray) {
-    computeCoefficients(baseFrequency, alpha, qAdjust);
+    computeCoefficients(baseFrequency, sampleRate(), alpha, qAdjust);
 }
 
 void AudioFilterLadder::frequency(float fc) {
@@ -142,18 +141,20 @@ void AudioFilterLadder::interpolationMethod(AudioFilterLadderInterpolation metho
 }
 
 OSPEED
-void AudioFilterLadder::computeCoefficients(float fc, float &newAlpha, float &newQAdjust) const {
+void AudioFilterLadder::computeCoefficients(float fc, float currentSampleRate, float &newAlpha, float &newQAdjust) const {
     if (!isfinite(fc)) {
         fc = 5.0f;
     }
-    if (fc > MAX_FREQUENCY) {
-        fc = MAX_FREQUENCY;
+    const float maxFrequency = currentSampleRate * 0.425f;
+
+    if (fc > maxFrequency) {
+        fc = maxFrequency;
     } else if (fc < 5.0f) {
         fc = 5.0f;
     }
 
     const float wc = fc * (2.0f * MOOG_PI /
-                           ((float)INTERPOLATION * AUDIO_SAMPLE_RATE_EXACT));
+                           ((float)INTERPOLATION * currentSampleRate));
     const float wc2 = wc * wc;
 
     newAlpha = 0.9892f * wc - 0.4324f * wc2 +
@@ -324,10 +325,13 @@ void AudioFilterLadder::update() {
     config.polyOn = polyOn;
     portEXIT_CRITICAL(&configMux);
 
+    const float currentSampleRate = sampleRate();
+    const float maxFrequency = currentSampleRate * 0.425f;
+
     // frequency() only changes the requested base frequency from task context.
     // Coefficients are recalculated here, in the audio task.
     if (config.frequencyGeneration != appliedFrequencyGeneration) {
-        computeCoefficients(config.baseFrequency, alpha, qAdjust);
+        computeCoefficients(config.baseFrequency, currentSampleRate, alpha, qAdjust);
         appliedFrequencyGeneration = config.frequencyGeneration;
     }
 
@@ -342,10 +346,10 @@ void AudioFilterLadder::update() {
             if (frequencyModulationActive) {
                 const float octave = (float)frequencyBlock->data[i] * config.octaveScale;
                 float cutoff = config.baseFrequency * fastExp2(octave);
-                if (cutoff > MAX_FREQUENCY) {
-                    cutoff = MAX_FREQUENCY;
+                if (cutoff > maxFrequency) {
+                    cutoff = maxFrequency;
                 }
-                computeCoefficients(cutoff, alpha, qAdjust);
+                computeCoefficients(cutoff, currentSampleRate, alpha, qAdjust);
             }
 
             if (resonanceModulationActive) {
@@ -388,10 +392,10 @@ void AudioFilterLadder::update() {
             if (frequencyModulationActive) {
                 const float octave = (float)frequencyBlock->data[i] * config.octaveScale;
                 float cutoff = config.baseFrequency * fastExp2(octave);
-                if (cutoff > MAX_FREQUENCY) {
-                    cutoff = MAX_FREQUENCY;
+                if (cutoff > maxFrequency) {
+                    cutoff = maxFrequency;
                 }
-                computeCoefficients(cutoff, alpha, qAdjust);
+                computeCoefficients(cutoff, currentSampleRate, alpha, qAdjust);
             }
 
             if (resonanceModulationActive) {

@@ -43,8 +43,9 @@ static inline int16_t saturatePcm(int64_t value) {
     return (int16_t)(value);
 }
 
-bool validFrequencyAndQ(float frequency, float q) {
-    return std::isfinite(frequency) && frequency > 0.0f && frequency < AUDIO_SAMPLE_RATE_EXACT * 0.5f &&
+bool validFrequencyAndQ(float frequency, float q, float sampleRate) {
+    return std::isfinite(sampleRate) && sampleRate > 0.0f &&
+           std::isfinite(frequency) && frequency > 0.0f && frequency < sampleRate * 0.5f &&
            std::isfinite(q) && q > 0.0f;
 }
 
@@ -128,11 +129,11 @@ void AudioFilterBiquad::setCoefficients(uint32_t stage, const double *coefficien
 
 OSIZE
 void AudioFilterBiquad::setLowpass(uint32_t stage, float frequency, float q) {
-    if (!validFrequencyAndQ(frequency, q)) {
+    if (!validFrequencyAndQ(frequency, q, sampleRate())) {
         return;
     }
 
-    const float w0 = 2.0f * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
+    const float w0 = 2.0f * BIQUAD_PI * frequency / sampleRate();
 
     const float sine = std::sin(w0);
     const float cosine = std::cos(w0);
@@ -147,11 +148,11 @@ void AudioFilterBiquad::setLowpass(uint32_t stage, float frequency, float q) {
 
 OSIZE
 void AudioFilterBiquad::setHighpass(uint32_t stage, float frequency, float q) {
-    if (!validFrequencyAndQ(frequency, q)) {
+    if (!validFrequencyAndQ(frequency, q, sampleRate())) {
         return;
     }
 
-    const float w0 = 2.0f * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
+    const float w0 = 2.0f * BIQUAD_PI * frequency / sampleRate();
 
     const float sine = std::sin(w0);
     const float cosine = std::cos(w0);
@@ -166,11 +167,11 @@ void AudioFilterBiquad::setHighpass(uint32_t stage, float frequency, float q) {
 
 OSIZE
 void AudioFilterBiquad::setBandpass(uint32_t stage, float frequency, float q) {
-    if (!validFrequencyAndQ(frequency, q)) {
+    if (!validFrequencyAndQ(frequency, q, sampleRate())) {
         return;
     }
 
-    const float w0 = 2.0f * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
+    const float w0 = 2.0f * BIQUAD_PI * frequency / sampleRate();
 
     const float sine = std::sin(w0);
     const float cosine = std::cos(w0);
@@ -184,11 +185,11 @@ void AudioFilterBiquad::setBandpass(uint32_t stage, float frequency, float q) {
 
 OSIZE
 void AudioFilterBiquad::setNotch(uint32_t stage, float frequency, float q) {
-    if (!validFrequencyAndQ(frequency, q)) {
+    if (!validFrequencyAndQ(frequency, q, sampleRate())) {
         return;
     }
 
-    const float w0 = 2.0f * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
+    const float w0 = 2.0f * BIQUAD_PI * frequency / sampleRate();
 
     const float sine = std::sin(w0);
     const float cosine = std::cos(w0);
@@ -201,15 +202,45 @@ void AudioFilterBiquad::setNotch(uint32_t stage, float frequency, float q) {
 }
 
 OSIZE
+void AudioFilterBiquad::setPeaking(uint32_t stage, float frequency, float gain, float q) {
+    if (!validFrequencyAndQ(frequency, q, sampleRate()) || !std::isfinite(gain)) {
+        return;
+    }
+
+    // RBJ Audio EQ Cookbook peaking EQ. Gain is specified in dB;
+    // Q controls the width of the boost/cut around the center frequency.
+    const float A = std::pow(10.0f, gain / 40.0f);
+    const float w0 = 2.0f * BIQUAD_PI * frequency / sampleRate();
+    const float sine = std::sin(w0);
+    const float cosine = std::cos(w0);
+    const float alpha = sine / (2.0f * q);
+    const float a0 = 1.0f + alpha / A;
+
+    if (a0 == 0.0f || !std::isfinite(a0)) {
+        return;
+    }
+
+    const float coefficients[5] = {
+        (1.0f + alpha * A) / a0,
+        -2.0f * cosine / a0,
+        (1.0f - alpha * A) / a0,
+        -2.0f * cosine / a0,
+        (1.0f - alpha / A) / a0
+    };
+
+    storeCoefficients(stage, coefficients);
+}
+
+OSIZE
 void AudioFilterBiquad::setLowShelf(uint32_t stage, float frequency, float gain, float slope) {
-    if (!std::isfinite(frequency) || frequency <= 0.0f || frequency >= AUDIO_SAMPLE_RATE_EXACT * 0.5f ||
+    if (!std::isfinite(frequency) || frequency <= 0.0f || frequency >= sampleRate() * 0.5f ||
         !std::isfinite(gain) || !std::isfinite(slope) || slope <= 0.0f) {
         return;
     }
 
     const float a = std::pow(10.0f, gain / 40.0f);
 
-    const float w0 = 2.0f * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
+    const float w0 = 2.0f * BIQUAD_PI * frequency / sampleRate();
 
     const float sine = std::sin(w0);
     const float cosine = std::cos(w0);
@@ -238,14 +269,14 @@ void AudioFilterBiquad::setLowShelf(uint32_t stage, float frequency, float gain,
 
 OSIZE
 void AudioFilterBiquad::setHighShelf(uint32_t stage, float frequency, float gain, float slope) {
-    if (!std::isfinite(frequency) || frequency <= 0.0f || frequency >= AUDIO_SAMPLE_RATE_EXACT * 0.5f ||
+    if (!std::isfinite(frequency) || frequency <= 0.0f || frequency >= sampleRate() * 0.5f ||
         !std::isfinite(gain) || !std::isfinite(slope) || slope <= 0.0f) {
         return;
     }
 
     const float a = std::pow(10.0f, gain / 40.0f);
 
-    const float w0 = 2.0f * BIQUAD_PI * frequency / AUDIO_SAMPLE_RATE_EXACT;
+    const float w0 = 2.0f * BIQUAD_PI * frequency / sampleRate();
 
     const float sine = std::sin(w0);
     const float cosine = std::cos(w0);

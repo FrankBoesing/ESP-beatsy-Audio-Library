@@ -29,7 +29,7 @@
 #include "utility/dspinst.h"
 
 bool AudioSynthToneSweep::play(float t_amp, int t_lo, int t_hi, float t_time) {
-    const uint32_t sampleRate = (uint32_t)AUDIO_SAMPLE_RATE_EXACT;
+    const uint32_t sampleRate = (uint32_t)this->sampleRate();
 
     if (!isfinite(t_amp) || !isfinite(t_time) ||
         t_amp < 0.0f || t_amp > 1.0f ||
@@ -75,6 +75,7 @@ bool AudioSynthToneSweep::play(float t_amp, int t_lo, int t_hi, float t_time) {
     tone_remainder = remainder;
     remainder_accum = 0;
     sweep_samples = totalSamples;
+    tone_sample_rate = sampleRate;
     samples_elapsed = 0;
     tone_sign = direction;
     sweep_busy = 1;
@@ -104,6 +105,7 @@ void AudioSynthToneSweep::update() {
     uint32_t phase;
     int direction;
     uint32_t generation;
+    uint32_t localSampleRate;
     unsigned char busy;
 
     portENTER_CRITICAL(&stateMux);
@@ -115,13 +117,14 @@ void AudioSynthToneSweep::update() {
     frequencyRemainder = tone_remainder;
     remainderAccumulator = remainder_accum;
     totalSamples = sweep_samples;
+    localSampleRate = tone_sample_rate;
     samplesElapsed = samples_elapsed;
     phase = tone_phase;
     direction = tone_sign;
     generation = stateGeneration;
     portEXIT_CRITICAL(&stateMux);
 
-    if (!busy || totalSamples == 0) {
+    if (!busy || totalSamples == 0 || localSampleRate == 0) {
         return;
     }
 
@@ -130,7 +133,6 @@ void AudioSynthToneSweep::update() {
         return;
     }
 
-    const uint32_t sampleRate = (uint32_t)AUDIO_SAMPLE_RATE_EXACT;
     uint32_t i = 0;
     bool stillPlaying = true;
 
@@ -144,7 +146,7 @@ void AudioSynthToneSweep::update() {
         block->data[i] = (int16_t)((sineQ15 * (int32_t)amplitude) >> 15);
 
         // Q32.32 Hz divided by sample rate gives a Q0.32 phase increment.
-        phase += (uint32_t)(frequency / sampleRate);
+        phase += (uint32_t)(frequency / localSampleRate);
 
         // Divide the frequency delta into quotient and remainder so the sweep
         // reaches its target even when the requested duration is very long.

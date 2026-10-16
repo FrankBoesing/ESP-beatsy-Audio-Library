@@ -69,6 +69,7 @@ class AudioSynthToneSweep : public AudioStream {
     uint64_t tone_remainder = 0;  // fractional step numerator
     uint64_t remainder_accum = 0;
     uint64_t sweep_samples = 0;
+    uint32_t tone_sample_rate = 0;
     uint64_t samples_elapsed = 0;
     int tone_sign = 1;
     unsigned char sweep_busy = 0;

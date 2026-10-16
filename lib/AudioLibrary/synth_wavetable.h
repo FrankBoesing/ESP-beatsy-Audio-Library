@@ -73,6 +73,8 @@ class AudioSynthWavetable : public AudioStream {
     };
 
     static const int32_t UNITY_GAIN = INT32_MAX;
+    // Reference rate used by generated instrument_data. setInstrument()
+    // adapts its precomputed timing/phase values to the captured runtime rate.
     static constexpr float SAMPLES_PER_MSEC = AUDIO_SAMPLE_RATE_EXACT / 1000.0f;
     static const int32_t LFO_SMOOTHNESS = 3;
     static constexpr float LFO_PERIOD = AUDIO_BLOCK_SAMPLES / (1 << (LFO_SMOOTHNESS - 1));
@@ -100,6 +102,7 @@ class AudioSynthWavetable : public AudioStream {
 
     // The instrument and its sample/note-range arrays must remain alive for
     // the entire time this object can play them (typically static SoundFont data).
+    // Call again after a global sample-rate change, before starting new notes.
     void setInstrument(const instrument_data &newInstrument);
 
     void amplitude(float value);
@@ -120,6 +123,8 @@ class AudioSynthWavetable : public AudioStream {
   private:
     void setState(int note, int amp, float freq);
     void setFrequencyLocked(float freq);
+    uint32_t scaleSampleCount(uint32_t value) const;
+    uint32_t scalePhaseIncrement(uint32_t value) const;
 
     audio_block_t *inputQueueArray[1] = {};
 
@@ -127,6 +132,22 @@ class AudioSynthWavetable : public AudioStream {
     // writes the evolving state back only if no newer command arrived meanwhile.
     portMUX_TYPE stateMux = portMUX_INITIALIZER_UNLOCKED;
     uint32_t stateGeneration = 0;
+
+    // Captured by setInstrument(); generated sample_data values are relative
+    // to AUDIO_SAMPLE_RATE_EXACT and are adjusted once per instrument/note.
+    float initialized_sample_rate = AUDIO_SAMPLE_RATE_EXACT;
+    float sample_count_scale = 1.0f;
+    float phase_increment_scale = 1.0f;
+
+    uint32_t note_delay_count = 0;
+    uint32_t note_attack_count = 0;
+    uint32_t note_hold_count = 0;
+    uint32_t note_decay_count = 0;
+    uint32_t note_release_count = 0;
+    uint32_t note_vibrato_delay = 0;
+    uint32_t note_vibrato_increment = 0;
+    uint32_t note_modulation_delay = 0;
+    uint32_t note_modulation_increment = 0;
 
     const instrument_data *instrument = nullptr;
     const sample_data *current_sample = nullptr;

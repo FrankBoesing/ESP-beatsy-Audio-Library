@@ -94,6 +94,8 @@ class AudioPlaySdWav : public AudioPlayer {
     uint32_t data_frames;
 
     uint32_t sample_rate;
+    float output_sample_rate = AUDIO_SAMPLE_RATE_EXACT; // Captured at playback start
+    float source_step = 1.0f; // Source frames per output sample at unity rate
     uint16_t channels;
     uint16_t bits_per_sample;
     uint16_t bytes_per_sample;
@@ -160,7 +162,8 @@ class AudioPlaySdWav : public AudioPlayer {
      */
     bool readSourceFrame(int32_t &left, int32_t &right);
 
-    inline bool getOutputSample(int16_t &left, int16_t &right, float targetRate);
+    inline bool getOutputSample(int16_t &left, int16_t &right, float targetRate,
+                                float outputSampleRate, float sourceStep);
 
     void releaseBlocks();
     void finishPlayback(bool stopPlayback = true);

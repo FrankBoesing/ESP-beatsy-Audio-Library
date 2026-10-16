@@ -75,6 +75,7 @@ void AudioPlayMemory::play(const unsigned int *data, bool loop)
     }
 
     const uint32_t formatWord = *data++;
+    const float currentOutputSampleRate = sampleRate();
     portENTER_CRITICAL(&playback_state_mux);
     beginning = data;
     pcm_samples = nullptr;
@@ -84,6 +85,7 @@ void AudioPlayMemory::play(const unsigned int *data, bool loop)
     sample_index = 0;
     sample_fraction = 0.0f;
     current_playback_rate = target_playback_rate;
+    output_sample_rate = currentOutputSampleRate;
     loop_enabled = loop;
     playing = (uint8_t)(formatWord >> 24);
     ++playback_generation;
@@ -105,6 +107,7 @@ bool AudioPlayMemory::play(const AudioSampleBuffer &buffer, bool loop)
         return false;
     }
 
+    const float currentOutputSampleRate = sampleRate();
     portENTER_CRITICAL(&playback_state_mux);
     beginning = nullptr;
     pcm_samples = buffer.samples();
@@ -114,6 +117,7 @@ bool AudioPlayMemory::play(const AudioSampleBuffer &buffer, bool loop)
     sample_index = 0;
     sample_fraction = 0.0f;
     current_playback_rate = target_playback_rate;
+    output_sample_rate = currentOutputSampleRate;
     loop_enabled = loop;
     playing = 0x84; // signed 16-bit mono PCM supplied from AudioSampleBuffer
     ++playback_generation;
@@ -194,6 +198,7 @@ void AudioPlayMemory::update()
     float fraction = sample_fraction;
     float currentRate = current_playback_rate;
     const float targetRate = target_playback_rate;
+    const float outputSampleRate = output_sample_rate;
     portEXIT_CRITICAL(&playback_state_mux);
 
     if (play_format == 0) {
@@ -224,10 +229,10 @@ void AudioPlayMemory::update()
         fraction = 0.0f;
     }
 
-    const float baseStep = (float)sourceRate / AUDIO_SAMPLE_RATE_EXACT;
+    const float baseStep = (float)sourceRate / outputSampleRate;
     const bool unityRate = targetRate == 1.0f && currentRate == 1.0f;
     const bool directRate = unityRate && fraction == 0.0f &&
-                            (float)sourceRate == AUDIO_SAMPLE_RATE_EXACT;
+                            (float)sourceRate == outputSampleRate;
     int16_t *out = block->data;
     bool finished = false;
 
