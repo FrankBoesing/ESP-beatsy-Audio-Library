@@ -367,7 +367,7 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
     if (freeBytes < bytesNeeded ||
         freeBytes - bytesNeeded < reserveBytes ||
         largestBlock < bytesNeeded) {
-        ESP_LOGW(TAG,
+        ESP_LOGE(TAG,
                  "Not enough contiguous PSRAM for %s (%u needed, %u free, %u largest, %u reserve)",
                  filename, (unsigned)bytesNeeded, (unsigned)freeBytes,
                  (unsigned)largestBlock, (unsigned)reserveBytes);
@@ -378,7 +378,7 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
     int16_t *newSamples = static_cast<int16_t *>(
         heap_caps_malloc(bytesNeeded, PSRAM_CAPS));
     if (newSamples == nullptr) {
-        ESP_LOGW(TAG, "PSRAM allocation failed (%u bytes)", (unsigned)bytesNeeded);
+        ESP_LOGE(TAG, "PSRAM allocation failed (%u bytes)", (unsigned)bytesNeeded);
         closeSource();
         return false;
     }
@@ -967,7 +967,7 @@ bool AudioPlaySdWav::readSourceFrameOrLoop(int32_t &left, int32_t &right, bool l
 // ============================================================================
 // Output sample / variable-rate interpolation
 // ============================================================================
-inline
+inline OSPEED
 bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
                                      float targetRate, bool loop) {
     const bool unityRate = targetRate == 1.0f && current_playback_rate == 1.0f;
