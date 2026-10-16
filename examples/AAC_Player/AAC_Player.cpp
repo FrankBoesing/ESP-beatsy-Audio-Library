@@ -47,6 +47,35 @@ void setup() {
     Serial.println("======================================");
 
     // ------------------------------------------------------------------------
+    // SD_MMC
+    // Mount the card before initializing the audio graph and codec, matching
+    // the known-working initialization order in DopplerHelicopter.
+    // ------------------------------------------------------------------------
+
+    Serial.println("Initializing SD_MMC...");
+
+    if (!SD_MMC.setPins(PIN_SD_MMC_CLK, PIN_SD_MMC_CMD,
+                        PIN_SD_MMC_D0, PIN_SD_MMC_D1,
+                        PIN_SD_MMC_D2, PIN_SD_MMC_D3)) {
+        Serial.println("ERROR: SD_MMC pin configuration failed");
+
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    // mode1bit=false selects the 4-bit SD_MMC bus.
+    if (!SD_MMC.begin("/sdcard", false)) {
+        Serial.println("ERROR: SD_MMC initialization failed");
+
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    Serial.println("SD_MMC initialized");
+
+    // ------------------------------------------------------------------------
     // Audio memory
     // ------------------------------------------------------------------------
 
@@ -74,33 +103,6 @@ void setup() {
     codec.volume(volume);
     Serial.print("Volume:");
     Serial.println(volume, 2);
-
-    // ------------------------------------------------------------------------
-    // SD_MMC
-    // ------------------------------------------------------------------------
-
-    Serial.println("Initializing SD_MMC...");
-
-    if (!SD_MMC.setPins(PIN_SD_MMC_CLK, PIN_SD_MMC_CMD,
-                        PIN_SD_MMC_D0, PIN_SD_MMC_D1,
-                        PIN_SD_MMC_D2, PIN_SD_MMC_D3)) {
-        Serial.println("ERROR: SD_MMC pin configuration failed");
-
-        while (true) {
-            delay(1000);
-        }
-    }
-
-    // mode1bit=false selects the 4-bit SD_MMC bus.
-    if (!SD_MMC.begin("/sdcard", false)) {
-        Serial.println("ERROR: SD_MMC initialization failed");
-
-        while (true) {
-            delay(1000);
-        }
-    }
-
-    Serial.println("SD_MMC initialized");
 
     // ------------------------------------------------------------------------
     // Open MP3
