@@ -19,16 +19,19 @@ constexpr uint32_t DATA_ID = 0x61746164UL; // "data"
 constexpr uint16_t WAV_PCM = 1;
 constexpr uint16_t WAV_EXTENSIBLE = 0xFFFE;
 
+OSIZE
 static inline uint16_t readLE16(const uint8_t *p) {
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
 }
 
+OSIZE
 static inline uint32_t readLE32(const uint8_t *p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
            ((uint32_t)p[3] << 24);
 }
 
-void printChunk(uint32_t id, uint32_t size, uint32_t position) {
+OSIZE
+static inline void printChunk(uint32_t id, uint32_t size, uint32_t position) {
     #if CORE_DEBUG_LEVEL >= 5
     char name[5];
 
@@ -42,6 +45,54 @@ void printChunk(uint32_t id, uint32_t size, uint32_t position) {
              (unsigned long)position, (unsigned long)size);
     #endif
 }
+OSPEED
+static inline int32_t decodeWavSample(uint16_t bits_per_sample, const uint8_t *data) {
+    switch (bits_per_sample) {
+    case 8:
+        // WAV 8-bit PCM is unsigned.
+        return ((int32_t)data[0] - 128) * 16777216;
+
+    case 16: {
+        // The frame and preload buffers are aligned; memcpy avoids aliasing
+        // while allowing GCC to emit a native 16-bit load.
+        const uint8_t *p = (const uint8_t *)__builtin_assume_aligned(data, 2);
+        uint16_t raw;
+        memcpy(&raw, p, sizeof(raw));
+#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
+    (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+        raw = __builtin_bswap16(raw);
+#endif
+        return (int32_t)(int16_t)raw * 65536;
+    }
+
+    case 24: {
+        // Packed 24-bit PCM has no naturally aligned word representation.
+        int32_t value = (int32_t)data[0] | ((int32_t)data[1] << 8) |
+                        ((int32_t)data[2] << 16);
+
+        if (value & 0x00800000) {
+            value |= (int32_t)0xFF000000;
+        }
+
+        return value * 256;
+    }
+
+    case 32: {
+        const uint8_t *p = (const uint8_t *)__builtin_assume_aligned(data, 4);
+        uint32_t raw;
+        memcpy(&raw, p, sizeof(raw));
+#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
+    (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+        raw = __builtin_bswap32(raw);
+#endif
+        return (int32_t)raw;
+    }
+
+    default:
+        return 0;
+    }
+}
+
 } // namespace
 
 // ============================================================================
@@ -57,6 +108,7 @@ AudioPlaySdWav::~AudioPlaySdWav() {
 // begin
 // ============================================================================
 
+OSIZE
 void AudioPlaySdWav::begin() {
     state = STOPPED;
 
@@ -96,6 +148,7 @@ void AudioPlaySdWav::begin() {
 // Source ownership
 // ============================================================================
 
+OSIZE
 void AudioPlaySdWav::closeSource() {
     if (source == nullptr) {
         own_source = false;
@@ -115,6 +168,7 @@ void AudioPlaySdWav::closeSource() {
 // Existing API: filename
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::play(const char *filename) {
     return play(SD_MMC, filename);
 }
@@ -161,6 +215,7 @@ bool AudioPlaySdWav::play(fs::FS &fs, const char *filename) {
 // Generic AudioSource
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::play(AudioSource &newSource) {
     stop();
     closeSource();
@@ -263,6 +318,7 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
 // Load an entire PCM WAV into PSRAM
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
                                   AudioSampleBuffer &buffer, size_t reserveBytes) {
     if (filename == nullptr || state != STOPPED || source != nullptr) {
@@ -355,9 +411,9 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
 
         for (uint32_t i = 0; i < framesNow; ++i) {
             const uint8_t *frame = raw + (size_t)i * block_align;
-            const int32_t left = decodeSample(frame) >> 16;
+            const int32_t left = decodeWavSample(bits_per_sample, frame) >> 16;
             const int32_t right = channels == 2
-                                      ? decodeSample(frame + bytes_per_sample) >> 16
+                                      ? decodeWavSample(bits_per_sample, frame + bytes_per_sample) >> 16
                                       : left;
             newSamples[framesDone + i] = (int16_t)((left + right) / 2);
         }
@@ -389,6 +445,7 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
 // Playback rate
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::setPlaybackRate(float rate) {
     if (!(rate >= 0.25f && rate <= 4.0f)) {
         return false;
@@ -400,6 +457,7 @@ bool AudioPlaySdWav::setPlaybackRate(float rate) {
     return true;
 }
 
+OSIZE
 float AudioPlaySdWav::playbackRate() const {
     portENTER_CRITICAL(&playback_rate_mux);
     const float result = target_playback_rate;
@@ -407,12 +465,14 @@ float AudioPlaySdWav::playbackRate() const {
     return result;
 }
 
+OSIZE
 void AudioPlaySdWav::setLoop(bool enabled) {
     portENTER_CRITICAL(&playback_rate_mux);
     loop_enabled = enabled;
     portEXIT_CRITICAL(&playback_rate_mux);
 }
 
+OSIZE
 bool AudioPlaySdWav::isLooping() const {
     portENTER_CRITICAL(&playback_rate_mux);
     const bool result = loop_enabled;
@@ -424,6 +484,7 @@ bool AudioPlaySdWav::isLooping() const {
 // Stop
 // ============================================================================
 
+OSIZE
 void AudioPlaySdWav::stop() {
     if (state != STOPPED) {
         releaseBlocks();
@@ -447,6 +508,7 @@ void AudioPlaySdWav::stop() {
 // Play / Pause
 // ============================================================================
 
+OSIZE
 void AudioPlaySdWav::togglePlayPause() {
     if (state == PLAYING) {
         state = PAUSED;
@@ -459,14 +521,17 @@ void AudioPlaySdWav::togglePlayPause() {
 // State
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::isPlaying() const {
     return state == PLAYING;
 }
 
+OSIZE
 bool AudioPlaySdWav::isPaused() {
     return state == PAUSED;
 }
 
+OSIZE
 bool AudioPlaySdWav::isStopped() {
     return state == STOPPED;
 }
@@ -475,6 +540,7 @@ bool AudioPlaySdWav::isStopped() {
 // Position
 // ============================================================================
 
+OSIZE
 uint32_t AudioPlaySdWav::positionMillis() const {
     if (sample_rate == 0 || block_align == 0) {
         return 0;
@@ -489,6 +555,7 @@ uint32_t AudioPlaySdWav::positionMillis() const {
 // Length
 // ============================================================================
 
+OSIZE
 uint32_t AudioPlaySdWav::lengthMillis() const {
     if (sample_rate == 0 || block_align == 0) {
         return 0;
@@ -502,6 +569,7 @@ uint32_t AudioPlaySdWav::lengthMillis() const {
 // Source read
 // ============================================================================
 
+OSPEED
 bool AudioPlaySdWav::readExact(void *buffer, size_t length) {
     uint8_t *p = (uint8_t *)(buffer);
 
@@ -554,6 +622,7 @@ bool AudioPlaySdWav::readExact(void *buffer, size_t length) {
 // Seek
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::seekAbsolute(uint64_t position) {
     if (source == nullptr) {
         return false;
@@ -686,6 +755,7 @@ bool AudioPlaySdWav::parseFmtChunk(uint64_t position, uint32_t size) {
 // Find data chunk
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::findDataChunk() {
     const uint32_t fileSize = (uint32_t)source->size();
 
@@ -834,58 +904,11 @@ bool AudioPlaySdWav::parseWav() {
 // ============================================================================
 // Decode sample
 // ============================================================================
-OSPEED
-int32_t AudioPlaySdWav::decodeSample(const uint8_t *data) const {
-    switch (bits_per_sample) {
-    case 8:
-        // WAV 8-bit PCM is unsigned.
-        return ((int32_t)data[0] - 128) * 16777216;
-
-    case 16: {
-        // The frame and preload buffers are aligned; memcpy avoids aliasing
-        // while allowing GCC to emit a native 16-bit load.
-        const uint8_t *p = (const uint8_t *)__builtin_assume_aligned(data, 2);
-        uint16_t raw;
-        memcpy(&raw, p, sizeof(raw));
-#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
-    (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-        raw = __builtin_bswap16(raw);
-#endif
-        return (int32_t)(int16_t)raw * 65536;
-    }
-
-    case 24: {
-        // Packed 24-bit PCM has no naturally aligned word representation.
-        int32_t value = (int32_t)data[0] | ((int32_t)data[1] << 8) |
-                        ((int32_t)data[2] << 16);
-
-        if (value & 0x00800000) {
-            value |= (int32_t)0xFF000000;
-        }
-
-        return value * 256;
-    }
-
-    case 32: {
-        const uint8_t *p = (const uint8_t *)__builtin_assume_aligned(data, 4);
-        uint32_t raw;
-        memcpy(&raw, p, sizeof(raw));
-#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
-    (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-        raw = __builtin_bswap32(raw);
-#endif
-        return (int32_t)raw;
-    }
-
-    default:
-        return 0;
-    }
-}
-
 // ============================================================================
 // Read source frame
 // ============================================================================
 
+OSPEED
 bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
     if ((uint64_t)source_frames_read * block_align >= data_length) {
         return false;
@@ -900,10 +923,10 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
         return false;
     }
 
-    left = decodeSample(frame);
+    left = decodeWavSample(bits_per_sample, frame);
 
     if (channels == 2) {
-        right = decodeSample(frame + bytes_per_sample);
+        right = decodeWavSample(bits_per_sample, frame + bytes_per_sample);
     } else {
         right = left;
     }
@@ -913,6 +936,7 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
     return true;
 }
 
+OSPEED
 bool AudioPlaySdWav::readSourceFrameOrLoop(int32_t &left, int32_t &right, bool loop) {
     // Restart only at the data-chunk boundary; never scan the RIFF header in the
     // audio update path. Seeking is done by the current file-backed WAV path.
@@ -1010,6 +1034,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
 // Release blocks
 // ============================================================================
 
+OSIZE
 void AudioPlaySdWav::releaseBlocks() {
     if (block_left) {
         release(block_left);
@@ -1028,6 +1053,7 @@ void AudioPlaySdWav::releaseBlocks() {
 // Finish playback
 // ============================================================================
 
+OSIZE
 void AudioPlaySdWav::finishPlayback() {
     if (block_left) {
         for (uint16_t i = block_offset; i < AUDIO_BLOCK_SAMPLES; ++i) {
