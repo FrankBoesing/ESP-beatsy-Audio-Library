@@ -60,10 +60,9 @@ bool AudioControlES8388::enable() {
     initialized_ = false;
     adcEnabled_ = false;
 
-    // Keep the external power amplifier disabled for the whole reset/init.
     if (pins_.pa_enable >= 0) {
         pinMode(pins_.pa_enable, OUTPUT);
-        digitalWrite(pins_.pa_enable, !pins_.pa_active);
+        digitalWrite(pins_.pa_enable, !pins_.pa_active); //pa off
     }
 
     wire_->begin(pins_.sda, pins_.scl, ES8388_I2C_FREQUENCY);
@@ -72,63 +71,55 @@ bool AudioControlES8388::enable() {
         return false;
     }
 
-    // First try to silence a codec that may still be running from a previous
-    // setup. Attenuate and power down the DAC before resetting its registers.
-    // The external PA is already off; this also minimizes headphone-output pops.
-    if (!writeReg(REG_DACCONTROL3, 0x04) ||
-        !setDacVolume(0xC0, 0xC0) ||
-        !writeReg(REG_DACPOWER, 0xC0)) {
-        return false;
-    }
-    delay(10);
-
-    // ES8388 CONTROL1.SCPReset (bit 7) resets the codec control registers.
-    if (!writeReg(REG_CONTROL1, 0x80)) {
-        return false;
-    }
-    delay(10);
-
     struct RegisterValue {
         uint8_t reg;
         uint8_t value;
     };
 
-    static constexpr RegisterValue initSequence[] = {
-        // Keep the DAC muted while the clocking and signal routing are configured.
-        {REG_DACCONTROL3, 0x04},
+    static constexpr RegisterValue initSequence[] = {// DAC unmute / control
+                                                     {REG_DACCONTROL3, 0x04},
 
-        // Chip control and power.
-        {REG_CONTROL2, 0x50},
-        {REG_CHIPPOWER, 0x00},
-        {REG_ADCPOWER, 0xFF},
-        {REG_MASTERMODE, 0x00}, // ESP32 is I2S master; ES8388 is slave.
-        {REG_DACPOWER, 0xC0},   // Keep DAC/analog outputs powered down until configured.
-        {REG_CONTROL1, 0x12},
+                                                     // Chip Control
+                                                     {REG_CONTROL2, 0x50},
 
-        // DAC: 16-bit I2S, MCLK/FS = 256.
-        {REG_DACCONTROL1, 0x18},
-        {REG_DACCONTROL2, 0x02},
+                                                     // Chip Power
+                                                     {REG_CHIPPOWER, 0x00},
 
-        // DAC routing.
-        {REG_DACCONTROL16, 0x1B},
-        {REG_DACCONTROL17, 0x90},
-        {REG_DACCONTROL20, 0x90},
-        {REG_DACCONTROL21, 0x80},
-        {REG_DACCONTROL23, 0x00},
+                                                     // Start playback-only; inputSelect() enables/configures the ADC.
+                                                     {REG_ADCPOWER, 0xFF},
 
-        // Minimum DAC volume while muted.
-        {REG_DACCONTROL4, 0xC0},
-        {REG_DACCONTROL5, 0xC0},
+                                                     // ESP32 ist I2S-Master -> ES8388 ist Slave
+                                                     {REG_MASTERMODE, 0x00},
 
-        // Output volume.
-        {REG_DACCONTROL24, 0x1E},
-        {REG_DACCONTROL25, 0x1E},
-        {REG_DACCONTROL26, 0x1E},
-        {REG_DACCONTROL27, 0x1E},
+                                                     // DAC Power
+                                                     {REG_DACPOWER, 0x3E},
 
-        // Power up DAC and outputs only after configuration is complete.
-        {REG_DACPOWER, 0x3C}
-    };
+                                                     // Control 1
+                                                     {REG_CONTROL1, 0x12},
+
+                                                     // DAC: 16 Bit, I2S, MCLK/FS = 256
+                                                     {REG_DACCONTROL1, 0x18},
+                                                     {REG_DACCONTROL2, 0x02},
+
+                                                     // DAC routing
+                                                     {REG_DACCONTROL16, 0x1B},
+                                                     {REG_DACCONTROL17, 0x90},
+                                                     {REG_DACCONTROL20, 0x90},
+                                                     {REG_DACCONTROL21, 0x80},
+                                                     {REG_DACCONTROL23, 0x00},
+
+                                                     // DAC main volume
+                                                     {REG_DACCONTROL5, 0x00},
+                                                     {REG_DACCONTROL4, 0x00},
+
+                                                     // Output volume
+                                                     {REG_DACCONTROL24, 0x1E},
+                                                     {REG_DACCONTROL25, 0x1E},
+                                                     {REG_DACCONTROL26, 0x1E},
+                                                     {REG_DACCONTROL27, 0x1E},
+
+                                                     // DAC einschalten
+                                                     {REG_DACPOWER, 0x3C}};
 
     for (const auto &entry : initSequence) {
         if (!writeReg(entry.reg, entry.value)) {
@@ -136,34 +127,23 @@ bool AudioControlES8388::enable() {
         }
     }
 
-    // Allow analog outputs to settle at minimum volume while the DAC is muted.
+    // Let the DAC outputs settle while the external amplifier is muted.
     delay(50);
-    if (!volume(0.0f) || !unmute()) {
+
+    if (!writeReg(REG_DACCONTROL3, 0x00)) {
         return false;
     }
 
-    // Start the external PA at minimum DAC level, then ramp up to the default.
+    // Power Amplifier des Audio-Kit-Boards einschalten
     if (pins_.pa_enable >= 0) {
-        delay(20);
-        digitalWrite(pins_.pa_enable, pins_.pa_active);
-    }
-
-    constexpr int volumeRampSteps = 16;
-    constexpr float defaultVolume = 0.7f;
-    for (int step = 1; step <= volumeRampSteps; ++step) {
-        const float level = defaultVolume * (float)step / (float)volumeRampSteps;
-        if (!volume(level)) {
-            mute();
-            if (pins_.pa_enable >= 0) {
-                digitalWrite(pins_.pa_enable, !pins_.pa_active);
-            }
-            return false;
-        }
-        delay(10);
+        // The I2S stream is already running with silence; let the DAC ramp before enabling the PA.
+        delay(50);
+        digitalWrite(pins_.pa_enable, pins_.pa_active); //pa on;
     }
 
     initialized_ = true;
-    return true;
+    bool ok = volume (0.7f);
+    return ok;
 }
 
 bool AudioControlES8388::disable() {
