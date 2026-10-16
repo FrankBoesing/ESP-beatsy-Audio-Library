@@ -43,7 +43,6 @@ bool AudioEffectDelay::allocateBuffer() {
     if (buffer) return true;
 
     const float currentSampleRate = sampleRate();
-    if (!isfinite(currentSampleRate) || currentSampleRate <= 0.0f) return false;
 
     uint32_t n = (uint32_t)((float)maxDelayMs * (currentSampleRate / 1000.0f) + 0.5f);
     // one extra block so a full-length delay never reads data being written
