@@ -48,6 +48,8 @@ These examples are present in the repository. Their board-specific pin and codec
 | [Guitar synthesis](examples/Synthesis/Guitar/Guitar.cpp) | Uses six Karplus–Strong string generators, mixers and chord data to synthesize strummed chords. |
 | [Polyphonic synth music](examples/Synthesis/PlaySynthMusic/main.cpp) | Plays a score stored in memory using 16 waveform voices, envelopes and left/right AudioMixerN instances. |
 | [Simple Drum](examples/Synthesis/SimpleDrum/SimpleDrum.cpp) | Triggers four simple-drum synthesizers and mixes them to stereo output. |
+| [Handpan — Moonlit Current](examples/Synthesis/HandpanMusic/HandpanMusic.cpp) | A looping eight-bar, roughly 20-second handpan-inspired phrase with variable strike velocities, quiet grace notes, damped modal synthesis and a restrained Freeverb return. See [the handpan synthesis notes](docs/handpan-synth.md). |
+| [Handpan CPU / Polyphony Test](examples/Synthesis/Handpan/Handpan.cpp) | Exercises the hybrid handpan synth at 48 kHz with a musical phrase, all-pad tails, rapid bursts and a dense 16-pad sweep; reports graph and per-stream CPU, audio-block usage and rejected note events. |
 | [Wavetable Drum Computer](examples/Synthesis/WavetableDrumComputer/WavetableDrumComputer.cpp) | Plays a four-bar, alternative-rock-style intro before looping an original groove. Uses one-shot wavetable playback with CC0 kick, snare, closed/open hi-hat and two tom samples prepared from [Aspirin DX Soundbank — Fairytale Edition](https://github.com/NeoSoundFonts/Aspirin-DX-Soundbank). Records about 60 seconds as mono PCM WAV to SD (`/DrumComputer.wav`); skips recording if `/DrumComputer.wav` or `/DrumComputer.tmp` already exists. Requires SD wiring, a writable card and PSRAM. |
 | [Doppler Helicopter](examples/Effects/DopplerHelicopter/DopplerHelicopter.cpp) | Loads a short mono rotor-loop WAV from SD_MMC in 4-bit mode into a PSRAM `AudioSampleBuffer`, then plays it from `AudioPlayMemory` with looping and Doppler playback-rate control, stereo panning and distance-dependent gain. Requires `/Helicopter.wav` to fit in available PSRAM. |
 | [Generative Melody](examples/Synthesis/GenerativeMelody/GenerativeMelody.cpp) | Creates C64-inspired, ever-changing melodies with a repeating motif, chord-aware notes, a bass line, a sustained chord pad and four tempo-synchronised melody echoes. |
@@ -147,6 +149,7 @@ MP3 and AAC use the ESP-beatsy software-decoder/AudioDecoderStream path. The rad
 | **AudioSynthWavetable** | Wavetable-based synthesis. |
 | **AudioSynthSimpleDrum** | Simple percussive/drum synthesis. |
 | **AudioSynthKarplusStrong** | Plucked-string synthesis using the Karplus–Strong algorithm. |
+| **AudioSynthHandpan** | Hybrid handpan model combining a short PCM16 attack with six damped resonator modes per pad, variable velocity, up to 16 pads and eight overlapping attack voices. See [synthesis documentation](docs/handpan-synth.md). |
 
 A 513 entry sine table replaces the Teensy 257 entry table.
 
