@@ -274,8 +274,12 @@ void AudioSynthHandpan::update() {
             const int32_t sample0 = voice.sample[index];
             const int32_t sample1 = voice.sample[nextIndex];
             const uint32_t fraction = voice.positionQ16 & 0xFFFFU;
+            // fraction >> 1 keeps the signed product within int32_t even
+            // for a full-scale int16_t transition. The lost LSB of the Q16
+            // phase fraction changes the interpolated value by less than one
+            // PCM count and avoids a costly 64-bit multiply on ESP32 Gen 1.
             const int32_t interpolated =
-                sample0 + (int32_t)(((int64_t)(sample1 - sample0) * fraction) >> 16);
+                sample0 + (((sample1 - sample0) * (int32_t)(fraction >> 1)) >> 15);
 
             mix += ((float)interpolated * (1.0f / 32768.0f)) * voice.gain;
             voice.positionQ16 += voice.incrementQ16;

@@ -67,7 +67,9 @@ license explicitly permits it.
 ## Performance notes
 
 `update()` performs no trigonometric or exponential calculations; modal
-coefficients are prepared in `configureNote()`. Active resonators and active
+coefficients are prepared in `configureNote()`. Attack-sample interpolation uses
+32-bit fixed-point arithmetic on purpose; the phase fraction loses its lowest
+Q16 bit to avoid a 64-bit multiply in the real-time loop. Active resonators and active
 attack voices are processed, and silent resonators are disabled once their
 state falls below the output threshold. If the audio block pool is temporarily
 exhausted, oscillator states and attack positions still advance to preserve
