@@ -55,6 +55,22 @@ void startFirstTone() {
     enterPhase(TestPhase::FirstTone);
 }
 
+bool initializeCodecForRate(uint32_t outputRate) {
+#if defined(AUDIO_CODEC_ES8311)
+    // The ES8311 clock table has no exact 22500-Hz entry. Use the closest
+    // supported 22050-Hz clock profile for this deliberately nonstandard test
+    // rate; the I2S/AudioStream rate itself remains 22500 Hz.
+    const uint32_t codecRate = outputRate == 22500 ? 22050 : outputRate;
+    if (outputRate == 22500) {
+        Serial.println("ES8311: using 22050-Hz clock profile for 22500-Hz I2S test");
+    }
+    return codec.enable(codecRate);
+#else
+    (void)outputRate;
+    return codec.enable();
+#endif
+}
+
 bool changeSampleRate(uint32_t rate) {
     // Reconfigure the I2S clock while the sine output is muted.
     AudioNoInterrupts();
@@ -63,6 +79,14 @@ bool changeSampleRate(uint32_t rate) {
 
     if (!changed) {
         Serial.printf("ERROR: Could not set sample rate to %lu Hz\n",
+                      (unsigned long)rate);
+        sine.amplitude(0.0f);
+        enterPhase(TestPhase::Done);
+        return false;
+    }
+
+    if (!initializeCodecForRate(rate)) {
+        Serial.printf("ERROR: Could not initialize codec for %lu-Hz output\n",
                       (unsigned long)rate);
         sine.amplitude(0.0f);
         enterPhase(TestPhase::Done);
@@ -93,7 +117,7 @@ void setup() {
 
     AudioMemory(8);
 
-    if (!codec.enable()) {
+    if (!initializeCodecForRate(SAMPLE_RATES[0])) {
         Serial.println("ERROR: Audio codec initialization failed");
         while (true) delay(1000);
     }
