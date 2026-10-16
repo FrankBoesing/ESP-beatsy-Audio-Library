@@ -349,110 +349,72 @@ span.mainfunction {color: #993300; font-weight: bolder}
 <script  type="text/x-red" data-container-name="InputOutputCompatibilityMetadata">
 	{"requirements":[
 		{"type":"AudioInputI2S",         "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
-		{"type":"AudioInputI2S",         "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioInputI2S",         "resource":"IN1 Pin",       "shareable":false},
+		{"type":"AudioInputI2S",         "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioInputI2SQuad",     "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
-		{"type":"AudioInputI2SQuad",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioInputI2SQuad",     "resource":"IN1 Pin",       "shareable":false},
-		{"type":"AudioInputI2SQuad",     "resource":"OUT1D Pin",     "shareable":false},
+		{"type":"AudioInputI2SQuad",     "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioInputI2SHex",      "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
-		{"type":"AudioInputI2SHex",      "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioInputI2SHex",      "resource":"IN1 Pin",       "shareable":false},
-		{"type":"AudioInputI2SHex",      "resource":"OUT1D Pin",     "shareable":false},
-		{"type":"AudioInputI2SHex",      "resource":"OUT1C Pin",     "shareable":false},
+		{"type":"AudioInputI2SHex",      "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioInputI2SOct",      "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
-		{"type":"AudioInputI2SOct",      "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioInputI2SOct",      "resource":"IN1 Pin",       "shareable":false},
-		{"type":"AudioInputI2SOct",      "resource":"OUT1D Pin",     "shareable":false},
-		{"type":"AudioInputI2SOct",      "resource":"OUT1C Pin",     "shareable":false},
-		{"type":"AudioInputI2SOct",      "resource":"OUT1B Pin",     "shareable":false},
+		{"type":"AudioInputI2SOct",      "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioInputI2Sslave",    "resource":"I2S Device",    "shareable":true,  "setting":"I2S Slave"},
 		{"type":"AudioInputI2Sslave",    "resource":"Sample Rate",   "shareable":true,  "setting":"LRCLK1 Control"},
-		{"type":"AudioInputI2Sslave",    "resource":"IN1 Pin",       "shareable":false},
 		{"type":"AudioInputI2S2",        "resource":"I2S2 Device",   "shareable":true,  "setting":"I2S Master"},
-		{"type":"AudioInputI2S2",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioInputI2S2",        "resource":"IN2 Pin",       "shareable":false},
+		{"type":"AudioInputI2S2",        "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioInputSPDIF3",      "resource":"SPDIF Device",  "shareable":true,  "setting":"SPDIF Protocol"},
 		{"type":"AudioInputSPDIF3",      "resource":"Sample Rate",   "shareable":true,  "setting":"SPDIF Control"},
-		{"type":"AudioInputSPDIF3",      "resource":"SPDIFIN Pin",   "shareable":false},
 		{"type":"AsyncAudioInputSPDIF3", "resource":"SPDIF Device",  "shareable":true,  "setting":"SPDIF Protocol"},
-		{"type":"AsyncAudioInputSPDIF3", "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AsyncAudioInputSPDIF3", "resource":"SPDIFIN Pin",   "shareable":false},
+		{"type":"AsyncAudioInputSPDIF3", "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioInputAnalog",      "resource":"ADC1",          "shareable":false},
-		{"type":"AudioInputAnalog",      "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputAnalog",      "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioInputAnalogStereo","resource":"ADC1",          "shareable":false},
 		{"type":"AudioInputAnalogStereo","resource":"ADC2",          "shareable":false},
-		{"type":"AudioInputAnalogStereo","resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputAnalogStereo","resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioInputPDM",         "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
-		{"type":"AudioInputPDM",         "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioInputPDM",         "resource":"IN1 Pin",       "shareable":false},
+		{"type":"AudioInputPDM",         "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioInputPDM2",        "resource":"I2S2 Device",   "shareable":true,  "setting":"I2S Master"},
-		{"type":"AudioInputPDM2",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioInputPDM2",        "resource":"IN2 Pin",       "shareable":false},
+		{"type":"AudioInputPDM2",        "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioInputTDM",         "resource":"I2S Device",    "shareable":true,  "setting":"TDM Protocol"},
-		{"type":"AudioInputTDM",         "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioInputTDM",         "resource":"IN1 Pin",       "shareable":false},
+		{"type":"AudioInputTDM",         "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioInputTDM2",        "resource":"I2S2 Device",   "shareable":true,  "setting":"TDM Protocol"},
-		{"type":"AudioInputTDM2",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioInputTDM2",        "resource":"IN2 Pin",       "shareable":false},
+		{"type":"AudioInputTDM2",        "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioInputUSB",         "resource":"USB Rx Endpoint","shareable":false},
 		{"type":"AudioOutputI2S",        "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
-		{"type":"AudioOutputI2S",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputI2S",        "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputI2S",        "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputI2SQuad",    "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
-		{"type":"AudioOutputI2SQuad",    "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputI2SQuad",    "resource":"OUT1A Pin",     "shareable":false},
-		{"type":"AudioOutputI2SQuad",    "resource":"OUT1B Pin",     "shareable":false},
+		{"type":"AudioOutputI2SQuad",    "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputI2SHex",     "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
-		{"type":"AudioOutputI2SHex",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputI2SHex",     "resource":"OUT1A Pin",     "shareable":false},
-		{"type":"AudioOutputI2SHex",     "resource":"OUT1B Pin",     "shareable":false},
-		{"type":"AudioOutputI2SHex",     "resource":"OUT1C Pin",     "shareable":false},
+		{"type":"AudioOutputI2SHex",     "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputI2SOct",     "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
-		{"type":"AudioOutputI2SOct",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputI2SOct",     "resource":"OUT1A Pin",     "shareable":false},
-		{"type":"AudioOutputI2SOct",     "resource":"OUT1B Pin",     "shareable":false},
-		{"type":"AudioOutputI2SOct",     "resource":"OUT1C Pin",     "shareable":false},
-		{"type":"AudioOutputI2SOct",     "resource":"OUT1D Pin",     "shareable":false},
+		{"type":"AudioOutputI2SOct",     "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputI2Sslave",   "resource":"I2S Device",    "shareable":true,  "setting":"I2S Slave"},
 		{"type":"AudioOutputI2Sslave",   "resource":"Sample Rate",   "shareable":true,  "setting":"LRCLK1 Control"},
-		{"type":"AudioOutputI2Sslave",   "resource":"OUT1A Pin",     "shareable":false},
 		{"type":"AudioOutputI2S2",       "resource":"I2S2 Device",   "shareable":true,  "setting":"I2S Master"},
-		{"type":"AudioOutputI2S2",       "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputI2S2",       "resource":"OUT2 Pin",      "shareable":false},
+		{"type":"AudioOutputI2S2",       "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputSPDIF",      "resource":"I2S Device",    "shareable":true,  "setting":"SPDIF Protocol"},
-		{"type":"AudioOutputSPDIF",      "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputSPDIF",      "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputSPDIF",      "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputSPDIF2",     "resource":"I2S2 Device",   "shareable":true,  "setting":"SPDIF Protocol"},
-		{"type":"AudioOutputSPDIF2",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputSPDIF2",     "resource":"OUT2 Pin",      "shareable":false},
+		{"type":"AudioOutputSPDIF2",     "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputSPDIF3",     "resource":"SPDIF Device",  "shareable":true,  "setting":"SPDIF Protocol"},
-		{"type":"AudioOutputSPDIF3",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputSPDIF3",     "resource":"SPDIFOUT Pin",  "shareable":false},
+		{"type":"AudioOutputSPDIF3",     "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputPT8211",     "resource":"I2S Device",    "shareable":true,  "setting":"PT8211 Protocol"},
-		{"type":"AudioOutputPT8211",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputPT8211",     "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputPT8211",     "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputPT8211_2",   "resource":"I2S2 Device",   "shareable":true,  "setting":"PT8211 Protocol"},
-		{"type":"AudioOutputPT8211_2",   "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputPT8211_2",   "resource":"OUT2 Pin",      "shareable":false},
+		{"type":"AudioOutputPT8211_2",   "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputAnalog",     "resource":"DAC1",          "shareable":false},
-		{"type":"AudioOutputAnalog",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputAnalog",     "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputAnalogStereo","resource":"DAC1",         "shareable":false},
 		{"type":"AudioOutputAnalogStereo","resource":"DAC2",         "shareable":false},
-		{"type":"AudioOutputAnalogStereo","resource":"Sample Rate",  "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputAnalogStereo","resource":"Sample Rate",  "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputPWM",        "resource":"PWM",           "shareable":false},
-		{"type":"AudioOutputPWM",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputPWM",        "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputMQS",        "resource":"MSQ Device",    "shareable":false},
-		{"type":"AudioOutputMQS",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputMQS",        "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputTDM",        "resource":"I2S Device",    "shareable":true,  "setting":"TDM Protocol"},
-		{"type":"AudioOutputTDM",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputTDM",        "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputTDM",        "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputTDM2",       "resource":"I2S2 Device",   "shareable":true,  "setting":"TDM Protocol"},
-		{"type":"AudioOutputTDM2",       "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputTDM2",       "resource":"OUT2 Pin",      "shareable":false},
+		{"type":"AudioOutputTDM2",       "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputADAT",       "resource":"I2S Device",    "shareable":true,  "setting":"ADAT Protocol"},
-		{"type":"AudioOutputADAT",       "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
-		{"type":"AudioOutputADAT",       "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputADAT",       "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputUSB",        "resource":"USB Tx Endpoint","shareable":false}
 	]}
 </script>
@@ -1414,25 +1376,12 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<h3>Functions</h3>
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from the I2S hardware to its 2 output ports.</p>
-	<h3>Hardware Teensy 4</h3>
-	<h3>Hardware Teensy 3</h3>
-	<p>The I2S signals are used in "master" mode, where Teensy creates
-		all 3 clock signals and controls all data timing.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>T3.x<br>Pin</th><th>T4.x<br>Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>9</td><td align=center>21</td><td>BCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>11</td><td align=center>23</td><td>MCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>13</td><td align=center>8</td><td>RX</td><td>Input</td></tr>
-		<tr class=odd><td align=center>23</td><td align=center>20</td><td>LRCLK</td><td>Output</td></tr>
-	</table>
-	<p>Audio from
-		master mode I2S may be used in the same project as ADC, DAC and
-		PWM signals, because all remain in sync to Teensy's timing</p>
+	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
 	<p>Compatible CODEC Chips:
 		<ul>
 		<li>STGL5000
-		<li><a href="https://forum.pjrc.com/threads/42665-New-Audio-Board!-TI-TLV320AIC3206">TLV320AIC3206</a>
-		<li><a href="https://forum.pjrc.com/threads/32276-HiFi-Audio-CODEC-Module-AK4558-evaluation-board-in-a-square-inch-PCB">AK4558</a>
+		<li>TLV320AIC3206
+		<li>AK4558
 		<li>WM8731
 		</ul>
 	</p>
@@ -1442,9 +1391,9 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	</p>
 	<p>Compatible Microphones:
 		<ul>
-		<li><a href="https://forum.pjrc.com/threads/47010-I2S-Microphone-(SPH0645LM4H-B)?p=157101&viewfull=1#post157101">SPH0645LM4H-B</a>
-		<li><a href="https://forum.pjrc.com/threads/50534-Why-MEMS-i2s-microphone-ICS-43432-with-teensy-audio-library-not-working?p=173279&viewfull=1#post173279">ICS43432</a>
-		<li><a href="https://forum.pjrc.com/threads/49065-ICS43434-I2S-Digital-Microphone-and-Teensy-3-2">ICS43434</a>
+		<li>SPH0645LM4H-B
+		<li>ICS43432
+		<li>ICS43434
 		</ul>
 	</p>
 	<h3>Examples</h3>
@@ -1497,26 +1446,11 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from the I2S hardware to its 4 output ports.</p>
 	<h3>Hardware</h3>
-	<p>The I2S signals are used in "master" mode, where Teensy creates
-		all 3 clock signals and controls all data timing.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>3.2<br>Pin</th><th>Teensy<br>3.5/3.6<br>Pin</th><th>Teensy<br>4.x<br>Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>9</td><td align=center>9</td><td align=center>21</td><td>BCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>11</td><td align=center>11</td><td align=center>23</td><td>MCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>13</td><td align=center>13</td><td align=center>8</td><td>RX</td><td>Input</td></tr>
-		<tr class=odd><td align=center>30</td><td align=center>38</td><td align=center>6</td><td>RX</td><td>Input</td></tr>
-		<tr class=odd><td align=center>23</td><td align=center>23</td><td align=center>20</td><td>LRCLK</td><td>Output</td></tr>
-	</table>
-	<p>Audio from
-		master mode I2S may be used in the same project as ADC, DAC and
-		PWM signals, because all remain in sync to Teensy's timing</p>
+	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
 	<h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughQuad
 	</p>
 	<h3>Notes</h3>
-	<p>On Teensy 3.x, the BCLK/LRCLK ratio is 32, which is not compatible with
-		most MEMS microphones.  Teensy 4.x uses BCLK/LRCLK ratio, which can
-		be used with I2S MEMS microphones.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioInputI2SQuad">
 	<div class="form-row">
@@ -1544,26 +1478,13 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from the I2S hardware to its 6 output ports.</p>
 	<h3>Hardware</h3>
-	<p>The I2S signals are used in "master" mode, where Teensy creates
-		all 3 clock signals and controls all data timing.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>21</td><td>BCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>23</td><td>MCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>8</td><td>RX (ch 1+2)</td><td>Input</td></tr>
-		<tr class=odd><td align=center>6</td><td>RX (ch 3+4)</td><td>Input</td></tr>
-		<tr class=odd><td align=center>9</td><td>RX (ch 5+6)</td><td>Input</td></tr>
-		<tr class=odd><td align=center>20</td><td>LRCLK</td><td>Output</td></tr>
-	</table>
+	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
+	
 	<h3>Examples</h3>
 	<!--<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughQuad
 	</p>-->
 	<h3>Notes</h3>
-	<p>Teensy 4.0 &amp; 4.1's I2S port has a total of 5 data pins
-		which may each transmit or receive stereo digital audio.  This
-		6 channel input may be used together with the I2S stereo or
-		quad channel I2S output, but may not be combined with others
-		which use the same physical pins.</p>
+	<p>Concurrent I²S streams can share peripheral and pin-multiplexing resources. Check the target MCU's available I²S data lanes and routing before combining multiple I²S nodes.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioInputI2SHex">
 	<div class="form-row">
@@ -1593,27 +1514,13 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from the I2S hardware to its 8 output ports.</p>
 	<h3>Hardware</h3>
-	<p>The I2S signals are used in "master" mode, where Teensy creates
-		all 3 clock signals and controls all data timing.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>21</td><td>BCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>23</td><td>MCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>8</td><td>RX (ch 1+2)</td><td>Input</td></tr>
-		<tr class=odd><td align=center>6</td><td>RX (ch 3+4)</td><td>Input</td></tr>
-		<tr class=odd><td align=center>9</td><td>RX (ch 5+6)</td><td>Input</td></tr>
-		<tr class=odd><td align=center>32</td><td>RX (ch 7+8)</td><td>Input</td></tr>
-		<tr class=odd><td align=center>20</td><td>LRCLK</td><td>Output</td></tr>
-	</table>
+	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
+	
 	<h3>Examples</h3>
 	<!--<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughQuad
 	</p>-->
 	<h3>Notes</h3>
-	<p>Teensy 4.0 &amp; 4.1's I2S port has a total of 5 data pins
-		which may each transmit or receive stereo digital audio.  This
-		8 channel input may be used together with the I2S stereo
-		output, but may not be combined with others
-		which use the same physical pins.</p>
+	<p>Concurrent I²S streams can share peripheral and pin-multiplexing resources. Check the target MCU's available I²S data lanes and routing before combining multiple I²S nodes.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioInputI2SOct">
 	<div class="form-row">
@@ -1625,7 +1532,7 @@ span.mainfunction {color: #993300; font-weight: bolder}
 <script type="text/x-red" data-help-name="AudioInputI2S2">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Receive 16 bit stereo audio from an I2S device using the 2nd I2S port on Teensy 4.x.</p>
+	<p>Receive 16-bit stereo audio from a second I²S peripheral, where the target platform supports one.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -1637,17 +1544,9 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from the I2S hardware to its 2 output ports.</p>
 	<h3>Hardware</h3>
-	<p>The I2S signals are used in "master" mode, where Teensy creates
-		all 3 clock signals and controls all data timing.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>T4.x<br>Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>4</td><td>BCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>33</td><td>MCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>5</td><td>RX</td><td>Input</td></tr>
-		<tr class=odd><td align=center>3</td><td>LRCLK</td><td>Output</td></tr>
-	</table>
+	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
+	
 	</p>
-	<h3>Examples</h3>
 	<h3>Notes</h3>
 </script>
 <script type="text/x-red" data-template-name="AudioInputI2S2">
@@ -1661,9 +1560,9 @@ span.mainfunction {color: #993300; font-weight: bolder}
 <script type="text/x-red" data-help-name="AudioInputSPDIF3">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Receive S/PDIF digital audio, at the rate of the external digital audio source.</p>
+	<p>Receive S/PDIF digital audio at the external source's sample rate.</p>
 	<p><span style="color:red">This input is incompatible with most other inputs and outputs</span>
-		which run at a speed controlled by Teensy's internal sample rate.</p>
+		which run at the audio graph's configured sample rate.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -1681,19 +1580,12 @@ span.mainfunction {color: #993300; font-weight: bolder}
 		or returns 0 if the audio sample rate is unknown.
 	</p>
 	<h3>Hardware</h3>
-	<p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>T4.x<br>Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>15</td><td>S/PDIF Data</td><td>Output</td></tr>
-	</table>
-	</p>
+	
 	<h3>Examples</h3>
 	<!--<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughAsyncSpdif
 	</p>-->
 	<h3>Notes</h3>
-	<p>This input tries to force the entire audio library to run at the
-		sample rate of the incoming data.  It usually can not be combined
-		with most other inputs and outputs which run at specific speeds.</p>
+	<p>This input follows the incoming signal's sample rate. It may not be compatible with nodes that require a fixed audio-graph sample rate unless asynchronous resampling is used.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioInputSPDIF3">
 	<div class="form-row">
@@ -1705,7 +1597,7 @@ span.mainfunction {color: #993300; font-weight: bolder}
 <script type="text/x-red" data-help-name="AsyncAudioInputSPDIF3">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Receive S/PDIF digital audio and resample to Teensy's audio sample rate.</p>
+	<p>Receive S/PDIF digital audio and resample it to the audio graph's configured sample rate.</p>
 	<p>Asynchronous resampling contributed by <a href="https://github.com/alex6679">Alex Walch</a>.</p>
 	</div>
 	<h3>Audio Connections</h3>
@@ -1718,9 +1610,7 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<p class=func><span class=keyword>getBufferedTime</span>();</p>
 	<p class=desc>Returns the buffered time in seconds. The buffered time is the duration of the incoming samples which are not resampled yet. The step width of the resampling algorithm is constantly slightly adjusted to keep the buffered time closely to the target latency. The difference between the target latency and the buffered time is typically smaller than 1 microsecond.
 	</p>
-	<!--<p class=func><span class=keyword>getInputFrequency</span>();</p>
-	<p class=desc>TODO: documentation needed here
-	</p>-->
+	
 	<p class=func><span class=keyword>isLocked</span>();</p>
 	<p class=desc>Returns true if the S/PDIF phase locked loop is tracking
 		the sample rate of incoming digital audio data.
@@ -1729,7 +1619,7 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	<p class=desc>Returns the sample rate of incoming data, if the PLL has locked, or returns 0 if the audio sample rate is unknown.
 	</p>
 	<p class=func><span class=keyword>getTargetLantency</span>();</p>
-	<p class=desc>Returns the target latency in seconds. The latency is the time from the moment a sample is received by the Teensy SPDIF hardware receiver until it is transmitted by the asrc intput. The audio samples arrive at the asrc input in chunks of 32 samples per channel. The target latency consists of these 32 samples + some buffer that is needed to compensate for timing variations.
+	<p class=desc>Returns the target latency in seconds. The latency is the time from the moment a sample is received by the input is accepted by the resampler. Target latency includes the resampler's input chunk plus additional buffering to absorb timing variations; the exact value depends on the input rate and configuration.
 	</p>
 	<p class=func><span class=keyword>getAttenuation</span>();</p>
 	<p class=desc>
@@ -1739,12 +1629,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p class=desc>Returns the half length of the resampling filter. Its complete length is 2*(the returned value)+1.
 	</p>
 	<h3>Hardware</h3>
-	<p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>T4.x<br>Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>15</td><td>S/PDIF Data</td><td>Output</td></tr>
-	</table>
-	</p>
+	
 	<h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughAsyncSpdif
 	</p>
@@ -1788,26 +1673,8 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Functions</h3>
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from the ADC to its output port.</p>
-	<h3>Hardware Teensy 4</h3>
-	<p>Pin A2 is used by default for audio input.</p>
-	<p>The same circuitry as Teensy 3 can be used (see schematic below),
-		but the 10K resistor should be changed to 2.2K.
-	<p>Signal range is 0 to 3.3V.</p>
-	<p>Low impedance (strong) drive is required.  The ADC pin picks up
-		a lot of noise from inside the chip.  A strong signal is
-		needed to overcome this noise coupling.  DO NOT leave the
-		input pin disconnected.  Strong noise will occur if the
-		ADC input pin is left floating!</p>
-	<h3>Hardware Teensy 3</h3>
-	<p>Pin A2 is used for audio input.  This circuitry is recommended.</p>
-	<p align=center><img src="img/adccircuit.png"></p>
-	<p>Signal range is 0 to 1.2V</p>
-	<p>With a <a href="https://forum.pjrc.com/threads/40468-Help-with-Basic-Audio-Lib-results?p=126317&viewfull=1#post126317">small modification</a> Adafruit's <a href="https://www.adafruit.com/products/1063">MAX4466 microphone</a> can be used</p>
-	<p align=center><a href="https://forum.pjrc.com/threads/40468-Help-with-Basic-Audio-Lib-results?p=126317&viewfull=1#post126317"><img src="img/adccircuitmic.jpg" border=0></a></p>
-	<p>Control Voltage (CV) from +5V to -5V can be adapted with a
-		<a href="https://www.dorkbotpdx.org/blog/paul/control_voltage_cv_to_analog_input_pin">simple circuit</a>
-		or better <a href="https://forum.pjrc.com/threads/28423?p=71257&viewfull=1#post71257">opamp-based circuity</a>
-		to Teensy's 0-1.2V analog input range.</p>
+	<h3>Hardware</h3>
+	<p>ADC pin availability, voltage limits, biasing and input circuitry depend on the target MCU and board. Condition the signal to the board's ADC range, do not apply voltages outside those limits, and do not leave the input floating.</p>
 	<h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughMono
 	</p>
@@ -1818,27 +1685,12 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p class=exam>File &gt; Examples &gt; OctoWS2811 &gt; SpectrumAnalyzer
 	</p>
 	<h3>Notes</h3>
-	<p><b>analogRead() must not be used</b>, on Teensy 3.x because AudioInputAnalog
-		is regularly
-		accessing the ADC hardware.  If both access the hardware at the same
-		moment, analogRead() can end up waiting forever, which effectively
-		crashes your program.
-	</p>
-	<p><b>analogRead()</b> can be used on Teensy 4.x while AudioInputAnalog is
-		running, as long as pins 26/A12, 27/A13, 38/A14, 39/A15 are not used.</p>
-	<p>A different pin may be used, but adding it as an parameter
-		to the AudioInputAnalog object definition.
-	</p>
-	<p>For example, to use pin A3:
-	</p>
-	<p class=desc><span class=keyword>AudioInputAnalog</span>  adc1(<span class=literal>A3</span>);
-	</p>
-	<p>On Teensy 4, analog pins 24/A10 and 25/A11 are not supported.</p>
+	<p>Access to the ADC from application code while this node is running is target-specific. Avoid concurrent access to an ADC unit used by the audio backend unless the target's ADC driver explicitly supports it.</p>
 
-	<p>Noise due to high source impedance, which allows rapidly switching digital signals
-		to capacitively couple... avoiding higher analog impedance is the solution.</p>
-	<p>Power Supply rejection issue with simple DC bias (bigger capacitor may be needed if 3.3V has low frequency noise)</p>
-	<p>Algorithm for automatic DC bias tracking</p>
+
+	<p>High source impedance can couple fast-switching digital noise into the ADC. Keep source impedance low and use suitable analog filtering.</p>
+	<p>Supply noise can affect a simple DC-bias network; provide adequate decoupling and filter the bias as needed.</p>
+	<p>Baseline drift and DC bias should be handled so the signal remains inside the usable ADC range.</p>
 	<p>Noise coupling from digital circuitry inside the chip is always a problem when using
 		ADC input pins. Strong low-impedance drive to the analog input pin is critical
 		to minimizing noise coupling.  If an opamp is used, connect a low value resistor
@@ -1871,13 +1723,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from both ADCs to its output ports.</p>
 	<h3>Hardware</h3>
-	<p>By default, pins A2 & A3 are used for audio input.  This circuitry is recommended.</p>
-	<p align=center><img src="img/adccircuit2.png"></p>
-	<p>Signal range is 0 to 1.2V</p>
-	<p>Control Voltage (CV) from +5V to -5V can be adapted with a
-		<a href="https://www.dorkbotpdx.org/blog/paul/control_voltage_cv_to_analog_input_pin">simple circuit</a>
-		or better <a href="https://forum.pjrc.com/threads/28423?p=71257&viewfull=1#post71257">opamp-based circuity</a>
-		to Teensy's 0-1.2V analog input range.</p>
+	<p>Both input channels must be routed to ADC-capable pins supported by the target board. Pin mapping, voltage range and required bias/filter circuitry are platform-specific; keep both inputs within the ADC limits.</p>
 	<h3>Examples</h3>
 	<!--
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughMono
@@ -1890,25 +1736,12 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	</p>
 	-->
 	<h3>Notes</h3>
-	<p><b>analogRead() must not be used</b>, because AudioInputAnalogStereo is regularly
-		accessing the ADC hardware.  If both access the hardware at the same
-		moment, analogRead() can end up waiting forever, which effectively
-		crashes your program.
-	</p>
-	<p>A different pin may be used, but adding it as an parameter
-		to the AudioInputAnalog object definition.
-	</p>
-	<p>For example:
-	</p>
-	<p class=desc><span class=keyword>AudioInputAnalogStereo</span>  adc1(<span class=literal>A3</span>, <span class=literal>A2</span>);
-	</p>
-	<p>TODO: add info here about which pins work for input 0 and 1.
-	</p>
-	<p>Noise due to high source impedance, which allows rapidly switching digital signals
-		to capacitively couple... avoiding higher analog impedance is the solution.</p>
-	<p>Power Supply rejection issue with simple DC bias (bigger capacitor may be needed if 3.3V has low frequency noise)</p>
-	<p>Algorithm for automatic DC bias tracking</p>
-	<p>TODO: actual noise measurements with different input circuitry.</p>
+	<p>Do not access ADC channels used by this node concurrently from application code unless the target's ADC driver explicitly supports it. Channel availability and routing must be checked against the target board's documentation.</p>
+
+	<p>High source impedance can couple fast-switching digital noise into the ADC. Keep source impedance low and use suitable analog filtering.</p>
+	<p>Supply noise can affect a simple DC-bias network; provide adequate decoupling and filter the bias as needed.</p>
+	<p>Baseline drift and DC bias should be handled so the signal remains inside the usable ADC range.</p>
+	<p>Noise performance depends on source impedance, bias circuitry, grounding and supply filtering. This help page contains no comparative measurements; validate the complete input circuit under real operating conditions.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioInputAnalogStereo">
 	<div class="form-row">
@@ -1921,9 +1754,9 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
 	<p>Receive 16 bit stereo audio from an I2S device using I2S slave mode
-		(where the ADC or codec chip, not Teensy, controls audio timing).</p>
+		(where the external ADC or codec controls audio timing).</p>
 	<p><span style="color:red">This input is incompatible with most other inputs and outputs</span>
-		which run at a speed controlled by Teensy's internal sample rate.</p>
+		which run at the audio graph's configured sample rate.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -1937,23 +1770,14 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Hardware</h3>
 	<p>The I2S signals are used in "slave" mode, where the I2S device controls
 		data timing.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>3.x Pin</th><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>9</td><td align=center>21</td><td>BCLK</td><td>Input</td></tr>
-		<tr class=odd><td align=center>13</td><td align=center>8</td><td>RX</td><td>Input</td></tr>
-		<tr class=odd><td align=center>23</td><td align=center>20</td><td>LRCLK</td><td>Input</td></tr>
-	</table>
+	
 	<!--
 <h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt;
 	</p>
 -->
 	<h3>Notes</h3>
-	<p>Slave mode I2S <b>should not used in the same project as ADC, DAC and
-		PWM</b> signals.  Differences in timing between the I2S device and
-		Teensy's clock can cause occasional audio glitches when I2S slave mode
-		is used together with other input or output objects based on Teensy's
-		timing.</p>
+	<p>In slave mode, the external device supplies the audio clocks. Combining externally clocked and internally clocked nodes may require asynchronous resampling; verify that the target backend supports the combination.</p>
 	<p>Only one I2S input and one I2S output object may be used.  Master
 		and slave modes may not be mixed (both must be of the same type).
 	</p>
@@ -1970,7 +1794,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<div class=tooltipinfo>
 	<p>Receive a 256 bit Time Division Multiplexed frame containing
 		many audio channels.</p>
-	<p align=center><img src="img/tdm.jpg"></p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -1996,27 +1819,8 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from the TDM hardware to its 16 output ports.</p>
 	<h3>Hardware</h3>
-	<p>TDM has been tested with this
-		<a href="https://oshpark.com/shared_projects/2Yj6rFaW">
-		CS42448 Board for Teensy 3.x</a> and this
-		<a href="https://oshpark.com/shared_projects/gVFy0fWQ">
-		CS42448 Board for Teensy 4.x</a>.  It may also work with
-		<a href="https://forum.pjrc.com/threads/42894">Invensense ICS-52000 microphones</a>.
-		</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>T3.x<br>Pin</th><th>T4.x<br>Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>9</td><td align=center>21</td><td>BCLK</td><td>Output, 11.3 MHz</td></tr>
-		<tr class=odd><td align=center>11</td><td align=center>23</td><td>MCLK</td><td>Output, 22.6 MHz</td></tr>
-		<tr class=odd><td align=center>13</td><td align=center>8</td><td>RX</td><td>Input, 11.3 Mbit/sec</td></tr>
-		<tr class=odd><td align=center>23</td><td align=center>20</td><td>FS</td><td>Output</td></tr>
-	</table>
-	<p>Audio from
-		master mode TDM may be used in the same project as ADC, DAC and
-		PWM signals, because all remain in sync to Teensy's timing</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughTDM16</p>
-	</p>
-	<h3>Notes</h3>
+	<p>TDM requires a compatible codec and a target peripheral that supports the required data slots and clocks. Pin routing and channel limits depend on the MCU and codec.</p>
+<h3>Notes</h3>
 	<p>Only one TDM input and one TDM output object may be used.  The
 		I2S hardware is used by TDM, so TDM objects may not be used
 		together with I2S, SPDIF or PT8211.</p>
@@ -2064,13 +1868,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from the TDM hardware to its 16 output ports.</p>
 	<h3>Hardware</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>4</td><td>BCLK</td><td>Output, 11.3 MHz</td></tr>
-		<tr class=odd><td align=center>33</td><td>MCLK</td><td>Output, 22.6 MHz</td></tr>
-		<tr class=odd><td align=center>5</td><td>RX</td><td>Input, 11.3 Mbit/sec</td></tr>
-		<tr class=odd><td align=center>3</td><td>FS</td><td>Output</td></tr>
-	</table>
+	
 	<!--<h3>Examples</h3>-->
 	<h3>Notes</h3>
 	<p>When used with TDM devices which transmit 32 bit audio, the
@@ -2107,11 +1905,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>PDM has been tested with this <a href="https://www.adafruit.com/product/3492">
 		Adafruit MP34DT01-M Microphone Board</a>.
 	</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>T3.x Pin</th><th>T4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>9</td><td align=center>21</td><td>CLK</td><td>Output, 2.8235 MHz</td></tr>
-		<tr class=odd><td align=center>13</td><td align=center>8</td><td>DATA</td><td>Input, Data on rising edge</td></tr>
-	</table>
+	
 
 	<p>Data is input on the rising edge.  The SEL pin on MP34DT01-M should be
 		connected LOW for proper data capture.</p>
@@ -2160,17 +1954,13 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>PDM2 has been tested with this <a href="https://www.adafruit.com/product/3492">
 		Adafruit MP34DT01-M Microphone Board</a>.
 	</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>T4.x Pin I2S2</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>4</td><td>CLK</td><td>Output, 2.8235 MHz</td></tr>
-		<tr class=odd><td align=center>5</td><td>DATA</td><td>Input, Data on rising edge</td></tr>
-	</table>
+	
 
 	<p>Data is input on the rising edge.  The SEL pin on MP34DT01-M should be
 		connected LOW for proper data capture.</p>
 	<!--<h3>Examples</h3>-->
 	<h3>Notes</h3>
-        <p>This uses the alternate I2S2 unit on the T4, employing the BCLK2 and IN2 pins, 
+        <p>This node uses a secondary I²S/PDM peripheral where supported; exact clock and data routing 
 	   allowing AudioInputI2S to be run alongside.</p>
 	<p>The filter used is a 512 tap FIR with approx &plusmn;1.1 dB gain
 		flatness to 10 kHz.  While far from audiophile grade, this should
@@ -2191,9 +1981,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 <script type="text/x-red" data-help-name="AudioInputUSB">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Receive stereo audio from a PC or Mac.  Teensy appears as a USB
-		sound device.</p>
-	<p align=center><img src="img/usbtype_audio_in.png"></p>
+	<p>Receive stereo audio from a PC or Mac when the target's USB stack supports USB Audio.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -2215,12 +2003,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughUSB</p>
 	</p>
 	<h3>Notes</h3>
-	<p>Arduino's <b>Tools &gt; USB Type</b> menu must be set to <b>Audio</b>.
-		</p>
-	<p align=center><img src="img/usbtype_audio.png"></p>
-	<p>USB input &amp; output does not cause the Teensy Audio Library to
-		update.  At least one non-USB input or output object must be
-		present for the entire library to update properly.</p>
+	<p>USB Audio support and device configuration depend on the target platform's USB stack. USB Audio is work in progress in this port; verify input support on the selected board before relying on this node.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioInputUSB">
 	<div class="form-row">
@@ -2244,31 +2027,20 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from its 2 input ports to the I2S hardware.</p>
 	<h3>Hardware</h3>
-	<p>The I2S signals are used in "master" mode, where Teensy creates
-		all 3 clock signals and controls all data timing.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>T3.x<br>Pin</th><th>T4.x<br>Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>9</td><td align=center>21</td><td>BCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>11</td><td align=center>23</td><td>MCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>22</td><td align=center>7</td><td>TX</td><td>Output</td></tr>
-		<tr class=odd><td align=center>23</td><td align=center>20</td><td>LRCLK</td><td>Output</td></tr>
-	</table>
-	<p>Audio from
-		master mode I2S may be used in the same project as ADC, DAC and
-		PWM signals, because all remain in sync to Teensy's timing</p>
+	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
 	<p>Compatible CODEC Chips:
 		<ul>
 		<li>STGL5000
-		<li><a href="https://forum.pjrc.com/threads/42665-New-Audio-Board!-TI-TLV320AIC3206">TLV320AIC3206</a>
-		<li><a href="https://forum.pjrc.com/threads/32276-HiFi-Audio-CODEC-Module-AK4558-evaluation-board-in-a-square-inch-PCB">AK4558</a>
+		<li>TLV320AIC3206
+		<li>AK4558
 		</ul>
 	</p>
 	<p>Compatible DAC Chips:
 		<ul>
-		<li><a href="https://forum.pjrc.com/threads/53069-Teensy-with-PCM5102a-Module-via-I2S?p=183106&viewfull=1#post183106">PCM5102A</a>
-		<li><a href="https://forum.pjrc.com/threads/53069-Teensy-with-PCM5102a-Module-via-I2S?p=183176&viewfull=1#post183176">PCM1808</a>
-		<li><a href="https://forum.pjrc.com/threads/53069-Teensy-with-PCM5102a-Module-via-I2S?p=188244&viewfull=1#post188244">PCM5242</a>
-		<li><a href="https://forum.pjrc.com/threads/55137-I2S-output-with-CS4344?p=197919&viewfull=1#post197919">CS4344</a>
+		<li>PCM5102A
+		<li>PCM1808
+		<li>PCM5242
+		<li>CS4344
 		</ul>
 	</p>
 	<h3>Examples</h3>
@@ -2314,19 +2086,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from its 4 input ports to the I2S hardware.</p>
 	<h3>Hardware</h3>
-	<p>The I2S signals are used in "master" mode, where Teensy creates
-		all 3 clock signals and controls all data timing.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>T3.x<br>Pin</th><th>T4.x<br>Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>9</td><td align=center>21</td><td>BCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>11</td><td align=center>23</td><td>MCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>22</td><td align=center>7</td><td>TX (ch 1+2)</td><td>Output</td></tr>
-		<tr class=odd><td align=center>15</td><td align=center>32</td><td>TX (ch 3+4)</td><td>Output</td></tr>
-		<tr class=odd><td align=center>23</td><td align=center>20</td><td>LRCLK</td><td>Output</td></tr>
-	</table>
-	<p>Audio from
-		master mode I2S may be used in the same project as ADC, DAC and
-		PWM signals, because all remain in sync to Teensy's timing</p>
+	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
 	<h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughQuad
 	</p>
@@ -2360,24 +2120,10 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from its 6 input ports to the I2S hardware.</p>
 	<h3>Hardware</h3>
-	<p>The I2S signals are used in "master" mode, where Teensy creates
-		all 3 clock signals and controls all data timing.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>21</td><td>BCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>23</td><td>MCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>7</td><td>TX (ch 1+2)</td><td>Output</td></tr>
-		<tr class=odd><td align=center>32</td><td>TX (ch 3+4)</td><td>Output</td></tr>
-		<tr class=odd><td align=center>9</td><td>TX (ch 5+6)</td><td>Output</td></tr>
-		<tr class=odd><td align=center>20</td><td>LRCLK</td><td>Output</td></tr>
-	</table>
-	<h3>Examples</h3>
+	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
+	
 	<h3>Notes</h3>
-	<p>Teensy 4.0 &amp; 4.1's I2S port has a total of 5 data pins
-		which may each transmit or receive stereo digital audio.  This
-		6 channel output may be used together with the I2S stereo or
-		quad channel I2S input, but may not be combined with others
-		which use the same physical pins.</p>
+	<p>Concurrent I²S streams can share peripheral and pin-multiplexing resources. Check the target MCU's available I²S data lanes and routing before combining multiple I²S nodes.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputI2SHex">
 	<div class="form-row">
@@ -2407,25 +2153,10 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from its 8 input ports to the I2S hardware.</p>
 	<h3>Hardware</h3>
-	<p>The I2S signals are used in "master" mode, where Teensy creates
-		all 3 clock signals and controls all data timing.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>21</td><td>BCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>23</td><td>MCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>7</td><td>TX (ch 1+2)</td><td>Output</td></tr>
-		<tr class=odd><td align=center>32</td><td>TX (ch 3+4)</td><td>Output</td></tr>
-		<tr class=odd><td align=center>9</td><td>TX (ch 5+6)</td><td>Output</td></tr>
-		<tr class=odd><td align=center>6</td><td>TX (ch 7+8)</td><td>Output</td></tr>
-		<tr class=odd><td align=center>20</td><td>LRCLK</td><td>Output</td></tr>
-	</table>
-	<h3>Examples</h3>
+	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
+	
 	<h3>Notes</h3>
-	<p>Teensy 4.0 &amp; 4.1's I2S port has a total of 5 data pins
-		which may each transmit or receive stereo digital audio.  This
-		8 channel output may be used together with the I2S stereo
-		input, but may not be combined with others
-		which use the same physical pins.</p>
+	<p>Concurrent I²S streams can share peripheral and pin-multiplexing resources. Check the target MCU's available I²S data lanes and routing before combining multiple I²S nodes.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputI2SOct">
 	<div class="form-row">
@@ -2450,16 +2181,8 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from its 2 input ports to the I2S hardware.</p>
 	<h3>Hardware</h3>
-	<p>The I2S signals are used in "master" mode, where Teensy creates
-		all 3 clock signals and controls all data timing.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>T4.x<br>Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>4</td><td>BCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>33</td><td>MCLK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>2</td><td>TX</td><td>Output</td></tr>
-		<tr class=odd><td align=center>3</td><td>LRCLK</td><td>Output</td></tr>
-	</table>
-	<h3>Examples</h3>
+	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
+	
 	<h3>Notes</h3>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputI2S2">
@@ -2473,7 +2196,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
 	<p>Transmit 16 bit stereo audio as Digital S/PDIF by use of the I2S port.</p>
-	<p align=center><img src="img/spdif_proto.jpg"></p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -2483,15 +2205,11 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	</table>
 	<h3>Functions</h3>
 	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 2 input ports S/PDIF encoded digital
-		audio on pin 22 (Teensy 3.x) or pin 7 (Teensy 4.x).</p>
+		simply sends its input audio to the S/PDIF encoder using the output pin configured by the target backend.</p>
 	<h3>Hardware</h3>
 	<p>The S/PDIF output signal can be used to drive an optical TOSLINK
 		cable, or a standard (usually orange) RCA jack.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>3.x Pin</th><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>22</td><td align=center>7</td><td>S/PDIF</td><td>Output</td></tr>
-	</table>
+	
 	<p>For optical TOSLINK output, this
 		<a href="https://www.oshpark.com/shared_projects/KcDBKHta" target="_blank">OSH Park board</a>
 		can be used with the inexpensive Everlight PLT133/T6A connector, available
@@ -2507,7 +2225,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Credits</h3>
 	<p><a href="https://github.com/FrankBoesing" target="_blank">Frank Boesing</a>
 		developed the AudioOutputSPDIF code.  The original
-		<a href="https://forum.pjrc.com/threads/28639-S-pdif" target="_blank">forum disussion</a>
+		forum disussion
 		included valuable input and code from "kpc".
 	<h3>Notes</h3>
 	<p>S/PDIF output uses the I2S hardware.  This object can not be used
@@ -2535,15 +2253,11 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	</table>
 	<h3>Functions</h3>
 	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 2 input ports S/PDIF encoded digital
-		audio on pin 2 (Teensy 4.x).</p>
+		simply sends its input audio to the S/PDIF encoder using the output pin configured by the target backend.</p>
 	<h3>Hardware</h3>
 	<p>The S/PDIF output signal can be used to drive an optical TOSLINK
 		cable, or a standard (usually orange) RCA jack.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>2</td><td>S/PDIF</td><td>Output</td></tr>
-	</table>
+	
 	<h3>Examples</h3>
 	<p>The AudioOutputSPDIF object can be used in place of the AudioOutputI2S object,
 	<p>used in nearly all the examples.  The WavFilePlayer shows how to substitute
@@ -2554,7 +2268,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Credits</h3>
 	<p><a href="https://github.com/FrankBoesing" target="_blank">Frank Boesing</a>
 		developed the AudioOutputSPDIF code.  The original
-		<a href="https://forum.pjrc.com/threads/28639-S-pdif" target="_blank">forum disussion</a>
+		forum disussion
 		included valuable input and code from "kpc".
 	<h3>Notes</h3>
 	<p>S/PDIF output uses the I2S2 hardware.  This object can not be used
@@ -2582,15 +2296,11 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	</table>
 	<h3>Functions</h3>
 	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 2 input ports S/PDIF encoded digital
-		audio on pin 14 (Teensy 4.x).</p>
+		simply sends its input audio to the S/PDIF encoder using the output pin configured by the target backend.</p>
 	<h3>Hardware</h3>
 	<p>The S/PDIF output signal can be used to drive an optical TOSLINK
 		cable, or a standard (usually orange) RCA jack.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>14</td><td>S/PDIF</td><td>Output</td></tr>
-	</table>
+	
 	<h3>Examples</h3>
 	<p>The AudioOutputSPDIF object can be used in place of the AudioOutputI2S object,
 	<p>used in nearly all the examples.  The WavFilePlayer shows how to substitute
@@ -2630,12 +2340,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		simply streams data from its 2 input ports to a PT8211 chip.  4X
 		oversampling and filtering is automatically used to improve quality.</p>
 	<h3>Hardware</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>3.x Pin</th><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>9</td><td align=center>21</td><td>BCK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>22</td><td align=center>7</td><td>DIN</td><td>Output</td></tr>
-		<tr class=odd><td align=center>23</td><td align=center>20</td><td>FS</td><td>Output</td></tr>
-	</table>
+	
 	<p>More information can be found in the PT8211 datasheet.
 		</p>
 	<h3>Examples</h3>
@@ -2644,10 +2349,9 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Credits</h3>
 	<p>Frank Boesing and Benjamin developed this PT8211 object.  Details can be
 		found on this
-		<a href="https://forum.pjrc.com/threads/29284-Dual-channel-16bit-dac-PT8211/page3" target="_blank">forum disussion</a>.
+		forum disussion.
 	<h3>Notes</h3>
-	<p>
-	</p>
+	
 </script>
 <script type="text/x-red" data-template-name="AudioOutputPT8211">
 	<div class="form-row">
@@ -2673,22 +2377,15 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		simply streams data from its 2 input ports to a PT8211 chip.  4X
 		oversampling and filtering is automatically used to improve quality.</p>
 	<h3>Hardware</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>4</td><td>BCK</td><td>Output</td></tr>
-		<tr class=odd><td align=center>2</td><td>DIN</td><td>Output</td></tr>
-		<tr class=odd><td align=center>3</td><td>FS</td><td>Output</td></tr>
-	</table>
+	
 	<p>More information can be found in the PT8211 datasheet.
 		</p>
-	<h3>Examples</h3>
 	<h3>Credits</h3>
 	<p>Frank Boesing and Benjamin developed this PT8211 object.  Details can be
 		found on this
-		<a href="https://forum.pjrc.com/threads/29284-Dual-channel-16bit-dac-PT8211/page3" target="_blank">forum disussion</a>.
+		forum disussion.
 	<h3>Notes</h3>
-	<p>
-	</p>
+	
 </script>
 <script type="text/x-red" data-template-name="AudioOutputPT8211_2">
 	<div class="form-row">
@@ -2700,9 +2397,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 <script type="text/x-red" data-help-name="AudioOutputAnalog">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Transmit 12 bit audio using Teensy's built-in digital to analog converter.</p>
-	<p align=center><img src="img/dac_speaker.jpg"><br>
-	<small><a href="http://www.pjrc.com/store/prop_shield.html" target="_blank_">Prop Shield with 4&ohm; Speaker</a></small></p>
+	<p>Transmit audio using the target MCU's built-in DAC, where available.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -2716,12 +2411,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<span class=literal>EXTERNAL</span> selects 3.3 volt peak-to-peak output.
 	</p>
 	<h3>Hardware</h3>
-	<p align=center><img src="img/dacpin.jpg"></p>
-	<p>Signal range default is 0 to 1.2V</p>
-	<p>The output voltage has DC level.  Some applications require a DC-blocking capacitor.  If unsure, a 10&micro;F is usually a safe value to use.  If an aluminum or tantalum capacitor is used, the positive terminal should connect to Teensy's DAC pin.</p>
-	<p>The DAC pin is used with the
-	<a href="http://www.pjrc.com/store/prop_shield.html" target="_blank_">Prop Shield</a>
-	to drive speakers.</p>
+	<p>DAC availability, resolution, reference voltage, output range and pin assignment depend on the target MCU. A DAC output may include a DC offset; use coupling and filtering appropriate to the load, and keep the output within hardware limits.</p>
 	<h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughMono
 	</p>
@@ -2736,10 +2426,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p class=exam>File &gt; Examples &gt; SerialFlash &gt; MP3Player
 	</p>
 	<h3>Notes</h3>
-	<p>The output rate is 44.1 kHz (no oversampling).  Ultrasonic noise present if
-		not filtered.  This may not
-		be an issue for many uses, but care should be used if amplified and driven
-		to high power tweeters.</p>
+	<p>Output sample rate and reconstruction filtering depend on the selected DAC backend. The output may contain ultrasonic images or supply noise, so filtering may be needed before driving an amplifier.</p>
 	<p>When using 3.3V output, the power supply is used for the analog reference.  Noise
 		present on the 3.3V power can couple to the DAC output signal.
 	</p>
@@ -2754,9 +2441,8 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 <script type="text/x-red" data-help-name="AudioOutputAnalogStereo">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Transmit 12 bit stereo audio using Teensy 3.5 or 3.6 built-in digital to analog converters.</p>
-	<!--<p align=center><img src="img/dac_speaker.jpg"><br>
-	<small><a href="http://www.pjrc.com/store/prop_shield.html" target="_blank_">Prop Shield with 4&ohm; Speaker</a></small></p>-->
+	<p>Transmit stereo audio using two built-in DAC channels, where the target MCU provides them.</p>
+	
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -2771,22 +2457,14 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<span class=literal>EXTERNAL</span> selects 3.3 volt peak-to-peak output.
 	</p>
 	<h3>Hardware</h3>
-	<p align=center><img src="img/dacpins.png"></p>
-	<p>Signal range default is 0 to 1.2V</p>
-	<p>The output voltage has DC level.  Some applications require a DC-blocking capacitor.  If unsure, a 10&micro;F is usually a safe value to use.  If an aluminum or tantalum capacitor is used, the positive terminal should connect to Teensy's DAC pin.</p>
-	<p>The DAC pin is used with the
-	<a href="http://www.pjrc.com/store/prop_shield.html" target="_blank_">Prop Shield</a>
-	to drive speakers.</p>
+	<p>This node requires two usable DAC channels. DAC support, output range and pin assignment are target-specific; check that the MCU and board support stereo analog output.</p>
 	<h3>Examples</h3>
 	<!--<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughMono
 	</p>
 	<p class=exam>File &gt; Examples &gt; SerialFlash &gt; MP3Player
 	</p>-->
 	<h3>Notes</h3>
-	<p>The output rate is 44.1 kHz (no oversampling).  Ultrasonic noise present if
-		not filtered.  This may not
-		be an issue for many uses, but care should be used if amplified and driven
-		to high power tweeters.</p>
+	<p>Output sample rate and reconstruction filtering depend on the selected DAC backend. The output may contain ultrasonic images or supply noise, so filtering may be needed before driving an amplifier.</p>
 	<p>When using 3.3V output, the power supply is used for the analog reference.  Noise
 		present on the 3.3V power can couple to the DAC output signal.
 	</p>
@@ -2801,9 +2479,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 <script type="text/x-red" data-help-name="AudioOutputPWM">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Transmit audio using Teensy 3's PWM pins.  Two pins are
-		used for coarse and fine pulses, to be combined by scaled
-		resistors.</p>
+	<p>Transmit audio by pulse-width modulation (PWM). Hardware timer support, output pins and the required reconstruction filter depend on the target MCU.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -2814,27 +2490,12 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from the its input port to the PWM pins.</p>
 	<h3>Hardware</h3>
-	<p>The following circuit is recommended.</p>
-	<p align=center><img src="img/pwmdualcircuit.jpg"></p>
-	<p>Signal range is approx 1.55 Vp-p.</p>
-	<p>These resistor values assume approx 20 ohms output impedance
-		on the digital pins.  The 127K resistor may be adjusted or
-		trimmed for variation in output drive and tolerance on the
-		475 ohm resistor.</p>
-	<p>A plastic film (Polypropylene, Polyethylene, Polyester, etc) or
-		C0G/NPO ceramic capacitor should be used for filtering.  Low
-		quality ceramic (X7R, Y5V, Z5U, etc) can cause signal distortion.</p>
+	<p>PWM audio requires an output filter and may need buffering before driving a load. Choose filter components for the target's carrier frequency, output impedance and permitted GPIO current.</p>
 	<h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughMono
 	</p>
 	<h3>Notes</h3>
-	<p>This object only works properly when Tools &gt; CPU_Speed is set to
-		48 or 96 MHz.  Other speeds aren't supported and will likely fail
-		in strange ways.</p>
-	<p>The PWM carrier frequency is 88.2 kHz.  The suggested circuit
-		will only slightly filter the carrier.  Extra filtering will be
-		required for a clean signal without the ultrasonic PWM carrier.
-		</p>
+	<p>PWM audio quality depends on timer configuration, carrier frequency, sample rate and filter design. Verify those values on the target and test for residual carrier before connecting high-power audio equipment.</p>
 	<p>Analog signals created by filtering PWM waveforms use the digital
 		power supply as their reference voltage.  Any noise on the digital
 		power line can directly couple to the output signal.  the built-in DAC should be used when higher quality signals are needed.</p>
@@ -2849,8 +2510,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 <script type="text/x-red" data-help-name="AudioOutputMQS">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Transmit 16 bit stereo audio using Medium Quality Sound pulses, usually better than PWM,
-		but not as good as a proper DAC.</p>
+	<p><p>Transmit stereo audio through an MQS-style hardware output where the target MCU provides one.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -2861,15 +2521,8 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Functions</h3>
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from its 2 input ports to generate output pulses.</p>
-	<h3>Hardware</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>T4.x<br>Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>12</td><td>Left</td><td>Output</td></tr>
-		<tr class=odd><td align=center>10</td><td>Right</td><td>Output</td></tr>
-	</table>
-	<h3>Examples</h3>
 	<h3>Notes</h3>
-	<p>TODO: can this really be used together with other inputs and outputs?</p>
+	<p>Compatibility with other audio nodes depends on the target backend and hardware resource conflicts. Verify peripheral ownership and clocking before combining nodes.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputMQS">
 	<div class="form-row">
@@ -2882,9 +2535,9 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
 	<p>Transmit 16 bit stereo audio to an I2S device using I2S slave mode
-		(where the DAC or codec chip, not Teensy, controls audio timing).</p>
+		(where the external ADC or codec controls audio timing).</p>
 	<p><span style="color:red">This input is incompatible with most other inputs and outputs</span>
-		which run at a speed controlled by Teensy's internal sample rate.</p>
+		which run at the audio graph's configured sample rate.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -2898,21 +2551,12 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Hardware</h3>
 	<p>The I2S signals are used in "slave" mode, where the I2S device controls
 		data timing.</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>3.x Pin</th><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>9</td><td align=center>21</td><td>BCLK</td><td>Input</td></tr>
-		<tr class=odd><td align=center>22</td><td align=center>7</td><td>TX</td><td>Output</td></tr>
-		<tr class=odd><td align=center>23</td><td align=center>20</td><td>LRCLK</td><td>Input</td></tr>
-	</table>
+	
 	<h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; WM8731MikroSine
 	</p>
 	<h3>Notes</h3>
-	<p>Slave mode I2S <b>should not used in the same project as ADC, DAC and
-		PWM</b> signals.  Differences in timing between the I2S device and
-		Teensy's clock can cause occasional audio glitches when I2S slave mode
-		is used together with other input or output objects based on Teensy's
-		timing.</p>
+	<p>In slave mode, the external device supplies the audio clocks. Combining externally clocked and internally clocked nodes may require asynchronous resampling; verify that the target backend supports the combination.</p>
 	<p>Only one I2S input and one I2S output object may be used.  Master
 		and slave modes may not be mixed (both must be of the same type).
 	</p>
@@ -2929,7 +2573,6 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<div class=tooltipinfo>
 	<p>Transmit a 256 bit Time Division Multiplexed frame containing
 		many audio channels.</p>
-	<p align=center><img src="img/tdm.jpg"></p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -2955,32 +2598,8 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from its 16 input ports to the TDM hardware.</p>
 	<h3>Hardware</h3>
-	<p>TDM has been tested with this <a href="https://oshpark.com/shared_projects/2Yj6rFaW">
-		CS42448 Board for Teensy 3.x</a> and this
-		<a href="https://oshpark.com/shared_projects/gVFy0fWQ">
-		CS42448 Board for Teensy 4.x</a> and this
-		<a href="https://oshpark.com/shared_projects/O7iqdcLr">
-		ADAU1966A Board for Teensy 4.x</a>, and an
-		<a href="https://forum.pjrc.com/threads/72479?p=327541&viewfull=1#post327541">
-		inexpensive CS42448 breakout board</a>.
-		</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>T3.x<br>Pin</th><th>T4.x<br>Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>9</td><td align=center>21</td><td>BCLK</td><td>Output, 11.3 MHz</td></tr>
-		<tr class=odd><td align=center>11</td><td align=center>23</td><td>MCLK</td><td>Output, 22.6 MHz</td></tr>
-		<tr class=odd><td align=center>22</td><td align=center>7</td><td>TX</td><td>Output, 11.3 Mbit/sec</td></tr>
-		<tr class=odd><td align=center>23</td><td align=center>20</td><td>WS</td><td>Output</td></tr>
-	</table>
-	<p>Audio from
-		master mode TDM may be used in the same project as ADC, DAC and
-		PWM signals, because all remain in sync to Teensy's timing</p>
-	<h3>Examples</h3>
-	<p><a href="https://www.youtube.com/watch?v=LOnEv4EDYsk">Video Demo</a> (YouTube)
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; WaveformsTDM16</p>
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughTDM16</p>
-	</p>
-	<h3>Notes</h3>
+	<p>TDM requires a compatible codec and a target peripheral that supports the required data slots and clocks. Pin routing and channel limits depend on the MCU and codec.</p>
+<h3>Notes</h3>
 	<p>Only one TDM input and one TDM output object may be used.  The
 		I2S hardware is used by TDM, so TDM objects may not be used
 		together with I2S, SPDIF or PT8211.</p>
@@ -3024,13 +2643,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from its 16 input ports to the TDM hardware.</p>
 	<h3>Hardware</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Teensy<br>4.x Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>4</td><td>BCLK</td><td>Output, 11.3 MHz</td></tr>
-		<tr class=odd><td align=center>33</td><td>MCLK</td><td>Output, 22.6 MHz</td></tr>
-		<tr class=odd><td align=center>2</td><td>TX</td><td>Output, 11.3 Mbit/sec</td></tr>
-		<tr class=odd><td align=center>3</td><td>WS</td><td>Output</td></tr>
-	</table>
+	
 	<!--<h3>Examples</h3>-->
 	<h3>Notes</h3>
 	<p>When used with TDM devices which receive 32 bit audio, the
@@ -3049,8 +2662,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>Transmit ADAT TOSLINK Optical Output</p>
 	<p align=center><img src="img/adat.jpg"></p>
 	</div>
-	<p>ADAT output for Teensy 4.0 is discussed on
-	<a href="https://forum.pjrc.com/threads/60914?p=239824&viewfull=1#post239824">this forum thread</a>.</p>
+	<p>ADAT output requires suitable serializer/timer hardware and an optical transmitter. Exact pin routing depends on the target backend.</p>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
@@ -3067,10 +2679,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This object has no functions to call from the Arduino sketch.  It
 		simply streams data from its 8 input ports to the TOSLINK output.</p>
 	<h3>Hardware</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Pin</th><th>Signal</th><th>Direction</th></tr>
-		<tr class=odd><td align=center>22</td><td>TX</td><td>TOSLINK Signal</td></tr>
-	</table>
+	
 	<p>For optical TOSLINK output, this
 		<a href="https://www.oshpark.com/shared_projects/KcDBKHta" target="_blank">OSH Park board</a>
 		can be used with the inexpensive Everlight PLT133/T6A connector, available
@@ -3080,7 +2689,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; ADAT_DrumSamplePlayer
 	</p>
 	<h3>Notes</h3>
-	<p>ADAT output was contributed by Ernstjan Freriks.  See <a href="https://forum.pjrc.com/threads/28639-S-pdif?p=159530&viewfull=1#post159530">this forum thread</a> for details.</p>
+	<p>ADAT output was contributed by Ernstjan Freriks.  See this forum thread for details.</p>
 	<p>A <a href="https://www.youtube.com/watch?v=e5ov3q02zxo">Youtube video</a>
 		also demonstrates how it works.</p>
 </script>
@@ -3094,9 +2703,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 <script type="text/x-red" data-help-name="AudioOutputUSB">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Send stereo audio to a PC or Mac.  Teensy appears as a USB
-		sound device.</p>
-	<p align=center><img src="img/usbtype_audio_out.png"></p>
+	<p>Send stereo audio to a PC or Mac when the target's USB stack supports USB Audio.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -3114,16 +2721,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; WavFilePlayerUSB</p>
 	</p>
 	<h3>Notes</h3>
-	<p>Arduino's <b>Tools &gt; USB Type</b> menu must be set to <b>Audio</b>.
-		</p>
-	<p align=center><img src="img/usbtype_audio.png"></p>
-	<p>USB input &amp; output does not cause the Teensy Audio Library to
-		update.  At least one non-USB input or output object must be
-		present for the entire library to update properly.</p>
-	<p>A known problem exists with USB audio from Macintosh computers.
-		An imperfect <a href="https://forum.pjrc.com/threads/34855-Distorted-audio-when-using-USB-input-on-Teensy-3-1?p=110392&viewfull=1#post110392">workaround
-		can be enabled by editing usb_audio.cpp</a>.
-		Find and uncomment "#define MACOSX_ADAPTIVE_LIMIT".</p>
+	<p>USB Audio support and device configuration depend on the target platform's USB stack. USB Audio is work in progress in this port; verify output support on the selected board before relying on this node.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputUSB">
 	<div class="form-row">
@@ -3291,7 +2889,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p class=func><span class=keyword>loadToMemory</span>(fs, filename, buffer, reserveBytes);</p>
 	<p class=desc>Preload a WAV into an AudioSampleBuffer in PSRAM for AudioPlayMemory. Stereo is downmixed to mono signed 16-bit PCM. The player must be stopped and have no active source; reserveBytes defaults to 64 KiB. The buffer must outlive playback.</p>
 	<h3>Notes</h3>
-	<p>This is the ESP32 implementation, not the original Teensy-only SD player. It reads the file during playback and therefore needs a seekable source; a non-seekable network stream such as AudioSourceStream is not supported.</p>
+	<p>This implementation targets ESP32. It reads the file during playback and therefore needs a seekable source; a non-seekable network stream such as AudioSourceStream is not supported.</p>
 	<p>Preloading with loadToMemory() requires enough available PSRAM for the complete decoded sample while preserving the requested reserve. The preload helper supports 11025, 22050 and 44100 Hz.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioPlaySdWav">
@@ -3341,13 +2939,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<h3>Notes</h3>
 	<p>The data file must be RAW 16 bit signed integers in LSB-first format.
 	</p>
-	<p>While playing, the audio library accesses the SD card automatically.
-		If card access is required, you must
-		<a href="http://www.pjrc.com/teensy/td_libs_AudioProcessorUsage.html" target="_blank">AudioNoInterrupts()</a>
-		to prevent the library from accessing the SD card while you use it.
-		Disabling the audio library interrupt for too long may cause audible
-		dropouts or glitches.
-	</p>
+	<p>Coordinate storage access with the audio backend. Long blocking operations can starve audio processing and cause dropouts or glitches.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioPlaySdRaw">
 	<div class="form-row">
@@ -3396,8 +2988,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<!--
 <p class=exam>File &gt; Examples &gt; Audio &gt; Recorder
 -->
-	<p class=exam>TODO: play example needed....
-	</p>
+	<p class=exam>No dedicated playback example is listed here. <code>CopyFromSD</code> demonstrates file transfer to SerialFlash; use <code>ListFiles</code> to verify stored file names.</p>
 	<p class=exam>File &gt; Examples &gt; SerialFlash &gt; CopyFromSD
 	</p>
 	<h3>Notes</h3>
@@ -3431,9 +3022,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	</table>
 	<h3>Functions</h3>
 	<p class=func><span class=keyword>setMaxBuffers</span>(uint8);</p>
-	<p class=desc>Set the maximum buffer block count for the queue to limit its size - by default 32 blocks are used on Teensy 3.x
-	  and 80 on Teensy 4.x - this allows the value to be reduced so that the queue cannot get too far ahead, nor use up lots of
-	  audio blocks you might want for other purposes.  The minimum number of buffer blocks is 2.
+	<p class=desc>Set the queue's maximum buffer count. The default is implementation-defined; reducing it limits how far the producer can get ahead and leaves more audio blocks for other nodes. The minimum is 2.
 	</p>
 	<p class=func><span class=keyword>play</span>(int16);</p>
 	<p class=desc>add a single sample to the queue - no need to use getBuffer() or playBuffer() as this
@@ -3492,9 +3081,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	</p>
 -->
 	<h3>Notes</h3>
-	<p>TODO: many caveats....</p>
-	<p>
-	</p>
+	<p>Each queued entry consumes an audio block, so a deeper queue tolerates larger bursts but uses more of the audio-memory pool. With <span class=literal>ORIGINAL</span> behavior, buffer allocation or queue insertion can wait for resources and stall application code. <span class=literal>NON_STALLING</span> returns promptly, but callers must check return values and retry samples or buffers that were not accepted.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioPlayQueue">
 	<div class="form-row">
@@ -3629,7 +3216,7 @@ The actual packets are taken
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Synthesis &gt; Wavetable &gt; Zelda
 	</p>
 	<h3>Notes</h3>
-	<p></p>
+	
 </script>
 <script type="text/x-red" data-template-name="AudioSynthWavetable">
 	<div class="form-row">
@@ -3674,7 +3261,7 @@ The actual packets are taken
 	<p class=exam>File &gt; Examples &gt; Synthesis &gt; SimpleDrum
 	</p>
 	<h3>Notes</h3>
-	<p></p>
+	
 </script>
 <script type="text/x-red" data-template-name="AudioSynthSimpleDrum">
 	<div class="form-row">
@@ -3709,7 +3296,7 @@ The actual packets are taken
 	<p class=exam><a href="https://github.com/PaulStoffregen/TouchGuitar" target="_blank">TouchGuitar</a>
 	</p>
 	<h3>Notes</h3>
-	<p></p>
+	
 </script>
 <script type="text/x-red" data-template-name="AudioSynthKarplusStrong">
 	<div class="form-row">
@@ -3742,7 +3329,7 @@ The actual packets are taken
 		Cause the generated waveform to jump to a specific point within
 		its cycle.  Angle is from 0 to 360 degrees.  When multiple objects
 		are configured,
-		<a href="http://www.pjrc.com/teensy/td_libs_AudioProcessorUsage.html" target="_blank">AudioNoInterrupts()</a>
+		AudioNoInterrupts()
 		should be used to guarantee all new settings take effect together.
 	</p>
 	<h3>Examples</h3>
@@ -3753,7 +3340,7 @@ The actual packets are taken
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; FFT
 	</p>
 	<h3>Notes</h3>
-	<p></p>
+	
 </script>
 <script type="text/x-red" data-template-name="AudioSynthWaveformSine">
 	<div class="form-row">
@@ -3788,7 +3375,7 @@ The actual packets are taken
 		Cause the generated waveform to jump to a specific point within
 		its cycle.  Angle is from 0 to 360 degrees.  When multiple objects
 		are configured,
-		<a href="http://www.pjrc.com/teensy/td_libs_AudioProcessorUsage.html" target="_blank">AudioNoInterrupts()</a>
+		AudioNoInterrupts()
 		should be used to guarantee all new settings take effect together.
 	</p>
 	<h3>Notes</h3>
@@ -3832,7 +3419,7 @@ The actual packets are taken
 		Cause the generated waveform to jump to a specific point within
 		its cycle.  Angle is from 0 to 360 degrees.  When multiple objects
 		are configured,
-		<a href="http://www.pjrc.com/teensy/td_libs_AudioProcessorUsage.html" target="_blank">AudioNoInterrupts()</a>
+		AudioNoInterrupts()
 		should be used to guarantee all new settings take effect together.
 	</p>
 	<!--
@@ -3846,7 +3433,7 @@ The actual packets are taken
 		with FM synthesis.  Use the newer AudioSynthWaveformModulated
 		(waveformMod) waveform when wide range is needed.  This simple
 		sine wave uses a very simple algorithm, written in the earliest
-		versions of the Teensy Audio Library.  The newer waveformMod
+		versions of the audio library. The newer waveformMod
 		offers up to 12 octaves modulation with control input mapped
 		to modulation in the way commonly used by audio synthesis.</p>
 </script>
@@ -3890,7 +3477,7 @@ The actual packets are taken
 		Cause the generated waveform to jump to a specific point within
 		its cycle.  Angle is from 0 to 360 degrees.  When multiple objects
 		are configured,
-		<a href="http://www.pjrc.com/teensy/td_libs_AudioProcessorUsage.html" target="_blank">AudioNoInterrupts()</a>
+		AudioNoInterrupts()
 		should be used to guarantee all new settings take effect together.
 	</p>
 	<p class=func><span class=keyword>pulseWidth</span>(amount);</p>
@@ -4055,7 +3642,7 @@ The actual packets are taken
 	<p class=desc>Change the amplitude.  Set to 0 to turn the signal off.
 	</p>
 	<h3>Examples</h3>
-	<p class=exam>TODO, examples needed
+	<p class=exam>Use a known test signal to verify the PWM output and reconstruction filter before connecting an amplifier.
 	</p>
 	<h3>Notes</h3>
 	<p>The maximum duty cycle is 65536 samples high followed by
@@ -4207,7 +3794,7 @@ The actual packets are taken
 	</p>
 	<h3>Notes</h3>
 	<p>Setting the amplitude to zero causes this object to stop using
-		CPU time.  CPU usage is approx 3% on Teensy 3.1.
+		CPU time.  CPU usage depends on the target MCU and graph update rate.
 	</p>
 	<p>Stefan Stenzel's
 		<a href="http://stenzel.waldorfmusic.de/post/pink/" target="_blank">New Shade Of Pink</a>
@@ -4255,7 +3842,7 @@ The actual packets are taken
 		allows 2 fade objects to work together for a smooth transition
 		between a pair of signals.
 	</p>
-	<p><a href="http://www.pjrc.com/teensy/td_libs_AudioProcessorUsage.html" target="_blank">AudioNoInterrupts()</a>
+	<p>AudioNoInterrupts()
 		should be used when changing
 		settings on multiple objects, so all changes always take effect
 		at the same moment.
@@ -4442,8 +4029,7 @@ double s_freq = .0625;</p>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Freeverb
 		</p>
 	<h3>Notes</h3>
-	<p>Freeverb mono consumes about 21% of the CPU time on Teensy 3.2 and
-		requires about 22K of RAM.</p>
+	<p>The mono implementation requires about 22 KiB of RAM; CPU usage depends on the target MCU and graph update rate.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioEffectFreeverb">
 	<div class="form-row">
@@ -4457,7 +4043,7 @@ double s_freq = .0625;</p>
 	<div class=tooltipinfo>
 	<p>High quality stereo Reverb effect, based on Freeverb by Jezar at Dreampoint.
 	</p>
-	<p>Teensy 3.5 or 3.6 required to run stereo version.</p>
+	<p>The stereo variant requires more RAM and processing headroom than the mono variant. Confirm resource availability on the target MCU.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -4483,10 +4069,7 @@ double s_freq = .0625;</p>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Freeverb_Stereo
 		</p>
 	<h3>Notes</h3>
-	<p>Freeverb mono consumes about 18% of the CPU time on Teensy 3.6 and
-		requires about 45K of RAM.</p>
-	<p>Teensy 3.2 does not have enough RAM to
-		run this effect while playing WAV file and implementing USB Serial.</p>
+	<p>The stereo implementation's RAM and CPU requirements depend on the build and target backend. Measure available headroom while the complete audio graph is running.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioEffectFreeverbStereo">
 	<div class="form-row">
@@ -4603,8 +4186,7 @@ double s_freq = .0625;</p>
 	</p>
 -->
 	<h3>Notes</h3>
-	<p>
-    </p>
+	
 </script>
 <script type="text/x-red" data-template-name="AudioEffectMultiply">
 	<div class="form-row">
@@ -4667,7 +4249,7 @@ double s_freq = .0625;</p>
 	</p>
 	<h3>Notes</h3>
 	<p>To create a half wave rectifier effect, use the waveshape effect.  See
-		<a href="https://forum.pjrc.com/threads/62091?p=255367&viewfull=1#post255367">this forum message</a> for a half-wave rectifier example.
+		this forum message for a half-wave rectifier example.
 	</p>
     </p>
 </script>
@@ -4715,20 +4297,10 @@ double s_freq = .0625;</p>
 	</p>
 	<h3>Notes</h3>
 	<p>Memory for the delayed signal is take from the memory pool allocated by
-		<a href="http://www.pjrc.com/teensy/td_libs_AudioConnection.html" target="_blank">AudioMemory()</a>.
-		Each block allows about 2.9 milliseconds of delay, so AudioMemory
-		should be increased to allow for the longest delay tap.
+		AudioMemory().
+		Each block stores AUDIO_BLOCK_SAMPLES samples, so the time represented by a block depends on the configured sample rate and block size. Increase AudioMemory to allow for the longest delay tap.
 	</p>
-	<p>Each board has a maximum possible delay.
-	</p>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Board</th><th>Maximum</th></tr>
-		<tr class=odd><td>Teensy 3.0</td><td align=center>139.26 ms</td></tr>
-		<tr class=odd><td>Teensy 3.1</td><td align=center>449.39 ms</td></tr>
-		<tr class=odd><td>Teensy 3.2</td><td align=center>449.39 ms</td></tr>
-		<tr class=odd><td>Teensy 3.5</td><td align=center>1671.19 ms</td></tr>
-		<tr class=odd><td>Teensy 3.6</td><td align=center>2413.94 ms</td></tr>
-	</table>
+	<p>Maximum delay depends on the available audio-memory pool, configured sample rate and selected delay taps. Allocate sufficient audio blocks for the longest delay.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioEffectDelay">
 	<div class="form-row">
@@ -4769,63 +4341,12 @@ double s_freq = .0625;</p>
 	<p class=desc>Disable a channel.  The output of this channel becomes silent.
 	</p>
 	<h3>Hardware</h3>
-	<p>By default, or when <span class=literal>AUDIO_MEMORY_23LC1024</span> is used (see below),
-		 a single 23LC1024 RAM chip is used, with these pins:
-    <table class=doc align=center cellpadding=3>
-        <tr class=top><th>Pin</th><th>Signal</th></tr>
-        <tr class=odd><td align=center>6</td><td>CS</td></tr>
-        <tr class=odd><td align=center>7</td><td>MOSI</td></tr>
-        <tr class=odd><td align=center>12</td><td>MISO</td></tr>
-        <tr class=odd><td align=center>14</td><td>SCK</td></tr>
-    </table>
-	</p>
-	<p>When <span class=literal>AUDIO_MEMORY_CY15B104</span> is used, a single
-		CY15B104 FRAM chip is used, with these pins:
-    <table class=doc align=center cellpadding=3>
-        <tr class=top><th>Pin</th><th>Signal</th></tr>
-        <tr class=odd><td align=center>6</td><td>CS</td></tr>
-        <tr class=odd><td align=center>7</td><td>SI</td></tr>
-        <tr class=odd><td align=center>12</td><td>SO</td></tr>
-        <tr class=odd><td align=center>14</td><td>SCK</td></tr>
-    </table>
-	</p>
-	<p>When <span class=literal>AUDIO_MEMORY_MEMORYBOARD</span> is used, up to six
-		23LC1024 chips are used.
-	</p>
-	<p align=center><img src="img/memoryboard.jpg"><br><small><a href="https://oshpark.com/shared_projects/KZt5PaU7" target="_blank">Memoryboard 4</a></small></p>
-	<p>
-    <table class=doc align=center cellpadding=3>
-        <tr class=top><th>Pin</th><th>Signal</th></tr>
-        <tr class=odd><td align=center>2</td><td>CS0 (encoded)</td></tr>
-        <tr class=odd><td align=center>3</td><td>CS1 (encoded)</td></tr>
-        <tr class=odd><td align=center>4</td><td>CS2 (encoded)</td></tr>
-        <tr class=odd><td align=center>7</td><td>MOSI</td></tr>
-        <tr class=odd><td align=center>12</td><td>MISO</td></tr>
-        <tr class=odd><td align=center>14</td><td>SCK</td></tr>
-    </table>
-	</p>
-	<p>
-	If fewer than 6 chips are soldered, the optional parameter for maximum delay
-	must be used.  See below for details.  Each chip provides 1485 ms of delay
-	memory, so the total of all objects using AUDIO_MEMORY_MEMORYBOARD must not
-	exceed the amount of memory physically present.
-	</p>
-	<h3>Examples</h3>
-	<p>
-	<a href="https://www.youtube.com/watch?v=d80d1HWy5_s" target="_blank">Demo Video</a> (YouTube)
-	</p>
-	<!--
- <p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Delay
-	</p>
--->
-	<p>
-	<a href="https://forum.pjrc.com/threads/29276-Limits-of-delay-effect-in-audio-library?p=79436&viewfull=1#post79436" target="_blank">Forum Conversaton</a> (with sample code)
-	</p>
-	<h3>Notes</h3>
+	<p>External-delay memory devices connect over SPI. The selected memory type, chip-select routing and supported device count are backend-specific; follow the active driver and target board's SPI wiring. For multiple chips, verify that every chip-select signal is unique and correctly decoded.</p>
+<h3>Notes</h3>
 	<p>External RAM allows for longer delays without consuming
 		limited internal RAM.  However, SPI communication is required,
 		which consumes much more CPU time.  The
-		<a href="http://www.pjrc.com/teensy/td_libs_AudioProcessorUsage.html">AudioProcessorUsageMax</a>
+		AudioProcessorUsageMax
 		function may be used to monitor how much CPU time is consumed.
 	</p>
 	<p>You may specify the type of hardware to be used by editing the code.  AUDIO_MEMORY_23LC1024
@@ -4841,7 +4362,7 @@ double s_freq = .0625;</p>
 	<p class=desc><span class=keyword>AudioEffectDelayExternal</span>  delayExt1(<span class=literal>AUDIO_MEMORY_23LC1024</span>, 700);<br><span class=keyword>AudioEffectDelayExternal</span>  delayExt2(<span class=literal>AUDIO_MEMORY_23LC1024</span>, 700);
 	</p>
 	<p>When using CY15B104, you
-		<a href="https://forum.pjrc.com/threads/45872-Memory-Chip-for-Audio-Adaptor-Board?p=151839&viewfull=1#post151839">may need to add a capacitor between 3.3V & GND</a>
+		may need to add a capacitor between 3.3V & GND
 		to make the chip work.
 	</p>
 </script>
@@ -4886,7 +4407,7 @@ double s_freq = .0625;</p>
     the future, but for now, it's rough, it's dirty and it sounds a bit like
     Nine Inch Nails.
     </p>
-    <p><a href="http://www.pjrc.com/teensy/td_libs_AudioProcessorUsage.html" target="_blank">AudioNoInterrupts()</a>
+    <p>AudioNoInterrupts()
         should be used when changing
         settings on multiple objects, so all changes always take effect
         at the same moment.
@@ -4966,10 +4487,10 @@ double s_freq = .0625;</p>
 		</p>
 
 	<h3>Examples</h3>
-	<p class=exam>TODO: example needed</p>
+	<p>For evaluation, feed a sine wave and inspect the output waveform or FFT; nonlinear transfer curves introduce harmonics that are visible in the spectrum.</p>
 	<!--<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Mid_Side</p>-->
 	<h3>Notes</h3>
-	<p><a href="https://github.com/dxinteractive/TeensyAudioWaveshaper">More information</a>
+	<p>More information
 		</p>
 </script>
 <script type="text/x-red" data-template-name="AudioEffectWaveshaper">
@@ -5022,7 +4543,7 @@ double s_freq = .0625;</p>
 	<h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Granular</p>
 	<!--<h3>Notes</h3>
-	<p> </p>-->
+	-->
 </script>
 <script type="text/x-red" data-template-name="AudioEffectGranular">
     <div class="form-row">
@@ -5059,7 +4580,7 @@ double s_freq = .0625;</p>
 	<h3>Examples</h3>
 	<!--<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Combine</p>-->
 	<!--<h3>Notes</h3>
-	<p> </p>-->
+	-->
 </script>
 <script type="text/x-red" data-template-name="AudioEffectDigitalCombine">
     <div class="form-row">
@@ -5383,7 +4904,7 @@ double s_freq = .0625;</p>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; PeakMeterStereo
 	</p>
 	<h3>Notes</h3>
-	<p></p>
+	
 </script>
 <script type="text/x-red" data-template-name="AudioAnalyzePeak">
 	<div class="form-row">
@@ -5415,7 +4936,7 @@ double s_freq = .0625;</p>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; PeakAndRMSMeterStereo</p>
 	</p>
 	<h3>Notes</h3>
-	<p></p>
+	
 </script>
 <script type="text/x-red" data-template-name="AudioAnalyzeRMS">
 	<div class="form-row">
@@ -5467,7 +4988,7 @@ double s_freq = .0625;</p>
 	<h3>Notes</h3>
 	<p>The raw 16 bit output data bins may be access with myFFT.output[num], where
 		num is 0 to 127.</p>
-	<p>TODO: caveats about spectral leakage vs frequency precision for arbitrary signals</p>
+	<p>For a tone that does not fall exactly on an FFT-bin frequency, energy spreads into adjacent bins (spectral leakage). Window functions reduce sidelobes but broaden the main peak, trading leakage suppression against frequency precision. Bin spacing is sampleRate / FFT length; a single peak-bin read therefore gives a coarse frequency estimate.</p>
 	<p>Window Types:
 		<ul>
 		<li><span class=literal>AudioWindowHanning256</span> (default)</li>
@@ -5534,7 +5055,7 @@ double s_freq = .0625;</p>
 	<h3>Notes</h3>
 	<p>The raw 16 bit output data bins may be access with myFFT.output[num], where
 		num is 0 to 511.</p>
-	<p>TODO: caveats about spectral leakage vs frequency precision for arbitrary signals</p>
+	<p>For a tone that does not fall exactly on an FFT-bin frequency, energy spreads into adjacent bins (spectral leakage). Window functions reduce sidelobes but broaden the main peak, trading leakage suppression against frequency precision. Bin spacing is sampleRate / FFT length; a single peak-bin read therefore gives a coarse frequency estimate.</p>
 	<p>Window Types:
 		<ul>
 		<li><span class=literal>AudioWindowHanning1024</span> (default)</li>
@@ -5550,10 +5071,7 @@ double s_freq = .0625;</p>
 		<li><span class=literal>AudioWindowTukey1024</span></li>
 		</ul>
 	</p>
-	<p>1024 point FFT has a peak CPU usage of approx 52% on Teensy 3.1.
-		Average usage is much lower.  Future versions might distribute the
-		load more evenly over time....
-	</p>
+	<p>FFT processing cost depends on the MCU, FFT backend, sample rate and other active nodes. Measure CPU headroom on the target rather than relying on figures from another platform.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioAnalyzeFFT1024">
 	<div class="form-row">
@@ -5664,9 +5182,7 @@ double s_freq = .0625;</p>
 	<p>Within the code, AUDIO_GUITARTUNER_BLOCKS
 		may be edited to control low frequency range.  The default
 		(24) allows measurement down to 29.14 Hz, or B(flat)0.</p>
-	<p>TODO: The usable upper range of this object is not well known.
-		Duff says "it should be good up to 1000Hz", but may have trouble
-		at 4 kHz.  Please <a href="https://forum.pjrc.com/threads/32252-Different-Range-FFT-Algorithm/page2">post feedback here</a>, ideally with audio clips for the NoteFrequency example.</p>
+	<p>The reliable upper limit depends on signal, harmonics and noise. Original implementation notes suggest useful results up to about 1 kHz but possible reduced reliability near 4 kHz; validate against known tones in the intended application.</p>
 	<p>This object was contributed by Collin Duffy from his
 		<a href="https://github.com/duff2013/AudioTuner">AudioTuner project</a>.
 		Additional details and documentation may be found there.</p>
@@ -5729,7 +5245,7 @@ double s_freq = .0625;</p>
 	<p>This object has no audio inputs or outputs.  Separate i2s objects
 		are used to send and receive audio data.  I2S master mode objects
 		must be used, because this object configures the SGTL5000 in slave
-		mode, where it depends on Teensy to provide all I2S clocks.
+		mode, where it receives all I²S clocks from the external master.
 		This object controls
 		how the SGTL5000 will use those I2S audio streams.</p>
 
@@ -5841,8 +5357,7 @@ double s_freq = .0625;</p>
 	<p class=func><span class=keyword>adcHighPassFilterDisable</span>();</p>
 	<p class=desc>Completely disable the analog input filter.  DC and sub-audible
 		low frequencies are allowed to enter the digital signal.  This
-		<a href="http://openaudio.blogspot.com/2017/03/teensy-audio-board-self-noise.html">may
-		reduce noise</a> in some cases.
+		may reduce noise in some cases.
 	</p>
 	<p class=func><span class=keyword>adcHighPassFilterEnable</span>();</p>
 	<p class=desc>Turn the DC-blocking filter back on, if disabled, or
@@ -5887,9 +5402,7 @@ double s_freq = .0625;</p>
 		simple tone control, or a parametric equalizer, or a graphic equalizer),
 		in that order.
 	</p>
-	<p>These signal processing features are implemented in the SGTL5000 chip,
-		so they do not consume CPU time on Teensy. However, the order of
-		these processes is fixed in the hardware.
+	<p>These signal-processing features are implemented inside the SGTL5000, so they do not consume host-processor cycles. The processing order is fixed in the codec hardware.
 	</p>
 	<p>It is good practice to mute the outputs before enabling or disabling
 	the Audio Processor, to avoid clicks or thumps.
@@ -5898,11 +5411,10 @@ double s_freq = .0625;</p>
 	<p class=func><span class=keyword>audioPreProcessorEnable</span>();</p>
 	<p class=desc>Enable the audio processor to pre-process the input
 		(from either line-level inputs or microphone) before it's sent
-		to Teensy by I2S.
+		to the host over I²S.
 	</p>
 	<p class=func><span class=keyword>audioPostProcessorEnable</span>();</p>
-	<p class=desc>Enable the audio processor to post-process Teensy's
-		I2S output before it's turned into analog signals for the
+	<p class=desc>Enable the audio processor to post-process the host's I²S output before it's turned into analog signals for the
 		headphones and/or line level outputs.
 	</p>
 	<p class=func><span class=keyword>audioProcessorDisable</span>();</p>
@@ -6053,12 +5565,7 @@ value  frequency
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; SGTL5000 &gt; VolumeRamp
 	</p>
 	<h3>Notes</h3>
-	<p>TODO: add example with rock/classical/speech presets, where rock uses bass boost
-	and surround enhancement while speech uses bandpass filtering and auto volume control
-	compression.
-	</p>
-	<p>TODO: add example with two analogRead pots for bass and treble to demonstrate ramping.
-	</p>
+	<p>The examples listed above cover bass enhancement, automatic volume control, channel balance, tone control and volume ramping. Potentiometer-based control requires application-specific ADC wiring and code.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioControlSGTL5000">
 	<div class="form-row">
@@ -6070,7 +5577,7 @@ value  frequency
 <script type="text/x-red" data-help-name="AudioControlWM8731">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Control a WM8731 chip in slave mode, where it receives all clocks from Teensy</p>
+	<p>Control a WM8731 chip in slave mode, where it receives all clocks from the I²S master.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<p>This object has no audio inputs or outputs.  Separate i2s objects
@@ -6100,7 +5607,7 @@ value  frequency
 	</p>
 -->
 	<h3>Notes</h3>
-	<p></p>
+	
 </script>
 <script type="text/x-red" data-template-name="AudioControlWM8731">
 	<div class="form-row">
@@ -6123,7 +5630,7 @@ value  frequency
 	<h3>Functions</h3>
 	<p class=func><span class=keyword>enable</span>();</p>
 	<p class=desc>Turn on the WS8731, in I2S Master mode.  I2S slave mode
-		communication must be used by Teensy.
+		the connected I²S peripheral must operate in slave mode.
 	</p>
 	<p class=func><span class=keyword>disable</span>();</p>
 	<p class=desc>not implemented
@@ -6142,8 +5649,7 @@ value  frequency
 	</p>
 	<h3>Notes</h3>
 	<p>The WM8731 will implement a sample rate of its crystal frequency divided by 256.
-		To get the 44.1 kHz sample rate the Teensy Audio Library expects, an
-		11.2896 MHz crystal should be used.
+		For a 44.1 kHz output sample rate, an 11.2896 MHz crystal is needed when the codec divides the crystal frequency by 256.
 	</p>
 </script>
 <script type="text/x-red" data-template-name="AudioControlWM8731master">
@@ -6157,7 +5663,7 @@ value  frequency
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
 	<p>Control the AK4558 chip on the <a href="https://hackaday.io/project/8567-hifi-audio-codec-module" target="_blank">HiFi Audio CODEC Module</a>
-	in slave mode, where the Teensy controls all I2S timing.</p>
+	in slave mode, where the connected I²S master controls all timing.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<p>This object has no audio inputs or outputs.  Separate I2S objects
@@ -6203,9 +5709,7 @@ value  frequency
 	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; AK4558 &gt; SineOutTest
 	</p>
 	<h3>Notes</h3>
-	<p>TODO: Implement inputSelect() function to enable mono left, mono right, stereo operation.</p>
-	<p>TODO: Implement ADC and DAC filters control.</p>
-	<p>TODO: Implement DAC level attenuator attack rate modifier.</p>
+	<p>Implementation limits: <code>inputSelect()</code> is documented as not implemented. ADC/DAC filter control and DAC attenuator attack-rate control are not exposed as working features in this help reference.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioControlAK4558">
 	<div class="form-row">
@@ -6217,9 +5721,8 @@ value  frequency
 <script type="text/x-red" data-help-name="AudioControlCS4272">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Control the CS4272 chip on the <a href="https://hackaday.io/project/5912-teensy-super-audio-board" target="_blank">Super Audio Board</a>.
-	</p>
-	<p>TODO: does this control object put the CS4272 into I2S master or slave mode</p>
+	<p>Control the CS4272 audio codec. Separate I²S nodes send and receive audio data.</p>
+	<p>Ensure the codec's configured I²S clock role matches the connected I²S nodes: one side must generate the clocks and the other must receive them.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<p>This object has no audio inputs or outputs.  Separate I2S objects
@@ -6236,31 +5739,24 @@ value  frequency
 	<p class=desc>Set the volume level. Range is 0 to 1.0.
 	</p>
 	<p class=func><span class=keyword>dacVolume</span>(vol);</p>
-	<p class=desc>Set the volume level. Range is 0 to 1.0.  TODO: what's the
-		distinction between volume() and dacVolume()?
+	<p class=desc>Set the DAC volume control. Range is 0 to 1.0. The codec's general volume control and DAC-specific volume control are distinct APIs; check the active driver for how their gains are combined.
 	</p>
 	<p class=func><span class=keyword>dacVolume</span>(left, right);</p>
 	<p class=desc>Set the volume level. Range is 0 to 1.0.
 	</p>
 
 	<p class=func><span class=keyword>muteOutput</span>();</p>
-	<p class=desc>TODO: description
-	</p>
+	@@CS4272_DESC@@
 	<p class=func><span class=keyword>unmuteOutput</span>();</p>
-	<p class=desc>TODO: description
-	</p>
+	@@CS4272_DESC@@
 	<p class=func><span class=keyword>muteInput</span>();</p>
-	<p class=desc>TODO: description
-	</p>
+	@@CS4272_DESC@@
 	<p class=func><span class=keyword>unmuteInput</span>();</p>
-	<p class=desc>TODO: description
-	</p>
+	@@CS4272_DESC@@
 	<p class=func><span class=keyword>enableDither</span>();</p>
-	<p class=desc>TODO: description
-	</p>
+	@@CS4272_DESC@@
 	<p class=func><span class=keyword>disableDither</span>();</p>
-	<p class=desc>TODO: description
-	</p>
+	@@CS4272_DESC@@
 
 	<h3>Hardware</h3>
 	<p>Pin 2 must be connected to the CS4272 reset.  SDA &amp; SCL are used for all control.
@@ -6280,7 +5776,6 @@ value  frequency
 	<div class=tooltipinfo>
 	<p>Control the CS42448 chip in TDM mode, for 6 inputs and 8 outputs.
 	</p>
-	<p align=center><img src="img/cs42448.jpg"></p>
 	</div>
 	</div>
 	<h3>Audio Connections</h3>
@@ -6304,12 +5799,7 @@ value  frequency
 	<p class=desc>Set the input gain level for a single input. Channel is 1 to 6. Range is 0 to 15.85.
 	</p>
 	<h3>Hardware</h3>
-	<p>Tested with this <a href="https://oshpark.com/shared_projects/2Yj6rFaW">
-		CS42448 Board for Teensy 3.x</a> and this
-		<a href="https://oshpark.com/shared_projects/gVFy0fWQ">
-		CS42448 Board for Teensy 4.x</a>.
-	</p>
-	<p align=center><img src="img/tdm.jpg"></p>
+	<p>Use a compatible CS42448 board with six input and eight output channels. Confirm its TDM wiring, clock configuration and pin routing against the target MCU and board.</p>
 	</div>
 	<h3>Notes</h3>
 </script>
