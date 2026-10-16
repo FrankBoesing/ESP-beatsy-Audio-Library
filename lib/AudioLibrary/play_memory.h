@@ -59,7 +59,7 @@ public:
     void update() override;
 
 private:
-    const unsigned int *beginning = nullptr; // Legacy encoded sample data
+    const unsigned int *beginning = nullptr; // Legacy packed PCM sample data
     const int16_t *pcm_samples = nullptr;    // Non-owning AudioSampleBuffer data
     uint32_t length = 0;                    // Source samples, not output samples
     uint32_t pcm_sample_rate = 0;

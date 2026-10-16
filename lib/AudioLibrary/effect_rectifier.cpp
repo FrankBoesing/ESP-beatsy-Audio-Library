@@ -38,14 +38,8 @@ void AudioEffectRectifier::update() {
 
 GCC_UNROLL
     for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        int16_t sample = block->data[i];
-
-        if (sample < 0) {
-            // -INT16_MIN cannot be represented by int16_t; saturate it.
-            sample = sample == INT16_MIN ? INT16_MAX : (int16_t)-sample;
-        }
-
-        block->data[i] = sample;
+        const int32_t magnitude = __builtin_abs((int32_t)block->data[i]);
+        block->data[i] = (int16_t)(magnitude > INT16_MAX ? INT16_MAX : magnitude);
     }
 
     transmit(block);

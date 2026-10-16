@@ -116,46 +116,60 @@ bool AudioControlES8311::configureClock(uint32_t sampleRate) {
 }
 
 bool AudioControlES8311::enable(uint32_t sampleRate) {
+    initialized_ = false;
+
+    // Keep the board's external power amplifier disabled throughout reset
+    // and initialization.
+    if (pins_.pa_enable >= 0) {
+        pinMode(pins_.pa_enable, OUTPUT);
+        digitalWrite(pins_.pa_enable, !pins_.pa_active);
+    }
+
     wire_->begin(pins_.sda, pins_.scl, ES8311_I2C_FREQUENCY);
 
     if (!isConnected()) {
-        initialized_ = false;
         return false;
     }
 
-    bool ok = true;
+    // Best-effort silence before reset in case the codec was left running
+    // by a previous setup. The reset below also powers down the digital path.
+    (void)mute();
+    (void)volume(0.0f);
 
-    // ------------------------------------------------------------
-    // ES8311-Initialisierung, portiert aus Espressifs offiziellem
-    // es8311.c (es8311_init). ESP32 ist I2S-Master, ES8311 laeuft
-    // als I2S-Slave; MCLK wird vom ESP32 ueber den MCLK-Pin
-    // eingespeist (256 * Samplerate, 16-Bit-I2S-Slots).
-    // ------------------------------------------------------------
-
-    // Chip zuruecksetzen und wieder hochfahren
-    ok &= writeReg(REG_RESET, 0x1F);
+    // ES8311 software reset sequence: assert all reset bits with the state
+    // machine off, release the reset bits, then start the state machine.
+    bool resetOk = writeReg(REG_RESET, 0x1F);
     delay(20);
-    ok &= writeReg(REG_RESET, 0x00);
-    ok &= writeReg(REG_RESET, 0x80);
+    resetOk &= writeReg(REG_RESET, 0x00);
+    resetOk &= writeReg(REG_RESET, 0x80);
+    if (!resetOk) {
+        return false;
+    }
 
-    // Taktbaum fuer die gewuenschte Samplerate konfigurieren
+    // Re-establish mute and minimum volume immediately after the reset, before
+    // enabling the DAC or its analog output stages.
+    bool ok = true;
+    ok &= mute();
+    ok &= volume(0.0f);
     ok &= configureClock(sampleRate);
 
-    // Serielles Format: Slave-Modus, 32 Bit (passend zu AudioOutputI2S)
+    // Keep the codec in slave mode and configure its serial port for 16-bit I2S.
     uint8_t reg00 = 0;
-    readReg(REG_RESET, reg00);
-    reg00 &= 0xBF;
-    ok &= writeReg(REG_RESET, reg00);
-    ok &= writeReg(REG_SDPIN, 0x0C);   // DAC: 16 Bit
-    ok &= writeReg(REG_SDPOUT, 0x0C);  // ADC: 16 Bit
+    if (!readReg(REG_RESET, reg00)) {
+        ok = false;
+    } else {
+        reg00 &= 0xBF;
+        ok &= writeReg(REG_RESET, reg00);
+    }
+    ok &= writeReg(REG_SDPIN, 0x0C);   // DAC: 16 bit.
+    ok &= writeReg(REG_SDPOUT, 0x0C);  // ADC: 16 bit.
 
-    // Analoge Stufen und Signalpfad einschalten
-    ok &= writeReg(REG_SYSTEM0D, 0x01); // Analog-Bias einschalten
-    ok &= writeReg(REG_SYSTEM0E, 0x02); // Analog-PGA + ADC-Modulator einschalten
-    ok &= writeReg(REG_SYSTEM14, 0x10); // MIC1P/MIC1N wählen, PGA zunächst 0 dB
+    // Configure analog stages while the DAC remains muted and at minimum volume.
+    ok &= writeReg(REG_SYSTEM0D, 0x01); // Analog bias.
+    ok &= writeReg(REG_SYSTEM0E, 0x02); // Analog PGA + ADC modulator.
+    ok &= writeReg(REG_SYSTEM14, 0x10); // MIC1P/MIC1N, PGA initially 0 dB.
 
-    // ADC_SCALE fest auf 0 dB setzen: inputLevel() steuert ausschließlich
-    // die analoge PGA-Verstärkung. Andere Registerbits bleiben erhalten.
+    // ADC_SCALE fixed at 0 dB; inputLevel() controls the analog PGA only.
     uint8_t adcScale = 0;
     if (readReg(REG_ADC16, adcScale)) {
         ok &= writeReg(REG_ADC16, (uint8_t)(adcScale & 0xF8U));
@@ -163,28 +177,45 @@ bool AudioControlES8311::enable(uint32_t sampleRate) {
         ok = false;
     }
 
-    ok &= writeReg(REG_SYSTEM12, 0x00); // DAC einschalten
-    ok &= writeReg(REG_SYSTEM13, 0x10); // Ausgang auf Kopfhoerer-/Line-Treiber schalten
-    ok &= writeReg(REG_ADC1C, 0x6A);    // ADC-Equalizer-Bypass, DC-Offset-Korrektur
-    ok &= writeReg(REG_DAC37, 0x08);    // DAC-Equalizer-Bypass
+    // Power up the DAC and output drivers only after mute and minimum volume
+    // are in place.
+    ok &= writeReg(REG_SYSTEM12, 0x00); // DAC on.
+    ok &= writeReg(REG_SYSTEM13, 0x10); // Headphone/line driver.
+    ok &= writeReg(REG_ADC1C, 0x6A);   // ADC EQ bypass, DC-offset correction.
+    ok &= writeReg(REG_DAC37, 0x08);   // DAC EQ bypass.
 
     if (!ok) {
         initialized_ = false;
         return false;
     }
 
-    // / Standardlautstaerke: 70 %, nicht stummgeschaltet
-    ok &= volume(0.7f);
-    ok &= unmute();
+    // Unmute at minimum volume, then enable the PA and ramp up gradually.
+    if (!volume(0.0f) || !unmute()) {
+        return false;
+    }
+    delay(50);
 
-    // Power Amplifier des Boards einschalten
     if (pins_.pa_enable >= 0) {
-        pinMode(pins_.pa_enable, OUTPUT);
         digitalWrite(pins_.pa_enable, pins_.pa_active);
     }
 
-    initialized_ = ok;
-    return ok;
+    constexpr int volumeRampSteps = 16;
+    constexpr float defaultVolume = 0.7f;
+    for (int step = 1; step <= volumeRampSteps; ++step) {
+        const float level = defaultVolume * (float)step / (float)volumeRampSteps;
+        if (!volume(level)) {
+            mute();
+            if (pins_.pa_enable >= 0) {
+                digitalWrite(pins_.pa_enable, !pins_.pa_active);
+            }
+            initialized_ = false;
+            return false;
+        }
+        delay(10);
+    }
+
+    initialized_ = true;
+    return true;
 }
 
 bool AudioControlES8311::disable() {

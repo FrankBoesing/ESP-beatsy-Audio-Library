@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "play_sd_wav.h"
 #include "softcodecs/AudioSourceFile.h"
+#include <string.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
 #include <esp_heap_caps.h>
@@ -27,7 +28,7 @@ static inline uint32_t readLE32(const uint8_t *p) {
            ((uint32_t)p[3] << 24);
 }
 
-void printChunk(uint32_t id, uint32_t size, uint32_t position) {
+static inline void printChunk(uint32_t id, uint32_t size, uint32_t position) {
     #if CORE_DEBUG_LEVEL >= 5
     char name[5];
 
@@ -41,12 +42,61 @@ void printChunk(uint32_t id, uint32_t size, uint32_t position) {
              (unsigned long)position, (unsigned long)size);
     #endif
 }
+
+static inline int32_t decodeWavSample(uint16_t bits_per_sample, const uint8_t *data) {
+    switch (bits_per_sample) {
+    case 8:
+        // WAV 8-bit PCM is unsigned.
+        return ((int32_t)data[0] - 128) * 16777216;
+
+    case 16: {
+        // The frame and preload buffers are aligned; memcpy avoids aliasing
+        // while allowing GCC to emit a native 16-bit load.
+        const uint8_t *p = (const uint8_t *)__builtin_assume_aligned(data, 2);
+        uint16_t raw;
+        memcpy(&raw, p, sizeof(raw));
+#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
+    (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+        raw = __builtin_bswap16(raw);
+#endif
+        return (int32_t)(int16_t)raw * 65536;
+    }
+
+    case 24: {
+        // Packed 24-bit PCM has no naturally aligned word representation.
+        int32_t value = (int32_t)data[0] | ((int32_t)data[1] << 8) |
+                        ((int32_t)data[2] << 16);
+
+        if (value & 0x00800000) {
+            value |= (int32_t)0xFF000000;
+        }
+
+        return value * 256;
+    }
+
+    case 32: {
+        const uint8_t *p = (const uint8_t *)__builtin_assume_aligned(data, 4);
+        uint32_t raw;
+        memcpy(&raw, p, sizeof(raw));
+#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
+    (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+        raw = __builtin_bswap32(raw);
+#endif
+        return (int32_t)raw;
+    }
+
+    default:
+        return 0;
+    }
+}
+
 } // namespace
 
 // ============================================================================
 // Destructor
 // ============================================================================
 
+OSIZE
 AudioPlaySdWav::~AudioPlaySdWav() {
     stop();
     closeSource();
@@ -56,6 +106,7 @@ AudioPlaySdWav::~AudioPlaySdWav() {
 // begin
 // ============================================================================
 
+OSIZE
 void AudioPlaySdWav::begin() {
     state = STOPPED;
 
@@ -67,15 +118,15 @@ void AudioPlaySdWav::begin() {
 
     data_start = 0;
     data_length = 0;
-    total_length = 0;
+    data_frames = 0;
+    source_buffer_offset = 0;
+    source_buffer_size = 0;
 
     sample_rate = 0;
     channels = 0;
     bits_per_sample = 0;
     bytes_per_sample = 0;
     block_align = 0;
-
-    source_frame = 0;
     source_frames_read = 0;
 
     previous_left = 0;
@@ -88,6 +139,7 @@ void AudioPlaySdWav::begin() {
 
     source_phase = 0.0f;
     source_ended = false;
+    source_error = false;
     current_playback_rate = target_playback_rate;
 }
 
@@ -95,6 +147,7 @@ void AudioPlaySdWav::begin() {
 // Source ownership
 // ============================================================================
 
+OSIZE
 void AudioPlaySdWav::closeSource() {
     if (source == nullptr) {
         own_source = false;
@@ -114,6 +167,7 @@ void AudioPlaySdWav::closeSource() {
 // Existing API: filename
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::play(const char *filename) {
     return play(SD_MMC, filename);
 }
@@ -160,6 +214,7 @@ bool AudioPlaySdWav::play(fs::FS &fs, const char *filename) {
 // Generic AudioSource
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::play(AudioSource &newSource) {
     stop();
     closeSource();
@@ -188,6 +243,8 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
 
     source = &newSource;
     own_source = takeOwnership;
+    source_error = false;
+    source_ended = false;
 
     ESP_LOGV(TAG, "Opening WAV source, size=%llu bytes",
              (unsigned long long)source->size());
@@ -234,8 +291,6 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
         closeSource();
         return false;
     }
-
-    source_frame = 0;
     source_frames_read = 0;
 
     have_previous = false;
@@ -262,6 +317,7 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
 // Load an entire PCM WAV into PSRAM
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
                                   AudioSampleBuffer &buffer, size_t reserveBytes) {
     if (filename == nullptr || state != STOPPED || source != nullptr) {
@@ -314,7 +370,7 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
     if (freeBytes < bytesNeeded ||
         freeBytes - bytesNeeded < reserveBytes ||
         largestBlock < bytesNeeded) {
-        ESP_LOGW(TAG,
+        ESP_LOGE(TAG,
                  "Not enough contiguous PSRAM for %s (%u needed, %u free, %u largest, %u reserve)",
                  filename, (unsigned)bytesNeeded, (unsigned)freeBytes,
                  (unsigned)largestBlock, (unsigned)reserveBytes);
@@ -325,7 +381,7 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
     int16_t *newSamples = static_cast<int16_t *>(
         heap_caps_malloc(bytesNeeded, PSRAM_CAPS));
     if (newSamples == nullptr) {
-        ESP_LOGW(TAG, "PSRAM allocation failed (%u bytes)", (unsigned)bytesNeeded);
+        ESP_LOGE(TAG, "PSRAM allocation failed (%u bytes)", (unsigned)bytesNeeded);
         closeSource();
         return false;
     }
@@ -338,7 +394,7 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
     }
 
     // Decode in bounded chunks instead of invoking the source reader once per sample.
-    uint8_t raw[1024];
+    alignas(4) uint8_t raw[1024];
     const uint32_t framesPerChunk = sizeof(raw) / block_align;
     uint32_t framesDone = 0;
     while (framesDone < frames) {
@@ -354,9 +410,9 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
 
         for (uint32_t i = 0; i < framesNow; ++i) {
             const uint8_t *frame = raw + (size_t)i * block_align;
-            const int32_t left = decodeSample(frame) >> 16;
+            const int32_t left = decodeWavSample(bits_per_sample, frame) >> 16;
             const int32_t right = channels == 2
-                                      ? decodeSample(frame + bytes_per_sample) >> 16
+                                      ? decodeWavSample(bits_per_sample, frame + bytes_per_sample) >> 16
                                       : left;
             newSamples[framesDone + i] = (int16_t)((left + right) / 2);
         }
@@ -364,7 +420,6 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
     }
 
     closeSource();
-    source_frame = 0;
     source_frames_read = 0;
     have_previous = false;
     have_next = false;
@@ -378,7 +433,7 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
     buffer.sample_rate_ = sample_rate;
     buffer.is_psram_ = true;
 
-    ESP_LOGI(TAG, "Loaded %s into PSRAM: %u mono samples, %lu Hz, %u bytes",
+    ESP_LOGV(TAG, "Loaded %s into PSRAM: %u mono samples, %lu Hz, %u bytes",
              filename, (unsigned)frames, (unsigned long)sample_rate,
              (unsigned)bytesNeeded);
     return true;
@@ -388,6 +443,7 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
 // Playback rate
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::setPlaybackRate(float rate) {
     if (!(rate >= 0.25f && rate <= 4.0f)) {
         return false;
@@ -399,6 +455,7 @@ bool AudioPlaySdWav::setPlaybackRate(float rate) {
     return true;
 }
 
+OSIZE
 float AudioPlaySdWav::playbackRate() const {
     portENTER_CRITICAL(&playback_rate_mux);
     const float result = target_playback_rate;
@@ -406,12 +463,14 @@ float AudioPlaySdWav::playbackRate() const {
     return result;
 }
 
+OSIZE
 void AudioPlaySdWav::setLoop(bool enabled) {
     portENTER_CRITICAL(&playback_rate_mux);
     loop_enabled = enabled;
     portEXIT_CRITICAL(&playback_rate_mux);
 }
 
+OSIZE
 bool AudioPlaySdWav::isLooping() const {
     portENTER_CRITICAL(&playback_rate_mux);
     const bool result = loop_enabled;
@@ -423,6 +482,7 @@ bool AudioPlaySdWav::isLooping() const {
 // Stop
 // ============================================================================
 
+OSIZE
 void AudioPlaySdWav::stop() {
     if (state != STOPPED) {
         releaseBlocks();
@@ -446,6 +506,7 @@ void AudioPlaySdWav::stop() {
 // Play / Pause
 // ============================================================================
 
+OSIZE
 void AudioPlaySdWav::togglePlayPause() {
     if (state == PLAYING) {
         state = PAUSED;
@@ -458,14 +519,17 @@ void AudioPlaySdWav::togglePlayPause() {
 // State
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::isPlaying() const {
     return state == PLAYING;
 }
 
+OSIZE
 bool AudioPlaySdWav::isPaused() {
     return state == PAUSED;
 }
 
+OSIZE
 bool AudioPlaySdWav::isStopped() {
     return state == STOPPED;
 }
@@ -474,6 +538,7 @@ bool AudioPlaySdWav::isStopped() {
 // Position
 // ============================================================================
 
+OSIZE
 uint32_t AudioPlaySdWav::positionMillis() const {
     if (sample_rate == 0 || block_align == 0) {
         return 0;
@@ -488,6 +553,7 @@ uint32_t AudioPlaySdWav::positionMillis() const {
 // Length
 // ============================================================================
 
+OSIZE
 uint32_t AudioPlaySdWav::lengthMillis() const {
     if (sample_rate == 0 || block_align == 0) {
         return 0;
@@ -501,6 +567,7 @@ uint32_t AudioPlaySdWav::lengthMillis() const {
 // Source read
 // ============================================================================
 
+OSPEED
 bool AudioPlaySdWav::readExact(void *buffer, size_t length) {
     uint8_t *p = (uint8_t *)(buffer);
 
@@ -553,6 +620,7 @@ bool AudioPlaySdWav::readExact(void *buffer, size_t length) {
 // Seek
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::seekAbsolute(uint64_t position) {
     if (source == nullptr) {
         return false;
@@ -570,6 +638,8 @@ bool AudioPlaySdWav::seekAbsolute(uint64_t position) {
         return false;
     }
 
+    source_buffer_offset = 0;
+    source_buffer_size = 0;
     return true;
 }
 
@@ -678,6 +748,12 @@ bool AudioPlaySdWav::parseFmtChunk(uint64_t position, uint32_t size) {
         return false;
     }
 
+    // Continue at the next chunk header, including the RIFF padding byte.
+    if (!seekAbsolute(position + size + (size & 1U))) {
+        ESP_LOGE(TAG, "Could not seek past fmt chunk");
+        return false;
+    }
+
     return true;
 }
 
@@ -685,6 +761,7 @@ bool AudioPlaySdWav::parseFmtChunk(uint64_t position, uint32_t size) {
 // Find data chunk
 // ============================================================================
 
+OSIZE
 bool AudioPlaySdWav::findDataChunk() {
     const uint32_t fileSize = (uint32_t)source->size();
 
@@ -707,7 +784,7 @@ bool AudioPlaySdWav::findDataChunk() {
         if (id == DATA_ID) {
             data_start = source->position();
             data_length = size;
-            total_length = size;
+            data_frames = size / block_align;
 
             ESP_LOGV(TAG, "Found data chunk: start=%lu size=%lu",
                      (unsigned long)data_start, (unsigned long)data_length);
@@ -833,95 +910,68 @@ bool AudioPlaySdWav::parseWav() {
 // ============================================================================
 // Decode sample
 // ============================================================================
-OSPEED
-int32_t AudioPlaySdWav::decodeSample(const uint8_t *data) const {
-    switch (bits_per_sample) {
-    case 8:
-
-        // WAV 8-bit PCM is unsigned.
-        return (((int32_t)data[0] - 128) << 24);
-
-    case 16:
-
-        return (
-            ((int32_t)(int16_t)((uint16_t)data[0] | ((uint16_t)data[1] << 8)))
-            << 16);
-
-    case 24: {
-        int32_t value = (int32_t)data[0] | ((int32_t)data[1] << 8) |
-                        ((int32_t)data[2] << 16);
-
-        if (value & 0x00800000) {
-            value |= (int32_t)0xFF000000;
-        }
-
-        return value << 8;
-    }
-
-    case 32:
-
-        return (int32_t)((uint32_t)data[0] | ((uint32_t)data[1] << 8) |
-                         ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24));
-
-    default:
-
-        return 0;
-    }
-}
-
 // ============================================================================
 // Read source frame
 // ============================================================================
 
+OSPEED
 bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
-    if ((uint64_t)source_frames_read * block_align >= data_length) {
+    if (source_frames_read >= data_frames) {
         return false;
     }
 
-    uint8_t frame[8];
+    if (source_buffer_offset >= source_buffer_size) {
+        const uint32_t framesRemaining = data_frames - source_frames_read;
+        uint32_t framesToRead = sizeof(source_buffer) / block_align;
+        if (framesToRead > framesRemaining) {
+            framesToRead = framesRemaining;
+        }
 
-    if (!readExact(frame, block_align)) {
-        ESP_LOGE(TAG, "Failed reading audio frame %lu",
-                 (unsigned long)source_frames_read);
+        const uint16_t bytesToRead = (uint16_t)(framesToRead * block_align);
+        if (!readExact(source_buffer, bytesToRead)) {
+            source_error = true;
+            ESP_LOGE(TAG, "Failed reading audio frames at %lu",
+                     (unsigned long)source_frames_read);
+            return false;
+        }
 
-        return false;
+        source_buffer_offset = 0;
+        source_buffer_size = bytesToRead;
     }
 
-    left = decodeSample(frame);
+    const uint8_t *frame = source_buffer + source_buffer_offset;
+    left = decodeWavSample(bits_per_sample, frame);
 
     if (channels == 2) {
-        right = decodeSample(frame + bytes_per_sample);
+        right = decodeWavSample(bits_per_sample, frame + bytes_per_sample);
     } else {
         right = left;
     }
 
+    source_buffer_offset += block_align;
     ++source_frames_read;
 
     return true;
 }
 
-bool AudioPlaySdWav::readSourceFrameOrLoop(int32_t &left, int32_t &right, bool loop) {
-    // Restart only at the data-chunk boundary; never scan the RIFF header in the
-    // audio update path. Seeking is done by the current file-backed WAV path.
-    if ((uint64_t)source_frames_read * block_align >= data_length) {
-        if (!loop || data_length == 0 || !seekAbsolute(data_start)) {
-            return false;
-        }
-        source_frames_read = 0;
-        source_frame = 0;
+// ============================================================================
+// Output sample / variable-rate interpolation TODO: Optimize this.
+// ============================================================================
+inline OSPEED
+bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
+                                     float targetRate) {
+    if (source_error) {
+        return false;
     }
 
-    return readSourceFrame(left, right);
-}
+    const bool unityRate = targetRate == 1.0f && current_playback_rate == 1.0f;
+    const bool directRate = unityRate &&
+                            (float)sample_rate == AUDIO_SAMPLE_RATE_EXACT &&
+                            source_phase == 0.0f;
 
-// ============================================================================
-// Output sample / variable-rate interpolation
-// ============================================================================
-OSPEED
-bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
-                                     float targetRate, bool loop) {
     if (!have_previous) {
-        if (!readSourceFrameOrLoop(previous_left, previous_right, loop)) {
+        if (!readSourceFrame(previous_left, previous_right)) {
+            source_ended = true;
             return false;
         }
 
@@ -932,31 +982,44 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
     }
 
     if (!have_next && !source_ended) {
-        if (readSourceFrameOrLoop(next_left, next_right, loop)) {
+        if (readSourceFrame(next_left, next_right)) {
             have_next = true;
         } else {
             source_ended = true;
         }
     }
 
-    const float fraction = have_next ? source_phase : 0.0f;
-    const int64_t leftDelta = have_next ? (int64_t)next_left - previous_left : 0;
-    const int64_t rightDelta = have_next ? (int64_t)next_right - previous_right : 0;
-    const int64_t l = (int64_t)previous_left +
-                      (have_next ? (int64_t)(leftDelta * fraction) : 0);
-    const int64_t r = (int64_t)previous_right +
-                      (have_next ? (int64_t)(rightDelta * fraction) : 0);
+    if (directRate) {
+        // 44.1 kHz at unity rate needs no interpolation or rate smoothing.
+        left = (int16_t)(previous_left >> 16);
+        right = (int16_t)(previous_right >> 16);
+        source_phase = 1.0f;
+    } else {
+        const float fraction = have_next ? source_phase : 0.0f;
+        const int64_t leftDelta = have_next ? (int64_t)next_left - previous_left : 0;
+        const int64_t rightDelta = have_next ? (int64_t)next_right - previous_right : 0;
+        const int64_t l = (int64_t)previous_left +
+                          (have_next ? (int64_t)(leftDelta * fraction) : 0);
+        const int64_t r = (int64_t)previous_right +
+                          (have_next ? (int64_t)(rightDelta * fraction) : 0);
 
-    left = (int16_t)(l >> 16);
-    right = (int16_t)(r >> 16);
+        left = (int16_t)(l >> 16);
+        right = (int16_t)(r >> 16);
 
-    // The target may be updated by the control task; smooth the change here.
-    current_playback_rate +=
-        (targetRate - current_playback_rate) * 0.0015f;
-
-    const float sourceStep =
-        ((float)sample_rate / AUDIO_SAMPLE_RATE_EXACT) * current_playback_rate;
-    source_phase += sourceStep;
+        // Lower-rate WAVs still need interpolation for sample-rate conversion.
+        if (unityRate) {
+            source_phase += (float)sample_rate / AUDIO_SAMPLE_RATE_EXACT;
+        } else {
+            const float rateDelta = targetRate - current_playback_rate;
+            if (rateDelta > -0.0001f && rateDelta < 0.0001f) {
+                current_playback_rate = targetRate;
+            } else {
+                current_playback_rate += rateDelta * 0.0015f;
+            }
+            source_phase +=
+                ((float)sample_rate / AUDIO_SAMPLE_RATE_EXACT) * current_playback_rate;
+        }
+    }
 
     while (source_phase >= 1.0f) {
         source_phase -= 1.0f;
@@ -964,7 +1027,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
         if (have_next) {
             previous_left = next_left;
             previous_right = next_right;
-            have_next = readSourceFrameOrLoop(next_left, next_right, loop);
+            have_next = readSourceFrame(next_left, next_right);
             if (!have_next) {
                 source_ended = true;
             }
@@ -983,6 +1046,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
 // Release blocks
 // ============================================================================
 
+OSIZE
 void AudioPlaySdWav::releaseBlocks() {
     if (block_left) {
         release(block_left);
@@ -1001,40 +1065,31 @@ void AudioPlaySdWav::releaseBlocks() {
 // Finish playback
 // ============================================================================
 
-void AudioPlaySdWav::finishPlayback() {
+OSIZE
+void AudioPlaySdWav::finishPlayback(bool stopPlayback) {
     if (block_left) {
-        for (uint16_t i = block_offset; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            block_left->data[i] = 0;
-        }
-
+        memset(block_left->data + block_offset, 0,
+               (AUDIO_BLOCK_SAMPLES - block_offset) * sizeof(block_left->data[0]));
         transmit(block_left, 0);
-
         release(block_left);
         block_left = nullptr;
     }
 
     if (block_right) {
-        for (uint16_t i = block_offset; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            block_right->data[i] = 0;
-        }
-
+        memset(block_right->data + block_offset, 0,
+               (AUDIO_BLOCK_SAMPLES - block_offset) * sizeof(block_right->data[0]));
         transmit(block_right, 1);
-
         release(block_right);
         block_right = nullptr;
     }
 
-    /*
-     * Hier NICHT closeSource().
-     *
-     * Bei einer externen Source gehört deren Lebensdauer
-     * dem Aufrufer.
-     */
-    state = STOPPED;
+    // Keep the source open. An external source belongs to the caller.
+    if (stopPlayback) {
+        state = STOPPED;
+    }
 
     have_previous = false;
     have_next = false;
-
     block_offset = 0;
 }
 
@@ -1045,6 +1100,24 @@ OSPEED
 void AudioPlaySdWav::update() {
     if (state != PLAYING) {
         return;
+    }
+
+    portENTER_CRITICAL(&playback_rate_mux);
+    const float targetRate = target_playback_rate;
+    const bool loop = loop_enabled;
+    portEXIT_CRITICAL(&playback_rate_mux);
+
+    // If the previous block reached EOF, seek once here, not in the sample path.
+    if (loop && data_frames > 0 && source_ended && !have_previous && !source_error) {
+        if (seekAbsolute(data_start)) {
+            source_frames_read = 0;
+            have_previous = false;
+            have_next = false;
+            source_phase = 0.0f;
+            source_ended = false;
+        } else {
+            source_error = true;
+        }
     }
 
     block_left = allocate();
@@ -1068,17 +1141,14 @@ void AudioPlaySdWav::update() {
 
     block_offset = 0;
 
-    portENTER_CRITICAL(&playback_rate_mux);
-    const float targetRate = target_playback_rate;
-    const bool loop = loop_enabled;
-    portEXIT_CRITICAL(&playback_rate_mux);
-
     while (block_offset < AUDIO_BLOCK_SAMPLES) {
         int16_t left;
         int16_t right;
 
-        if (!getOutputSample(left, right, targetRate, loop)) {
-            finishPlayback();
+        if (!getOutputSample(left, right, targetRate)) {
+            const bool restartNextBlock = loop && data_frames > 0 &&
+                                          source_ended && !source_error;
+            finishPlayback(!restartNextBlock);
             return;
         }
 

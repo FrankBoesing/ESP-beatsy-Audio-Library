@@ -122,7 +122,7 @@ TDM is planned; PDM output is implemented on supported targets.
 | **AudioPlayMp3** | MP3 decoder/player. Can play from an Arduino filesystem or a generic AudioSource; used by the radio example for MP3 streams. |
 | **AudioPlayAac** | AAC decoder/player. Can play from an Arduino filesystem or a generic AudioSource; used by the radio example for AAC streams. |
 | **AudioPlaySdWav** | WAV/PCM file player for filesystems and seekable AudioSource objects. Supports loop and playback-rate control, and can preload a supported PCM WAV into a mono PSRAM AudioSampleBuffer for AudioPlayMemory. |
-| **AudioPlayMemory** | Plays legacy wav2sketch sample arrays or mono PCM from AudioSampleBuffer without copying; supports looping and variable playback rate. The buffer must outlive playback. |
+| **AudioPlayMemory** | Plays legacy uncompressed PCM arrays from wav2sketch or mono PCM from AudioSampleBuffer without copying; μ-law-encoded legacy arrays are not decoded. Supports looping and variable playback rate. The buffer must outlive playback. |
 | **AudioPlayQueue** | Supplies application-generated samples or blocks into the audio graph; includes ORIGINAL and NON_STALLING queue behaviours. |
 | **AudioPlayer** | Common player interface used by the decoder/file-player architecture, with codec metadata, MIME matching, playback state, position and duration methods. It is an abstract interface, not a concrete decoder. |
 

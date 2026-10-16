@@ -11,5 +11,7 @@ secrets.h
 /src/secrets.h
 .github/*
 copilot-instructions.md
-/src/
+/src/*
+/include/*
+/pc-test
 platformio.ini
