@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "play_sd_wav.h"
 #include "softcodecs/AudioSourceFile.h"
+#include <string.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
 #include <esp_heap_caps.h>
@@ -338,7 +339,7 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
     }
 
     // Decode in bounded chunks instead of invoking the source reader once per sample.
-    uint8_t raw[1024];
+    alignas(4) uint8_t raw[1024];
     const uint32_t framesPerChunk = sizeof(raw) / block_align;
     uint32_t framesDone = 0;
     while (framesDone < frames) {
@@ -837,17 +838,24 @@ OSPEED
 int32_t AudioPlaySdWav::decodeSample(const uint8_t *data) const {
     switch (bits_per_sample) {
     case 8:
-
         // WAV 8-bit PCM is unsigned.
-        return (((int32_t)data[0] - 128) << 24);
+        return ((int32_t)data[0] - 128) * 16777216;
 
-    case 16:
-
-        return (
-            ((int32_t)(int16_t)((uint16_t)data[0] | ((uint16_t)data[1] << 8)))
-            << 16);
+    case 16: {
+        // The frame and preload buffers are aligned; memcpy avoids aliasing
+        // while allowing GCC to emit a native 16-bit load.
+        const uint8_t *p = (const uint8_t *)__builtin_assume_aligned(data, 2);
+        uint16_t raw;
+        memcpy(&raw, p, sizeof(raw));
+#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
+    (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+        raw = __builtin_bswap16(raw);
+#endif
+        return (int32_t)(int16_t)raw * 65536;
+    }
 
     case 24: {
+        // Packed 24-bit PCM has no naturally aligned word representation.
         int32_t value = (int32_t)data[0] | ((int32_t)data[1] << 8) |
                         ((int32_t)data[2] << 16);
 
@@ -855,16 +863,21 @@ int32_t AudioPlaySdWav::decodeSample(const uint8_t *data) const {
             value |= (int32_t)0xFF000000;
         }
 
-        return value << 8;
+        return value * 256;
     }
 
-    case 32:
-
-        return (int32_t)((uint32_t)data[0] | ((uint32_t)data[1] << 8) |
-                         ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24));
+    case 32: {
+        const uint8_t *p = (const uint8_t *)__builtin_assume_aligned(data, 4);
+        uint32_t raw;
+        memcpy(&raw, p, sizeof(raw));
+#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
+    (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+        raw = __builtin_bswap32(raw);
+#endif
+        return (int32_t)raw;
+    }
 
     default:
-
         return 0;
     }
 }
@@ -878,7 +891,7 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
         return false;
     }
 
-    uint8_t frame[8];
+    alignas(4) uint8_t frame[8];
 
     if (!readExact(frame, block_align)) {
         ESP_LOGE(TAG, "Failed reading audio frame %lu",
@@ -920,6 +933,41 @@ bool AudioPlaySdWav::readSourceFrameOrLoop(int32_t &left, int32_t &right, bool l
 OSPEED
 bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
                                      float targetRate, bool loop) {
+    // Exact-rate fast path: 44.1 kHz source, unity playback rate and no
+    // fractional phase. Read each frame once and skip interpolation entirely.
+    if ((float)sample_rate == AUDIO_SAMPLE_RATE_EXACT &&
+        targetRate == 1.0f && current_playback_rate == 1.0f &&
+        source_phase == 0.0f) {
+        if (have_previous && source_ended && !have_next) {
+            return false;
+        }
+
+        if (!have_previous) {
+            if (!readSourceFrameOrLoop(previous_left, previous_right, loop)) {
+                return false;
+            }
+            have_previous = true;
+            have_next = false;
+            source_ended = false;
+        } else if (have_next) {
+            previous_left = next_left;
+            previous_right = next_right;
+            have_next = false;
+        }
+
+        left = (int16_t)(previous_left >> 16);
+        right = (int16_t)(previous_right >> 16);
+
+        if (!have_next && !source_ended) {
+            if (readSourceFrameOrLoop(next_left, next_right, loop)) {
+                have_next = true;
+            } else {
+                source_ended = true;
+            }
+        }
+        return true;
+    }
+
     if (!have_previous) {
         if (!readSourceFrameOrLoop(previous_left, previous_right, loop)) {
             return false;
@@ -950,13 +998,17 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
     left = (int16_t)(l >> 16);
     right = (int16_t)(r >> 16);
 
-    // The target may be updated by the control task; smooth the change here.
-    current_playback_rate +=
-        (targetRate - current_playback_rate) * 0.0015f;
-
-    const float sourceStep =
-        ((float)sample_rate / AUDIO_SAMPLE_RATE_EXACT) * current_playback_rate;
-    source_phase += sourceStep;
+    // Avoid the rate smoothing and multiplication for fixed unity-rate
+    // playback. Lower-rate WAVs still need interpolation for sample-rate
+    // conversion, but their source-step is simply sample_rate / output_rate.
+    if (targetRate == 1.0f && current_playback_rate == 1.0f) {
+        source_phase += (float)sample_rate / AUDIO_SAMPLE_RATE_EXACT;
+    } else {
+        current_playback_rate +=
+            (targetRate - current_playback_rate) * 0.0015f;
+        source_phase +=
+            ((float)sample_rate / AUDIO_SAMPLE_RATE_EXACT) * current_playback_rate;
+    }
 
     while (source_phase >= 1.0f) {
         source_phase -= 1.0f;
