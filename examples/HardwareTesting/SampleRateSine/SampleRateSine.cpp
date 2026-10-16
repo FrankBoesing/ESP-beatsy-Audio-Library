@@ -22,7 +22,7 @@ AudioConnection patchCordLeft(sine, 0, output, 0);
 AudioConnection patchCordRight(sine, 0, output, 1);
 
 namespace {
-constexpr uint32_t SAMPLE_RATES[] = {22500, 44100, 48000};
+constexpr uint32_t SAMPLE_RATES[] = {32000, 44100, 48000};
 constexpr size_t SAMPLE_RATE_COUNT = sizeof(SAMPLE_RATES) / sizeof(SAMPLE_RATES[0]);
 constexpr float FIRST_FREQUENCY_HZ = 440.0f;
 constexpr float SECOND_FREQUENCY_HZ = 880.0f;
@@ -58,14 +58,8 @@ void startFirstTone() {
 bool initializeCodecForRate(uint32_t outputRate) {
     bool initialized = false;
 #if defined(AUDIO_CODEC_ES8311)
-    // The ES8311 clock table has no exact 22500-Hz entry. Use the closest
-    // supported 22050-Hz clock profile for this deliberately nonstandard test
-    // rate; the I2S/AudioStream rate itself remains 22500 Hz.
-    const uint32_t codecRate = outputRate == 22500 ? 22050 : outputRate;
-    if (outputRate == 22500) {
-        Serial.println("ES8311: using 22050-Hz clock profile for 22500-Hz I2S test");
-    }
-    initialized = codec.enable(codecRate);
+    // The ES8311 has explicit clock-table entries for each tested rate.
+    initialized = codec.enable(outputRate);
 #else
     (void)outputRate;
     initialized = codec.enable();
@@ -110,7 +104,7 @@ void setup() {
     Serial.println();
     Serial.println("======================================");
     Serial.println(" Runtime Sample-Rate Sine Test");
-    Serial.println(" 22500 / 44100 / 48000 Hz");
+    Serial.println(" 32000 / 44100 / 48000 Hz");
     Serial.println("======================================");
 
     // Set the initial rate before AudioMemory() initializes the audio graph.
