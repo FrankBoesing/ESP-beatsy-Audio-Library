@@ -58,7 +58,7 @@ These examples are present in the repository. Their board-specific pin and codec
 
 | Class | Functionality and notes |
 | --- | --- |
-| **AudioFilterBiquad** | Multi-stage biquad filter. Supports low-pass, high-pass, band-pass, notch, low-shelf and high-shelf coefficient setup. Up to four stages; coefficient handling uses Q30 internally. |
+| **AudioFilterBiquad** | Multi-stage biquad filter. Supports low-pass, high-pass, band-pass, notch, peaking EQ, low-shelf and high-shelf coefficient setup. `setPeaking(stage, frequency, gain, q)` controls a bell-shaped frequency band; gain is in dB and Q controls bandwidth. Up to four stages; coefficient handling uses Q30 internally. |
 | **AudioFilterFIR** | FIR filter with caller-provided coefficients; supports up to 200 coefficients/taps. |
 | **AudioFilterLadder** | Nonlinear ladder low-pass filter based on the Huovilainen/New Moog model. Offers linear or polyphase-FIR interpolation and uses 4× internal oversampling. |
 | **AudioFilterStateVariable** | State-variable filter providing low-pass, band-pass and high-pass outputs; also supports a control input for variable cutoff. |
