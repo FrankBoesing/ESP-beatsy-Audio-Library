@@ -5670,7 +5670,7 @@ value  frequency
 	</div>
 	<h3>Functions</h3>
 	<p class=func><span class=keyword>enable</span>();</p>
-	<p class=desc>Initializes the codec. DAC soft-ramp is enabled automatically, so hardware volume transitions are smoothed when <code>volume()</code> changes. No separate ramp API is required. The independent <code>mute()</code>/<code>unmute()</code> controls remain available.</p>
+	<p class=desc>Initializes the codec and ramps DAC volume from mute to a conservative default level of <code>0.2</code>. DAC soft-ramp is enabled automatically, so later hardware volume transitions are smoothed when <code>volume()</code> changes. No separate ramp API is required. The independent <code>mute()</code>/<code>unmute()</code> controls remain available.</p>
 	<p class=func><span class=keyword>disable</span>();</p>
 	<p class=desc>Mutes and powers down the codec.</p>
 	<p class=func><span class=keyword>volume</span>(level); / <span class=keyword>volume</span>(left, right);</p>
@@ -5698,7 +5698,7 @@ value  frequency
 	</div>
 	<h3>Functions</h3>
 	<p class=func><span class=keyword>enable</span>(sampleRate);</p>
-	<p class=desc>Initializes the codec for the specified supported sample rate. The no-argument <code>enable()</code> overload uses 44100 Hz. DAC soft-ramp is enabled automatically and smooths hardware DAC-volume transitions; no separate ramp API is needed.</p>
+	<p class=desc>Initializes the codec for the specified supported sample rate. The no-argument <code>enable()</code> overload uses 44100 Hz. DAC volume ramps from mute to a conservative default level of <code>0.2</code>. DAC soft-ramp is enabled automatically and smooths later hardware DAC-volume transitions; no separate ramp API is needed.</p>
 	<p class=func><span class=keyword>disable</span>();</p>
 	<p class=desc>Mutes and powers down the codec.</p>
 	<p class=func><span class=keyword>volume</span>(level);</p>

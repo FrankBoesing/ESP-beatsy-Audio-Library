@@ -9,6 +9,8 @@ Teensy Audio System Design Tool for the ESP-beatsy Audio Library.
 - Codec node help documents the ES8388 ALC/limiter and noise-gate APIs, the ES8311
   ALC, noise-gate and ADC high-pass APIs, and the default hardware DAC soft-ramp
   behavior. The GUI describes these APIs but does not generate codec setup calls.
+  Both codec drivers ramp their DAC output from mute to a default volume of `0.2`
+  during `enable()`; applications can set another level explicitly afterward.
 - Help for `AudioEffectDigitalCombine`, `AudioEffectMultiply`, `AudioEffectRectifier`,
   `AudioEffectMidSide`, `AudioEffectWaveFolder` and `AudioEffectWaveshaper` documents
   their block-wise `bypass(bool)` API. A bypass setting is read at the start of each

@@ -201,7 +201,7 @@ bool AudioControlES8311::enable(uint32_t sampleRate) {
         return false;
     }
 
-    // Unmute at minimum volume, then enable the PA and ramp up gradually.
+    // Unmute at minimum volume, then enable the PA and ramp up gradually to the conservative default level.
     if (!volume(0.0f) || !unmute()) {
         return false;
     }
@@ -212,7 +212,7 @@ bool AudioControlES8311::enable(uint32_t sampleRate) {
     }
 
     constexpr int volumeRampSteps = 16;
-    constexpr float defaultVolume = 0.7f;
+    constexpr float defaultVolume = 0.2f;
     for (int step = 1; step <= volumeRampSteps; ++step) {
         const float level = defaultVolume * (float)step / (float)volumeRampSteps;
         if (!volume(level)) {

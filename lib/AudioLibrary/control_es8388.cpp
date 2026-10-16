@@ -180,7 +180,7 @@ bool AudioControlES8388::enable() {
     }
     delay(50);
 
-    // Release mute at minimum volume, then ramp to the previous default level.
+    // Release mute at minimum volume, then ramp to the conservative default level.
     if (!volume(0.0f) || !unmute()) {
         return false;
     }
@@ -191,7 +191,7 @@ bool AudioControlES8388::enable() {
     }
 
     constexpr int volumeRampSteps = 16;
-    constexpr float defaultVolume = 0.7f;
+    constexpr float defaultVolume = 0.2f;
     for (int step = 1; step <= volumeRampSteps; ++step) {
         const float level = defaultVolume * (float)step / (float)volumeRampSteps;
         if (!volume(level)) {

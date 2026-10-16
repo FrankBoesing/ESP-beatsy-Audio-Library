@@ -14,6 +14,7 @@
  * This class intentionally contains codec/I2C control only.
  * I2S data transport remains the responsibility of AudioOutputI2S,
  * which drives 32-bit I2S slots with MCLK = 256 * sample rate.
+ * enable() ramps DAC volume from mute to a conservative default of 0.2.
  *
  */
 class AudioControlES8311 : public AudioControl {

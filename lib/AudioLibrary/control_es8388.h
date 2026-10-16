@@ -9,6 +9,7 @@
  *
  * This class intentionally contains codec/I2C control only.
  * I2S data transport remains the responsibility of AudioOutputI2S.
+ * enable() ramps DAC volume from mute to a conservative default of 0.2.
  *
  * Verified board defaults for Ai-Thinker ESP32-A1S Audio Kit V2.2:
  *   I2C SDA  = GPIO33
