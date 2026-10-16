@@ -38,7 +38,7 @@ void setup() {
     codec.enable();
     codec.inputSelect(myInput);
     codec.inputLevel(0.8f);
-    codec.volume(0.7f);
+    codec.volume(0.2f);
 }
 
 void loop() {

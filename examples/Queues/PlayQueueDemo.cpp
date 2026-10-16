@@ -50,7 +50,7 @@ void setup() {
   AudioMemory(10);
 
   codec.enable();
-  codec.volume(0.5);
+  codec.volume(0.2f);
 
   next = millis();
 

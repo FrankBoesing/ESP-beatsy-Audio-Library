@@ -53,6 +53,8 @@ void setup() {
             delay(1000);
     }
 
+    codec.volume(0.2f);
+
     fir.begin(FIR_COEFFICIENTS,
               sizeof(FIR_COEFFICIENTS) / sizeof(FIR_COEFFICIENTS[0]));
     biquad.setLowpass(0, BIQUAD_CUTOFF_HZ);

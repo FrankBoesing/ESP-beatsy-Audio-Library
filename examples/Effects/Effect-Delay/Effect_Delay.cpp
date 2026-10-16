@@ -46,7 +46,7 @@ void setup() {
 
     // enable the audio shield
     codec.enable();
-    codec.volume(0.5);
+    codec.volume(0.2f);
 
     // configure a sine wave for the chirp
     // the original is turned on/off by an envelope effect

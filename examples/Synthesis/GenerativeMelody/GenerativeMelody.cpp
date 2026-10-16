@@ -305,7 +305,7 @@ void setup()
         }
     }
 
-    codec.volume(0.8f);
+    codec.volume(0.2f);
 
     randomSeed(esp_random());
 

@@ -66,7 +66,7 @@ void setup() {
   drum4.pitchMod(0.0);
 
   codec.enable();
-  codec.volume(0.7);
+  codec.volume(0.2f);
 
   AudioInterrupts();
 

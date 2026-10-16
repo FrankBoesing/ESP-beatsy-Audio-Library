@@ -4168,10 +4168,8 @@ double s_freq = .0625;</p>
 		<tr class=odd><td align=center>Out 0</td><td>Signal with Envelope Applied</td></tr>
 	</table>
 	<h3>Functions</h3>
-	<p>There are no functions to call from the Arduino sketch.
-		This object simply multiplies the 2 signals to create
-		a continuous output
-	</p>
+	<p class=func><span class=keyword>bypass</span>(enable);</p>
+	<p class=desc>When <code>enable</code> is true, input 0 is forwarded unchanged and input 1 is ignored. When false, multiplication resumes. The setting is sampled once per audio block.</p>
 	<!--
 <h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt;
@@ -4205,9 +4203,8 @@ double s_freq = .0625;</p>
 		<tr class=odd><td align=center>Out 0</td><td>Signal with Folding Applied</td></tr>
 	</table>
 	<h3>Functions</h3>
-	<p>There are no functions to call from the Arduino sketch.
-		This object simply combined the 2 signals and then wave-folds
-	</p>
+	<p class=func><span class=keyword>bypass</span>(enable);</p>
+	<p class=desc>When <code>enable</code> is true, input 0 is forwarded unchanged and the modulation input is ignored. When false, wavefolding resumes. The setting is sampled once per audio block.</p>
 <h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; WaveFolder</p>
 	<h3>Notes</h3>
@@ -4232,10 +4229,8 @@ double s_freq = .0625;</p>
 		<tr class=odd><td align=center>Out 0</td><td>Rectifed (positive only) Signal</td></tr>
 	</table>
 	<h3>Functions</h3>
-	<p>There are no functions to call from the Arduino sketch.
-		This object simply passes the positive portion of the
-		signal and inverts the signal when the input is negative.
-	</p>
+	<p class=func><span class=keyword>bypass</span>(enable);</p>
+	<p class=desc>When <code>enable</code> is true, input 0 is forwarded unchanged. When false, rectification resumes. The setting is sampled once per audio block.</p>
 <h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Vocoder19Band
 	</p>
@@ -4432,6 +4427,8 @@ double s_freq = .0625;</p>
 	<p class=desc>Configure this object to encode from stereo to Mid-Side format.</p>
 	<p class=func><span class=keyword>decode</span>();</p>
 	<p class=desc>Configure this object to decode from Mid-Side format back to stereo signals.</p>
+	<p class=func><span class=keyword>bypass</span>(enable);</p>
+	<p class=desc>When <code>enable</code> is true, inputs 0 and 1 are forwarded unchanged to outputs 0 and 1, regardless of encode/decode mode. When false, the selected mode resumes. The setting is sampled once per audio block.</p>
 
 	<h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Mid_Side</p>
@@ -4478,6 +4475,8 @@ double s_freq = .0625;</p>
 		33, 65, 129, 257, 513, 1025, 2049, 4097, 8193, 16385, or 32769.
 		</p>
 
+	<p class=func><span class=keyword>bypass</span>(enable);</p>
+	<p class=desc>When <code>enable</code> is true, input 0 is forwarded unchanged. When false, the configured transfer curve is applied again. The setting is sampled once per audio block.</p>
 	<h3>Examples</h3>
 	<p>For evaluation, feed a sine wave and inspect the output waveform or FFT; nonlinear transfer curves introduce harmonics that are visible in the spectrum.</p>
 	<!--<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Mid_Side</p>-->
@@ -4563,6 +4562,8 @@ double s_freq = .0625;</p>
 	<p class=func><span class=keyword>setCombineMode</span>(mode);</p>
 	<p class=desc>Configure which digital combine operation is performed.
 	</p>
+	<p class=func><span class=keyword>bypass</span>(enable);</p>
+	<p class=desc>When <code>enable</code> is true, input 0 is forwarded unchanged and input 1 is ignored. When false, the selected combine operation resumes. The setting is sampled once per audio block.</p>
 	<p class=desc>Supported modes:<br>
 		<span class=keyword>AudioEffectDigitalCombine</span><b>::OR</b><br>
 		<span class=keyword>AudioEffectDigitalCombine</span><b>::XOR</b><br>

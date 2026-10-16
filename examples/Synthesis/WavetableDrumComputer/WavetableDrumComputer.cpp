@@ -277,7 +277,7 @@ void setup()
             delay(1000);
         }
     }
-    codec.volume(0.75f);
+    codec.volume(0.2f);
 
     AudioInterrupts();
 

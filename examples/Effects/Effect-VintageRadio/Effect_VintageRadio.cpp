@@ -193,7 +193,7 @@ void setup() {
             delay(1000);
         }
     }
-    codec.volume(0.65f);
+    codec.volume(0.2f);
 
     // Vintage-radio starting profile. Frequencies are tuning parameters,
     // not a claim to reproduce one particular historical radio.

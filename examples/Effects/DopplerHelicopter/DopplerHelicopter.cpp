@@ -158,7 +158,7 @@ void setup() {
         Serial.println("ERROR: Audio codec initialization failed");
         while (true) delay(1000);
     }
-    codec.volume(0.8f);
+    codec.volume(0.2f);
 
     helicopter.setPlaybackRate(1.0f);
     pan.setPosition(1.0f, 0.0f);

@@ -72,7 +72,7 @@ These examples are present in the repository. Their board-specific pin and codec
 | --- | --- |
 | **AudioEffectBitcrusher** | Reduces bit depth and/or effective sample rate. |
 | **AudioEffectChorus** | Multi-voice chorus. The application supplies and owns the delay-line memory. |
-| **AudioEffectDigitalCombine** | Combines two inputs using OR, XOR, AND, modulo, addition or subtraction. ADD and SUBTRACT saturate to the signed 16-bit PCM range. |
+| **AudioEffectDigitalCombine** | Combines two inputs using OR, XOR, AND, modulo, addition or subtraction. ADD and SUBTRACT saturate to the signed 16-bit PCM range. Supports block-wise `bypass(bool)`, forwarding input 0 unchanged. |
 | **AudioEffectDelay** | Delay effect with up to eight delay taps. Its sample ring buffer is allocated lazily, prefers PSRAM and falls back to internal RAM. The default maximum delay is 4000 ms. |
 | **AudioEffectEnvelope** | Delay/attack/hold/decay/sustain/release envelope with note-on/note-off control. |
 | **AudioEffectFade** | Fade-in and fade-out over a specified duration. |
@@ -80,12 +80,12 @@ These examples are present in the repository. Their board-specific pin and codec
 | **AudioEffectFreeverb** | Mono Freeverb reverb. |
 | **AudioEffectFreeverbStereo** | Stereo Freeverb variant sharing the ESP32-adapted implementation. |
 | **AudioEffectGranular** | Granular freeze and pitch-shift modes using an application-owned sample buffer. |
-| **AudioEffectMidSide** | Encodes stereo left/right to mid/side and decodes mid/side back to left/right. |
-| **AudioEffectMultiply** | Multiplies two input signals sample by sample. |
-| **AudioEffectRectifier** | Full-wave rectification. |
+| **AudioEffectMidSide** | Encodes stereo left/right to mid/side and decodes mid/side back to left/right. Supports block-wise `bypass(bool)`, forwarding both inputs unchanged to their matching outputs. |
+| **AudioEffectMultiply** | Multiplies two input signals sample by sample. Supports block-wise `bypass(bool)`, forwarding input 0 unchanged. |
+| **AudioEffectRectifier** | Full-wave rectification. Supports block-wise `bypass(bool)`. |
 | **AudioEffectReverb** | Reverb with configurable approximate decay time; delay-buffer allocation can use PSRAM. |
-| **AudioEffectWaveFolder** | Wave-folding effect with two input connections. |
-| **AudioEffectWaveshaper** | Applies a caller-defined transfer curve. The curve is copied into effect-owned storage. |
+| **AudioEffectWaveFolder** | Wave-folding effect with two input connections. Supports block-wise `bypass(bool)`, forwarding input 0 unchanged. |
+| **AudioEffectWaveshaper** | Applies a caller-defined transfer curve. The curve is copied into effect-owned storage. Supports block-wise `bypass(bool)`. |
 
 ## Mixers and gain
 

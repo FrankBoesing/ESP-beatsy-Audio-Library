@@ -529,7 +529,7 @@ void setup()
             delay(1000);
         }
     }
-    codec.volume(0.76f);
+    codec.volume(0.2f);
 
     (void)AudioStream::processorUsage(0);
     (void)AudioStream::processorUsage(1);

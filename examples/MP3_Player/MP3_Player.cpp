@@ -70,7 +70,7 @@ void setup() {
 
     Serial.println("Codec initialized");
 
-    float volume = 0.7f;
+    float volume = 0.2f;
     codec.volume(volume);
     Serial.print("Volume:");
     Serial.println(volume, 2);

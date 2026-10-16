@@ -63,7 +63,7 @@ bool initializeCodecForRate(uint32_t outputRate) {
 #endif
     // Codec initialization restores its default volume, so reapply the test
     // level after every sample-rate switch.
-    return initialized && codec.volume(0.5f);
+    return initialized && codec.volume(0.2f);
 }
 
 bool changeSampleRate(uint32_t rate) {

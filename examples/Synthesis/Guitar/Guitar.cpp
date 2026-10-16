@@ -45,7 +45,7 @@ int chordnum=0;
 void setup() {
   AudioMemory(15);
   codec.enable();
-  codec.volume(0.6);
+  codec.volume(0.2f);
   mixer1.gain(0, 0.15);
   mixer1.gain(1, 0.15);
   mixer1.gain(2, 0.15);
