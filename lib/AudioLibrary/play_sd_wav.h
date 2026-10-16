@@ -101,6 +101,11 @@ class AudioPlaySdWav : public AudioPlayer {
 
     uint32_t source_frames_read;
 
+    // Batch file/source reads instead of calling AudioSource::read() per frame.
+    alignas(4) uint8_t source_buffer[512];
+    uint16_t source_buffer_offset = 0;
+    uint16_t source_buffer_size = 0;
+
     audio_block_t *block_left;
     audio_block_t *block_right;
     uint16_t block_offset;
