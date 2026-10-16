@@ -123,6 +123,8 @@ void AudioPlaySdWav::begin() {
     data_start = 0;
     data_length = 0;
     data_frames = 0;
+    source_buffer_offset = 0;
+    source_buffer_size = 0;
 
     sample_rate = 0;
     channels = 0;
@@ -637,6 +639,8 @@ bool AudioPlaySdWav::seekAbsolute(uint64_t position) {
         return false;
     }
 
+    source_buffer_offset = 0;
+    source_buffer_size = 0;
     return true;
 }
 
@@ -917,15 +921,25 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
         return false;
     }
 
-    alignas(4) uint8_t frame[8];
+    if (source_buffer_offset >= source_buffer_size) {
+        const uint32_t framesRemaining = data_frames - source_frames_read;
+        uint32_t framesToRead = sizeof(source_buffer) / block_align;
+        if (framesToRead > framesRemaining) {
+            framesToRead = framesRemaining;
+        }
 
-    if (!readExact(frame, block_align)) {
-        ESP_LOGE(TAG, "Failed reading audio frame %lu",
-                 (unsigned long)source_frames_read);
+        const uint16_t bytesToRead = (uint16_t)(framesToRead * block_align);
+        if (!readExact(source_buffer, bytesToRead)) {
+            ESP_LOGE(TAG, "Failed reading audio frames at %lu",
+                     (unsigned long)source_frames_read);
+            return false;
+        }
 
-        return false;
+        source_buffer_offset = 0;
+        source_buffer_size = bytesToRead;
     }
 
+    const uint8_t *frame = source_buffer + source_buffer_offset;
     left = decodeWavSample(bits_per_sample, frame);
 
     if (channels == 2) {
@@ -934,6 +948,7 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
         right = left;
     }
 
+    source_buffer_offset += block_align;
     ++source_frames_read;
 
     return true;
