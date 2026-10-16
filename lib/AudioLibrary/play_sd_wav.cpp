@@ -139,6 +139,7 @@ void AudioPlaySdWav::begin() {
 
     source_phase = 0.0f;
     source_ended = false;
+    source_error = false;
     current_playback_rate = target_playback_rate;
 }
 
@@ -242,6 +243,8 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
 
     source = &newSource;
     own_source = takeOwnership;
+    source_error = false;
+    source_ended = false;
 
     ESP_LOGV(TAG, "Opening WAV source, size=%llu bytes",
              (unsigned long long)source->size());
@@ -926,6 +929,7 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
 
         const uint16_t bytesToRead = (uint16_t)(framesToRead * block_align);
         if (!readExact(source_buffer, bytesToRead)) {
+            source_error = true;
             ESP_LOGE(TAG, "Failed reading audio frames at %lu",
                      (unsigned long)source_frames_read);
             return false;
@@ -950,33 +954,24 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
     return true;
 }
 
-OSPEED
-bool AudioPlaySdWav::readSourceFrameOrLoop(int32_t &left, int32_t &right, bool loop) {
-    // Restart only at the data-chunk boundary; never scan the RIFF header in the
-    // audio update path. Seeking is done by the current file-backed WAV path.
-    if (source_frames_read >= data_frames) {
-        if (!loop || data_frames == 0 || !seekAbsolute(data_start)) {
-            return false;
-        }
-        source_frames_read = 0;
-    }
-
-    return readSourceFrame(left, right);
-}
-
 // ============================================================================
 // Output sample / variable-rate interpolation
 // ============================================================================
 inline OSPEED
 bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
-                                     float targetRate, bool loop) {
+                                     float targetRate) {
+    if (source_error) {
+        return false;
+    }
+
     const bool unityRate = targetRate == 1.0f && current_playback_rate == 1.0f;
     const bool directRate = unityRate &&
                             (float)sample_rate == AUDIO_SAMPLE_RATE_EXACT &&
                             source_phase == 0.0f;
 
     if (!have_previous) {
-        if (!readSourceFrameOrLoop(previous_left, previous_right, loop)) {
+        if (!readSourceFrame(previous_left, previous_right)) {
+            source_ended = true;
             return false;
         }
 
@@ -987,7 +982,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
     }
 
     if (!have_next && !source_ended) {
-        if (readSourceFrameOrLoop(next_left, next_right, loop)) {
+        if (readSourceFrame(next_left, next_right)) {
             have_next = true;
         } else {
             source_ended = true;
@@ -1032,7 +1027,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
         if (have_next) {
             previous_left = next_left;
             previous_right = next_right;
-            have_next = readSourceFrameOrLoop(next_left, next_right, loop);
+            have_next = readSourceFrame(next_left, next_right);
             if (!have_next) {
                 source_ended = true;
             }
@@ -1071,40 +1066,30 @@ void AudioPlaySdWav::releaseBlocks() {
 // ============================================================================
 
 OSIZE
-void AudioPlaySdWav::finishPlayback() {
+void AudioPlaySdWav::finishPlayback(bool stopPlayback) {
     if (block_left) {
-        for (uint16_t i = block_offset; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            block_left->data[i] = 0;
-        }
-
+        memset(block_left->data + block_offset, 0,
+               (AUDIO_BLOCK_SAMPLES - block_offset) * sizeof(block_left->data[0]));
         transmit(block_left, 0);
-
         release(block_left);
         block_left = nullptr;
     }
 
     if (block_right) {
-        for (uint16_t i = block_offset; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            block_right->data[i] = 0;
-        }
-
+        memset(block_right->data + block_offset, 0,
+               (AUDIO_BLOCK_SAMPLES - block_offset) * sizeof(block_right->data[0]));
         transmit(block_right, 1);
-
         release(block_right);
         block_right = nullptr;
     }
 
-    /*
-     * Hier NICHT closeSource().
-     *
-     * Bei einer externen Source gehört deren Lebensdauer
-     * dem Aufrufer.
-     */
-    state = STOPPED;
+    // Keep the source open. An external source belongs to the caller.
+    if (stopPlayback) {
+        state = STOPPED;
+    }
 
     have_previous = false;
     have_next = false;
-
     block_offset = 0;
 }
 
@@ -1115,6 +1100,24 @@ OSPEED
 void AudioPlaySdWav::update() {
     if (state != PLAYING) {
         return;
+    }
+
+    portENTER_CRITICAL(&playback_rate_mux);
+    const float targetRate = target_playback_rate;
+    const bool loop = loop_enabled;
+    portEXIT_CRITICAL(&playback_rate_mux);
+
+    // If the previous block reached EOF, seek once here, not in the sample path.
+    if (loop && source_ended && !have_previous && !source_error) {
+        if (seekAbsolute(data_start)) {
+            source_frames_read = 0;
+            have_previous = false;
+            have_next = false;
+            source_phase = 0.0f;
+            source_ended = false;
+        } else {
+            source_error = true;
+        }
     }
 
     block_left = allocate();
@@ -1138,17 +1141,13 @@ void AudioPlaySdWav::update() {
 
     block_offset = 0;
 
-    portENTER_CRITICAL(&playback_rate_mux);
-    const float targetRate = target_playback_rate;
-    const bool loop = loop_enabled;
-    portEXIT_CRITICAL(&playback_rate_mux);
-
     while (block_offset < AUDIO_BLOCK_SAMPLES) {
         int16_t left;
         int16_t right;
 
-        if (!getOutputSample(left, right, targetRate, loop)) {
-            finishPlayback();
+        if (!getOutputSample(left, right, targetRate)) {
+            const bool restartNextBlock = loop && source_ended && !source_error;
+            finishPlayback(!restartNextBlock);
             return;
         }
 
