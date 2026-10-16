@@ -44,7 +44,7 @@ const float AudioFilterLadder::interpolation_coeffs[AudioFilterLadder::INTERPOLA
 
 AudioFilterLadder::AudioFilterLadder()
     : AudioStream(3, inputQueueArray) {
-    computeCoefficients(baseFrequency, alpha, qAdjust);
+    computeCoefficients(baseFrequency, sampleRate(), alpha, qAdjust);
 }
 
 void AudioFilterLadder::frequency(float fc) {
@@ -141,11 +141,10 @@ void AudioFilterLadder::interpolationMethod(AudioFilterLadderInterpolation metho
 }
 
 OSPEED
-void AudioFilterLadder::computeCoefficients(float fc, float &newAlpha, float &newQAdjust) const {
+void AudioFilterLadder::computeCoefficients(float fc, float currentSampleRate, float &newAlpha, float &newQAdjust) const {
     if (!isfinite(fc)) {
         fc = 5.0f;
     }
-    const float currentSampleRate = sampleRate();
     if (!isfinite(currentSampleRate) || currentSampleRate <= 0.0f) {
         return;
     }
@@ -329,12 +328,13 @@ void AudioFilterLadder::update() {
     config.polyOn = polyOn;
     portEXIT_CRITICAL(&configMux);
 
-    const float maxFrequency = sampleRate() * 0.425f;
+    const float currentSampleRate = sampleRate();
+    const float maxFrequency = currentSampleRate * 0.425f;
 
     // frequency() only changes the requested base frequency from task context.
     // Coefficients are recalculated here, in the audio task.
     if (config.frequencyGeneration != appliedFrequencyGeneration) {
-        computeCoefficients(config.baseFrequency, alpha, qAdjust);
+        computeCoefficients(config.baseFrequency, currentSampleRate, alpha, qAdjust);
         appliedFrequencyGeneration = config.frequencyGeneration;
     }
 
@@ -352,7 +352,7 @@ void AudioFilterLadder::update() {
                 if (cutoff > maxFrequency) {
                     cutoff = maxFrequency;
                 }
-                computeCoefficients(cutoff, alpha, qAdjust);
+                computeCoefficients(cutoff, currentSampleRate, alpha, qAdjust);
             }
 
             if (resonanceModulationActive) {
