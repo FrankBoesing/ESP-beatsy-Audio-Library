@@ -338,13 +338,13 @@ void setup()
     Serial.println();
     Serial.println("======================================");
     Serial.println(" Handpan hybrid synth + load test");
-    Serial.printf(" Output sample rate: %lu Hz\\n", (unsigned long)OUTPUT_SAMPLE_RATE);
+    Serial.printf(" Output sample rate: %lu Hz\n", (unsigned long)OUTPUT_SAMPLE_RATE);
     Serial.println("======================================");
 
     // Set the output rate before AudioMemory() and before configuring the
     // resonators, otherwise their coefficients would still assume 44.1 kHz.
     if (!audioOut.setSampleRate((float)OUTPUT_SAMPLE_RATE)) {
-        Serial.printf("ERROR: Could not set output sample rate to %lu Hz\\n",
+        Serial.printf("ERROR: Could not set output sample rate to %lu Hz\n",
                       (unsigned long)OUTPUT_SAMPLE_RATE);
         while (true) delay(1000);
     }
