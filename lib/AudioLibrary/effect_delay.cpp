@@ -30,10 +30,22 @@
 
 AudioEffectDelay::~AudioEffectDelay() { freeBuffer(); }
 
+void AudioEffectDelay::begin() {
+    // update() accesses this storage, so stop the graph while releasing it.
+    // Allocation stays lazy until the next delay() call.
+    audio_detail::GraphUpdateLock graphLock;
+    freeBuffer();
+    writeIndex = 0;
+    for (uint8_t i = 0; i < 8; i++) position[i] = 0;
+}
+
 bool AudioEffectDelay::allocateBuffer() {
     if (buffer) return true;
 
-    uint32_t n = (uint32_t)((float)maxDelayMs * (AUDIO_SAMPLE_RATE_EXACT / 1000.0f) + 0.5f);
+    const float currentSampleRate = sampleRate();
+    if (!isfinite(currentSampleRate) || currentSampleRate <= 0.0f) return false;
+
+    uint32_t n = (uint32_t)((float)maxDelayMs * (currentSampleRate / 1000.0f) + 0.5f);
     // one extra block so a full-length delay never reads data being written
     const uint32_t samples = n + AUDIO_BLOCK_SAMPLES;
     const size_t bytes = (size_t)samples * sizeof(int16_t);
@@ -49,6 +61,7 @@ bool AudioEffectDelay::allocateBuffer() {
     memset(p, 0, bytes);
     capacity = samples;
     writeIndex = 0;
+    bufferSampleRate = currentSampleRate;
     psramBuffer = inPsram;
     buffer = p;
     return true;
@@ -59,13 +72,14 @@ void AudioEffectDelay::freeBuffer() {
     activemask = 0;
     buffer = nullptr;
     capacity = 0;
+    bufferSampleRate = 0.0f;
     psramBuffer = false;
     if (p) heap_caps_free(p);
 }
 
 float AudioEffectDelay::maxDelay() const {
-    if (!buffer) return 0.0f;
-    return (float)(capacity - AUDIO_BLOCK_SAMPLES) * (1000.0f / AUDIO_SAMPLE_RATE_EXACT);
+    if (!buffer || bufferSampleRate <= 0.0f) return 0.0f;
+    return (float)(capacity - AUDIO_BLOCK_SAMPLES) * (1000.0f / bufferSampleRate);
 }
 
 void AudioEffectDelay::delay(uint8_t channel, float milliseconds) {
@@ -73,7 +87,7 @@ void AudioEffectDelay::delay(uint8_t channel, float milliseconds) {
     if (milliseconds < 0.0f) milliseconds = 0.0f;
     if (!allocateBuffer()) return;
 
-    uint32_t n = (uint32_t)(milliseconds * (AUDIO_SAMPLE_RATE_EXACT / 1000.0f) + 0.5f);
+    uint32_t n = (uint32_t)(milliseconds * (bufferSampleRate / 1000.0f) + 0.5f);
     const uint32_t nmax = capacity - AUDIO_BLOCK_SAMPLES;
     if (n > nmax) n = nmax;
     position[channel] = n;
