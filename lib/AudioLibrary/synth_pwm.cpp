@@ -39,14 +39,15 @@ void AudioSynthWaveformPWM::frequency(float freq) {
     if (!isfinite(freq)) {
         return;
     }
+    const float currentSampleRate = sampleRate();
     if (freq < 1.0f) {
         freq = 1.0f;
-    } else if (freq > AUDIO_SAMPLE_RATE_EXACT / 4.0f) {
-        freq = AUDIO_SAMPLE_RATE_EXACT / 4.0f;
+    } else if (freq > currentSampleRate / 4.0f) {
+        freq = currentSampleRate / 4.0f;
     }
 
     // Store the duration of a half-cycle in Q16.16 sample units.
-    const uint32_t newDuration = (uint32_t)((AUDIO_SAMPLE_RATE_EXACT * 65536.0f + freq) / (freq * 2.0f));
+    const uint32_t newDuration = (uint32_t)((currentSampleRate * 65536.0f + freq) / (freq * 2.0f));
 
     portENTER_CRITICAL(&configMux);
     duration = newDuration;
