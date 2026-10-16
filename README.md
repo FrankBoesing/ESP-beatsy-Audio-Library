@@ -40,7 +40,7 @@ These examples are present in the repository. Their board-specific pin and codec
 | [Stereo Pass-through](examples/HardwareTesting/PassThroughStereo.cpp) | Routes the left/right I2S input to the matching output channel and reports received, erroneous and dropped input blocks. |
 | [Play Queue Demo](examples/Queues/PlayQueueDemo.cpp) | Generates a sine wave in application code and demonstrates AudioPlayQueue buffer/sample submission, including non-stalling operation. |
 | [Record to LittleFS](examples/RecordLittleFS/RecordLittleFS.cpp) | Generates a short 880 Hz sine ping with an envelope and records mono PCM WAV to LittleFS using AudioRecordFile. Requires PSRAM and a mounted/formatted LittleFS partition. |
-| [Record to SD](examples/RecordSD/RecordSD.cpp) | Generates the same short sine ping and records mono PCM WAV to an SD card using AudioRecordFile. SD SPI pins can be supplied through the project configuration. |
+| [Record to SD](examples/RecordSD/RecordSD.cpp) | Generates the same short sine ping and records mono PCM WAV to an SD card using AudioRecordFile. SD_MMC uses the board-specific 4-bit pin mapping from the project configuration. |
 | [Delay effect](examples/Effects/Effect-Delay/Effect_Delay.cpp) | Generates a sine chirp, shapes it with an envelope and mixes several delayed taps to the opposite output channel. |
 | [FIR and Biquad filters](examples/Effects/Filter_FIR/Filter_FIR.cpp) | Sends white noise through FIR and low-pass biquad paths to the left and right outputs for comparison. |
 | [Guitar synthesis](examples/Synthesis/Guitar/Guitar.cpp) | Uses six Karplus–Strong string generators, mixers and chord data to synthesize strummed chords. |
