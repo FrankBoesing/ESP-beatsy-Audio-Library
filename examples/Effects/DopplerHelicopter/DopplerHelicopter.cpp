@@ -135,7 +135,6 @@ void setup() {
     Serial.println("======================================");
 
     if (!mountSD()) {
-        Serial.println("ERROR: SD_MMC initialization failed. See the preceding diagnostic message.");
         while (true) delay(1000);
     }
 
