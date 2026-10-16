@@ -35,7 +35,7 @@ textarea{width:100%;min-height:240px;resize:vertical;padding:10px;border:1px sol
 <div class="field" id="cut1"><label for="f1">Cutoff frequency (Hz)</label><input id="f1" type="number" min="1" step="1" value="4000" required></div>
 <div class="field" id="cut2" hidden><label for="f2">Upper cutoff (Hz)</label><input id="f2" type="number" min="1" step="1" value="8000"></div>
 </div>
-<div class="field"><label for="taps">Number of coefficients (taps)</label><input id="taps" type="number" min="3" max="199" step="2" value="63" required><div class="help">Odd number, 3–199. AudioFilterFIR currently supports at most 200 coefficients.</div></div>
+<div class="field"><label for="taps">Number of coefficients (taps)</label><input id="taps" type="number" min="4" max="200" step="2" value="64" required><div class="help">Even number, 4–200. AudioFilterFIR requires an even coefficient count.</div></div>
 <div class="field"><label for="window">Window function</label><select id="window"><option value="hamming">Hamming</option><option value="hann">Hann</option><option value="blackman">Blackman</option><option value="rectangular">Rectangular</option></select></div>
 <div class="actions"><button type="submit">Calculate filter</button><button class="secondary" type="button" id="reset">Reset defaults</button></div>
 <div id="error" role="alert"></div>
@@ -61,7 +61,7 @@ function calculate(){
  const type=$('type').value,fs=Number($('fs').value),f1=Number($('f1').value),f2=Number($('f2').value),N=Number($('taps').value),win=$('window').value,err=$('error');
  err.style.display='none';err.textContent='';
  if(!Number.isFinite(fs)||fs<=0||fs>384000)return fail('Sample rate must be between 1 and 384000 Hz.');
- if(!Number.isInteger(N)||N<3||N>199||N%2===0)return fail('Tap count must be an odd integer between 3 and 199.');
+ if(!Number.isInteger(N)||N<4||N>200||N%2!==0)return fail('Tap count must be an even integer between 4 and 200.');
  if(!Number.isFinite(f1)||f1<=0||f1>=fs/2)return fail('Cutoff must be above 0 Hz and below Nyquist (sample rate / 2).');
  if((type==='bandpass'||type==='bandstop')&&(!Number.isFinite(f2)||f2<=f1||f2>=fs/2))return fail('Band filters need an upper cutoff greater than the lower cutoff and below Nyquist.');
  const M=(N-1)/2,raw=[];
@@ -84,7 +84,7 @@ function drawPlot(fs){
 }
 $('type').addEventListener('change',()=>{const band=['bandpass','bandstop'].includes($('type').value);$('cut2').hidden=!band;$('f1').previousElementSibling.textContent=band?'Lower cutoff (Hz)':'Cutoff frequency (Hz)';$('f2').required=band});
 $('settings').addEventListener('submit',e=>{e.preventDefault();calculate()});
-$('reset').addEventListener('click',()=>{$('type').value='lowpass';$('fs').value=44100;$('f1').value=4000;$('f2').value=8000;$('taps').value=63;$('window').value='hamming';$('type').dispatchEvent(new Event('change'));calculate()});
+$('reset').addEventListener('click',()=>{$('type').value='lowpass';$('fs').value=44100;$('f1').value=4000;$('f2').value=8000;$('taps').value=64;$('window').value='hamming';$('type').dispatchEvent(new Event('change'));calculate()});
 $('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('output').value);$('copy').textContent='Copied';setTimeout(()=>$('copy').textContent='Copy coefficients',1200)}catch(e){$('output').focus();$('output').select();document.execCommand('copy')}});
 $('download').addEventListener('click',()=>{const blob=new Blob(['#pragma once\n#include <stdint.h>\n\n'+$('output').value],{type:'text/plain'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='fir_coefficients.h';a.click();URL.revokeObjectURL(a.href)});
 $('type').dispatchEvent(new Event('change'));calculate();
