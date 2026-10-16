@@ -398,7 +398,7 @@ void AudioFilterLadder::update() {
                 if (cutoff > maxFrequency) {
                     cutoff = maxFrequency;
                 }
-                computeCoefficients(cutoff, alpha, qAdjust);
+                computeCoefficients(cutoff, currentSampleRate, alpha, qAdjust);
             }
 
             if (resonanceModulationActive) {
