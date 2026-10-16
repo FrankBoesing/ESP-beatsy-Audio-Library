@@ -35,7 +35,15 @@
 #include "utility/dspinst.h"
 
 void AudioSynthWavetable::setInstrument(const instrument_data &newInstrument) {
+    float currentSampleRate = sampleRate();
+    if (!isfinite(currentSampleRate) || currentSampleRate <= 0.0f) {
+        currentSampleRate = AUDIO_SAMPLE_RATE_EXACT;
+    }
+
     portENTER_CRITICAL(&stateMux);
+    initialized_sample_rate = currentSampleRate;
+    sample_count_scale = currentSampleRate / AUDIO_SAMPLE_RATE_EXACT;
+    phase_increment_scale = AUDIO_SAMPLE_RATE_EXACT / currentSampleRate;
     instrument = &newInstrument;
     current_sample = nullptr;
     env_state = STATE_IDLE;
@@ -45,6 +53,10 @@ void AudioSynthWavetable::setInstrument(const instrument_data &newInstrument) {
     env_incr = 0;
     vib_count = mod_count = 0;
     vib_phase = mod_phase = (uint32_t)TRIANGLE_INITIAL_PHASE;
+    note_delay_count = note_attack_count = note_hold_count = 0;
+    note_decay_count = note_release_count = 0;
+    note_vibrato_delay = note_vibrato_increment = 0;
+    note_modulation_delay = note_modulation_increment = 0;
     ++stateGeneration;
     portEXIT_CRITICAL(&stateMux);
 }
@@ -103,7 +115,7 @@ void AudioSynthWavetable::stop() {
     portENTER_CRITICAL(&stateMux);
     if (env_state != STATE_IDLE) {
         env_state = STATE_RELEASE;
-        env_count = current_sample != nullptr ? (int32_t)current_sample->RELEASE_COUNT : 1;
+        env_count = current_sample != nullptr ? (int32_t)note_release_count : 1;
         if (env_count <= 0) {
             env_count = 1;
         }
@@ -118,10 +130,15 @@ void AudioSynthWavetable::playFrequency(float freq, int amp) {
     if (!isfinite(freq)) {
         return;
     }
+
+    portENTER_CRITICAL(&stateMux);
+    const float currentSampleRate = initialized_sample_rate;
+    portEXIT_CRITICAL(&stateMux);
+
     if (freq < 1.0f) {
         freq = 1.0f;
-    } else if (freq > AUDIO_SAMPLE_RATE_EXACT * 0.5f) {
-        freq = AUDIO_SAMPLE_RATE_EXACT * 0.5f;
+    } else if (freq > currentSampleRate * 0.5f) {
+        freq = currentSampleRate * 0.5f;
     }
 
     setState(freqToNote(freq), amp, freq);
@@ -136,12 +153,22 @@ void AudioSynthWavetable::playNote(int note, int amp) {
     setState(note, amp, noteToFreq(note));
 }
 
+uint32_t AudioSynthWavetable::scaleSampleCount(uint32_t value) const {
+    const double scaled = (double)value * (double)sample_count_scale + 0.5;
+    return scaled >= (double)UINT32_MAX ? UINT32_MAX : (uint32_t)scaled;
+}
+
+uint32_t AudioSynthWavetable::scalePhaseIncrement(uint32_t value) const {
+    const double scaled = (double)value * (double)phase_increment_scale + 0.5;
+    return scaled >= (double)UINT32_MAX ? UINT32_MAX : (uint32_t)scaled;
+}
+
 void AudioSynthWavetable::setFrequencyLocked(float freq) {
     if (current_sample == nullptr || !isfinite(freq) || freq < 0.0f) {
         return;
     }
 
-    const float increment = freq * current_sample->PER_HERTZ_PHASE_INCREMENT;
+    const float increment = freq * current_sample->PER_HERTZ_PHASE_INCREMENT * phase_increment_scale;
     if (increment >= 4294967295.0f) {
         tone_incr = UINT32_MAX;
     } else if (increment <= 0.0f) {
@@ -201,7 +228,18 @@ void AudioSynthWavetable::setState(int note, int amp, float freq) {
         setFrequencyLocked(freq);
         vib_count = mod_count = tone_phase = env_incr = env_mult = 0;
         vib_phase = mod_phase = (uint32_t)TRIANGLE_INITIAL_PHASE;
-        env_count = (int32_t)current_sample->DELAY_COUNT;
+
+        note_delay_count = scaleSampleCount(current_sample->DELAY_COUNT);
+        note_attack_count = scaleSampleCount(current_sample->ATTACK_COUNT);
+        note_hold_count = scaleSampleCount(current_sample->HOLD_COUNT);
+        note_decay_count = scaleSampleCount(current_sample->DECAY_COUNT);
+        note_release_count = scaleSampleCount(current_sample->RELEASE_COUNT);
+        note_vibrato_delay = scaleSampleCount(current_sample->VIBRATO_DELAY);
+        note_vibrato_increment = scalePhaseIncrement(current_sample->VIBRATO_INCREMENT);
+        note_modulation_delay = scaleSampleCount(current_sample->MODULATION_DELAY);
+        note_modulation_increment = scalePhaseIncrement(current_sample->MODULATION_INCREMENT);
+
+        env_count = (int32_t)note_delay_count;
 
         tone_amp = (uint16_t)(amp * (UINT16_MAX / 127));
         tone_amp = (uint16_t)(((uint32_t)current_sample->INITIAL_ATTENUATION_SCALAR * (uint32_t)tone_amp) >> 16);
@@ -211,6 +249,10 @@ void AudioSynthWavetable::setState(int note, int amp, float freq) {
         env_count = 0;
         env_mult = 0;
         env_incr = 0;
+        note_delay_count = note_attack_count = note_hold_count = 0;
+        note_decay_count = note_release_count = 0;
+        note_vibrato_delay = note_vibrato_increment = 0;
+        note_modulation_delay = note_modulation_increment = 0;
     }
 
     ++stateGeneration;
@@ -252,6 +294,13 @@ void AudioSynthWavetable::update() {
     uint32_t modulationPhase;
     int32_t modulationPitchOffsetInitial;
     int32_t modulationPitchOffsetSecond;
+    uint32_t vibratoDelayCount;
+    uint32_t vibratoIncrement;
+    uint32_t modulationDelayCount;
+    uint32_t modulationIncrement;
+    uint32_t attackCount;
+    uint32_t holdCount;
+    uint32_t decayCount;
 
     portENTER_CRITICAL(&stateMux);
     sample = current_sample;
@@ -271,6 +320,13 @@ void AudioSynthWavetable::update() {
     modulationPhase = mod_phase;
     modulationPitchOffsetInitial = mod_pitch_offset_init;
     modulationPitchOffsetSecond = mod_pitch_offset_scnd;
+    vibratoDelayCount = note_vibrato_delay;
+    vibratoIncrement = note_vibrato_increment;
+    modulationDelayCount = note_modulation_delay;
+    modulationIncrement = note_modulation_increment;
+    attackCount = note_attack_count;
+    holdCount = note_hold_count;
+    decayCount = note_decay_count;
     portEXIT_CRITICAL(&stateMux);
 
     if (envelopeState == STATE_IDLE || sample == nullptr) {
@@ -303,8 +359,8 @@ void AudioSynthWavetable::update() {
     while (sampleOffset < blockSize && !sampleEnded) {
         int32_t toneIncrementOffset = 0;
 
-        if (vibratoCount++ > sample->VIBRATO_DELAY) {
-            vibratoPhase += sample->VIBRATO_INCREMENT;
+        if (vibratoCount++ > vibratoDelayCount) {
+            vibratoPhase += vibratoIncrement;
             const int32_t vibratoScale = (vibratoPhase & 0x80000000U) ? (int32_t)(0x40000000U + vibratoPhase)
                                                                       : (int32_t)(0x3FFFFFFFU - vibratoPhase);
             const int32_t vibratoPitchOffset = vibratoScale >= 0 ? vibratoPitchOffsetInitial : vibratoPitchOffsetSecond;
@@ -313,8 +369,8 @@ void AudioSynthWavetable::update() {
         }
 
         int32_t modulationAmplitude = toneAmplitude;
-        if (modulationCount++ > sample->MODULATION_DELAY) {
-            modulationPhase += sample->MODULATION_INCREMENT;
+        if (modulationCount++ > modulationDelayCount) {
+            modulationPhase += modulationIncrement;
             int32_t modulationScale = (modulationPhase & 0x80000000U) ? (int32_t)(0x40000000U + modulationPhase)
                                                                       : (int32_t)(0x3FFFFFFFU - modulationPhase);
 
@@ -388,7 +444,7 @@ void AudioSynthWavetable::update() {
             switch (envelopeState) {
             case STATE_DELAY:
                 envelopeState = STATE_ATTACK;
-                envelopeCount = (int32_t)sample->ATTACK_COUNT;
+                envelopeCount = (int32_t)attackCount;
                 if (envelopeCount <= 0) {
                     envelopeCount = 1;
                 }
@@ -398,13 +454,13 @@ void AudioSynthWavetable::update() {
             case STATE_ATTACK:
                 envelopeMultiplier = UNITY_GAIN;
                 envelopeState = STATE_HOLD;
-                envelopeCount = (int32_t)sample->HOLD_COUNT;
+                envelopeCount = (int32_t)holdCount;
                 envelopeIncrement = 0;
                 continue;
 
             case STATE_HOLD:
                 envelopeState = STATE_DECAY;
-                envelopeCount = (int32_t)sample->DECAY_COUNT;
+                envelopeCount = (int32_t)decayCount;
                 if (envelopeCount <= 0) {
                     envelopeCount = 1;
                 }
