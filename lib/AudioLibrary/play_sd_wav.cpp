@@ -967,7 +967,7 @@ bool AudioPlaySdWav::readSourceFrameOrLoop(int32_t &left, int32_t &right, bool l
 // ============================================================================
 // Output sample / variable-rate interpolation
 // ============================================================================
-OSPEED
+inline
 bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
                                      float targetRate, bool loop) {
     const bool unityRate = targetRate == 1.0f && current_playback_rate == 1.0f;
