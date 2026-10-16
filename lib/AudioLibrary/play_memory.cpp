@@ -28,23 +28,16 @@
 #include "play_memory.h"
 #include "utility/dspinst.h"
 
-extern "C" {
-extern const int16_t ulaw_decode_table[256];
-};
-
 static portMUX_TYPE playback_state_mux = portMUX_INITIALIZER_UNLOCKED;
 
 
 namespace {
 static uint32_t sampleRateForFormat(uint8_t format) {
     switch (format) {
-    case 0x01:
     case 0x81:
         return 44100;
-    case 0x02:
     case 0x82:
         return 22050;
-    case 0x03:
     case 0x83:
         return 11025;
     default:
@@ -59,13 +52,6 @@ static int16_t sampleAt(const unsigned int *data, uint8_t format, uint32_t index
     case 0x83: {
         const uint32_t packed = data[index >> 1];
         return (index & 1U) ? (int16_t)(packed >> 16) : (int16_t)packed;
-    }
-    case 0x01:
-    case 0x02:
-    case 0x03: {
-        const uint32_t packed = data[index >> 2];
-        const uint8_t code = (uint8_t)(packed >> ((index & 3U) * 8U));
-        return ulaw_decode_table[code];
     }
     default:
         return 0;
