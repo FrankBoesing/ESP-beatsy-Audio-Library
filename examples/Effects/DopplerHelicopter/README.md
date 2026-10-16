@@ -47,7 +47,7 @@ AudioSampleBuffer sample;
 AudioPlaySdWav loader;
 AudioPlayMemory player;
 
-if (loader.loadToMemory(SD, "/Helicopter.wav", sample)) {
+if (loader.loadToMemory(SD_MMC, "/Helicopter.wav", sample)) {
     player.setPlaybackRate(1.0f);
     player.play(sample, true); // loop from PSRAM without copying
 }
@@ -63,8 +63,16 @@ remain part of the file-backed playback path.
 
 ## Hardware and build
 
-The example uses the SPI SD-card and I2S codec pin definitions from the repository's
-`platformio.ini` ESP32 Audio Kit environment. Build it with that environment and copy
-`HueyRotorLoop_v4.wav` to the card renamed to `/Helicopter.wav`.
+The example uses **SD_MMC in 4-bit mode**. The clock, command and data pins are defined
+as `PIN_SD_MMC_CLK`, `PIN_SD_MMC_CMD` and `PIN_SD_MMC_D0` through
+`PIN_SD_MMC_D3` in `platformio.ini`. The legacy SPI SD pin definitions remain there
+for examples that have not yet been migrated.
 
-The example has not been compiled or verified on physical hardware in this change.
+For the **ESP32-A1S Audio Kit**, set the onboard SD-card switches labelled **CMD** and
+**DATA3** to ON before testing. For the **Freenove ESP32-S3 Display 2.8-inch
+(FNK0104A)**, the SD_MMC pin definitions use the board's documented wiring.
+
+Build with the corresponding PlatformIO environment and copy `HueyRotorLoop_v4.wav`
+to the card renamed to `/Helicopter.wav`.
+
+This change has not been compiled locally or tested on physical hardware yet.

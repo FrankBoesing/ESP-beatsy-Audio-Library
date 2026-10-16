@@ -4,14 +4,13 @@
  * This example uses the library's default 44.1 kHz audio graph and records
  * mono, 16-bit PCM. It does not require an audio codec or I2S output.
  *
- * When PIN_SD_CS and the SPI pin macros are supplied by platformio.ini, they
- * are used below. Otherwise SD.begin() uses the board's default SPI pins.
- * Adjust the pins to match your SD-card wiring.
+ * The board-specific SD_MMC pins are supplied by platformio.ini.
+ * Recording uses the SD_MMC 4-bit bus.
  */
 
 #include <Arduino.h>
-#include <SPI.h>
-#include <SD.h>
+#include <FS.h>
+#include <SD_MMC.h>
 #include <Audio.h>
 
 constexpr uint32_t RECORD_SAMPLE_RATE = AUDIO_SAMPLE_RATE_EXACT;
@@ -31,12 +30,19 @@ static void haltWithError(const char *message) {
 }
 
 static bool mountSD() {
-#if defined(PIN_SD_CS) && defined(PIN_SPI_MOSI) && defined(PIN_SPI_MISO) && defined(PIN_SPI_SCK)
-    SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_SD_CS);
-    return SD.begin(PIN_SD_CS, SPI);
-#else
-    return SD.begin();
+#if defined(PIN_SD_MMC_CLK) && defined(PIN_SD_MMC_CMD) && \
+    defined(PIN_SD_MMC_D0) && defined(PIN_SD_MMC_D1) && \
+    defined(PIN_SD_MMC_D2) && defined(PIN_SD_MMC_D3)
+    if (!SD_MMC.setPins(PIN_SD_MMC_CLK, PIN_SD_MMC_CMD,
+                        PIN_SD_MMC_D0, PIN_SD_MMC_D1,
+                        PIN_SD_MMC_D2, PIN_SD_MMC_D3)) {
+        return false;
+    }
 #endif
+
+    // mode1bit=false selects the 4-bit SD_MMC bus.
+    // Boards without explicit pin definitions use the framework defaults.
+    return SD_MMC.begin("/sdcard", false);
 }
 
 void setup() {
@@ -47,7 +53,7 @@ void setup() {
     Serial.println("SD-card WAV recorder example");
 
     if (!mountSD()) {
-        haltWithError("SD mount failed. Check card, wiring and SPI pin configuration.");
+        haltWithError("SD_MMC mount failed. Check card, DIP switches and pin configuration.");
     }
 
     // Audio graph and the shared audio-block pool.
@@ -65,7 +71,7 @@ void setup() {
 
     // Creates /ping.tmp. On successful stop(), it becomes /ping.wav.
     // The PSRAM ring buffer defaults to 512 KiB.
-    if (!recorder.begin(SD, "/ping", RECORD_SAMPLE_RATE, 1,
+    if (!recorder.begin(SD_MMC, "/ping", RECORD_SAMPLE_RATE, 1,
                         AudioRecordFile::CORE_UNPINNED)) {
         haltWithError("Could not start recorder. Check PSRAM, SD card and filenames.");
     }

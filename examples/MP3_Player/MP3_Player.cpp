@@ -43,7 +43,7 @@ void setup() {
 
     Serial.println();
     Serial.println("======================================");
-    Serial.println(" AudioPlayAac SD_MMC TEST");
+    Serial.println(" AudioPlayMp3 SD_MMC TEST");
     Serial.println("======================================");
 
     // ------------------------------------------------------------------------
@@ -81,12 +81,18 @@ void setup() {
 
     Serial.println("Initializing SD_MMC...");
 
-    /*
-     * ESP32 Audio Kit V2.2
-     *
-     * 1-bit mode.
-     */
-    if (!SD_MMC.begin("/sdcard", true)) {
+    if (!SD_MMC.setPins(PIN_SD_MMC_CLK, PIN_SD_MMC_CMD,
+                        PIN_SD_MMC_D0, PIN_SD_MMC_D1,
+                        PIN_SD_MMC_D2, PIN_SD_MMC_D3)) {
+        Serial.println("ERROR: SD_MMC pin configuration failed");
+
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    // mode1bit=false selects the 4-bit SD_MMC bus.
+    if (!SD_MMC.begin("/sdcard", false)) {
         Serial.println("ERROR: SD_MMC initialization failed");
 
         while (true) {
