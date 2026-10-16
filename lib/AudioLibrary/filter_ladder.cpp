@@ -145,9 +145,6 @@ void AudioFilterLadder::computeCoefficients(float fc, float currentSampleRate, f
     if (!isfinite(fc)) {
         fc = 5.0f;
     }
-    if (!isfinite(currentSampleRate) || currentSampleRate <= 0.0f) {
-        return;
-    }
     const float maxFrequency = currentSampleRate * 0.425f;
 
     if (fc > maxFrequency) {
