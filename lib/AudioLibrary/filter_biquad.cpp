@@ -18,7 +18,7 @@ static inline int32_t toQ30(float value) {
         return INT32_MIN;
     }
 
-    return (scaled >= 0.0f) ? scaled + 0.5f : scaled - 0.5f;
+    return (int32_t)((scaled >= 0.0f) ? scaled + 0.5f : scaled - 0.5f);
 }
 
 static inline int64_t roundQ30(int64_t value) {
@@ -40,7 +40,7 @@ static inline int16_t saturatePcm(int64_t value) {
         return -32768;
     }
 
-    return value;
+    return (int16_t)value;
 }
 
 bool validFrequencyAndQ(float frequency, float q) {
@@ -94,7 +94,7 @@ void AudioFilterBiquad::setCoefficients(uint32_t stage, const int *coefficients)
     // Die Werte liegen bereits in Q30 vor.
     // Keine Rückwandlung über float/double und damit keine
     // zusätzliche Quantisierung.
-    const Coefficients converted = {coefficients[0], coefficients[1], coefficients[2], coefficients[3], coefficients[4]};
+    const Coefficients converted = {(int32_t)coefficients[0], (int32_t)coefficients[1], (int32_t)coefficients[2], (int32_t)coefficients[3], (int32_t)coefficients[4]};
 
     portENTER_CRITICAL(&_configMux);
     _coefficients[stage] = converted;
@@ -119,7 +119,7 @@ void AudioFilterBiquad::setCoefficients(uint32_t stage, const double *coefficien
             return;
         }
 
-        converted[i] = coefficients[i];
+        converted[i] = (float)coefficients[i];
     }
 
     storeCoefficients(stage, converted);
