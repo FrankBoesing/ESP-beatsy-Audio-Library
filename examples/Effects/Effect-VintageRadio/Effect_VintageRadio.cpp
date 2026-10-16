@@ -1,11 +1,11 @@
 #include <Arduino.h>
-#include <SPI.h>
-#include <SD.h>
+#include <FS.h>
+#include <SD_MMC.h>
 #include <Audio.h>
 #include <math.h>
 
 // Compare the same MP3 stream through several processing paths.
-// Copy a test file to the SD card as /test.mp3.
+// Copy a test file to the SD card as /radiotest.mp3.
 //
 // Serial commands:
 //   0 = original signal
@@ -175,7 +175,7 @@ void setup() {
     Serial.println();
     Serial.println("======================================");
     Serial.println(" Vintage Radio A/B test");
-    Serial.println(" SPI SD file: /test.mp3");
+    Serial.println(" 4-bit SD_MMC file: /radiotest.mp3");
     Serial.println("======================================");
 
     // AudioMixerN starts with all gains at 1. Mute its inputs before starting
@@ -212,21 +212,29 @@ void setup() {
     configureSaturation();
     selectMode(1);
 
-    // Use the SPI pins defined for this board in platformio.ini.
-#if !defined(PIN_SD_CS) || !defined(PIN_SPI_SCK) || !defined(PIN_SPI_MISO) || !defined(PIN_SPI_MOSI)
-#error "Define PIN_SD_CS, PIN_SPI_SCK, PIN_SPI_MISO and PIN_SPI_MOSI for this board"
+    // Use the board-specific SD_MMC pins defined in platformio.ini.
+#if !defined(PIN_SD_MMC_CLK) || !defined(PIN_SD_MMC_CMD) || !defined(PIN_SD_MMC_D0) || \
+    !defined(PIN_SD_MMC_D1) || !defined(PIN_SD_MMC_D2) || !defined(PIN_SD_MMC_D3)
+#error "Define all PIN_SD_MMC_* pins for this board"
 #endif
 
-    SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_SD_CS);
-
-    if (!SD.begin(PIN_SD_CS, SPI)) {
-        Serial.println("ERROR: SPI SD initialization failed");
+    if (!SD_MMC.setPins(PIN_SD_MMC_CLK, PIN_SD_MMC_CMD,
+                        PIN_SD_MMC_D0, PIN_SD_MMC_D1,
+                        PIN_SD_MMC_D2, PIN_SD_MMC_D3)) {
+        Serial.println("ERROR: SD_MMC pin configuration failed");
         while (true) {
             delay(1000);
         }
     }
 
-    if (!source.open(SD, "/radiotest.mp3")) {
+    if (!SD_MMC.begin("/sdcard", false)) {
+        Serial.println("ERROR: SD_MMC initialization failed");
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    if (!source.open(SD_MMC, "/radiotest.mp3")) {
         Serial.println("ERROR: Could not open /radiotest.mp3");
         while (true) {
             delay(1000);
