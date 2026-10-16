@@ -156,7 +156,6 @@ class AudioPlaySdWav : public AudioPlayer {
     bool readSourceFrame(int32_t &left, int32_t &right);
     bool readSourceFrameOrLoop(int32_t &left, int32_t &right, bool loop);
 
-    int32_t decodeSample(const uint8_t *data) const;
 
     bool getOutputSample(int16_t &left, int16_t &right, float targetRate, bool loop);
 
