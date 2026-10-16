@@ -31,8 +31,8 @@ Each configured pad is a small hybrid instrument. A note combines two signals:
 
 1. **Attack transient (PCM sample).** A short mono signed 16-bit PCM waveform
    provides the noisy, high-frequency part at the start of the strike. The
-   example generates a deterministic 30 ms transient at startup from filtered
-   noise plus a short decaying sine ring. It is not a recording. One attack
+   example generates a deterministic 30 ms transient at startup from decaying
+   broadband noise plus a short decaying sine ring. It is not a recording. One attack
    buffer is currently shared by all 16 pads.
 2. **Damped resonator bank.** Six independent second-order resonators provide
    the sustained tone: three longer body modes and three short metallic modes.
