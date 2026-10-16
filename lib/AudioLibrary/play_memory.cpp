@@ -229,21 +229,23 @@ void AudioPlayMemory::update()
     if (directRate) {
         // Native-rate fast path: one source sample per output sample, no
         // interpolation, fractional-position math, or playback-rate smoothing.
-        for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            if (index >= total_samples) {
-                if (loop) {
+        if (loop) {
+            for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                if (index >= total_samples) {
                     index = 0;
-                } else {
+                }
+                out[i] = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
+                ++index;
+            }
+        } else {
+            for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                if (index >= total_samples) {
                     out[i] = 0;
                     finished = true;
                     continue;
                 }
-            }
-
-            out[i] = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
-            ++index;
-            if (loop && index >= total_samples) {
-                index = 0;
+                out[i] = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
+                ++index;
             }
         }
     } else {
