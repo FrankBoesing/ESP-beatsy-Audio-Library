@@ -27,6 +27,7 @@
 #include <Arduino.h>
 #include "play_memory.h"
 #include "utility/dspinst.h"
+#include <string.h>
 
 static portMUX_TYPE playback_state_mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -217,6 +218,12 @@ void AudioPlayMemory::update()
         return;
     }
 
+    // Defer loop restart until the next audio block.
+    if (loop && index >= total_samples) {
+        index = 0;
+        fraction = 0.0f;
+    }
+
     const float baseStep = (float)sourceRate / AUDIO_SAMPLE_RATE_EXACT;
     const bool unityRate = targetRate == 1.0f && currentRate == 1.0f;
     const bool directRate = unityRate && fraction == 0.0f &&
@@ -225,42 +232,26 @@ void AudioPlayMemory::update()
     bool finished = false;
 
     if (directRate) {
-        // Native-rate fast path: one source sample per output sample, no
-        // interpolation, fractional-position math, or playback-rate smoothing.
-        if (loop) {
-            for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                if (index >= total_samples) {
-                    index = 0;
-                }
-                out[i] = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
-                ++index;
-            }
-        } else {
-            for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                if (index >= total_samples) {
-                    out[i] = 0;
-                    finished = true;
-                    continue;
-                }
-                out[i] = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
-                ++index;
-            }
+        // Native-rate fast path: copy valid samples without per-sample
+        // end-of-buffer checks, then zero-pad the remainder of the block.
+        const uint32_t available = index < total_samples ? total_samples - index : 0;
+        const uint32_t count = available < AUDIO_BLOCK_SAMPLES
+                                   ? available
+                                   : AUDIO_BLOCK_SAMPLES;
+        for (uint32_t i = 0; i < count; ++i) {
+            out[i] = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
+            ++index;
+        }
+        if (count < AUDIO_BLOCK_SAMPLES) {
+            memset(out + count, 0,
+                   (AUDIO_BLOCK_SAMPLES - count) * sizeof(*out));
         }
     } else {
-        for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            if (index >= total_samples) {
-                if (loop) {
-                    index %= total_samples;
-                } else {
-                    out[i] = 0;
-                    finished = true;
-                    continue;
-                }
-            }
-
+        uint32_t i = 0;
+        for (; i < AUDIO_BLOCK_SAMPLES && index < total_samples; ++i) {
             const uint32_t index1 = (index + 1U < total_samples)
                                         ? index + 1U
-                                        : (loop ? 0U : index);
+                                        : index;
             const int32_t s0 = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
             const int32_t s1 = rawPcm ? pcmData[index1] : sampleAt(data, play_format, index1);
             out[i] = (int16_t)(s0 + (int32_t)((s1 - s0) * fraction));
@@ -282,9 +273,9 @@ void AudioPlayMemory::update()
             index += advance;
             fraction -= (float)advance;
 
-            if (loop && index >= total_samples) {
-                index %= total_samples;
-            }
+        }
+        if (i < AUDIO_BLOCK_SAMPLES) {
+            memset(out + i, 0, (AUDIO_BLOCK_SAMPLES - i) * sizeof(*out));
         }
     }
 
