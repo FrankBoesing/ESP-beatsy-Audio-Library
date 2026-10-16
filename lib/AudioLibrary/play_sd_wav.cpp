@@ -1108,7 +1108,7 @@ void AudioPlaySdWav::update() {
     portEXIT_CRITICAL(&playback_rate_mux);
 
     // If the previous block reached EOF, seek once here, not in the sample path.
-    if (loop && source_ended && !have_previous && !source_error) {
+    if (loop && data_frames > 0 && source_ended && !have_previous && !source_error) {
         if (seekAbsolute(data_start)) {
             source_frames_read = 0;
             have_previous = false;
@@ -1146,7 +1146,8 @@ void AudioPlaySdWav::update() {
         int16_t right;
 
         if (!getOutputSample(left, right, targetRate)) {
-            const bool restartNextBlock = loop && source_ended && !source_error;
+            const bool restartNextBlock = loop && data_frames > 0 &&
+                                          source_ended && !source_error;
             finishPlayback(!restartNextBlock);
             return;
         }
