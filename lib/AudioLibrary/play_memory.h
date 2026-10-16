@@ -68,6 +68,7 @@ private:
     float sample_fraction = 0.0f;           // Fractional source-sample position
     float current_playback_rate = 1.0f;     // Audio-update task only
     float target_playback_rate = 1.0f;      // Protected by playback_state_mux
+    float output_sample_rate = AUDIO_SAMPLE_RATE_EXACT; // Captured at play() start
     bool raw_pcm = false;
     bool loop_enabled = false;              // Protected by playback_state_mux
     volatile uint8_t playing = 0;           // Encoded format or 0x84 for raw PCM
