@@ -52,9 +52,6 @@ void AudioFilterStateVariable::frequency(float freq) {
         return;
     }
     const float currentSampleRate = sampleRate();
-    if (!isfinite(currentSampleRate) || currentSampleRate <= 0.0f) {
-        return;
-    }
 
     if (freq < 20.0f) {
         freq = 20.0f;
