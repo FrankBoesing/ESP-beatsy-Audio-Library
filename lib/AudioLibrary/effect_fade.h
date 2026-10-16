@@ -40,7 +40,7 @@ class AudioEffectFade : public AudioStream {
         fadeBegin(samples, 1);
     }
     void fadeOut(uint32_t milliseconds) {
-        uint32_t samples = (uint32_t)(milliseconds * MILLIS_MULT + 5u) / 10u;
+        uint32_t samples = (uint32_t)(milliseconds * ((uint32_t)sampleRate() / 100U) + 5u) / 10u;
         //Serial.printf("fadeOut, %u samples\n", samples);
         fadeBegin(samples, 0);
     }
