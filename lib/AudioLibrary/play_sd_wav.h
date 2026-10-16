@@ -91,7 +91,7 @@ class AudioPlaySdWav : public AudioPlayer {
 
     uint64_t data_start;
     uint64_t data_length;
-    uint64_t total_length;
+    uint32_t data_frames;
 
     uint32_t sample_rate;
     uint16_t channels;
@@ -99,7 +99,6 @@ class AudioPlaySdWav : public AudioPlayer {
     uint16_t bytes_per_sample;
     uint16_t block_align;
 
-    uint32_t source_frame;
     uint32_t source_frames_read;
 
     audio_block_t *block_left;
