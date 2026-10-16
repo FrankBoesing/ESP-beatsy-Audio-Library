@@ -122,6 +122,7 @@ void AudioPlaySdWav::begin() {
 
     data_start = 0;
     data_length = 0;
+    data_frames = 0;
 
     sample_rate = 0;
     channels = 0;
