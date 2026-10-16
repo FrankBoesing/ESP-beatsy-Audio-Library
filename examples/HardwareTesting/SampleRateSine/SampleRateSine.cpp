@@ -80,6 +80,8 @@ bool changeSampleRate(uint32_t rate) {
         return false;
     }
 
+#if defined(AUDIO_CODEC_ES8311)
+    // The ES8311 has sample-rate-specific clock divider settings.
     if (!initializeCodecForRate(rate)) {
         Serial.printf("ERROR: Could not initialize codec for %lu-Hz output\n",
                       (unsigned long)rate);
@@ -87,6 +89,11 @@ bool changeSampleRate(uint32_t rate) {
         enterPhase(TestPhase::Done);
         return false;
     }
+#else
+    // The ES8388 uses fixed MCLK/LRCK ratios and follows the I2S clock.
+    // Do not reset it on every rate change or call Wire.begin() again.
+    (void)rate;
+#endif
 
     // Recompute the oscillator phase increment for the new sample rate.
     sine.frequency(TEST_FREQUENCY_HZ);
