@@ -221,36 +221,66 @@ void AudioPlayMemory::update()
     }
 
     const float baseStep = (float)sourceRate / AUDIO_SAMPLE_RATE_EXACT;
+    const bool unityRate = targetRate == 1.0f && currentRate == 1.0f;
+    const bool directRate = unityRate && fraction == 0.0f &&
+                            (float)sourceRate == AUDIO_SAMPLE_RATE_EXACT;
     int16_t *out = block->data;
     bool finished = false;
 
-    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        if (index >= total_samples) {
-            if (loop) {
-                index %= total_samples;
-            } else {
-                out[i] = 0;
-                finished = true;
-                continue;
+    if (directRate) {
+        // Native-rate fast path: one source sample per output sample, no
+        // interpolation, fractional-position math, or playback-rate smoothing.
+        for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            if (index >= total_samples) {
+                if (loop) {
+                    index = 0;
+                } else {
+                    out[i] = 0;
+                    finished = true;
+                    continue;
+                }
+            }
+
+            out[i] = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
+            ++index;
+            if (loop && index >= total_samples) {
+                index = 0;
             }
         }
+    } else {
+        for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            if (index >= total_samples) {
+                if (loop) {
+                    index %= total_samples;
+                } else {
+                    out[i] = 0;
+                    finished = true;
+                    continue;
+                }
+            }
 
-        const uint32_t index1 = (index + 1U < total_samples)
-                                    ? index + 1U
-                                    : (loop ? 0U : index);
-        const int32_t s0 = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
-        const int32_t s1 = rawPcm ? pcmData[index1] : sampleAt(data, play_format, index1);
-        out[i] = (int16_t)(s0 + (int32_t)((s1 - s0) * fraction));
+            const uint32_t index1 = (index + 1U < total_samples)
+                                        ? index + 1U
+                                        : (loop ? 0U : index);
+            const int32_t s0 = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
+            const int32_t s1 = rawPcm ? pcmData[index1] : sampleAt(data, play_format, index1);
+            out[i] = (int16_t)(s0 + (int32_t)((s1 - s0) * fraction));
 
-        // Smooth rate changes to avoid abrupt pitch modulation.
-        currentRate += (targetRate - currentRate) * 0.0015f;
-        fraction += baseStep * currentRate;
-        const uint32_t advance = (uint32_t)fraction;
-        index += advance;
-        fraction -= (float)advance;
+            // Unity rate still needs sample-rate conversion for 11.025/22.05 kHz,
+            // but it does not need the per-sample rate-smoothing calculation.
+            if (unityRate) {
+                fraction += baseStep;
+            } else {
+                currentRate += (targetRate - currentRate) * 0.0015f;
+                fraction += baseStep * currentRate;
+            }
+            const uint32_t advance = (uint32_t)fraction;
+            index += advance;
+            fraction -= (float)advance;
 
-        if (loop && index >= total_samples) {
-            index %= total_samples;
+            if (loop && index >= total_samples) {
+                index %= total_samples;
+            }
         }
     }
 
