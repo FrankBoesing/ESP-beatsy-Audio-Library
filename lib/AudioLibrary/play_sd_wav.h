@@ -161,7 +161,7 @@ class AudioPlaySdWav : public AudioPlayer {
     bool readSourceFrameOrLoop(int32_t &left, int32_t &right, bool loop);
 
 
-    bool getOutputSample(int16_t &left, int16_t &right, float targetRate, bool loop);
+    inline bool getOutputSample(int16_t &left, int16_t &right, float targetRate, bool loop);
 
     void releaseBlocks();
     void finishPlayback();
