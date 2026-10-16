@@ -5309,8 +5309,8 @@ double s_freq = .0625;</p>
 <script type="text/x-red" data-help-name="AudioFilterBiquad">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Biquadratic cascaded filter, useful for all sorts of filtering.
-		Up to 4 stages may be cascaded.
+	<p>A cascaded biquadratic (biquad) filter. Up to four stages can be configured,
+		numbered 0 to 3. Each stage can use a different response.
 	</p>
 	<p align=center><img src="img/biquad.png"></p>
 	</div>
@@ -5318,74 +5318,53 @@ double s_freq = .0625;</p>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
 		<tr class=odd><td align=center>In 0</td><td>Signal to be filtered</td></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Filtered Signal Output</td></tr>
+		<tr class=odd><td align=center>Out 0</td><td>Filtered signal output</td></tr>
 	</table>
 	<h3>Functions</h3>
 	<p class=func><span class=keyword>setLowpass</span>(stage, frequency, Q);</p>
-	<p class=desc>Configure one stage of the filter (0 to 3) with low pass
-		response, with the specified corner frequency and Q shape.  If Q is
-		higher that 0.7071, be careful of filter gain (see below).
-	</p>
+	<p class=desc>Configures a stage as a low-pass filter. The frequency is the
+		cutoff frequency in Hz; Q controls the resonance around the cutoff.</p>
 	<p class=func><span class=keyword>setHighpass</span>(stage, frequency, Q);</p>
-	<p class=desc>Configure one stage of the filter (0 to 3) with high pass
-		response, with the specified corner frequency and Q shape.  If Q is
-		higher that 0.7071, be careful of filter gain (see below).
-	</p>
+	<p class=desc>Configures a stage as a high-pass filter. The frequency is the
+		cutoff frequency in Hz; Q controls the resonance around the cutoff.</p>
 	<p class=func><span class=keyword>setBandpass</span>(stage, frequency, Q);</p>
-	<p class=desc>Configure one stage of the filter (0 to 3) with band pass
-		response.  The filter has unity gain at the specified frequency.  Q
-		controls the width of frequencies allowed to pass.
-	</p>
+	<p class=desc>Configures a band-pass filter centered on the specified frequency.
+		Q controls the width of the passed frequency band.</p>
 	<p class=func><span class=keyword>setNotch</span>(stage, frequency, Q);</p>
-	<p class=desc>Configure one stage of the filter (0 to 3) with band reject (notch)
-		response.  Q controls the width of rejected frequencies.
-	</p>
+	<p class=desc>Configures a band-reject (notch) filter centered on the specified
+		frequency. Q controls the width of the rejected frequency band.</p>
+	<p class=func><span class=keyword>setPeaking</span>(stage, frequency, gain, Q);</p>
+	<p class=desc>Configures a peaking (bell-shaped) EQ centered on the specified
+		frequency. Gain is in dB: positive values boost the band and negative values
+		cut it. Q controls the band's width. A gain of 0 dB is frequency-neutral.</p>
 	<p class=func><span class=keyword>setLowShelf</span>(stage, frequency, gain, slope);</p>
-	<p class=desc>Configure one stage of the filter (0 to 3) with low shelf response.
-		A low shelf filter attenuates or amplifies signals below the specified frequency.
-		Frequency controls the slope midpoint, gain is in dB and can be both
-		positive or negative. The slope parameter controls steepness of gain transition.
-		A slope of 1 yields maximum steepness without overshoot,
-		lower values yield a less steep slope. See the picture below for a visualization
-		of the slope parameter's effect.
-		Be careful with positive gains and slopes higher than 1 as they introduce gain
-		(see warning below).
-	</p>
-	</p>
+	<p class=desc>Configures a low-shelf EQ that boosts or attenuates frequencies below
+		the specified frequency. Gain is in dB and may be positive or negative.
+		Slope controls the steepness of the transition and must be positive.</p>
 	<p class=func><span class=keyword>setHighShelf</span>(stage, frequency, gain, slope);</p>
-	<p class=desc>Configure one stage of the filter (0 to 3) with high shelf response.
-		A high shelf filter attenuates or amplifies signals above the specified frequency.
-		Frequency controls the slope midpoint, gain is in dB and can be both
-		positive or negative. The slope parameter controls steepness of gain transition.
-		A slope of 1 yields maximum steepness without overshoot,
-		lower values yield a less steep slope. See the picture below for a visualization
-		of the slope parameter's effect.
-		Be careful with positive gains and slopes higher than 1 as they introduce gain
-		(see warning below).
-	</p>
+	<p class=desc>Configures a high-shelf EQ that boosts or attenuates frequencies above
+		the specified frequency. Gain is in dB and may be positive or negative.
+		Slope controls the steepness of the transition and must be positive.</p>
 	<p align=center><img src="img/shelf_filter.png"></p>
 	<p class=func><span class=keyword>setCoefficients</span>(stage, array[5]);</p>
-	<p class=desc>Configure one stage of the filter (0 to 3) with an arbitrary
-		filter response.  The array of coefficients is in order: B0, B1, B2, A1, A2.
-		Each coefficient must be less than 2.0 and greater than -2.0.  The array
-		should be type double.  Alternately, it may be type int, where 1.0 is
-		represented with 1073741824 (2<sup>30</sup>).
-	</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Filter
-	</p>
+	<p class=desc>Sets custom coefficients in the order B0, B1, B2, A1, A2.
+		An array of double values contains normalized floating-point coefficients,
+		which are converted internally to Q30. The int overload expects coefficients
+		already encoded in Q30; 1.0 is represented by 1073741824 (2<sup>30</sup>).
+		The stage index must be between 0 and 3.</p>
 	<h3>Notes</h3>
-	<p>Filters can with gain must have their input signals attenuated, so the
-		signal does not exceed 1.0.
-	</p>
-	<p>This object implements up to 4 cascaded stages.  Unconfigured stages will
-		not pass any signal.
-	</p>
-	<p>Biquad filters with low corner frequency (under about 400 Hz) can run into
-		trouble with limited numerical precision, causing the filter to perform
-		poorly.  For very low corner frequency, the State Variable (Chamberlin)
-		filter should be used.
-	</p>
+	<p>Positive gain in peaking and shelf filters can increase signal level and cause
+		clipping. Leave sufficient headroom when using boost settings.</p>
+	<p>The constructor initializes each stage as pass-through. Audio is not forwarded
+		until at least one stage is configured. Configuring a later stage also enables
+		the stages before it, so configure those stages as needed.</p>
+	<p>Very low cutoff frequencies can be sensitive to coefficient quantization.
+		Check the resulting frequency response for the sample rate and cutoff you use.</p>
+	<p>Filter coefficients are calculated using the current audio sample rate. It must
+		match the sample rate used by the application (including AUDIO_SAMPLE_RATE_EXACT
+		when compiling the library).</p>
+	<h3>Example</h3>
+	<p><a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/examples/Effects/Effect-VintageRadio/Effect_VintageRadio.cpp" target="_blank">Effect_VintageRadio.cpp</a> uses cascaded biquad filters.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioFilterBiquad">
 	<div class="form-row">
@@ -5397,59 +5376,38 @@ double s_freq = .0625;</p>
 <script type="text/x-red" data-help-name="AudioFilterFIR">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Finite impulse response filter, useful for all sorts of filtering.
-	</p>
+	<p>Finite impulse response (FIR) filter using caller-provided signed 16-bit coefficients.</p>
 	<p align=center><img src="img/fir_filter.png"></p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
 		<tr class=odd><td align=center>In 0</td><td>Signal to be filtered</td></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Filtered Signal Output</td></tr>
+		<tr class=odd><td align=center>Out 0</td><td>Filtered signal output</td></tr>
 	</table>
 	<h3>Functions</h3>
 	<p class=func><span class=keyword>begin</span>(array, length);</p>
-	<p class=desc>Initialize the filter.  The array must be 16 bit integers (the
-		filter's impulse response), and
-		length indicates the number of points in the array.  Array may also be
-		FIR_PASSTHRU (length = 0), to directly pass the input to output without
-		filtering.
-	</p>
+	<p class=desc>Initializes the filter. The coefficient array must contain an even number
+		of signed 16-bit coefficients, from 4 through 200. Coefficients should be designed
+		for the audio sample rate used by the application. The filter copies the coefficients
+		when begin() is called.</p>
+	<p class=desc>Use <span class=literal>begin(FIR_PASSTHRU, 0)</span> to forward audio
+		without filtering.</p>
 	<p class=func><span class=keyword>end</span>();</p>
-	<p class=desc>Turn the filter off.
-	</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Filter_FIR
-	</p>
-	<h3>Known Issues</h3>
-	<p>Your filter's impulse response array must have an even length.  If you have
-		add odd number of taps, you must add an extra zero to increase the length
-		to an even number.
-	</p>
-	<p>The minimum number of taps is 4.  If you use less, add extra zeros to increase
-		the length to 4.
-	</p>
-	<p>The impulse response must be given in reverse order.  Many filters have
-		symetrical impluse response, making this a non-issue.  If your filter has
-		a non-symetrical response, make sure the data is in reverse time order.
-	</p>
+	<p class=desc>Disables the filter. Unlike FIR_PASSTHRU, end() does not forward
+		the input signal.</p>
+	<h3>Known Constraints</h3>
+	<p>The coefficient count must be even and between 4 and 200. If your design has an
+		odd number of taps, add a zero coefficient to make the count even.</p>
+	<p>The impulse response must be supplied in reverse order. This is irrelevant for
+		symmetric impulse responses, but important for non-symmetric responses.</p>
 	<h3>Notes</h3>
-	<p>FIR filters requires more CPU time than Biquad (IIR), but they can
-		implement filters with better phase response.
-	</p>
-	<p>A 100 point filter requires 9% CPU time on Teensy 3.1.  The maximum
-		supported filter length is 200 points.
-	</p>
-	<p>The free
-		<a href="http://t-filter.engineerjs.com/" target="_blank"> TFilter Design Tool</a>
-		can be used to create the impulse response array.  Be sure to set the sampling
-		frequency to 44117 HZ (it defaults to only 2000 Hz) and the output type to "int" (16 bit).
-	</p>
-	<p>
-		If you use TFilter Design's "C/C++ array" option, it's output has "int" definition, which
-		is 32 bits on Teensy 3.1.  Edit "int" to "short" for an array of 16 bit numbers,
-		and add "const" to avoid consuming extra RAM.
-	</p>
+	<p>FIR filters generally require more CPU time than biquad (IIR) filters. Processing
+		cost depends on the number of coefficients and the target platform.</p>
+	<p>Coefficients use signed 16-bit Q15 values. Recalculate the coefficients whenever
+		the application's audio sample rate changes.</p>
+	<h3>Example</h3>
+	<p><a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/examples/Effects/Filter_FIR/Filter_FIR.cpp" target="_blank">Filter_FIR.cpp</a> demonstrates FIR filtering.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioFilterFIR">
 	<div class="form-row">
@@ -5506,9 +5464,10 @@ double s_freq = .0625;</p>
 	<p>
 		<img src="img/filter_formula.png">
 	</p>
-	<p>When operating with signal control of corner frequency, this
-		object uses approximately 4% of the CPU time on Teensy 3.1.
-	</p>
+	<p>The implementation uses fixed-point arithmetic with 2x internal oversampling.
+		The corner frequency is limited to 20 Hz through sampleRate()/2.5; resonance Q
+		is limited to 0.7–5.0. The octave-control setting is limited to approximately
+		0–7 octaves. CPU load depends on the target platform.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioFilterStateVariable">
 	<div class="form-row">
@@ -5559,34 +5518,36 @@ double s_freq = .0625;</p>
 		amplitude, this setting must be at least 0.8.
 	</p>
 	<p class=func><span class=keyword>inputDrive</span>(level);</p>
-	<p class=desc>TODO: add info here...<br>
-		range is 0 to 4.0
-	</p>
+	<p class=desc>Sets the input drive before the filter's nonlinear stages. Values
+		below 1 reduce the input level; values above 1 increase drive and saturation.
+		The requested range is 0 to 4.0. The effective maximum drive also depends on
+		passbandGain().</p>
 	<p class=func><span class=keyword>passbandGain</span>(gain);</p>
-	<p class=desc>TODO: add info here...<br>
-		range is 0 to 0.5
-	</p>
+	<p class=desc>Sets the passband compensation term used in the resonance feedback
+		path. The supported range is 0.0 to 0.5. This setting also affects the maximum
+		effective drive available from inputDrive().</p>
 	<p class=func><span class=keyword>interpolationMethod</span>(method);</p>
-	<p class=desc>TODO: add info here...<br>
-		<span class=literal>LADDER_FILTER_INTERPOLATION_FIR_POLY</span><br>
-		<span class=literal>LADDER_FILTER_INTERPOLATION_LINEAR</span><br>
-	</p>
+	<p class=desc>Selects the interpolation method used by the internally 4x-oversampled
+		filter. <span class=literal>LADDER_FILTER_INTERPOLATION_FIR_POLY</span> selects
+		polyphase FIR interpolation/decimation (the default). 
+		<span class=literal>LADDER_FILTER_INTERPOLATION_LINEAR</span> uses linear
+		interpolation with lower processing cost.</p>
 
 <h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Synthesis &gt; LadderFilter
 	</p>
 	<h3>Notes</h3>
-	<p>	Teensy 3.5 is the minimum hardware capable of running this filter.
-	</p>
+	<p>This port uses floating-point math and internally oversamples by 4x. Processing
+		cost depends on the target platform and interpolation method.</p>
 	<p>	When controlled by a signal, the equation for the filter
 		frequency is:
 	</p>
 	<p>
 		<img src="img/filter_formula.png">
 	</p>
-	<p>This filter uses floating point math.  It is recommended for use
-		on Teensy 4.0 or higher.
-	</p>
+	<p>If the sample rate changes after a statically allocated filter object has been
+		constructed, call frequency() again so its coefficients are recalculated for
+		the new sample rate.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioFilterLadder">
 	<div class="form-row">
