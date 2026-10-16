@@ -1,4 +1,9 @@
 #include "control_es8311.h"
+
+#if defined(ARDUINO_ARCH_ESP32)
+#include <esp32-hal-i2c.h>
+#endif
+
 #include <cmath>
 #pragma GCC optimize("Os")
 
@@ -125,7 +130,13 @@ bool AudioControlES8311::enable(uint32_t sampleRate) {
         digitalWrite(pins_.pa_enable, !pins_.pa_active);
     }
 
+#if defined(ARDUINO_ARCH_ESP32)
+    if (!i2cIsInit(wire_->getBusNum())) {
+        wire_->begin(pins_.sda, pins_.scl, ES8311_I2C_FREQUENCY);
+    }
+#else
     wire_->begin(pins_.sda, pins_.scl, ES8311_I2C_FREQUENCY);
+#endif
 
     if (!isConnected()) {
         return false;
