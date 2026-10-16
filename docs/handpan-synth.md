@@ -88,10 +88,10 @@ the source, reverb return and final mixer.
 The example cycles through three eight-second phases:
 
 1. `MELODY + HALL`: a moderate overlapping melody.
-2. `ALL 16 PADS / 96 MODES`: each pad is struck in turn, about once per second,
-   so its long body resonances overlap with the tails of the other pads.
+2. `ALL 16 PADS / BODY TAILS`: each pad is struck in turn, about once per second,
+   so the long body resonances overlap with the tails of the other pads. This phase checks all pad slots and tail overlap; it does not guarantee that every short metallic mode remains active at once.
 3. `RAPID 4-NOTE BURSTS`: four pad events every 24 ms, stressing the fixed event
-   queue and the eight attack-sample voice limit while modal tails remain active.
+   queue and the eight attack-sample voice limit while modal tails remain active. Repeated visits to every pad also exercise the short metallic modes; inspect the per-stream maximum on the target to quantify this worst case.
 
 Once per second the serial log reports graph-wide CPU, per-stream CPU for the
 handpan source and Freeverb, current/peak audio-block use, and note events

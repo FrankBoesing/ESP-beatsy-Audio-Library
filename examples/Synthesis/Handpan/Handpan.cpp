@@ -160,7 +160,7 @@ const char *phaseName(TestPhase phase)
 {
     switch (phase) {
     case TestPhase::MELODY: return "MELODY + HALL";
-    case TestPhase::ALL_PADS_RINGING: return "ALL 16 PADS / 96 MODES";
+    case TestPhase::ALL_PADS_RINGING: return "ALL 16 PADS / BODY TAILS";
     case TestPhase::RAPID_CHORDS: return "RAPID 4-NOTE BURSTS";
     default: return "UNKNOWN";
     }
