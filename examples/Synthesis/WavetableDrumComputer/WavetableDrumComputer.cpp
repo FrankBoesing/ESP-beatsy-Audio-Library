@@ -88,7 +88,7 @@ bool mountSD()
 
 bool recordingFilesExist()
 {
-    return SD_MMC.exists("/DrumComputer.wav") || SD.exists("/DrumComputer.tmp");
+    return SD_MMC.exists("/DrumComputer.wav") || SD_MMC.exists("/DrumComputer.tmp");
 }
 
 constexpr uint16_t stepBit(uint8_t step)
