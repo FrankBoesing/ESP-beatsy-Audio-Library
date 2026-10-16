@@ -144,7 +144,7 @@ void loop() {
 
             const uint32_t nextRate = SAMPLE_RATES[sampleRateIndex];
             if (changeSampleRate(nextRate)) {
-                startFirstTone();
+                startTestTone();
             }
         }
         break;
