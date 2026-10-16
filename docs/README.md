@@ -6,6 +6,9 @@ Teensy Audio System Design Tool for the ESP-beatsy Audio Library.
 - Start: open `index.html` in a modern browser.
 - Node palette: includes ESP-beatsy classes for I2S controllers, S/PDIF, PDM,
   ES8311/ES8388 codec control, MP3/AAC playback, AudioMixerN and WAV recording.
+- Codec node help documents the ES8388 ALC/limiter and noise-gate APIs, the ES8311
+  ALC, noise-gate and ADC high-pass APIs, and the default hardware DAC soft-ramp
+  behavior. The GUI describes these APIs but does not generate codec setup calls.
 - Export: generates the Audio graph declarations and `AudioConnection` lines
   as a starting point for an Arduino/PlatformIO sketch.
 - Biquad Calculator: standalone offline tool for low-pass, high-pass, band-pass, notch, peaking EQ and shelf filters. It plots the response and exports normalized Q30 coefficients and `AudioFilterBiquad` setup code.
