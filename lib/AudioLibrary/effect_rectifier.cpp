@@ -31,6 +31,17 @@
 
 OSPEED
 void AudioEffectRectifier::update() {
+
+    const bool bypassed = _bypassed.load(std::memory_order_relaxed);
+    if (bypassed) {
+        audio_block_t *block = receiveReadOnly();
+        if (block != nullptr) {
+            transmit(block);
+            release(block);
+        }
+        return;
+    }
+
     audio_block_t *block = receiveWritable();
     if (block == nullptr) {
         return;

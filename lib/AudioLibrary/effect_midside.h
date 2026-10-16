@@ -26,6 +26,8 @@
 
 #include "AudioStream.h"
 
+#include <atomic>
+
 // Encodes stereo L/R into mid/side or decodes mid/side into stereo L/R.
 // Encoding halves the sum/difference to avoid overflow. Decoding saturates.
 class AudioEffectMidSide : public AudioStream {
@@ -35,9 +37,13 @@ class AudioEffectMidSide : public AudioStream {
     void encode() { encoding = true; }
     void decode() { encoding = false; }
 
+    // Bypass forwards the signal unchanged. Changes take effect at the next audio block.
+    void bypass(bool enable) { _bypassed.store(enable, std::memory_order_relaxed); }
+
     void update() override;
 
   private:
+    std::atomic<bool> _bypassed{false};
     bool encoding;
     audio_block_t *inputQueueArray[2] = {};
 };

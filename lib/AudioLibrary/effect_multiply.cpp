@@ -31,6 +31,19 @@
 
 OSPEED
 void AudioEffectMultiply::update() {
+
+    const bool bypassed = _bypassed.load(std::memory_order_relaxed);
+    if (bypassed) {
+        audio_block_t *output = receiveReadOnly(0);
+        audio_block_t *modulator = receiveReadOnly(1);
+        if (output != nullptr) {
+            transmit(output);
+            release(output);
+        }
+        if (modulator != nullptr) release(modulator);
+        return;
+    }
+
     audio_block_t *output = receiveWritable(0);
     audio_block_t *modulator = receiveReadOnly(1);
 

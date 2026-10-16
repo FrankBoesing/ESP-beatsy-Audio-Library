@@ -7,6 +7,19 @@ typedef uint32_t audio_word_t __attribute__((__may_alias__));
 
 OSPEED
 void AudioEffectDigitalCombine::update() {
+
+    const bool bypassed = _bypassed.load(std::memory_order_relaxed);
+    if (bypassed) {
+        audio_block_t *blocka = receiveReadOnly(0);
+        audio_block_t *blockb = receiveReadOnly(1);
+        if (blocka != nullptr) {
+            transmit(blocka);
+            release(blocka);
+        }
+        if (blockb != nullptr) release(blockb);
+        return;
+    }
+
     audio_block_t *blocka = receiveWritable(0);
     audio_block_t *blockb = receiveReadOnly(1);
 

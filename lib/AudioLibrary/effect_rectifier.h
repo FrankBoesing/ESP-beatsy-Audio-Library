@@ -30,13 +30,19 @@
 
 #include "AudioStream.h"
 
+#include <atomic>
+
 class AudioEffectRectifier : public AudioStream {
   public:
     AudioEffectRectifier() : AudioStream(1, inputQueueArray) {}
 
+    // Bypass forwards the signal unchanged. Changes take effect at the next audio block.
+    void bypass(bool enable) { _bypassed.store(enable, std::memory_order_relaxed); }
+
     void update() override;
 
   private:
+    std::atomic<bool> _bypassed{false};
     audio_block_t *inputQueueArray[1] = {};
 };
 

@@ -13,6 +13,8 @@
 
 #include "AudioStream.h"
 
+#include <atomic>
+
 class AudioEffectDigitalCombine : public AudioStream {
   public:
     enum combineMode {
@@ -33,9 +35,13 @@ class AudioEffectDigitalCombine : public AudioStream {
         }
     }
 
+    // Bypass forwards the signal unchanged. Changes take effect at the next audio block.
+    void bypass(bool enable) { _bypassed.store(enable, std::memory_order_relaxed); }
+
     void update() override;
 
   private:
+    std::atomic<bool> _bypassed{false};
     combineMode mode_sel;
     audio_block_t *inputQueueArray[2] = {};
 };

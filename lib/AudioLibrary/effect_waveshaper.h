@@ -27,6 +27,8 @@
 
 #include "AudioStream.h"
 
+#include <atomic>
+
 class AudioEffectWaveshaper : public AudioStream {
   public:
     AudioEffectWaveshaper() : AudioStream(1, inputQueueArray) {}
@@ -37,9 +39,13 @@ class AudioEffectWaveshaper : public AudioStream {
     // The curve is copied, so the caller may release its input array afterwards.
     void shape(float *waveshape, int length);
 
+    // Bypass forwards the signal unchanged. Changes take effect at the next audio block.
+    void bypass(bool enable) { _bypassed.store(enable, std::memory_order_relaxed); }
+
     void update() override;
 
   private:
+    std::atomic<bool> _bypassed{false};
     audio_block_t *inputQueueArray[1] = {};
     int16_t *waveshape = nullptr;
     int16_t lerpshift = 0;

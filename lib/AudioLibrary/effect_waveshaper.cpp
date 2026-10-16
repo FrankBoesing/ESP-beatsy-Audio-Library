@@ -75,6 +75,17 @@ void AudioEffectWaveshaper::shape(float *curve, int length) {
 
 OSPEED
 void AudioEffectWaveshaper::update() {
+
+    const bool bypassed = _bypassed.load(std::memory_order_relaxed);
+    if (bypassed) {
+        audio_block_t *block = receiveReadOnly();
+        if (block != nullptr) {
+            transmit(block);
+            release(block);
+        }
+        return;
+    }
+
     // With no transfer curve configured, pass the signal through unchanged.
     if (waveshape == nullptr) {
         audio_block_t *block = receiveReadOnly();

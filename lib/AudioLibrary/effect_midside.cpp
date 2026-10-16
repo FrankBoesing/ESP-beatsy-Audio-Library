@@ -33,6 +33,23 @@
 
 OSPEED
 void AudioEffectMidSide::update() {
+
+    const bool bypassed = _bypassed.load(std::memory_order_relaxed);
+    if (bypassed) {
+        audio_block_t *blocka = receiveReadOnly(0);
+        audio_block_t *blockb = receiveReadOnly(1);
+        if (blocka == nullptr || blockb == nullptr) {
+            if (blocka != nullptr) release(blocka);
+            if (blockb != nullptr) release(blockb);
+            return;
+        }
+        transmit(blocka, 0);
+        transmit(blockb, 1);
+        release(blocka);
+        release(blockb);
+        return;
+    }
+
     audio_block_t *blocka = receiveWritable(0);
     audio_block_t *blockb = receiveWritable(1);
 
