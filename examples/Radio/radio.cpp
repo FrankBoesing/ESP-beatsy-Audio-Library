@@ -4,6 +4,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <esp_heap_caps.h>
+#include <math.h>
 
 #include "Audio.h"
 #include "softcodecs/AudioSourceStream.h"
@@ -44,9 +45,10 @@ AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER
 #error "AUDIO_CODEC not defined"
 #endif
 
-// Loudness is implemented as low/high shelves in the digital path. The filter
-// API has no bypass flag; 0 dB gain creates a flat response when disabled.
-// The stages stay in the graph so toggling does not require reconnecting audio.
+// Loudness uses digital low/high shelves. AudioFilterBiquad has no explicit
+// bypass flag: 0 dB gain is frequency-neutral, although the stages still run.
+AudioAmplifier loudnessPreGainL;
+AudioAmplifier loudnessPreGainR;
 AudioFilterBiquad loudnessFilterL;
 AudioFilterBiquad loudnessFilterR;
 
@@ -61,6 +63,8 @@ static bool loudnessEnabled = false;
 
 AudioConnection *patchCordPlayerLeft = nullptr;
 AudioConnection *patchCordPlayerRight = nullptr;
+AudioConnection *patchCordPreFilterLeft = nullptr;
+AudioConnection *patchCordPreFilterRight = nullptr;
 AudioConnection *patchCordOutputLeft = nullptr;
 AudioConnection *patchCordOutputRight = nullptr;
 
@@ -76,10 +80,25 @@ static float loudnessAmount() {
     return amount;
 }
 
+static float loudnessPreGain(float amount) {
+    // Make room for the low-shelf boost before the biquad, avoiding digital
+    // clipping on full-scale bass peaks. The DAC volume compensates this gain.
+    return powf(10.0f, -(LOUDNESS_MAX_BASS_DB * amount) / 20.0f);
+}
+
+static float effectiveCodecVolume(float amount) {
+    const float preGain = loudnessPreGain(amount);
+    float level = (preGain > 0.0f) ? outputVolume / preGain : outputVolume;
+    if (level > 1.0f) level = 1.0f;
+    else if (level < 0.0f) level = 0.0f;
+    return level;
+}
+
 static void updateLoudnessFilters() {
     const float amount = loudnessAmount();
     const float bassGainDb = LOUDNESS_MAX_BASS_DB * amount;
     const float trebleGainDb = LOUDNESS_MAX_TREBLE_DB * amount;
+    const float preGain = loudnessPreGain(amount);
 
     // Keep the treble shelf below Nyquist for low-rate radio streams too.
     const float rate = AudioStream::sampleRate();
@@ -93,10 +112,18 @@ static void updateLoudnessFilters() {
 
     // Update both channels atomically with respect to AudioStream::update().
     audio_detail::GraphUpdateLock lock;
+    loudnessPreGainL.gain(preGain);
+    loudnessPreGainR.gain(preGain);
     loudnessFilterL.setLowShelf(0, 120.0f, bassGainDb);
     loudnessFilterL.setHighShelf(1, trebleFrequency, trebleGainDb);
     loudnessFilterR.setLowShelf(0, 120.0f, bassGainDb);
     loudnessFilterR.setHighShelf(1, trebleFrequency, trebleGainDb);
+}
+
+static void updateCodecVolume() {
+    if (!codec.volume(effectiveCodecVolume(loudnessAmount()))) {
+        Serial.println("ERROR: codec volume update failed");
+    }
 }
 
 static void setOutputVolume(float level) {
@@ -104,16 +131,15 @@ static void setOutputVolume(float level) {
     else if (level > 1.0f) level = 1.0f;
 
     outputVolume = level;
-    if (!codec.volume(outputVolume)) {
-        Serial.println("ERROR: codec volume update failed");
-    }
     updateLoudnessFilters();
+    updateCodecVolume();
     Serial.printf("Output volume: %.2f\n", outputVolume);
 }
 
 static void setLoudness(bool enabled) {
     loudnessEnabled = enabled;
     updateLoudnessFilters();
+    updateCodecVolume();
     Serial.printf("Loudness %s (bass +%.1f dB, treble +%.1f dB)\n",
                   loudnessEnabled ? "ON" : "OFF",
                   LOUDNESS_MAX_BASS_DB * loudnessAmount(),
@@ -188,24 +214,39 @@ AudioPlayer *findPlayer(const char *contentType) {
 bool connectPlayer(AudioPlayer &player) {
     patchCordPlayerLeft = new AudioConnection();
     patchCordPlayerRight = new AudioConnection();
+    patchCordPreFilterLeft = new AudioConnection();
+    patchCordPreFilterRight = new AudioConnection();
     patchCordOutputLeft = new AudioConnection();
     patchCordOutputRight = new AudioConnection();
 
     if (patchCordPlayerLeft == nullptr || patchCordPlayerRight == nullptr ||
+        patchCordPreFilterLeft == nullptr || patchCordPreFilterRight == nullptr ||
         patchCordOutputLeft == nullptr || patchCordOutputRight == nullptr) {
         ESP_LOGE(TAG, "Could not allocate audio connections");
         return false;
     }
 
-    const int leftInputResult = patchCordPlayerLeft->connect(player, 0, loudnessFilterL, 0);
+    const int leftInputResult = patchCordPlayerLeft->connect(player, 0, loudnessPreGainL, 0);
     if (leftInputResult != 0) {
-        ESP_LOGE(TAG, "Left player-to-filter connection failed (%d)", leftInputResult);
+        ESP_LOGE(TAG, "Left player-to-pre-gain connection failed (%d)", leftInputResult);
         return false;
     }
 
-    const int rightInputResult = patchCordPlayerRight->connect(player, 1, loudnessFilterR, 0);
+    const int rightInputResult = patchCordPlayerRight->connect(player, 1, loudnessPreGainR, 0);
     if (rightInputResult != 0) {
-        ESP_LOGE(TAG, "Right player-to-filter connection failed (%d)", rightInputResult);
+        ESP_LOGE(TAG, "Right player-to-pre-gain connection failed (%d)", rightInputResult);
+        return false;
+    }
+
+    const int leftFilterResult = patchCordPreFilterLeft->connect(loudnessPreGainL, 0, loudnessFilterL, 0);
+    if (leftFilterResult != 0) {
+        ESP_LOGE(TAG, "Left pre-gain-to-filter connection failed (%d)", leftFilterResult);
+        return false;
+    }
+
+    const int rightFilterResult = patchCordPreFilterRight->connect(loudnessPreGainR, 0, loudnessFilterR, 0);
+    if (rightFilterResult != 0) {
+        ESP_LOGE(TAG, "Right pre-gain-to-filter connection failed (%d)", rightFilterResult);
         return false;
     }
 
