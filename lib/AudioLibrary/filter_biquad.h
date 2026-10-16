@@ -21,6 +21,7 @@ class AudioFilterBiquad : public AudioStream {
     void setHighpass(uint32_t stage, float frequency, float q = 0.7071f);
     void setBandpass(uint32_t stage, float frequency, float q = 1.0f);
     void setNotch(uint32_t stage, float frequency, float q = 1.0f);
+    void setPeaking(uint32_t stage, float frequency, float gain, float q = 1.0f);
     void setLowShelf(uint32_t stage, float frequency, float gain, float slope = 1.0f);
     void setHighShelf(uint32_t stage, float frequency, float gain, float slope = 1.0f);
 
