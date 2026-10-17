@@ -22,12 +22,6 @@
 #endif
 constexpr uint32_t OUTPUT_SAMPLE_RATE = HANDPAN_MUSIC_SAMPLE_RATE;
 
-// A deliberately soft, 30 ms finger-contact transient. It uses low-passed
-// noise and two quiet, low-frequency thuds instead of bright metallic clicks.
-constexpr uint32_t ATTACK_SAMPLE_RATE = 44100;
-constexpr uint32_t ATTACK_SAMPLE_COUNT = 1323; // 30 ms at 44.1 kHz
-static int16_t attackSample[ATTACK_SAMPLE_COUNT];
-
 AudioOutputI2S audioOut({
     PIN_I2S_BLCK, // BCLK
     PIN_I2S_WS,   // WS / LRCLK
@@ -75,55 +69,6 @@ constexpr float METAL_T60[3] = {0.25f, 0.12f, 0.08f};
 constexpr float METAL_GAINS[3] = {0.0f, 0.0f, 0.0f};
 constexpr float METAL_PHASES[3] = {0.72f, 2.20f, 1.48f};
 
-// Build a muted finger-contact sound, not a sharp metal click.
-// The slow smoothstep rise keeps the first sample at zero; low-passed noise
-// adds soft contact texture, while quiet low modes give it a rounded "thup".
-void buildSoftFingerAttack()
-{
-    uint32_t randomState = 0x4d595df4U;
-    float lowNoise = 0.0f;
-    int32_t peak = 0;
-
-    for (uint32_t i = 0; i < ATTACK_SAMPLE_COUNT; ++i) {
-        const float t = (float)i / (float)ATTACK_SAMPLE_RATE;
-
-        randomState = randomState * 1664525U + 1013904223U;
-        const float noise = ((float)(randomState >> 8) * (1.0f / 8388607.5f)) - 1.0f;
-
-        // One-pole low-pass, roughly 900 Hz at 44.1 kHz, to avoid a bright edge.
-        lowNoise += 0.12f * (noise - lowNoise);
-
-        float rise = t / 0.0025f;
-        if (rise > 1.0f) rise = 1.0f;
-        rise = rise * rise * (3.0f - 2.0f * rise);
-
-        // Fade the end as well, so the 30 ms buffer does not stop abruptly.
-        const float remaining = (float)(ATTACK_SAMPLE_COUNT - 1U - i) /
-                                (0.004f * (float)ATTACK_SAMPLE_RATE);
-        float tail = remaining;
-        if (tail > 1.0f) tail = 1.0f;
-        tail = tail * tail * (3.0f - 2.0f * tail);
-
-        const float noiseBody = 0.42f * lowNoise * expf(-t / 0.0085f);
-        const float lowThud = 0.38f * sinf(6.28318530718f * 185.0f * t) *
-                              expf(-t / 0.014f);
-        const float softKnock = 0.14f * sinf(6.28318530718f * 430.0f * t) *
-                                expf(-t / 0.008f);
-        const float value = rise * tail * (noiseBody + lowThud + softKnock);
-
-        const int32_t pcm = (int32_t)(value * 32767.0f);
-        attackSample[i] = (int16_t)pcm;
-        const int32_t magnitude = pcm < 0 ? -pcm : pcm;
-        if (magnitude > peak) peak = magnitude;
-    }
-
-    // Keep the sample well below full scale; the modal body should remain dominant.
-    const float scale = peak > 0 ? (0.42f * 32767.0f) / (float)peak : 0.0f;
-    for (uint32_t i = 0; i < ATTACK_SAMPLE_COUNT; ++i) {
-        attackSample[i] = (int16_t)((float)attackSample[i] * scale);
-    }
-}
-
 // Three-body-mode levels vary by pad to avoid identical synthetic timbre.
 // Keep resonator phase at zero in this listening test: each new strike then
 // starts at a zero crossing instead of injecting an abrupt nonzero first sample.
@@ -163,9 +108,9 @@ bool configureHandpan()
             modes[mode + 3].phaseRadians = METAL_PHASES[mode] + 0.17f * (float)pad;
         }
 
-        // The low-level sample supplies a rounded finger contact; resonators provide the body.
-        if (!handpan.configureNote(pad, modes, 6, attackSample,
-                                   ATTACK_SAMPLE_COUNT, ATTACK_SAMPLE_RATE, 0.16f)) {
+        // The synth supplies its built-in soft finger-contact transient.
+        // No attack buffer or waveform-generation code is needed in this sketch.
+        if (!handpan.configureNote(pad, modes, 6)) {
             Serial.print("Failed to configure pad ");
             Serial.println(pad);
             return false;
@@ -280,7 +225,6 @@ void setup()
 
     // H2 adds a little harmonic roughness without introducing another resonator.
     handpan.setSaturation(0.25f);
-    buildSoftFingerAttack();
     if (!configureHandpan()) {
         Serial.println("ERROR: Could not configure the handpan pad bank");
         while (true) delay(1000);
