@@ -96,8 +96,8 @@ constexpr float BODY_PHASES[PAD_COUNT][3] = {
     {1.24f,0.20f,2.06f}, {0.73f,1.87f,0.42f}
 };
 
-// A compact, deterministic noise burst plus a short high-frequency ring.
-// This is an example placeholder, not a sample from the user's recording.
+// A compact, deterministic noise burst plus two rapidly decaying sine rings.
+// The attack is generated at setup; it contains no recorded audio.
 void buildExampleAttack()
 {
     uint32_t randomState = 0x4d595df4U;
@@ -108,8 +108,10 @@ void buildExampleAttack()
         randomState = randomState * 1664525U + 1013904223U;
         const float noise = ((float)(randomState >> 8) * (1.0f / 8388607.5f)) - 1.0f;
         const float noiseEnvelope = expf(-t / 0.009f) * fminf(1.0f, t / 0.0006f);
-        const float ring = sinf(6.28318530718f * 3650.0f * t) * expf(-t / 0.0038f);
-        const float value = 0.65f * noise * noiseEnvelope + 0.35f * ring;
+        const float ring1 = sinf(6.28318530718f * 3650.0f * t) * expf(-t / 0.0038f);
+        const float ring2 = sinf(6.28318530718f * 6100.0f * t) * expf(-t / 0.0018f);
+        const float value = 0.60f * noise * noiseEnvelope +
+                            0.28f * ring1 + 0.12f * ring2;
         int32_t pcm = (int32_t)(value * 32767.0f);
         if (pcm > 32767) pcm = 32767;
         if (pcm < -32768) pcm = -32768;
