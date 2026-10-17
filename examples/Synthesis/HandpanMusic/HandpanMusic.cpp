@@ -9,7 +9,6 @@
  */
 
 #include <Audio.h>
-#include <math.h>
 
 // Standalone musical demonstration. Set HANDPAN_MUSIC_SAMPLE_RATE to 44100
 // for a 44.1-kHz run; 48 kHz is the default.
