@@ -149,7 +149,7 @@ MP3 and AAC use the ESP-beatsy software-decoder/AudioDecoderStream path. The rad
 | **AudioSynthWavetable** | Wavetable-based synthesis. |
 | **AudioSynthSimpleDrum** | Simple percussive/drum synthesis. |
 | **AudioSynthKarplusStrong** | Plucked-string synthesis using the Karplus–Strong algorithm. |
-| **AudioSynthHandpan** | Hybrid handpan model with an optional PCM16 attack and six damped resonator modes per pad, variable velocity, up to 16 pads and eight overlapping attack voices. See [synthesis documentation](docs/handpan-synth.md). |
+| **AudioSynthHandpan** | Hybrid handpan model with an optional PCM16 attack and six damped resonator modes per pad, a 5 ms smooth onset ramp, variable velocity, up to 16 pads, and 32 short-lived strike voices. See [synthesis documentation](docs/handpan-synth.md). |
 
 A 513 entry sine table replaces the Teensy 257 entry table.
 
