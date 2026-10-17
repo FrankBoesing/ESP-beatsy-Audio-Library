@@ -9,6 +9,7 @@
  */
 
 #include <Audio.h>
+#include <math.h>
 
 // Standalone musical demonstration. Set HANDPAN_MUSIC_SAMPLE_RATE to 44100
 // for a 44.1-kHz run; 48 kHz is the default.
@@ -20,6 +21,12 @@
 #error "HANDPAN_MUSIC_SAMPLE_RATE must be 44100 or 48000"
 #endif
 constexpr uint32_t OUTPUT_SAMPLE_RATE = HANDPAN_MUSIC_SAMPLE_RATE;
+
+// A deliberately soft, 30 ms finger-contact transient. It uses low-passed
+// noise and two quiet, low-frequency thuds instead of bright metallic clicks.
+constexpr uint32_t ATTACK_SAMPLE_RATE = 44100;
+constexpr uint32_t ATTACK_SAMPLE_COUNT = 1323; // 30 ms at 44.1 kHz
+static int16_t attackSample[ATTACK_SAMPLE_COUNT];
 
 AudioOutputI2S audioOut({
     PIN_I2S_BLCK, // BCLK
@@ -58,7 +65,7 @@ constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
     587.330f, 622.254f, 659.255f, 698.456f
 };
 
-// Keep the warm body modes; the musical example omits the PCM attack sample.
+// Keep the warm body modes and add a soft, damped finger-contact transient.
 // The upper partials remain disabled to limit CPU and avoid a second melody.
 constexpr float BODY_T60[3] = {3.00f, 3.00f, 4.00f};
 constexpr float BODY_RATIOS[3] = {1.000f, 2.011f, 2.984f};
@@ -67,6 +74,48 @@ constexpr float METAL_RATIOS[3] = {5.36f, 5.96f, 10.79f};
 constexpr float METAL_T60[3] = {0.25f, 0.12f, 0.08f};
 constexpr float METAL_GAINS[3] = {0.0f, 0.0f, 0.0f};
 constexpr float METAL_PHASES[3] = {0.72f, 2.20f, 1.48f};
+
+// Build a muted finger-contact sound, not a sharp metal click.
+// The slow smoothstep rise keeps the first sample at zero; low-passed noise
+// adds soft contact texture, while quiet low modes give it a rounded "thup".
+void buildSoftFingerAttack()
+{
+    uint32_t randomState = 0x4d595df4U;
+    float lowNoise = 0.0f;
+    int32_t peak = 0;
+
+    for (uint32_t i = 0; i < ATTACK_SAMPLE_COUNT; ++i) {
+        const float t = (float)i / (float)ATTACK_SAMPLE_RATE;
+
+        randomState = randomState * 1664525U + 1013904223U;
+        const float noise = ((float)(randomState >> 8) * (1.0f / 8388607.5f)) - 1.0f;
+
+        // One-pole low-pass, roughly 900 Hz at 44.1 kHz, to avoid a bright edge.
+        lowNoise += 0.12f * (noise - lowNoise);
+
+        float rise = t / 0.0025f;
+        if (rise > 1.0f) rise = 1.0f;
+        rise = rise * rise * (3.0f - 2.0f * rise);
+
+        const float noiseBody = 0.42f * lowNoise * expf(-t / 0.0085f);
+        const float lowThud = 0.38f * sinf(6.28318530718f * 185.0f * t) *
+                              expf(-t / 0.014f);
+        const float softKnock = 0.14f * sinf(6.28318530718f * 430.0f * t) *
+                                expf(-t / 0.008f);
+        const float value = rise * (noiseBody + lowThud + softKnock);
+
+        const int32_t pcm = (int32_t)(value * 32767.0f);
+        attackSample[i] = (int16_t)pcm;
+        const int32_t magnitude = pcm < 0 ? -pcm : pcm;
+        if (magnitude > peak) peak = magnitude;
+    }
+
+    // Keep the sample well below full scale; the modal body should remain dominant.
+    const float scale = peak > 0 ? (0.22f * 32767.0f) / (float)peak : 0.0f;
+    for (uint32_t i = 0; i < ATTACK_SAMPLE_COUNT; ++i) {
+        attackSample[i] = (int16_t)((float)attackSample[i] * scale);
+    }
+}
 
 // Three-body-mode levels vary by pad to avoid identical synthetic timbre.
 // Keep resonator phase at zero in this listening test: each new strike then
@@ -85,9 +134,6 @@ constexpr float BODY_LEVELS[PAD_COUNT][3] = {
     {0.64f,0.31f,0.24f},
     {0.65f,0.23f,0.17f}
 };
-
-// The musical example intentionally omits the PCM attack transient.
-// This isolates the note onset produced by the resonator bank.
 
 bool configureHandpan()
 {
@@ -110,8 +156,9 @@ bool configureHandpan()
             modes[mode + 3].phaseRadians = METAL_PHASES[mode] + 0.17f * (float)pad;
         }
 
-        // No PCM attack sample: noteOn() excites the configured resonator modes directly.
-        if (!handpan.configureNote(pad, modes, 6, nullptr, 0, 44100, 0.0f)) {
+        // The low-level sample supplies a rounded finger contact; resonators provide the body.
+        if (!handpan.configureNote(pad, modes, 6, attackSample,
+                                   ATTACK_SAMPLE_COUNT, ATTACK_SAMPLE_RATE, 0.055f)) {
             Serial.print("Failed to configure pad ");
             Serial.println(pad);
             return false;
@@ -214,7 +261,7 @@ void setup()
     Serial.println("======================================");
     Serial.println(" Handpan — Für Elise");
     Serial.printf(" Output sample rate: %lu Hz\n", (unsigned long)OUTPUT_SAMPLE_RATE);
-    Serial.printf(" Opening excerpt; %.1f seconds; %u note events; no PCM attack\n",
+    Serial.printf(" Opening excerpt; %.1f seconds; %u note events; soft finger attack\n",
                   PHRASE_DURATION_MS / 1000.0f, (unsigned)PHRASE_EVENT_COUNT);
     Serial.println("======================================");
 
@@ -226,6 +273,7 @@ void setup()
 
     // H2 adds a little harmonic roughness without introducing another resonator.
     handpan.setSaturation(0.25f);
+    buildSoftFingerAttack();
     if (!configureHandpan()) {
         Serial.println("ERROR: Could not configure the handpan pad bank");
         while (true) delay(1000);
