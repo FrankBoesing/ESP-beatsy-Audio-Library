@@ -78,6 +78,8 @@ bool AudioSynthHandpan::configureNote(uint8_t slot, const ModeConfig *modes,
     note.attackSampleCount = attackSampleCount;
     note.attackGain = attackGain;
     note.attackIncrementQ16 = 0;
+    const uint32_t rampSamples = (uint32_t)(fs * (float)ONSET_RAMP_US / 1000000.0f + 0.5f);
+    note.onsetRampSamples = (uint16_t)(rampSamples < 2 ? 2 : rampSamples);
     if (attackSample != nullptr) {
         const uint64_t increment = ((uint64_t)attackSampleRate << 16) / (uint32_t)(fs + 0.5f);
         if (increment == 0 || increment > UINT32_MAX) {
@@ -166,31 +168,39 @@ void AudioSynthHandpan::triggerNote(uint8_t slot, uint8_t velocity) {
     Note &note = notes[slot];
     const float velocityScale = (float)velocity * (1.0f / 127.0f);
 
-    // Inject a new phase-shaped oscillation into the current state. Existing
-    // y1/y2 values are retained, so retriggers add energy instead of restarting
-    // or cutting off the previous ring.
-    for (uint8_t i = 0; i < note.modeCount; ++i) {
-        Resonator &mode = note.modes[i];
+    // Start a separate resonator voice for this strike. Its contribution is
+    // smoothly faded in over a few milliseconds; once the ramp ends, the state
+    // is merged into the pad's long-lived resonators. Existing tails keep ringing.
+    int selected = -1;
+    for (uint8_t i = 0; i < MAX_STRIKE_VOICES; ++i) {
+        if (!strikeVoices[i].active) {
+            selected = (int)i;
+            break;
+        }
+    }
+    if (selected < 0) {
+        // Avoid an abrupt fallback excitation if the strike pool is exhausted.
+        return;
+    }
 
-        // Zero-gain modes are explicitly disabled in some low-CPU presets.
-        // Do not add them to the active list or spend a full audio block on them.
+    StrikeVoice &voice = strikeVoices[selected];
+    voice.slot = slot;
+    voice.position = 0;
+    voice.active = true;
+    for (uint8_t i = 0; i < MAX_MODES; ++i) {
+        voice.y1[i] = 0.0f;
+        voice.y2[i] = 0.0f;
+    }
+
+    for (uint8_t i = 0; i < note.modeCount; ++i) {
+        const Resonator &mode = note.modes[i];
         if (mode.config.gain <= 0.0f) {
             continue;
         }
 
         const float amplitude = mode.config.gain * velocityScale;
-        mode.y1 += amplitude * mode.sinPhase;
-        mode.y2 += amplitude * mode.previousStateScale;
-        if (!mode.active) {
-            // Keep the hot loop compact: only resonators that are ringing are
-            // visited for each sample. One entry exists per active mode.
-            if (activeModeCount < (MAX_NOTES * MAX_MODES)) {
-                activeModes[activeModeCount].slot = slot;
-                activeModes[activeModeCount].mode = i;
-                ++activeModeCount;
-                mode.active = true;
-            }
-        }
+        voice.y1[i] = amplitude * mode.sinPhase;
+        voice.y2[i] = amplitude * mode.previousStateScale;
     }
 
     startAttack(slot, velocityScale);
@@ -199,6 +209,11 @@ void AudioSynthHandpan::triggerNote(uint8_t slot, uint8_t velocity) {
 bool AudioSynthHandpan::hasActiveSound() const {
     if (activeModeCount != 0) {
         return true;
+    }
+    for (uint8_t i = 0; i < MAX_STRIKE_VOICES; ++i) {
+        if (strikeVoices[i].active) {
+            return true;
+        }
     }
     for (uint8_t i = 0; i < MAX_ATTACK_VOICES; ++i) {
         if (attackVoices[i].active) {
@@ -274,6 +289,41 @@ void AudioSynthHandpan::update() {
     for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         float mix = mixBuffer[i];
 
+        // Render the newly triggered resonator voices with a smoothstep
+        // envelope. The short onset fade avoids a discontinuity, while the
+        // independent states let existing pad tails ring without being ducked.
+        for (uint8_t v = 0; v < MAX_STRIKE_VOICES; ++v) {
+            StrikeVoice &voice = strikeVoices[v];
+            if (!voice.active) {
+                continue;
+            }
+
+            const Note &note = notes[voice.slot];
+            const uint16_t rampSamples = note.onsetRampSamples;
+            float envelope = 1.0f;
+            if (voice.position < rampSamples) {
+                const float x = (float)voice.position / (float)(rampSamples - 1U);
+                envelope = x * x * (3.0f - 2.0f * x);
+            }
+
+            for (uint8_t m = 0; m < note.modeCount; ++m) {
+                const Resonator &mode = note.modes[m];
+                if (mode.config.gain <= 0.0f) {
+                    continue;
+                }
+
+                mix += voice.y1[m] * envelope;
+                const float next = mode.coefficient1 * voice.y1[m] +
+                                   mode.coefficient2 * voice.y2[m];
+                voice.y2[m] = voice.y1[m];
+                voice.y1[m] = next;
+            }
+
+            if (voice.position < rampSamples) {
+                ++voice.position;
+            }
+        }
+
         for (uint8_t v = 0; v < MAX_ATTACK_VOICES; ++v) {
             AttackVoice &voice = attackVoices[v];
             if (!voice.active) {
@@ -326,6 +376,37 @@ void AudioSynthHandpan::update() {
             if (mix < -1.0f) mix = -1.0f;
             block->data[i] = saturate16((int32_t)(mix * OUTPUT_SCALE));
         }
+    }
+
+    // At the end of the block, transfer fully ramped strike states into the
+    // shared pad resonators. Both sets of states are now at the same time point.
+    for (uint8_t v = 0; v < MAX_STRIKE_VOICES; ++v) {
+        StrikeVoice &voice = strikeVoices[v];
+        if (!voice.active) {
+            continue;
+        }
+
+        Note &note = notes[voice.slot];
+        if (voice.position < note.onsetRampSamples) {
+            continue;
+        }
+
+        for (uint8_t m = 0; m < note.modeCount; ++m) {
+            Resonator &mode = note.modes[m];
+            if (mode.config.gain <= 0.0f) {
+                continue;
+            }
+
+            mode.y1 += voice.y1[m];
+            mode.y2 += voice.y2[m];
+            if (!mode.active && activeModeCount < (MAX_NOTES * MAX_MODES)) {
+                activeModes[activeModeCount].slot = voice.slot;
+                activeModes[activeModeCount].mode = m;
+                ++activeModeCount;
+                mode.active = true;
+            }
+        }
+        voice.active = false;
     }
 
     if (block != nullptr) {
