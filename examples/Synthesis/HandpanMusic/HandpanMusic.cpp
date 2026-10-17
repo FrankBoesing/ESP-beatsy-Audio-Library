@@ -53,12 +53,13 @@ namespace {
 
 constexpr uint8_t PAD_COUNT = 16;
 
-// Equal-tempered pitches for the Für Elise motifs and contrasting middle section.
-// Slots: G#3, A3, B3, C4, D4, E4, F4, G4, G#4, A4, B4, C5, D5, D#5, E5, F5.
+// Pitch bank used to reproduce all pitch classes in the score within 16 pads.
+// Slots: C4, D#4, E4, F4, F#4, G4, G#4, A4, A#4, B4, C5, C#5, D5, D#5, E5, F5.
+// C#4 and D4 are folded one octave up because the pad bank has 16 slots.
 constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
-    207.652f, 220.000f, 246.942f, 261.626f,
-    293.665f, 329.628f, 349.228f, 391.995f,
-    415.305f, 440.000f, 493.883f, 523.251f,
+    261.626f, 311.127f, 329.628f, 349.228f,
+    369.994f, 391.995f, 415.305f, 440.000f,
+    466.164f, 493.883f, 523.251f, 554.365f,
     587.330f, 622.254f, 659.255f, 698.456f
 };
 
@@ -159,19 +160,10 @@ bool configureHandpan()
     return true;
 }
 
-// Each velocity is a MIDI-like amplitude (0..127). Offsets permit small timing tweaks.
-struct PhraseEvent {
-    uint16_t step;
-    uint16_t offsetMs;
-    uint8_t pad;
-    uint8_t velocity;
-};
-
-// Full melody from the Mutopia Project's public-domain Für Elise MIDI.
- // Times are absolute milliseconds from the original score's MIDI timing.
- // The piano's upper staff is used; pitch classes are preserved while notes
- // are folded into the available 16-pad C4–F5 range. Repeated octave pitches
- // are deduplicated when they collapse onto the same pad at the same instant.
+// Full melody from the public-domain Mutopia Project MIDI.
+// Event times are absolute milliseconds from the original score's MIDI timing.
+// The piano's upper staff is used; all pitch classes are retained while notes
+// are octave-folded into the available 16-pad C4–F5 range.
 struct PhraseEvent {
     uint32_t atMs;
     uint8_t pad;
