@@ -16,7 +16,9 @@
 // Record one complete performance as stereo 16-bit PCM WAV on SD_MMC.
 // AudioRecordFile requires PSRAM for its ring buffer.
 constexpr uint32_t OUTPUT_SAMPLE_RATE = AUDIO_SAMPLE_RATE_EXACT;
-constexpr uint32_t RECORD_DURATION_MS = 38000; // 30 s phrase plus 8 s of ringing tail
+constexpr uint32_t PHRASE_DURATION_MS = 30000;
+constexpr uint32_t POST_PHRASE_TAIL_MS = 8000;
+constexpr uint32_t RECORD_DURATION_MS = PHRASE_DURATION_MS + POST_PHRASE_TAIL_MS;
 constexpr char RECORD_BASE_PATH[] = "/ElisasHandPan";
 
 // Standalone recording build; the musical parameters are unchanged.
@@ -114,8 +116,6 @@ struct PhraseEvent {
     uint8_t pad;
     uint8_t velocity;
 };
-
-constexpr uint32_t PHRASE_DURATION_MS = 30000;
 
 constexpr PhraseEvent PHRASE[] = {
     {    0, 10,  62}, {  208,  9,  62}, {  417, 10,  62},
