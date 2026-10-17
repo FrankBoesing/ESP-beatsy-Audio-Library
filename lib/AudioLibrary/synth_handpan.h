@@ -32,17 +32,20 @@ class AudioSynthHandpan : public AudioStream {
     // Configure a logical pad (slot 0..15). Pass up to six modal components,
     // usually three body modes followed by three metallic ring modes. Each mode
     // has an independent frequency, gain, phase and decay time.
-    // If attackSample is nullptr and attackSampleCount is zero, a soft 30 ms
-    // finger-contact transient is generated once in library-owned RAM and used
-    // by default. A supplied sample overrides it and is not copied. Set
-    // attackGain to 0.0f to disable the transient. Caller-owned sample memory
-    // must remain valid during playback. Call before AudioMemory()/updates,
-    // after selecting the sample rate.
+    // This overload uses the built-in soft 30 ms finger-contact transient,
+    // generated once in library-owned RAM. No sample data is needed in the sketch.
+    // Call before AudioMemory()/updates, after selecting the sample rate.
+    bool configureNote(uint8_t slot, const ModeConfig *modes, uint8_t modeCount);
+
+    // Optional custom attack sample: signed mono PCM16, retained but not copied.
+    // Pass nullptr and a count of zero for a resonator-only sound. Caller-owned
+    // memory must remain valid during playback. Set attackGain to 0.0f to disable
+    // a supplied sample. Call before AudioMemory()/updates, after selecting the rate.
     bool configureNote(uint8_t slot, const ModeConfig *modes, uint8_t modeCount,
-                       const int16_t *attackSample = nullptr,
-                       uint32_t attackSampleCount = 0,
+                       const int16_t *attackSample,
+                       uint32_t attackSampleCount,
                        uint32_t attackSampleRate = 44100,
-                       float attackGain = 0.10f);
+                       float attackGain = 0.09f);
 
     // Queue a strike. velocity is MIDI-like, 0..127. Returns false if the slot
     // is not configured or the fixed event queue is full. Each strike is faded
@@ -77,7 +80,7 @@ class AudioSynthHandpan : public AudioStream {
         uint32_t attackSampleCount = 0;
         uint32_t attackIncrementQ16 = 0;
         uint16_t onsetRampSamples = 0;
-        float attackGain = 0.10f;
+        float attackGain = 0.09f;
     };
 
     struct AttackVoice {
