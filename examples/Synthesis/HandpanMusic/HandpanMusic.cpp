@@ -97,12 +97,19 @@ void buildSoftFingerAttack()
         if (rise > 1.0f) rise = 1.0f;
         rise = rise * rise * (3.0f - 2.0f * rise);
 
+        // Fade the end as well, so the 30 ms buffer does not stop abruptly.
+        const float remaining = (float)(ATTACK_SAMPLE_COUNT - 1U - i) /
+                                (0.004f * (float)ATTACK_SAMPLE_RATE);
+        float tail = remaining;
+        if (tail > 1.0f) tail = 1.0f;
+        tail = tail * tail * (3.0f - 2.0f * tail);
+
         const float noiseBody = 0.42f * lowNoise * expf(-t / 0.0085f);
         const float lowThud = 0.38f * sinf(6.28318530718f * 185.0f * t) *
                               expf(-t / 0.014f);
         const float softKnock = 0.14f * sinf(6.28318530718f * 430.0f * t) *
                                 expf(-t / 0.008f);
-        const float value = rise * (noiseBody + lowThud + softKnock);
+        const float value = rise * tail * (noiseBody + lowThud + softKnock);
 
         const int32_t pcm = (int32_t)(value * 32767.0f);
         attackSample[i] = (int16_t)pcm;
