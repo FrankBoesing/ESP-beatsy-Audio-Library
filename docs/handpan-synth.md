@@ -1,10 +1,12 @@
 # Hybrid handpan synthesizer
 
 `AudioSynthHandpan` combines an optional caller-supplied mono PCM16 attack with
-a bank of damped resonators. The examples synthesize their own short attack,
-so no recorded handpan sample is required. The class supports three body modes
-and three optional upper partials; the low-CPU phrase preset leaves the upper
-partials disabled so they cannot sound like a second melodic instrument. A restrained soft-saturation blend can add mild harmonic roughness, but the
+a bank of damped resonators. The musical Für Elise example disables the attack
+sample for a resonator-only listening test; the diagnostic example retains its
+generated transient. Neither example requires a recorded handpan sample. The
+class supports three body modes and three optional upper partials; the low-CPU
+phrase preset leaves the upper partials disabled so they cannot sound like a
+second melodic instrument. A restrained soft-saturation blend can add mild harmonic roughness, but the
 examples prioritize avoiding peak overload by reducing resonator and attack gain. Resonators are independent per configured pad, and repeated
 strikes add energy to existing states instead of cutting off the previous ring.
 
@@ -31,11 +33,12 @@ strikes add energy to existing states instead of cutting off the previous ring.
 
 Each configured pad is a small hybrid instrument. A note combines two signals:
 
-1. **Attack transient (PCM sample).** A short mono signed 16-bit PCM waveform
-   provides the noisy, high-frequency part at the start of the strike. The
-   example generates a deterministic 30 ms transient at startup from decaying
-   broadband noise plus two rapidly decaying sine rings. It is not a recording.
-   One attack buffer is currently shared by all 16 pads.
+1. **Optional attack transient (PCM sample).** A short mono signed 16-bit PCM
+   waveform can provide the noisy, high-frequency part at the start of a strike.
+   The diagnostic example generates a deterministic 30 ms transient at startup
+   from decaying broadband noise plus two rapidly decaying sine rings. The
+   musical example passes `nullptr` and a count of zero to disable it, making the
+   resonator-only onset easy to compare. One attack buffer can be shared by pads.
 2. **Damped resonator bank.** Six independent second-order resonators provide
    the sustained tone: three body modes and three upper partials that establish
    the metallic ring. Every pad has its own frequency, gain, decay and phase
@@ -123,15 +126,16 @@ handpan; confirm them by listening on target hardware.
 There are two separate sketches:
 
 - `examples/Synthesis/HandpanMusic/HandpanMusic.cpp` is the musical example:
-  a 30-second excerpt from the opening of Beethoven's public-domain **“Für Elise” (WoO 59)**. The 109 note onsets come from the upper-staff melody and timing of the current Mutopia Project score/MIDI. The excerpt uses 13 distinct pitches at their written pitches, including one E6, so it does not fold notes into a different octave. Resonators ring naturally rather than stopping at each written note duration. Source: [Mutopia Project, Für Elise](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931).
+  a 30-second excerpt from the opening of Beethoven's public-domain **“Für Elise” (WoO 59)**. The 109 note onsets come from the upper-staff melody and timing of the current Mutopia Project score/MIDI. For this handpan arrangement, the isolated E6 at 25.833 seconds is lowered by one octave to E5. The example disables the PCM attack transient, so each note is excited by the resonator bank alone. Resonators ring naturally rather than stopping at each written note duration. Source: [Mutopia Project, Für Elise](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931).
 - `examples/Synthesis/Handpan/Handpan.cpp` is the diagnostic/load-test sketch.
   It runs a moderate melody, a realistic phrase and increasingly dense pad
   patterns, reporting CPU load, audio-block use and rejected note events.
 
-Both examples generate the short procedural attack at startup and do not depend
-on any third-party recording. Applications may pass a caller-owned mono PCM16
-attack or a `const int16_t[]` flash table when they have appropriate rights to
-that audio; passing `nullptr` disables the sampled transient. Do not redistribute
+The diagnostic example generates the short procedural attack at startup and
+does not depend on a third-party recording. The musical example deliberately
+disables the attack with `nullptr` and a zero sample count. Applications may pass
+a caller-owned mono PCM16 attack or a `const int16_t[]` flash table when they
+have appropriate rights to that audio; passing `nullptr` disables the transient. Do not redistribute
 extracted reference samples unless their license explicitly permits it. The notes
 and tuning here are illustrative starting parameters, not measurements of a
 particular commercial handpan.
@@ -163,7 +167,7 @@ return and final mixer. Both default to 48 kHz and configure I2S before
 respective `HANDPAN_MUSIC_SAMPLE_RATE` or `HANDPAN_TEST_SAMPLE_RATE` macro to
 `44100` for a 44.1-kHz run.
 
-The Für Elise example uses the upper-staff note sequence and onset timing from the current Mutopia Project MIDI (Beethoven, WoO 59; source score: Breitkopf & Härtel, 1888), cut off at 30,000 ms. The excerpt contains 109 note events and uses 13 distinct MIDI pitches (C4, E4, F4, G4, G#4, A4, B4, C5, D5, D#5, E5, F5 and E6) configured at their written frequencies. No octave folding is applied. Only the opening excerpt is included; the rest of the composition is intentionally omitted. The handpan resonators still ring according to their decay settings rather than following the piano's exact note-off envelopes.
+The Für Elise example uses the upper-staff note sequence and onset timing from the current Mutopia Project MIDI (Beethoven, WoO 59; source score: Breitkopf & Härtel, 1888), cut off at 30,000 ms. The excerpt contains 109 note events and 12 distinct pitches (C4, E4, F4, G4, G#4, A4, B4, C5, D5, D#5, E5 and F5). The isolated E6 event at 25.833 seconds is played as E5 instead. No PCM attack transient is mixed in by the musical example; the resonator modes alone create the note onsets. Only the opening excerpt is included; the rest of the composition is intentionally omitted. The handpan resonators still ring according to their decay settings rather than following the piano's exact note-off envelopes.
 
 The example defaults to **48 kHz**. It calls `audioOut.setSampleRate()` before
 `AudioMemory()` and before configuring the resonators, so the modal coefficients
