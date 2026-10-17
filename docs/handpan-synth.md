@@ -187,12 +187,12 @@ The example cycles through five eight-second phases:
    remain active simultaneously.
 4. `RAPID 4-NOTE BURSTS`: four pad events every 24 ms, stressing the event queue
    and the eight attack-sample voice limit while modal tails remain active.
-5. `DENSE 16-PAD SWEEP / MODAL LOAD`: four pad events every 12 ms, covering all
-   16 pads within 36 ms and revisiting each pad about every 48 ms. The long body
-   modes and upper partials overlap across that revisit interval, so this phase
-   is intended to keep the full 96-mode bank active together after startup. It is
-   a synthetic worst-case load test, not a realistic playing pattern, and may
-   sound rough or clipped. Keep the output volume low during this phase.
+5. `DENSE 16-PAD SWEEP / BODY LOAD`: four pad events every 12 ms, covering all
+   16 pads within 36 ms and revisiting each pad about every 48 ms. With the
+   upper partials disabled by the low-CPU preset, this phase is intended to keep
+   up to 48 body-mode resonators active together after startup. It is a synthetic
+   worst-case load test, not a realistic playing pattern, and may sound rough or
+   clipped. Keep the output volume low during this phase.
 
 Once per second the serial log reports graph-wide CPU, per-stream CPU for the
 handpan source and Freeverb, current/peak audio-block use, and note events
