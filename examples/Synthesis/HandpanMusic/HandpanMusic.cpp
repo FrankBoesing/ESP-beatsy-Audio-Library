@@ -1,10 +1,9 @@
 /*
- * Handpan — Moonlit Current
+ * Handpan — Für Elise (Beethoven)
  *
- * A looping eight-bar handpan-inspired phrase with dynamic accents, quiet grace
- * notes, resonator tails and a restrained hall return. The short attack transient
- * is generated procedurally; no third-party recording is bundled.
- * Pad frequencies and modal parameters are starting points, not measured tuning.
+ * A handpan-style arrangement of the public-domain melody, transposed one octave
+ * down. The notes are tuned to equal temperament; the strike transient is
+ * generated procedurally and no third-party audio recording is bundled.
  */
 
 #include <Audio.h>
@@ -53,13 +52,14 @@ namespace {
 
 constexpr uint8_t PAD_COUNT = 16;
 
-// The 16 pads cover a broad handpan-inspired register. Frequencies are adjustable
-// starter values, not a measured tuning for a specific commercial instrument.
+// Equal-tempered pitches used by the Für Elise arrangement, one octave below
+// the familiar opening register. Slot numbers are documented in the note table:
+// G#3, A3, B3, C4, D4, D#4, E4, G4, G#4, A4, B4, C5, D5, D#5, E5, F5.
 constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
-    139.6f, 156.8f, 185.0f, 209.4f,
-    233.1f, 246.5f, 277.1f, 293.7f,
-    312.6f, 330.7f, 349.2f, 372.3f,
-    415.7f, 440.0f, 493.9f, 523.3f
+    207.652f, 220.000f, 246.942f, 261.626f,
+    293.665f, 311.127f, 329.628f, 391.995f,
+    415.305f, 440.000f, 493.883f, 523.251f,
+    587.330f, 622.254f, 659.255f, 698.456f
 };
 
 // Lowest-cost phrase preset from the listening comparison (variant C):
@@ -169,50 +169,40 @@ struct PhraseEvent {
     uint8_t velocity;
 };
 
-constexpr uint32_t STEP_MS = 313;
-constexpr uint8_t PHRASE_STEPS = 64;
+// Sixteenth-note pulse at 120 BPM. The 160-step phrase is a short, recognizable
+// handpan arrangement of the Für Elise opening and its answering motifs.
+constexpr uint32_t STEP_MS = 125;
+constexpr uint8_t PHRASE_STEPS = 160;
 constexpr uint32_t PHRASE_DURATION_MS = STEP_MS * PHRASE_STEPS;
 
 constexpr PhraseEvent PHRASE[] = {
-    // Bar 1 — introduce the motif gently, then answer it with a stronger note.
-    { 0,   0,  0, 100}, { 1,   0,  4,  64}, { 2,   0,  2,  82},
-    { 3,   0,  5,  48}, { 4,   0,  1,  88}, { 5,   0,  6,  66},
-    { 6,   0,  4,  54}, { 7,   0,  7,  96}, { 7, 145,  3,  40},
+    // Opening motif: E4-D#4-E4-D#4-E4, then B3-D4-C4-A3.
+    {  0, 0,  6,  92}, {  1, 0,  5,  76}, {  2, 0,  6,  88},
+    {  3, 0,  5,  76}, {  4, 0,  6,  92}, {  7, 0,  2,  80},
+    {  9, 0,  4,  78}, { 11, 0,  3,  80}, { 14, 0,  1,  90},
 
-    // Bar 2 — a descending answer with a quiet upper grace note.
-    { 8,   0,  3,  82}, { 9,   0,  2,  57}, {10,   0,  6,  76},
-    {12,   0,  5,  92}, {13,   0,  1,  62}, {14,   0,  7,  78},
-    {15,   0,  2, 101}, {15, 155,  9,  37},
+    // Answering theme: C4-E4-A4-B4, then E4-G#4-B4-C5.
+    { 22, 0,  3,  72}, { 24, 0,  6,  78}, { 28, 0,  9,  84},
+    { 32, 0, 10,  87}, { 36, 0,  6,  76}, { 40, 0,  8,  82},
+    { 44, 0, 10,  87}, { 48, 0, 11,  90},
 
-    // Bar 3 — revisit the opening figure with softer inner notes.
-    {16,   0,  0,  96}, {17,   0,  4,  62}, {18,   0,  2,  79},
-    {18, 145, 11,  41}, {19,   0,  6,  58}, {20,   0,  5,  87},
-    {22,   0,  7,  91}, {23,   0,  3,  49},
+    // Repeat the answering figure before rising to the upper E.
+    { 54, 0,  6,  74}, { 58, 0,  9,  82}, { 62, 0, 10,  85},
+    { 66, 0, 11,  90}, { 72, 0,  6,  86}, { 76, 0, 14,  92},
+    { 77, 0, 13,  74}, { 78, 0, 14,  88}, { 79, 0, 13,  74},
+    { 80, 0, 14,  94}, { 84, 0, 10,  80}, { 86, 0, 12,  78},
+    { 88, 0, 11,  77}, { 92, 0,  9,  87},
 
-    // Bar 4 — brighter cadence, with a soft ornament after the last note.
-    {24,   0,  2,  84}, {25,   0,  6,  54}, {26,   0,  1,  77},
-    {27,   0,  5,  47}, {28,   0,  0,  99}, {29,   0,  4,  64},
-    {30,   0,  7,  84}, {31,   0,  2, 104}, {31, 145, 13,  35},
+    // Lower-register answer followed by a short rising phrase.
+    {100, 0,  3,  70}, {102, 0,  6,  74}, {106, 0,  9,  82},
+    {110, 0, 10,  85}, {114, 0,  6,  75}, {118, 0, 11,  85},
+    {120, 0, 10,  78}, {122, 0,  9,  82},
 
-    // Bar 5 — return to the motif with a little more energy.
-    {32,   0,  0, 103}, {33,   0,  5,  70}, {34,   0,  2,  78},
-    {35,   0,  6,  52}, {36,   0,  1,  87}, {37,   0,  7,  62},
-    {38,   0,  4,  57}, {39,   0,  9,  84},
-
-    // Bar 6 — sparse response; rests let the longer body modes breathe.
-    {40,   0,  3,  81}, {41,   0,  2,  54}, {42,   0,  6,  74},
-    {43,   0,  0,  46}, {44,   0,  5,  92}, {45,   0,  1,  61},
-    {46,   0,  7,  80}, {47,   0,  2, 105}, {47, 150, 14,  33},
-
-    // Bar 7 — broaden the register with a quiet upper answering note.
-    {48,   0,  0,  98}, {49,   0,  4,  66}, {50,   0,  2,  83},
-    {50, 150, 12,  40}, {51,   0,  5,  51}, {52,   0,  1,  86},
-    {53,   0,  6,  67}, {54,   0,  4,  55}, {55,   0,  7,  94},
-
-    // Bar 8 — resolve the phrase and leave space before it loops.
-    {56,   0,  3,  83}, {57,   0,  2,  58}, {58,   0,  6,  76},
-    {60,   0,  5,  94}, {61,   0,  1,  64}, {62,   0,  7,  80},
-    {63,   0,  2, 102}, {63, 145, 15,  34}
+    // Cadence leading back to the main motif.
+    {128, 0, 10,  83}, {130, 0, 11,  86}, {132, 0, 12,  90},
+    {136, 0, 14,  94}, {140, 0,  9,  81}, {144, 0, 15,  90},
+    {148, 0, 14,  86}, {152, 0, 12,  83}, {156, 0, 14,  91},
+    {157, 0, 13,  73}, {158, 0, 14,  90}
 };
 
 constexpr size_t PHRASE_EVENT_COUNT = sizeof(PHRASE) / sizeof(PHRASE[0]);
@@ -259,9 +249,9 @@ void setup()
 
     Serial.println();
     Serial.println("======================================");
-    Serial.println(" Handpan — Moonlit Current");
+    Serial.println(" Handpan — Für Elise");
     Serial.printf(" Output sample rate: %lu Hz\n", (unsigned long)OUTPUT_SAMPLE_RATE);
-    Serial.println(" Eight-bar phrase; variable velocity; looping with resonator tails");
+    Serial.println(" Für Elise arrangement one octave down; 20-second loop");
     Serial.println("======================================");
 
     // Modal coefficients must be prepared at the selected output sample rate.
