@@ -159,9 +159,8 @@ bool configureHandpan()
     return true;
 }
 
-// One eighth-note step at about 96 BPM. The eight-bar phrase lasts about 20 s.
 // Each velocity is an individual MIDI-like amplitude (0..127). Missing steps are
-// rests; offsetMs adds a quiet grace note between the main beats.
+// rests; offsetMs permits small timing offsets for ornaments if needed.
 struct PhraseEvent {
     uint8_t step;
     uint16_t offsetMs;
