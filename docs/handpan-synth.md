@@ -126,8 +126,9 @@ There are two separate sketches:
 
 - `examples/Synthesis/HandpanMusic/HandpanMusic.cpp` is the musical example:
   a short, looping handpan arrangement of Beethoven's public-domain **“Für Elise”**
-  theme, transposed one octave down and tuned to equal temperament. It exercises
-  the full musical note range with variable velocities and a gentle Freeverb return.
+  theme using the familiar upper-register opening and lower answer figures. The
+  equal-tempered notes follow a regular sixteenth-note timing grid, with variable
+  velocities and a gentle Freeverb return.
 - `examples/Synthesis/Handpan/Handpan.cpp` is the diagnostic/load-test sketch.
   It runs a moderate melody, a realistic phrase and increasingly dense pad
   patterns, reporting CPU load, audio-block use and rejected note events.
@@ -167,9 +168,11 @@ return and final mixer. Both default to 48 kHz and configure I2S before
 respective `HANDPAN_MUSIC_SAMPLE_RATE` or `HANDPAN_TEST_SAMPLE_RATE` macro to
 `44100` for a 44.1-kHz run.
 
-The Für Elise arrangement uses equal-tempered pitch values from G#3 to F5; the
-opening motif is transposed one octave down from the familiar piano register.
-This is an original handpan-style arrangement, not a transcription of a specific
+The Für Elise arrangement uses equal-tempered pitch values from G#3 to F5.
+The opening motif stays in its familiar upper register while lower answer figures
+use the lower-register notes from the composition. The 20-second loop uses a
+more even event grid, with longer note values represented by two- or four-step
+gaps. This is a handpan-style arrangement, not a transcription of a specific
 modern performance or recording.
 
 The example defaults to **48 kHz**. It calls `audioOut.setSampleRate()` before
