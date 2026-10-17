@@ -41,8 +41,9 @@ class AudioSynthHandpan : public AudioStream {
                        float attackGain = 0.09f);
 
     // Queue a strike. velocity is MIDI-like, 0..127. Returns false if the slot
-    // is not configured or the fixed event queue is full. Resonators are not
-    // reset by repeated strikes: each event adds energy to the existing ring.
+    // is not configured or the fixed event queue is full. Each strike is faded
+    // in over 5 ms as a separate resonator voice, then merged into the pad's
+    // long-lived ring; existing tails are not reset or ducked.
     bool noteOn(uint8_t slot, uint8_t velocity = 100);
 
     // Enable the soft saturation used by the H2 listening prototype. Amount is
