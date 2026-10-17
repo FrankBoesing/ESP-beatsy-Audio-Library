@@ -7,6 +7,15 @@
 
 AudioSynthHandpan::AudioSynthHandpan() : AudioStream(0, nullptr) {}
 
+void AudioSynthHandpan::setSaturation(float amount) {
+    if (!isfinite(amount)) {
+        return;
+    }
+    if (amount < 0.0f) amount = 0.0f;
+    if (amount > 1.0f) amount = 1.0f;
+    saturationAmount = amount;
+}
+
 bool AudioSynthHandpan::configureNote(uint8_t slot, const ModeConfig *modes,
                                       uint8_t modeCount,
                                       const int16_t *attackSample,
@@ -213,6 +222,7 @@ void AudioSynthHandpan::update() {
     // Allocate once per block. If unavailable, DSP state still advances so a
     // temporary audio-pool shortage does not stretch note tails in time.
     audio_block_t *block = allocate();
+    const float saturation = saturationAmount;
 
     for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         mixBuffer[i] = 0.0f;
@@ -297,6 +307,18 @@ void AudioSynthHandpan::update() {
         }
 
         if (block != nullptr) {
+            if (saturation > 0.0f) {
+                // Low-cost rational approximation to the H2 soft-saturation
+                // curve: 0.405 * tanh(2.672 * mix). The amount blends the shaped
+                // signal with the dry one; 0 bypasses this block completely.
+                const float driven = mix * 2.6718576f;
+                const float driven2 = driven * driven;
+                const float shaped =
+                    0.4050675f * driven * (27.0f + driven2) /
+                    (27.0f + 9.0f * driven2);
+                mix += saturation * (shaped - mix);
+            }
+
             if (mix > 1.0f) mix = 1.0f;
             if (mix < -1.0f) mix = -1.0f;
             block->data[i] = saturate16((int32_t)(mix * OUTPUT_SCALE));
