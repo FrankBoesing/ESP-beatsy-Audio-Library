@@ -60,7 +60,7 @@ constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
 // The optional sustained upper partials are disabled to avoid a second melody.
 constexpr float BODY_T60[3] = {3.00f, 3.00f, 4.00f};
 constexpr float BODY_RATIOS[3] = {1.000f, 2.011f, 2.984f};
-constexpr float BODY_GAIN_BASE[3] = {0.55f, 0.56f, 0.96f};
+constexpr float BODY_GAIN_BASE[3] = {0.30f, 0.31f, 0.52f};
 constexpr float METAL_RATIOS[3] = {5.36f, 5.96f, 10.79f};
 constexpr float METAL_T60[3] = {0.25f, 0.12f, 0.08f};
 constexpr float METAL_GAINS[3] = {0.0f, 0.0f, 0.0f};
@@ -114,7 +114,7 @@ void buildExampleAttack()
     }
 
     // Normalize in-place to a safe source peak without a large setup() stack array.
-    const float scale = peak > 0 ? (0.75f * 32767.0f) / (float)peak : 0.0f;
+    const float scale = peak > 0 ? (0.65f * 32767.0f) / (float)peak : 0.0f;
     for (uint32_t i = 0; i < ATTACK_SAMPLE_COUNT; ++i) {
         attackSample[i] = (int16_t)((float)attackSample[i] * scale);
     }
@@ -141,9 +141,9 @@ bool configureHandpan()
             modes[mode + 3].phaseRadians = METAL_PHASES[mode] + 0.17f * (float)pad;
         }
 
-        // 0.09 is the attack level preferred in the Python reference comparison.
+        // Keep the attack below the body level to reduce peak transients.
         if (!handpan.configureNote(pad, modes, 6, attackSample,
-                                   ATTACK_SAMPLE_COUNT, ATTACK_SAMPLE_RATE, 0.06f)) {
+                                   ATTACK_SAMPLE_COUNT, ATTACK_SAMPLE_RATE, 0.03f)) {
             Serial.print("Failed to configure pad ");
             Serial.println(pad);
             return false;
@@ -355,7 +355,7 @@ void setup()
     }
 
     // H2 adds a little harmonic roughness without introducing another resonator.
-    handpan.setSaturation(0.65f);
+    handpan.setSaturation(0.25f);
     buildExampleAttack();
     if (!configureHandpan()) {
         while (true) delay(1000);
@@ -370,8 +370,8 @@ void setup()
         Serial.println("WARNING: Freeverb memory allocation failed; continuing dry");
     }
 
-    dryWetMixer.gain(0, 0.82f);              // Dry signal
-    dryWetMixer.gain(1, hallReady ? 0.22f : 0.0f); // Wet return
+    dryWetMixer.gain(0, 0.72f);              // Dry signal
+    dryWetMixer.gain(1, hallReady ? 0.14f : 0.0f); // Wet return
 
     audioOut.setChannelCount(codec.channels());
     AudioMemory(32);
