@@ -1,15 +1,13 @@
 # Hybrid handpan synthesizer
 
 `AudioSynthHandpan` combines an optional caller-supplied mono PCM16 attack with
-a fixed bank of damped resonators. The examples synthesize their own short
-attack transient at startup, so no recorded handpan sample is required. Three
-body modes model the note body; three upper partials add the metallic ring, each
-with its own decay time. The low-CPU phrase preset disables the three sustained upper partials; the
-procedural attack provides the initial bright strike without a separate pitched
-metallic line. The class still allows applications to enable these modes when
-suitable for their own sound design. The resonators are independent per configured pad. A
-repeated strike adds energy to existing resonator states rather than cutting off
-the previous ring.
+a bank of damped resonators. The examples synthesize their own short attack,
+so no recorded handpan sample is required. The class supports three body modes
+and three optional upper partials; the low-CPU phrase preset leaves the upper
+partials disabled so they cannot sound like a second melodic instrument. The H2
+preset applies gentle soft saturation to the final mixed signal to add mild
+harmonic roughness. Resonators are independent per configured pad, and repeated
+strikes add energy to existing states instead of cutting off the previous ring.
 
 ## Limits and runtime behavior
 
@@ -62,9 +60,12 @@ the PCM attack and the modal gains. A phase-shaped impulse is added to the
 resonator's existing state. **The states are not cleared on retrigger**, so a
 new hit adds energy to an already-ringing note rather than cutting off its tail.
 The modal outputs and active attack voices are accumulated in a floating-point
-mix buffer, clamped to the normalized range, and converted once to PCM16 output.
-Strongly overlapping notes can therefore clip if the total mix exceeds full
-scale; choose modal gains and the final graph gain accordingly.
+mix buffer. Optional soft saturation then shapes the combined waveform before
+it is clamped and converted to PCM16. Set saturation to zero to bypass the
+non-linear stage; the examples use amount `1.0` for the H2 timbre. The rational
+approximation is designed to be cheaper than a per-sample `tanhf()` call.
+Strongly overlapping notes can still overload the final range, so choose modal
+gains and graph gain accordingly.
 
 The PCM sample pointer is retained by the synthesizer, not copied. It may point
 to a caller-owned RAM array or a `const int16_t[]` table placed in flash, but
@@ -97,8 +98,10 @@ AudioSynthHandpan::ModeConfig modes[6] = {
     {1583.9720f, 0.0000f, 0.08f, 1.48f},
 };
 
+// Optional soft saturation (0 = bypass, 1 = H2 sound).
+handpan.setSaturation(1.0f);
 // attack is a caller-owned signed mono PCM16 sample; nullptr disables it.
-handpan.configureNote(0, modes, 6, attack, attackSampleCount, 44100, 0.09f);
+handpan.configureNote(0, modes, 6, attack, attackSampleCount, 44100, 0.06f);
 handpan.noteOn(0, 100);
 ```
 
@@ -111,7 +114,9 @@ partial ratios `5.36, 5.96, 10.79` remain configured but have zero gain in these
 examples. `AudioSynthHandpan::triggerNote()` skips zero-gain modes, so only the
 three body resonators need to run during the sustained tail. This is the lowest-
 compute model among the previously compared variants, and avoids a separate
-pitched metallic line. The procedural attack gain remains `0.09`. These are
+pitched metallic line. The procedural attack gain has been reduced to `0.06`, and the musical/load-test
+examples enable H2 soft saturation. `setSaturation(0.0f)` bypasses the non-linear
+stage; intermediate values blend dry and saturated outputs. These are
 experimental listening parameters, not measured physical modes of a particular
 handpan; confirm them by listening on target hardware.
 
