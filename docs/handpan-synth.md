@@ -91,9 +91,9 @@ AudioSynthHandpan::ModeConfig modes[6] = {
     {146.8f, 0.3150f, 2.00f, 0.12f},
     {295.2148f, 0.0450f, 1.05f, 1.10f},
     {438.0512f, 0.1350f, 0.58f, 2.05f},
-    {786.8480f, 0.0700f, 2.60f, 0.72f},
-    {874.9280f, 0.0350f, 0.65f, 2.20f},
-    {1583.9720f, 0.0140f, 0.22f, 1.48f},
+    {786.8480f, 0.0160f, 1.80f, 0.72f},
+    {874.9280f, 0.0045f, 0.45f, 2.20f},
+    {1583.9720f, 0.0015f, 0.16f, 1.48f},
 };
 
 // attack is a caller-owned signed mono PCM16 sample; nullptr disables it.
@@ -103,14 +103,14 @@ handpan.noteOn(0, 100);
 
 `ModeConfig::gain` is a normalized peak amplitude per mode (0..1), not a
 percentage. `attackGain` is an additional normalized linear gain applied to the
-sample. The previous isolated-note S3 setting was too persistent when played as a phrase:
-its long body overtones and strong upper partials stacked into a xylophone-like
-second melody. The current phrase preset therefore returns the body-mode `T60`
-values to `2.00, 1.05, 0.58 s` and uses a lower metallic balance. With base
-frequency `f0`, the body-mode ratios are `1.000, 2.011, 2.984` and the upper-partial
-ratios are `5.36, 5.96, 10.79`. Their respective `T60` values are `2.00, 1.05,
-0.58 s` and `2.60, 0.65, 0.22 s`; the nominal gains used in the API example are
-`0.315, 0.045, 0.135, 0.070, 0.035, 0.014`. The musical example varies body-mode
+sample. The first phrase correction still left the upper modes audible as a separate
+melodic layer. The current preset therefore reduces their gains substantially:
+with base frequency `f0`, the body-mode ratios are `1.000, 2.011, 2.984` and the
+upper-partial ratios are `5.36, 5.96, 10.79`. Their respective `T60` values are
+`2.00, 1.05, 0.58 s` and `1.80, 0.45, 0.16 s`. The nominal modal gains in the API
+example are `0.315, 0.045, 0.135, 0.016, 0.0045, 0.0015`. Only the first upper
+partial retains a longer tail, at a much lower level; the other upper modes act
+primarily as brief strike coloration. The musical example varies body-mode
 levels slightly by pad. The procedural attack gain remains `0.09`. These are
 experimental listening parameters, not measured physical modes of a particular
 handpan; confirm them by listening on target hardware.
