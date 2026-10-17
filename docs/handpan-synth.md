@@ -86,7 +86,7 @@ Saturation is optional and can be bypassed with `setSaturation(0.0f)`.
 
 `ElisasHandPan.cpp` defaults to 48 kHz. It sets the I2S sample rate before
 configuring modal coefficients and before calling `AudioMemory()`. For a
-44.1-kHz comparison, change `HANDPAN_MUSIC_SAMPLE_RATE` near the top of the
+44.1-kHz comparison, change `ELISA_HANDPAN_SAMPLE_RATE` near the top of the
 example to `44100` and rebuild.
 
 The excerpt contains 109 note events and 12 distinct pitches: C4, E4, F4, G4,
