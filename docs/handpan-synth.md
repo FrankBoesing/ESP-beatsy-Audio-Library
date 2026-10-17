@@ -1,9 +1,9 @@
 # Hybrid handpan synthesizer
 
 `AudioSynthHandpan` combines an optional caller-supplied mono PCM16 attack with
-a bank of damped resonators. The musical Für Elise example disables the attack
-sample for a resonator-only listening test; the diagnostic example retains its
-generated transient. Neither example requires a recorded handpan sample. The
+a bank of damped resonators. The musical Für Elise example uses a custom, deliberately soft finger-contact
+transient; the diagnostic example retains its brighter generated transient.
+Neither example requires a recorded handpan sample. The
 class supports three body modes and three optional upper partials; the low-CPU
 phrase preset leaves the upper partials disabled so they cannot sound like a
 second melodic instrument. A restrained soft-saturation blend can add mild harmonic roughness, but the
@@ -35,10 +35,11 @@ Each configured pad is a small hybrid instrument. A note combines two signals:
 
 1. **Optional attack transient (PCM sample).** A short mono signed 16-bit PCM
    waveform can provide the noisy, high-frequency part at the start of a strike.
-   The diagnostic example generates a deterministic 30 ms transient at startup
-   from decaying broadband noise plus two rapidly decaying sine rings. The
-   musical example passes `nullptr` and a count of zero to disable it, making the
-   resonator-only onset easy to compare. One attack buffer can be shared by pads.
+   The diagnostic example generates its original, brighter transient. The
+   musical example instead builds a 30 ms soft contact transient from low-passed
+   noise and quiet low-frequency thuds, with a 2.5 ms smooth rise and a low peak
+   level. This gives the note a muted finger-like onset without using a recording.
+   One attack buffer can be shared by pads.
 2. **Damped resonator bank.** Six independent second-order resonators provide
    the sustained tone: three body modes and three upper partials that establish
    the metallic ring. Every pad has its own frequency, gain, decay and phase
@@ -120,7 +121,7 @@ partial ratios `5.36, 5.96, 10.79` remain configured but have zero gain in these
 examples. `AudioSynthHandpan::triggerNote()` skips zero-gain modes, so only the
 three body resonators need to run during the sustained tail. This is the lowest-
 compute model among the previously compared variants, and avoids a separate
-pitched metallic line. The diagnostic example's procedural attack gain is `0.03`, and its generated attack is normalized to a 0.65 full-scale peak; the musical example omits the attack entirely. Both examples use lower modal levels and a restrained `0.25` saturation blend. `setSaturation(0.0f)` bypasses the non-linear
+pitched metallic line. The diagnostic example's procedural attack gain is `0.03`, and its generated attack is normalized to a 0.65 full-scale peak. The musical example uses the softer custom attack at a `0.055` gain and a 0.22 full-scale peak. Both examples use lower modal levels and a restrained `0.25` saturation blend. `setSaturation(0.0f)` bypasses the non-linear
 stage; intermediate values blend dry and saturated outputs. These are
 experimental listening parameters, not measured physical modes of a particular
 handpan; confirm them by listening on target hardware.
@@ -135,9 +136,9 @@ There are two separate sketches:
   It runs a moderate melody, a realistic phrase and increasingly dense pad
   patterns, reporting CPU load, audio-block use and rejected note events.
 
-The diagnostic example generates the short procedural attack at startup and
-does not depend on a third-party recording. The musical example deliberately
-disables the attack with `nullptr` and a zero sample count. Applications may pass
+Both examples generate their own attack at startup and do not depend on a
+third-party recording. The musical example uses a softer, low-passed 30 ms
+finger-contact transient; the diagnostic example retains a brighter transient. Applications may pass
 a caller-owned mono PCM16 attack or a `const int16_t[]` flash table when they
 have appropriate rights to that audio; passing `nullptr` disables the transient. Do not redistribute
 extracted reference samples unless their license explicitly permits it. The notes
@@ -171,7 +172,7 @@ return and final mixer. Both default to 48 kHz and configure I2S before
 respective `HANDPAN_MUSIC_SAMPLE_RATE` or `HANDPAN_TEST_SAMPLE_RATE` macro to
 `44100` for a 44.1-kHz run.
 
-The Für Elise example uses the upper-staff note sequence and onset timing from the current Mutopia Project MIDI (Beethoven, WoO 59; source score: Breitkopf & Härtel, 1888), cut off at 30,000 ms. The excerpt contains 109 note events and 12 distinct pitches (C4, E4, F4, G4, G#4, A4, B4, C5, D5, D#5, E5 and F5). The isolated E6 event at 25.833 seconds is played as E5 instead. No PCM attack transient is mixed in by the musical example. Its body modes use zero initial phase, and the synthesizer applies a 5 ms smooth onset ramp to each strike to reduce the remaining click-like transient. Only the opening excerpt is included; the rest of the composition is intentionally omitted. The handpan resonators still ring according to their decay settings rather than following the piano's exact note-off envelopes.
+The Für Elise example uses the upper-staff note sequence and onset timing from the current Mutopia Project MIDI (Beethoven, WoO 59; source score: Breitkopf & Härtel, 1888), cut off at 30,000 ms. The excerpt contains 109 note events and 12 distinct pitches (C4, E4, F4, G4, G#4, A4, B4, C5, D5, D#5, E5 and F5). The isolated E6 event at 25.833 seconds is played as E5 instead. The musical example uses a softly generated finger-contact transient instead of the sharper diagnostic attack. The sample is low-passed, level-limited, and faded in over 2.5 ms; the body modes also use zero initial phase and retain the synthesizer's 5 ms smooth onset ramp. Only the opening excerpt is included; the rest of the composition is intentionally omitted. The handpan resonators still ring according to their decay settings rather than following the piano's exact note-off envelopes.
 
 The musical example defaults to **48 kHz**. It calls `audioOut.setSampleRate()`
 before `AudioMemory()` and before configuring the resonators, so the modal
