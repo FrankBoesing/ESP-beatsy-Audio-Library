@@ -124,9 +124,10 @@ handpan; confirm them by listening on target hardware.
 
 There are two separate sketches:
 
-- `examples/Synthesis/HandpanMusic/HandpanMusic.cpp` is the musical example,
-  **“Moonlit Current”**: an eight-bar phrase of about 20 seconds that loops
-  with changing velocities, quiet grace notes and a gentle Freeverb return.
+- `examples/Synthesis/HandpanMusic/HandpanMusic.cpp` is the musical example:
+  a short, looping handpan arrangement of Beethoven's public-domain **“Für Elise”**
+  theme, transposed one octave down and tuned to equal temperament. It exercises
+  the full musical note range with variable velocities and a gentle Freeverb return.
 - `examples/Synthesis/Handpan/Handpan.cpp` is the diagnostic/load-test sketch.
   It runs a moderate melody, a realistic phrase and increasingly dense pad
   patterns, reporting CPU load, audio-block use and rejected note events.
@@ -165,6 +166,11 @@ return and final mixer. Both default to 48 kHz and configure I2S before
 `AudioMemory()` and before calculating the resonator coefficients. Change the
 respective `HANDPAN_MUSIC_SAMPLE_RATE` or `HANDPAN_TEST_SAMPLE_RATE` macro to
 `44100` for a 44.1-kHz run.
+
+The Für Elise arrangement uses equal-tempered pitch values from G#3 to F5; the
+opening motif is transposed one octave down from the familiar piano register.
+This is an original handpan-style arrangement, not a transcription of a specific
+modern performance or recording.
 
 The example defaults to **48 kHz**. It calls `audioOut.setSampleRate()` before
 `AudioMemory()` and before configuring the resonators, so the modal coefficients
