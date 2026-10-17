@@ -3,7 +3,8 @@
  *
  * Uses the first 30 seconds of the upper-staff melody from the current,
  * public-domain Mutopia Project MIDI derived from the Breitkopf & Härtel
- * (1888) edition. Only the score's original pitches and event times are used.
+ * (1888) edition. At 25.833 s, the isolated E6 is lowered to E5 for this
+ * handpan arrangement; the original note timings are retained.
  * Source: https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931
  */
 
@@ -51,16 +52,15 @@ AudioConnection mixToRight(dryWetMixer, 0, audioOut, 1);
 
 namespace {
 
-// Exact pitches used in the first 30 seconds of the score-derived melody.
-// The one high E6 is kept at its written pitch; no octave folding is needed.
-// MIDI pitches: 60, 64, 65, 67, 68, 69, 71, 72, 74, 75, 76, 77, 88.
-constexpr uint8_t PAD_COUNT = 13;
-// Pad-index to MIDI pitch: 60, 64, 65, 67, 68, 69, 71, 72, 74, 75, 76, 77, 88.
+// Pitches used in the first 30 seconds of the score-derived melody.
+// The isolated E6 at 25.833 s is lowered by one octave to E5 for this arrangement.
+// MIDI pitches after this adjustment: 60, 64, 65, 67, 68, 69, 71, 72, 74, 75, 76, 77.
+constexpr uint8_t PAD_COUNT = 12;
+// Pad-index to MIDI pitch: 60, 64, 65, 67, 68, 69, 71, 72, 74, 75, 76, 77.
 constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
     261.626f, 329.628f, 349.228f, 391.995f,
     415.305f, 440.000f, 493.883f, 523.251f,
-    587.330f, 622.254f, 659.255f, 698.456f,
-    1318.510f
+    587.330f, 622.254f, 659.255f, 698.456f
 };
 
 // Keep the warm body modes and use the generated attack for the strike.
@@ -86,8 +86,7 @@ constexpr float BODY_LEVELS[PAD_COUNT][3] = {
     {0.58f,0.68f,0.38f},
     {0.62f,0.24f,0.18f},
     {0.64f,0.31f,0.24f},
-    {0.65f,0.23f,0.17f},
-    {0.72f,0.32f,0.20f}
+    {0.65f,0.23f,0.17f}
 };
 
 constexpr float BODY_PHASES[PAD_COUNT][3] = {
@@ -102,40 +101,11 @@ constexpr float BODY_PHASES[PAD_COUNT][3] = {
     {0.24f,1.65f,2.20f},
     {0.82f,0.45f,1.95f},
     {1.42f,2.05f,0.66f},
-    {0.25f,1.34f,2.72f},
-    {1.05f,0.71f,2.36f}
+    {0.25f,1.34f,2.72f}
 };
 
-// A compact, deterministic noise burst plus two rapidly decaying sine rings.
-// The attack is generated at setup; it contains no recorded audio.
-void buildExampleAttack()
-{
-    uint32_t randomState = 0x4d595df4U;
-    int32_t peak = 0;
-
-    for (uint32_t i = 0; i < ATTACK_SAMPLE_COUNT; ++i) {
-        const float t = (float)i / (float)ATTACK_SAMPLE_RATE;
-        randomState = randomState * 1664525U + 1013904223U;
-        const float noise = ((float)(randomState >> 8) * (1.0f / 8388607.5f)) - 1.0f;
-        const float noiseEnvelope = expf(-t / 0.009f) * fminf(1.0f, t / 0.0006f);
-        const float ring1 = sinf(6.28318530718f * 3650.0f * t) * expf(-t / 0.0038f);
-        const float ring2 = sinf(6.28318530718f * 6100.0f * t) * expf(-t / 0.0018f);
-        const float value = 0.60f * noise * noiseEnvelope +
-                            0.28f * ring1 + 0.12f * ring2;
-        int32_t pcm = (int32_t)(value * 32767.0f);
-        if (pcm > 32767) pcm = 32767;
-        if (pcm < -32768) pcm = -32768;
-        attackSample[i] = (int16_t)pcm;
-        const int32_t magnitude = pcm < 0 ? -pcm : pcm;
-        if (magnitude > peak) peak = magnitude;
-    }
-
-    // Normalize in-place to a safe source peak without a large setup() stack array.
-    const float scale = peak > 0 ? (0.65f * 32767.0f) / (float)peak : 0.0f;
-    for (uint32_t i = 0; i < ATTACK_SAMPLE_COUNT; ++i) {
-        attackSample[i] = (int16_t)((float)attackSample[i] * scale);
-    }
-}
+// The musical example intentionally omits the PCM attack transient.
+// This isolates the note onset produced by the resonator bank.
 
 bool configureHandpan()
 {
@@ -158,9 +128,8 @@ bool configureHandpan()
             modes[mode + 3].phaseRadians = METAL_PHASES[mode] + 0.17f * (float)pad;
         }
 
-        // Keep the generated transient modest; the modal bank supplies the long ring.
-        if (!handpan.configureNote(pad, modes, 6, attackSample,
-                                   ATTACK_SAMPLE_COUNT, ATTACK_SAMPLE_RATE, 0.03f)) {
+        // No PCM attack sample: noteOn() excites the configured resonator modes directly.
+        if (!handpan.configureNote(pad, modes, 6, nullptr, 0, ATTACK_SAMPLE_RATE, 0.0f)) {
             Serial.print("Failed to configure pad ");
             Serial.println(pad);
             return false;
@@ -170,7 +139,7 @@ bool configureHandpan()
 }
 
 // Score-derived upper-staff excerpt, truncated at 30,000 ms.
-// Original MIDI pitch and onset time are preserved; there is no octave folding.
+// Note onset times are preserved; the isolated E6 is lowered to E5.
 struct PhraseEvent {
     uint32_t atMs;
     uint8_t pad;
@@ -210,7 +179,7 @@ constexpr PhraseEvent PHRASE[] = {
     {22917,  7,  62}, {23542,  1,  62}, {23750,  8,  62},
     {23958,  7,  62}, {24167,  6,  62}, {24792,  1,  62},
     {25000, 10,  62}, {25208,  1,  62}, {25417, 10,  62},
-    {25625, 10,  62}, {25833, 12,  62}, {26042,  9,  62},
+    {25625, 10,  62}, {25833, 10,  62}, {26042,  9,  62},
     {26250, 10,  62}, {26458,  9,  62}, {26667, 10,  62},
     {26875,  9,  62}, {27083, 10,  62}, {27292,  9,  62},
     {27500, 10,  62}, {27708,  9,  62}, {27917, 10,  62},
@@ -263,7 +232,7 @@ void setup()
     Serial.println("======================================");
     Serial.println(" Handpan — Für Elise");
     Serial.printf(" Output sample rate: %lu Hz\n", (unsigned long)OUTPUT_SAMPLE_RATE);
-    Serial.printf(" Original-score opening excerpt; %.1f seconds; %u note events\n",
+    Serial.printf(" Opening excerpt; %.1f seconds; %u note events; no PCM attack\n",
                   PHRASE_DURATION_MS / 1000.0f, (unsigned)PHRASE_EVENT_COUNT);
     Serial.println("======================================");
 
@@ -275,7 +244,6 @@ void setup()
 
     // H2 adds a little harmonic roughness without introducing another resonator.
     handpan.setSaturation(0.25f);
-    buildExampleAttack();
     if (!configureHandpan()) {
         Serial.println("ERROR: Could not configure the handpan pad bank");
         while (true) delay(1000);
