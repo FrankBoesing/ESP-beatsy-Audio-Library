@@ -118,6 +118,8 @@ class AudioSynthHandpan : public AudioStream {
     Note notes[MAX_NOTES]{};
     AttackVoice attackVoices[MAX_ATTACK_VOICES]{};
     StrikeVoice strikeVoices[MAX_STRIKE_VOICES]{};
+    uint8_t activeStrikeVoiceIndices[MAX_STRIKE_VOICES]{};
+    uint8_t activeStrikeVoiceCount = 0;
     ActiveModeRef activeModes[MAX_NOTES * MAX_MODES]{};
     uint8_t activeModeCount = 0;
     float saturationAmount = 0.0f;
