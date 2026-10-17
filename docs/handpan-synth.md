@@ -61,11 +61,11 @@ resonator's existing state. **The states are not cleared on retrigger**, so a
 new hit adds energy to an already-ringing note rather than cutting off its tail.
 The modal outputs and active attack voices are accumulated in a floating-point
 mix buffer. Optional soft saturation then shapes the combined waveform before
-it is clamped and converted to PCM16. Set saturation to zero to bypass the
-non-linear stage; the examples use amount `1.0` for the H2 timbre. The rational
-approximation is designed to be cheaper than a per-sample `tanhf()` call.
-Strongly overlapping notes can still overload the final range, so choose modal
-gains and graph gain accordingly.
+it is clamped and converted to PCM16. The H2 curve is `tanh(1.8 * x) / 1.8`;
+`update()` uses a bounded rational approximation to avoid a per-sample `tanhf()`
+call. Set saturation to zero to bypass the non-linear stage; the examples use
+amount `1.0` for the H2 timbre. Strongly overlapping notes can still overload
+the final range, so choose modal gains and graph gain accordingly.
 
 The PCM sample pointer is retained by the synthesizer, not copied. It may point
 to a caller-owned RAM array or a `const int16_t[]` table placed in flash, but
