@@ -5,6 +5,56 @@
 
 #include "utility/dspinst.h"
 
+namespace {
+constexpr uint32_t BUILTIN_ATTACK_RATE = 44100;
+constexpr uint32_t BUILTIN_ATTACK_COUNT = 1323; // 30 ms at 44.1 kHz
+int16_t builtinAttackSample[BUILTIN_ATTACK_COUNT];
+bool builtinAttackReady = false;
+
+// Build the default finger-contact transient once, before audio updates start.
+// This is generated in RAM by the library; sketches do not need a sample table.
+void buildBuiltinAttack()
+{
+    uint32_t randomState = 0x4d595df4U;
+    float lowNoise = 0.0f;
+    int32_t peak = 0;
+
+    for (uint32_t i = 0; i < BUILTIN_ATTACK_COUNT; ++i) {
+        const float t = (float)i / (float)BUILTIN_ATTACK_RATE;
+        randomState = randomState * 1664525U + 1013904223U;
+        const float noise = ((float)(randomState >> 8) * (1.0f / 8388607.5f)) - 1.0f;
+        lowNoise += 0.12f * (noise - lowNoise);
+
+        float rise = t / 0.0025f;
+        if (rise > 1.0f) rise = 1.0f;
+        rise = rise * rise * (3.0f - 2.0f * rise);
+
+        const float remaining = (float)(BUILTIN_ATTACK_COUNT - 1U - i) /
+                                (0.004f * (float)BUILTIN_ATTACK_RATE);
+        float tail = remaining;
+        if (tail > 1.0f) tail = 1.0f;
+        tail = tail * tail * (3.0f - 2.0f * tail);
+
+        const float noiseBody = 0.42f * lowNoise * expf(-t / 0.0085f);
+        const float lowThud = 0.38f * sinf(6.28318530718f * 185.0f * t) *
+                              expf(-t / 0.014f);
+        const float softKnock = 0.14f * sinf(6.28318530718f * 430.0f * t) *
+                                expf(-t / 0.008f);
+        const float value = rise * tail * (noiseBody + lowThud + softKnock);
+        const int32_t pcm = (int32_t)(value * 32767.0f);
+        builtinAttackSample[i] = (int16_t)pcm;
+        const int32_t magnitude = pcm < 0 ? -pcm : pcm;
+        if (magnitude > peak) peak = magnitude;
+    }
+
+    // Intermediate level between the quiet and overly strong listening settings.
+    const float scale = peak > 0 ? (0.32f * 32767.0f) / (float)peak : 0.0f;
+    for (uint32_t i = 0; i < BUILTIN_ATTACK_COUNT; ++i) {
+        builtinAttackSample[i] = (int16_t)((float)builtinAttackSample[i] * scale);
+    }
+}
+} // namespace
+
 AudioSynthHandpan::AudioSynthHandpan() : AudioStream(0, nullptr) {}
 
 void AudioSynthHandpan::setSaturation(float amount) {
@@ -45,6 +95,21 @@ bool AudioSynthHandpan::configureNote(uint8_t slot, const ModeConfig *modes,
         return false;
     }
 
+    // Use the library-generated soft transient when the caller provides none.
+    // A zero gain is an explicit, allocation-free way to request resonators only.
+    const int16_t *effectiveAttackSample = attackSample;
+    uint32_t effectiveAttackSampleCount = attackSampleCount;
+    uint32_t effectiveAttackSampleRate = attackSampleRate;
+    if (effectiveAttackSample == nullptr && attackGain > 0.0f) {
+        if (!builtinAttackReady) {
+            buildBuiltinAttack();
+            builtinAttackReady = true;
+        }
+        effectiveAttackSample = builtinAttackSample;
+        effectiveAttackSampleCount = BUILTIN_ATTACK_COUNT;
+        effectiveAttackSampleRate = BUILTIN_ATTACK_RATE;
+    }
+
     Note &note = notes[slot];
     for (uint8_t i = 0; i < MAX_MODES; ++i) {
         note.modes[i] = Resonator{};
@@ -74,14 +139,14 @@ bool AudioSynthHandpan::configureNote(uint8_t slot, const ModeConfig *modes,
     }
 
     note.modeCount = modeCount;
-    note.attackSample = attackSample;
-    note.attackSampleCount = attackSampleCount;
+    note.attackSample = effectiveAttackSample;
+    note.attackSampleCount = effectiveAttackSampleCount;
     note.attackGain = attackGain;
     note.attackIncrementQ16 = 0;
     const uint32_t rampSamples = (uint32_t)(fs * (float)ONSET_RAMP_US / 1000000.0f + 0.5f);
     note.onsetRampSamples = (uint16_t)(rampSamples < 2 ? 2 : rampSamples);
-    if (attackSample != nullptr) {
-        const uint64_t increment = ((uint64_t)attackSampleRate << 16) / (uint32_t)(fs + 0.5f);
+    if (effectiveAttackSample != nullptr) {
+        const uint64_t increment = ((uint64_t)effectiveAttackSampleRate << 16) / (uint32_t)(fs + 0.5f);
         if (increment == 0 || increment > UINT32_MAX) {
             note.configured = false;
             return false;
