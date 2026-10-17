@@ -71,9 +71,8 @@ the final range, so choose modal gains and graph gain accordingly.
 
 The PCM sample pointer is retained by the synthesizer, not copied. It may point
 to a caller-owned RAM array or a `const int16_t[]` table placed in flash, but
-the data must remain available and unchanged for the lifetime of playback. The
-example's generated attack buffer is writable RAM because it is built at
-startup. A licensed recording can be converted to a short mono PCM16 table and
+the data must remain available and unchanged for the lifetime of playback. In the diagnostic sketch, the generated attack buffer is writable RAM because
+it is built at startup. A licensed recording can be converted to a short mono PCM16 table and
 used instead; no WAV parser or filesystem is built into `AudioSynthHandpan`.
 The configured sample rate is used to calculate a 32-bit fixed-point playback
 increment, so a 44.1 kHz attack can be interpolated at a 48 kHz output rate.
@@ -116,7 +115,7 @@ partial ratios `5.36, 5.96, 10.79` remain configured but have zero gain in these
 examples. `AudioSynthHandpan::triggerNote()` skips zero-gain modes, so only the
 three body resonators need to run during the sustained tail. This is the lowest-
 compute model among the previously compared variants, and avoids a separate
-pitched metallic line. The procedural attack gain is `0.03`, the generated attack is normalized to a 0.65 full-scale peak, and the musical/load-test examples use lower modal levels and a restrained `0.25` saturation blend. `setSaturation(0.0f)` bypasses the non-linear
+pitched metallic line. The diagnostic example's procedural attack gain is `0.03`, and its generated attack is normalized to a 0.65 full-scale peak; the musical example omits the attack entirely. Both examples use lower modal levels and a restrained `0.25` saturation blend. `setSaturation(0.0f)` bypasses the non-linear
 stage; intermediate values blend dry and saturated outputs. These are
 experimental listening parameters, not measured physical modes of a particular
 handpan; confirm them by listening on target hardware.
@@ -157,8 +156,8 @@ prints `AudioProcessorUsage()` and audio memory usage on the device.
 ## Reverb and worst-case load test
 
 The musical and load-test sketches route the source to a dry path and to
-mono `AudioEffectFreeverb`, then blend them through `AudioMixer4`. The musical
-example starts at 0.84 dry / 0.18 wet; the load test uses 0.82 dry / 0.22 wet.
+mono `AudioEffectFreeverb`, then blend them through `AudioMixer4`. Both use
+0.72 dry / 0.14 wet.
 Both use room size 0.68 and damping 0.46. These are listening defaults, not
 calibrated acoustic-room parameters. Freeverb allocates its delay lines once in
 `setup()`; both examples request 32 audio blocks to cover the source, reverb
@@ -169,13 +168,12 @@ respective `HANDPAN_MUSIC_SAMPLE_RATE` or `HANDPAN_TEST_SAMPLE_RATE` macro to
 
 The Für Elise example uses the upper-staff note sequence and onset timing from the current Mutopia Project MIDI (Beethoven, WoO 59; source score: Breitkopf & Härtel, 1888), cut off at 30,000 ms. The excerpt contains 109 note events and 12 distinct pitches (C4, E4, F4, G4, G#4, A4, B4, C5, D5, D#5, E5 and F5). The isolated E6 event at 25.833 seconds is played as E5 instead. No PCM attack transient is mixed in by the musical example; the resonator modes alone create the note onsets. Only the opening excerpt is included; the rest of the composition is intentionally omitted. The handpan resonators still ring according to their decay settings rather than following the piano's exact note-off envelopes.
 
-The example defaults to **48 kHz**. It calls `audioOut.setSampleRate()` before
-`AudioMemory()` and before configuring the resonators, so the modal coefficients
-match the selected rate. For a direct 44.1-kHz comparison, change
-`HANDPAN_TEST_SAMPLE_RATE` from `48000` to `44100` near the top of
-`examples/Synthesis/Handpan/Handpan.cpp`, rebuild, and compare the same phases.
-The generated attack remains a 44.1-kHz source sample and is resampled by the
-synthesizer during playback. The ES8311 is initialized with its sample-rate-specific
+The musical example defaults to **48 kHz**. It calls `audioOut.setSampleRate()`
+before `AudioMemory()` and before configuring the resonators, so the modal
+coefficients match the selected rate. For a direct 44.1-kHz comparison, change
+`HANDPAN_MUSIC_SAMPLE_RATE` from `48000` to `44100` near the top of
+`examples/Synthesis/HandpanMusic/HandpanMusic.cpp`, then rebuild. The diagnostic
+example retains its generated 44.1-kHz attack and resamples it during playback. The ES8311 is initialized with its sample-rate-specific
 clock configuration; the ES8388 follows the I2S output clock.
 
 The example cycles through five eight-second phases:
@@ -205,9 +203,10 @@ a guarantee for every sample rate, compiler optimization, Wi-Fi load or effect
 chain. Listen for clipping or roughness during the intentionally extreme stress
 phase as well as checking CPU headroom.
 
-The example generates its own short procedural attack. A caller-owned PCM16
-attack can be substituted without changing the synth architecture, provided the
-application has permission to use that audio.
+The diagnostic load-test example generates its own short procedural attack. The
+musical example omits that transient for a resonator-only comparison. A caller-owned
+PCM16 attack can be substituted without changing the synth architecture, provided
+the application has permission to use that audio.
 
 
 ## Resonator-loop optimization
