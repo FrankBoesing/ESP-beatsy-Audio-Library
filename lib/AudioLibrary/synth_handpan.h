@@ -44,6 +44,11 @@ class AudioSynthHandpan : public AudioStream {
     // reset by repeated strikes: each event adds energy to the existing ring.
     bool noteOn(uint8_t slot, uint8_t velocity = 100);
 
+    // Enable the soft saturation used by the H2 listening prototype. Amount is
+    // clamped to 0..1; zero bypasses the non-linear stage (default), one enables it.
+    // Set before playback to avoid concurrent changes to the audio update loop.
+    void setSaturation(float amount);
+
     void update() override;
 
   private:
@@ -100,6 +105,7 @@ class AudioSynthHandpan : public AudioStream {
     AttackVoice attackVoices[MAX_ATTACK_VOICES]{};
     ActiveModeRef activeModes[MAX_NOTES * MAX_MODES]{};
     uint8_t activeModeCount = 0;
+    float saturationAmount = 0.0f;
 
     // Block accumulator lets each resonator keep its state and coefficients in
     // local variables for a whole block instead of reloading them per sample.
