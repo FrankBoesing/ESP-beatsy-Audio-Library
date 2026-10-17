@@ -55,10 +55,7 @@ namespace {
 // The one high E6 is kept at its written pitch; no octave folding is needed.
 // MIDI pitches: 60, 64, 65, 67, 68, 69, 71, 72, 74, 75, 76, 77, 88.
 constexpr uint8_t PAD_COUNT = 13;
-constexpr uint8_t PAD_MIDI_NOTES[PAD_COUNT] = {
-    60, 64, 65, 67, 68, 69, 71,
-    72, 74, 75, 76, 77, 88
-};
+// Pad-index to MIDI pitch: 60, 64, 65, 67, 68, 69, 71, 72, 74, 75, 76, 77, 88.
 constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
     261.626f, 329.628f, 349.228f, 391.995f,
     415.305f, 440.000f, 493.883f, 523.251f,
