@@ -6,8 +6,9 @@
 
 #include <stdint.h>
 
-// Hybrid handpan synthesizer: a short, caller-supplied PCM16 attack sample plus
-// a bank of damped resonators for the sustained body and metallic ring.
+// Hybrid handpan synthesizer: an optional caller-supplied PCM16 attack sample
+// plus damped resonators for the sustained body and metallic ring. Each strike
+// uses a short onset ramp to avoid an abrupt resonator start.
 // Configure note slots before starting the audio graph. Sample memory must
 // remain valid for as long as this object may play it (const flash data is OK).
 class AudioSynthHandpan : public AudioStream {
