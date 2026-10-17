@@ -1,10 +1,9 @@
 #include <Audio.h>
 #include <math.h>
 
-// This quick-start example deliberately generates its attack transient at
-// startup, so no third-party recording is bundled with the library. For a
-// closer match to the reference prototype, replace this buffer with a licensed
-// mono PCM16 attack sample, preferably 20-60 ms long and stored in flash.
+// This load test generates its attack transient at startup. No recorded
+// handpan audio is required. Applications may still pass their own PCM16 attack
+// to AudioSynthHandpan when they have suitable rights to that material.
 // Select 48000 for the primary stress test; set to 44100 for an A/B run.
 // The output rate is applied before configureHandpan() computes its coefficients.
 #ifndef HANDPAN_TEST_SAMPLE_RATE
@@ -56,12 +55,16 @@ constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
     415.7f, 440.0f, 493.9f, 523.3f
 };
 
-constexpr float BODY_T60[3] = {2.00f, 1.05f, 0.58f};
-constexpr float BODY_RATIOS[3] = {1.0f, 2.0f, 3.0f};
-constexpr float METAL_RATIOS[3] = {6.35f, 8.85f, 11.65f};
-constexpr float METAL_T60[3] = {0.075f, 0.115f, 0.095f};
-constexpr float METAL_WEIGHTS[3] = {1.0f, 0.64f, 0.42f};
-constexpr float METAL_PHASES[3] = {0.90f, 2.15f, 0.25f};
+// S3 listening prototype: a longer body ring and prominent upper partials.
+// BODY_GAIN_BASE compensates for the per-pad level matrix so its mean gains are
+// approximately 0.35, 0.20 and 0.23, as in the offline S3 comparison.
+constexpr float BODY_T60[3] = {3.00f, 3.00f, 4.00f};
+constexpr float BODY_RATIOS[3] = {1.000f, 2.011f, 2.984f};
+constexpr float BODY_GAIN_BASE[3] = {0.55f, 0.56f, 0.96f};
+constexpr float METAL_RATIOS[3] = {5.36f, 5.96f, 10.79f};
+constexpr float METAL_T60[3] = {4.40f, 1.50f, 0.45f};
+constexpr float METAL_GAINS[3] = {0.1295f, 0.06475f, 0.0259f};
+constexpr float METAL_PHASES[3] = {0.72f, 2.20f, 1.48f};
 
 // Three-body-mode levels vary by pad to avoid identical synthetic timbre.
 constexpr float BODY_LEVELS[PAD_COUNT][3] = {
@@ -123,7 +126,7 @@ bool configureHandpan()
 
         for (uint8_t mode = 0; mode < 3; ++mode) {
             modes[mode].frequencyHz = f0 * BODY_RATIOS[mode];
-            modes[mode].gain = 0.45f * BODY_LEVELS[pad][mode];
+            modes[mode].gain = BODY_GAIN_BASE[mode] * BODY_LEVELS[pad][mode];
             modes[mode].decaySeconds = BODY_T60[mode];
             modes[mode].phaseRadians = BODY_PHASES[pad][mode];
         }
@@ -131,7 +134,7 @@ bool configureHandpan()
         for (uint8_t mode = 0; mode < 3; ++mode) {
             const float detune = 1.0f + 0.0015f * ((int)(pad % 3) - 1) * (float)(mode + 1);
             modes[mode + 3].frequencyHz = f0 * METAL_RATIOS[mode] * detune;
-            modes[mode + 3].gain = 0.055f * METAL_WEIGHTS[mode];
+            modes[mode + 3].gain = METAL_GAINS[mode];
             modes[mode + 3].decaySeconds = METAL_T60[mode];
             modes[mode + 3].phaseRadians = METAL_PHASES[mode] + 0.17f * (float)pad;
         }
@@ -273,8 +276,8 @@ void playAllPadsStep()
 
 void playDensePadLoadStep()
 {
-    // Four notes every 12 ms visits all 16 pads in 36 ms. The short metallic
-    // modes can therefore overlap while all three long body modes keep ringing.
+    // Four notes every 12 ms visits all 16 pads in 36 ms. The longer metallic
+    // modes overlap while the body modes continue ringing between strikes.
     // This is deliberately synthetic worst-case material, not a musical phrase.
     for (uint8_t i = 0; i < 4; ++i) {
         const uint8_t slot = (uint8_t)(((stepIndex * 4U) + i) % PAD_COUNT);
