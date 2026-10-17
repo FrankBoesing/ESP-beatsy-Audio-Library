@@ -4,8 +4,9 @@
 a fixed bank of damped resonators. The examples synthesize their own short
 attack transient at startup, so no recorded handpan sample is required. Three
 body modes model the note body; three upper partials add the metallic ring, each
-with its own decay time. The S3 listening preset uses deliberately long decays
-for the upper modes. The resonators are independent per configured pad. A
+with its own decay time. The phrase preset uses a restrained long decay on the main metallic partial;
+the other upper modes decay more quickly to avoid a second, xylophone-like
+melodic layer when notes overlap. The resonators are independent per configured pad. A
 repeated strike adds energy to existing resonator states rather than cutting off
 the previous ring.
 
@@ -87,12 +88,12 @@ AudioSynthHandpan handpan;
 
 AudioSynthHandpan::ModeConfig modes[6] = {
     // frequency Hz, peak gain, T60 seconds, phase radians
-    {146.8f, 0.3500f, 3.00f, 0.12f},
-    {295.2148f, 0.2000f, 3.00f, 1.10f},
-    {438.0512f, 0.2300f, 4.00f, 2.05f},
-    {786.8480f, 0.1295f, 4.40f, 0.72f},
-    {874.9280f, 0.06475f, 1.50f, 2.20f},
-    {1583.9720f, 0.0259f, 0.45f, 1.48f},
+    {146.8f, 0.3150f, 2.00f, 0.12f},
+    {295.2148f, 0.0450f, 1.05f, 1.10f},
+    {438.0512f, 0.1350f, 0.58f, 2.05f},
+    {786.8480f, 0.0700f, 2.60f, 0.72f},
+    {874.9280f, 0.0350f, 0.65f, 2.20f},
+    {1583.9720f, 0.0140f, 0.22f, 1.48f},
 };
 
 // attack is a caller-owned signed mono PCM16 sample; nullptr disables it.
@@ -102,15 +103,17 @@ handpan.noteOn(0, 100);
 
 `ModeConfig::gain` is a normalized peak amplitude per mode (0..1), not a
 percentage. `attackGain` is an additional normalized linear gain applied to the
-sample. The current example defaults target the S3 purely synthetic listening test.
-With base frequency `f0`, the body-mode ratios are `1.000, 2.011, 2.984` and the
-upper-partial ratios are `5.36, 5.96, 10.79`. Their respective `T60` values are
-`3.00, 3.00, 4.00 s` and `4.40, 1.50, 0.45 s`. The reference S3 modal gains are
-`0.35, 0.20, 0.23, 0.1295, 0.06475, 0.0259`; the musical example varies body-mode
-levels slightly by pad while preserving approximately those average levels. The
-procedural attack gain remains `0.09`. These values are experimental listening
-parameters, not measured physical modes of a particular handpan, and should be
-confirmed by listening on target hardware.
+sample. The previous isolated-note S3 setting was too persistent when played as a phrase:
+its long body overtones and strong upper partials stacked into a xylophone-like
+second melody. The current phrase preset therefore returns the body-mode `T60`
+values to `2.00, 1.05, 0.58 s` and uses a lower metallic balance. With base
+frequency `f0`, the body-mode ratios are `1.000, 2.011, 2.984` and the upper-partial
+ratios are `5.36, 5.96, 10.79`. Their respective `T60` values are `2.00, 1.05,
+0.58 s` and `2.60, 0.65, 0.22 s`; the nominal gains used in the API example are
+`0.315, 0.045, 0.135, 0.070, 0.035, 0.014`. The musical example varies body-mode
+levels slightly by pad. The procedural attack gain remains `0.09`. These are
+experimental listening parameters, not measured physical modes of a particular
+handpan; confirm them by listening on target hardware.
 
 ## Example and recordings
 
