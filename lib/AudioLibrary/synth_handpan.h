@@ -15,6 +15,7 @@ class AudioSynthHandpan : public AudioStream {
     static constexpr uint8_t MAX_NOTES = 16;
     static constexpr uint8_t MAX_MODES = 6;
     static constexpr uint8_t MAX_ATTACK_VOICES = 8;
+    static constexpr uint8_t MAX_STRIKE_VOICES = 32;
     static constexpr uint8_t MAX_PENDING_EVENTS = 16;
     static constexpr uint32_t MAX_ATTACK_SAMPLES = 8192;
 
@@ -70,6 +71,7 @@ class AudioSynthHandpan : public AudioStream {
         const int16_t *attackSample = nullptr;
         uint32_t attackSampleCount = 0;
         uint32_t attackIncrementQ16 = 0;
+        uint16_t onsetRampSamples = 0;
         float attackGain = 0.09f;
     };
 
@@ -80,6 +82,17 @@ class AudioSynthHandpan : public AudioStream {
         uint32_t incrementQ16 = 0;
         float gain = 0.0f;
         bool active = false;
+    };
+
+    // A strike is initially rendered as an independent oscillator voice. Its
+    // output is smoothly faded in, then its state is merged into the pad's
+    // long-lived resonators after the ramp has finished.
+    struct StrikeVoice {
+        uint8_t slot = 0;
+        uint16_t position = 0;
+        bool active = false;
+        float y1[MAX_MODES] = {};
+        float y2[MAX_MODES] = {};
     };
 
     struct NoteEvent {
@@ -94,6 +107,7 @@ class AudioSynthHandpan : public AudioStream {
 
     static constexpr float OUTPUT_SCALE = 32768.0f;
     static constexpr float SILENCE_THRESHOLD = 1.0e-7f;
+    static constexpr uint32_t ONSET_RAMP_US = 5000;
 
     void triggerNote(uint8_t slot, uint8_t velocity);
     void startAttack(uint8_t slot, float velocity);
@@ -103,6 +117,7 @@ class AudioSynthHandpan : public AudioStream {
     audio_block_t *inputQueueArray[1] = {};
     Note notes[MAX_NOTES]{};
     AttackVoice attackVoices[MAX_ATTACK_VOICES]{};
+    StrikeVoice strikeVoices[MAX_STRIKE_VOICES]{};
     ActiveModeRef activeModes[MAX_NOTES * MAX_MODES]{};
     uint8_t activeModeCount = 0;
     float saturationAmount = 0.0f;
