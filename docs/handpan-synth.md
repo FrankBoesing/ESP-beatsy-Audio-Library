@@ -37,7 +37,7 @@ Each configured pad is a small hybrid instrument. A note combines two signals:
    waveform can provide the noisy, high-frequency part at the start of a strike.
    The diagnostic example generates its original, brighter transient. The
    musical example instead builds a 30 ms soft contact transient from low-passed
-   noise and quiet low-frequency thuds, with a 2.5 ms smooth rise and a low peak
+   noise and quiet low-frequency thuds, with a 2.5 ms smooth rise, a 4 ms tail fade, and a low peak
    level. This gives the note a muted finger-like onset without using a recording.
    One attack buffer can be shared by pads.
 2. **Damped resonator bank.** Six independent second-order resonators provide
@@ -172,7 +172,7 @@ return and final mixer. Both default to 48 kHz and configure I2S before
 respective `HANDPAN_MUSIC_SAMPLE_RATE` or `HANDPAN_TEST_SAMPLE_RATE` macro to
 `44100` for a 44.1-kHz run.
 
-The Für Elise example uses the upper-staff note sequence and onset timing from the current Mutopia Project MIDI (Beethoven, WoO 59; source score: Breitkopf & Härtel, 1888), cut off at 30,000 ms. The excerpt contains 109 note events and 12 distinct pitches (C4, E4, F4, G4, G#4, A4, B4, C5, D5, D#5, E5 and F5). The isolated E6 event at 25.833 seconds is played as E5 instead. The musical example uses a softly generated finger-contact transient instead of the sharper diagnostic attack. The sample is low-passed, level-limited, and faded in over 2.5 ms; the body modes also use zero initial phase and retain the synthesizer's 5 ms smooth onset ramp. Only the opening excerpt is included; the rest of the composition is intentionally omitted. The handpan resonators still ring according to their decay settings rather than following the piano's exact note-off envelopes.
+The Für Elise example uses the upper-staff note sequence and onset timing from the current Mutopia Project MIDI (Beethoven, WoO 59; source score: Breitkopf & Härtel, 1888), cut off at 30,000 ms. The excerpt contains 109 note events and 12 distinct pitches (C4, E4, F4, G4, G#4, A4, B4, C5, D5, D#5, E5 and F5). The isolated E6 event at 25.833 seconds is played as E5 instead. The musical example uses a softly generated finger-contact transient instead of the sharper diagnostic attack. The sample is low-passed, level-limited, faded in over 2.5 ms and faded out over its final 4 ms; the body modes also use zero initial phase and retain the synthesizer's 5 ms smooth onset ramp. Only the opening excerpt is included; the rest of the composition is intentionally omitted. The handpan resonators still ring according to their decay settings rather than following the piano's exact note-off envelopes.
 
 The musical example defaults to **48 kHz**. It calls `audioOut.setSampleRate()`
 before `AudioMemory()` and before configuring the resonators, so the modal
