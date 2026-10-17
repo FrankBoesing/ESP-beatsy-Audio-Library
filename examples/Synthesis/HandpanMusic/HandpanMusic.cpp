@@ -52,8 +52,9 @@ namespace {
 
 constexpr uint8_t PAD_COUNT = 16;
 
-// Equal-tempered pitches used by the Für Elise arrangement, one octave below
-// the familiar opening register. Slot numbers are documented in the note table:
+// Equal-tempered pitches spanning the recognizable Für Elise motifs. The
+// opening melody remains in its familiar register; lower answer phrases use
+// the lower notes naturally found in the composition. Slots:
 // G#3, A3, B3, C4, D4, D#4, E4, G4, G#4, A4, B4, C5, D5, D#5, E5, F5.
 constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
     207.652f, 220.000f, 246.942f, 261.626f,
@@ -168,40 +169,40 @@ struct PhraseEvent {
     uint8_t velocity;
 };
 
-// Sixteenth-note pulse at 120 BPM. The 160-step phrase is a short, recognizable
-// handpan arrangement of the Für Elise opening and its answering motifs.
+// Sixteenth-note pulse at 120 BPM. Events follow a more even grid, with
+// held notes represented by two- or four-step gaps rather than long empty spans.
+// The 160-step phrase lasts 20 seconds and loops without an extra scheduling gap.
 constexpr uint32_t STEP_MS = 125;
 constexpr uint8_t PHRASE_STEPS = 160;
 constexpr uint32_t PHRASE_DURATION_MS = STEP_MS * PHRASE_STEPS;
 
 constexpr PhraseEvent PHRASE[] = {
-    // Opening motif: E4-D#4-E4-D#4-E4, then B3-D4-C4-A3.
-    {  0, 0,  6,  92}, {  1, 0,  5,  76}, {  2, 0,  6,  88},
-    {  3, 0,  5,  76}, {  4, 0,  6,  92}, {  7, 0,  2,  80},
-    {  9, 0,  4,  78}, { 11, 0,  3,  80}, { 14, 0,  1,  90},
+    // Opening motif: E5-D#5-E5-D#5-E5, followed by B4-D5-C5-A4.
+    {  0, 0, 14,  92}, {  2, 0, 13,  78}, {  4, 0, 14,  88},
+    {  6, 0, 13,  78}, {  8, 0, 14,  92}, { 12, 0, 10,  82},
+    { 14, 0, 12,  80}, { 16, 0, 11,  82}, { 20, 0,  9,  88},
 
-    // Answering theme: C4-E4-A4-B4, then E4-G#4-B4-C5.
-    { 22, 0,  3,  72}, { 24, 0,  6,  78}, { 28, 0,  9,  84},
-    { 32, 0, 10,  87}, { 36, 0,  6,  76}, { 40, 0,  8,  82},
-    { 44, 0, 10,  87}, { 48, 0, 11,  90},
+    // First answer in the lower register, then the rising E-G#-B-C figure.
+    { 24, 0,  3,  76}, { 28, 0,  6,  82}, { 32, 0,  9,  86},
+    { 36, 0, 10,  88}, { 40, 0,  6,  78}, { 44, 0,  8,  82},
+    { 48, 0, 10,  86}, { 52, 0, 11,  90},
 
-    // Repeat the answering figure before rising to the upper E.
-    { 54, 0,  6,  74}, { 58, 0,  9,  82}, { 62, 0, 10,  85},
-    { 66, 0, 11,  90}, { 72, 0,  6,  86}, { 76, 0, 14,  92},
-    { 77, 0, 13,  74}, { 78, 0, 14,  88}, { 79, 0, 13,  74},
-    { 80, 0, 14,  94}, { 84, 0, 10,  80}, { 86, 0, 12,  78},
-    { 88, 0, 11,  77}, { 92, 0,  9,  87},
+    // Return to the opening motif; longer notes retain space without a full stop.
+    { 56, 0, 14,  92}, { 58, 0, 13,  78}, { 60, 0, 14,  88},
+    { 62, 0, 13,  78}, { 64, 0, 14,  92}, { 68, 0, 10,  82},
+    { 70, 0, 12,  80}, { 72, 0, 11,  82}, { 76, 0,  9,  88},
 
-    // Lower-register answer followed by a short rising phrase.
-    {100, 0,  3,  70}, {102, 0,  6,  74}, {106, 0,  9,  82},
-    {110, 0, 10,  85}, {114, 0,  6,  75}, {118, 0, 11,  85},
-    {120, 0, 10,  78}, {122, 0,  9,  82},
+    // The lower answering motif repeats with a steady pulse.
+    { 80, 0,  3,  74}, { 84, 0,  6,  80}, { 88, 0,  9,  84},
+    { 92, 0, 10,  86}, { 96, 0,  6,  78}, {100, 0, 11,  84},
+    {104, 0, 10,  80}, {108, 0,  9,  84},
 
-    // Cadence leading back to the main motif.
-    {128, 0, 10,  83}, {130, 0, 11,  86}, {132, 0, 12,  90},
-    {136, 0, 14,  94}, {140, 0,  9,  81}, {144, 0, 15,  90},
-    {148, 0, 14,  86}, {152, 0, 12,  83}, {156, 0, 14,  91},
-    {157, 0, 13,  73}, {158, 0, 14,  90}
+    // Rising cadence, then a short resolution that leads naturally into the loop.
+    {112, 0, 10,  82}, {116, 0, 11,  86}, {120, 0, 12,  90},
+    {124, 0, 14,  92}, {128, 0,  3,  74}, {132, 0,  9,  82},
+    {136, 0,  6,  78}, {140, 0,  6,  80}, {144, 0,  9,  84},
+    {148, 0, 10,  86}, {152, 0, 11,  90}, {156, 0, 12,  86},
+    {158, 0, 14,  92}
 };
 
 constexpr size_t PHRASE_EVENT_COUNT = sizeof(PHRASE) / sizeof(PHRASE[0]);
