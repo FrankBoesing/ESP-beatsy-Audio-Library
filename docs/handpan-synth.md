@@ -123,7 +123,7 @@ handpan; confirm them by listening on target hardware.
 There are two separate sketches:
 
 - `examples/Synthesis/HandpanMusic/HandpanMusic.cpp` is the musical example:
-  a roughly 130.5-second handpan rendition of Beethoven's public-domain **“Für Elise” (WoO 59)** using note-on times from the upper staff of the Mutopia Project score/MIDI. It follows the full written melody rather than an invented approximation, with pitch classes folded into the available 16-pad range. The resonators ring naturally rather than being cut off at each written note duration. Source: [Mutopia Project, Für Elise](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931).
+  a 30-second excerpt from the opening of Beethoven's public-domain **“Für Elise” (WoO 59)**. The 109 note onsets come from the upper-staff melody and timing of the current Mutopia Project score/MIDI. The excerpt uses 13 distinct pitches at their written pitches, including one E6, so it does not fold notes into a different octave. Resonators ring naturally rather than stopping at each written note duration. Source: [Mutopia Project, Für Elise](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931).
 - `examples/Synthesis/Handpan/Handpan.cpp` is the diagnostic/load-test sketch.
   It runs a moderate melody, a realistic phrase and increasingly dense pad
   patterns, reporting CPU load, audio-block use and rejected note events.
@@ -163,7 +163,7 @@ return and final mixer. Both default to 48 kHz and configure I2S before
 respective `HANDPAN_MUSIC_SAMPLE_RATE` or `HANDPAN_TEST_SAMPLE_RATE` macro to
 `44100` for a 44.1-kHz run.
 
-The Für Elise example uses the upper-staff note sequence and note-on timing from the Mutopia Project MIDI (Beethoven, WoO 59; source score: Breitkopf & Härtel, 1888). Its score tempo is 72 quarter-notes per minute and its loop is about 130.5 seconds. The 16-pad bank spans C4–F5 and includes the pitch classes used by the score; notes outside that range are shifted by octaves, with C#4 and D4 mapped to C#5 and D5. It therefore preserves the melody's pitch classes and timing but not the original register, piano accompaniment, or exact note-off envelopes. The handpan resonators ring out according to their decay settings.
+The Für Elise example uses the upper-staff note sequence and onset timing from the current Mutopia Project MIDI (Beethoven, WoO 59; source score: Breitkopf & Härtel, 1888), cut off at 30,000 ms. The excerpt contains 109 note events and uses 13 distinct MIDI pitches (C4, E4, F4, G4, G#4, A4, B4, C5, D5, D#5, E5, F5 and E6) configured at their written frequencies. No octave folding is applied. Only the opening excerpt is included; the rest of the composition is intentionally omitted. The handpan resonators still ring according to their decay settings rather than following the piano's exact note-off envelopes.
 
 The example defaults to **48 kHz**. It calls `audioOut.setSampleRate()` before
 `AudioMemory()` and before configuring the resonators, so the modal coefficients
