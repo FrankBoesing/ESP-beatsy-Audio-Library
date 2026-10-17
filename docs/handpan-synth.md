@@ -12,8 +12,8 @@ strikes add energy to existing states instead of cutting off the previous ring.
 
 ## Limits and runtime behavior
 
-- Up to 16 configured pad slots, six modes per pad and eight concurrent attack
-  sample voices.
+- Up to 16 configured pad slots and six modes per pad, 32 short-lived strike
+  voices for smooth onsets, and eight concurrent attack-sample voices.
 - A fixed 16-entry event ring buffer accepts note events without dynamic
   allocation. Its usable capacity is 15 queued events; `noteOn()` returns false
   for an unconfigured pad or a full queue.
@@ -58,12 +58,16 @@ because a 60 dB amplitude reduction is a factor of 0.001. The coefficients are
 calculated in `configureNote()`, not inside the audio-block hot loop.
 
 On `noteOn(pad, velocity)`, the velocity is normalized to 0..1 and scales both
-the PCM attack and the modal gains. A phase-shaped impulse is added to the
-resonator's existing state. **The states are not cleared on retrigger**, so a
-new hit adds energy to an already-ringing note rather than cutting off its tail.
-The modal outputs and active attack voices are accumulated in a floating-point
-mix buffer. Optional soft saturation then shapes the combined waveform before
-it is clamped and converted to PCM16. The H2 curve is `tanh(1.8 * x) / 1.8`;
+the PCM attack and the modal gains. Each strike first runs as an independent set
+of resonator states with a 5 ms smoothstep fade-in (`x*x*(3-2*x)`). This removes
+the abrupt amplitude/derivative onset that can be perceived as a click. Once the
+ramp is complete, the strike's current state is merged into the pad's shared
+long-lived resonators at the end of an audio block. **Existing states are not
+cleared or ducked**, so previous rings continue uninterrupted and retriggers add
+energy instead of cutting off tails. The modal outputs, strike voices and active
+attack samples are accumulated in a floating-point mix buffer. Optional soft
+saturation then shapes the combined waveform before it is clamped and converted
+to PCM16. The H2 curve is `tanh(1.8 * x) / 1.8`;
 `update()` uses a bounded rational approximation to avoid a per-sample `tanhf()`
 call. Set saturation to zero to bypass the non-linear stage; the examples use
 amount `0.25` for a restrained H2 blend; modal, attack and mixer gains are also lower to leave more headroom. Strongly overlapping notes can still overload
@@ -77,9 +81,10 @@ used instead; no WAV parser or filesystem is built into `AudioSynthHandpan`.
 The configured sample rate is used to calculate a 32-bit fixed-point playback
 increment, so a 44.1 kHz attack can be interpolated at a 48 kHz output rate.
 
-The class supports 16 pads × 6 modes (96 configured resonators) and up to eight
-concurrent PCM attack voices. The 96 modes are not all necessarily active at
-every instant: quiet modes are culled once per block. If all eight attack voices
+The class supports 16 pads × 6 modes (96 configured resonators), up to 32
+short-lived strike voices for the onset ramp, and up to eight concurrent PCM
+attack voices. The 96 modes are not all necessarily active at every instant:
+quiet modes are culled once per block. Only active strike voices are processed. If all eight attack voices
 are busy, the voice with the least playback time remaining is replaced by a new
 attack. This keeps the onset responsive, but an extreme burst can truncate a
 previous transient.
@@ -142,10 +147,10 @@ particular commercial handpan.
 ## Performance notes
 
 `update()` performs no trigonometric or exponential calculations; modal
-coefficients are prepared in `configureNote()`. Attack-sample interpolation uses
-32-bit fixed-point arithmetic on purpose; the phase fraction loses its lowest
-Q16 bit to avoid a 64-bit multiply in the real-time loop. Active resonators and active
-attack voices are processed, and silent resonators are disabled once their
+coefficients are prepared in `configureNote()`. The 5 ms strike envelope uses a
+smoothstep polynomial rather than a per-sample trigonometric function. Active
+resonators, active strike voices and active attack voices are processed; inactive
+strike slots are skipped, and silent resonators are disabled once their
 state falls below the output threshold. If the audio block pool is temporarily
 exhausted, oscillator states and attack positions still advance to preserve
 wall-clock decay. Actual CPU cost must be measured on the target, particularly
@@ -166,7 +171,7 @@ return and final mixer. Both default to 48 kHz and configure I2S before
 respective `HANDPAN_MUSIC_SAMPLE_RATE` or `HANDPAN_TEST_SAMPLE_RATE` macro to
 `44100` for a 44.1-kHz run.
 
-The Für Elise example uses the upper-staff note sequence and onset timing from the current Mutopia Project MIDI (Beethoven, WoO 59; source score: Breitkopf & Härtel, 1888), cut off at 30,000 ms. The excerpt contains 109 note events and 12 distinct pitches (C4, E4, F4, G4, G#4, A4, B4, C5, D5, D#5, E5 and F5). The isolated E6 event at 25.833 seconds is played as E5 instead. No PCM attack transient is mixed in by the musical example. Its body modes use zero initial phase so the new resonator contribution begins at a zero crossing, reducing the abrupt first-sample jump that can sound like a click. Only the opening excerpt is included; the rest of the composition is intentionally omitted. The handpan resonators still ring according to their decay settings rather than following the piano's exact note-off envelopes.
+The Für Elise example uses the upper-staff note sequence and onset timing from the current Mutopia Project MIDI (Beethoven, WoO 59; source score: Breitkopf & Härtel, 1888), cut off at 30,000 ms. The excerpt contains 109 note events and 12 distinct pitches (C4, E4, F4, G4, G#4, A4, B4, C5, D5, D#5, E5 and F5). The isolated E6 event at 25.833 seconds is played as E5 instead. No PCM attack transient is mixed in by the musical example. Its body modes use zero initial phase, and the synthesizer applies a 5 ms smooth onset ramp to each strike to reduce the remaining click-like transient. Only the opening excerpt is included; the rest of the composition is intentionally omitted. The handpan resonators still ring according to their decay settings rather than following the piano's exact note-off envelopes.
 
 The musical example defaults to **48 kHz**. It calls `audioOut.setSampleRate()`
 before `AudioMemory()` and before configuring the resonators, so the modal
