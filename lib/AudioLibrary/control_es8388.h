@@ -69,7 +69,7 @@ class AudioControlES8388 : public AudioControl {
 #include "control_es8388_regs.h"
 
   private:
-    static constexpr uint32_t ES8388_I2C_FREQUENCY = 100000;
+    static constexpr uint32_t ES8388_I2C_FREQUENCY = 400000;
     static constexpr uint8_t ES8388_ADDRESS = 0x10;
 
     bool writeReg(uint8_t reg, uint8_t value);
