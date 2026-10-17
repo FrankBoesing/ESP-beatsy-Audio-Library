@@ -42,4 +42,4 @@ Node-RED-derived files identify the Apache License 2.0; bundled dependencies
 retain their own license notices. See `LICENSE-APACHE-2.0.txt` for the full
 Apache license text.
 
-- Hybrid handpan synthesizer: `handpan-synth.md` documents `AudioSynthHandpan`, the built-in soft attack, modal T60/gain parameters, optional sample ownership and polyphony limits.
+- Hybrid handpan synthesizer: `handpan-synth.md` documents `AudioSynthHandpan`, the built-in soft attack, modal T60/gain parameters, optional sample ownership and polyphony limits. It also describes the one-shot SD_MMC WAV recorder build.
