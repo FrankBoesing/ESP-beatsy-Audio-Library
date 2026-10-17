@@ -308,14 +308,17 @@ void AudioSynthHandpan::update() {
 
         if (block != nullptr) {
             if (saturation > 0.0f) {
-                // Low-cost rational approximation to the H2 soft-saturation
-                // curve: 0.405 * tanh(2.672 * mix). The amount blends the shaped
-                // signal with the dry one; 0 bypasses this block completely.
-                const float driven = mix * 2.6718576f;
+                // Match the H2 offline curve: tanh(1.8 * mix) / 1.8.
+                // The rational approximation below is close in the normalized
+                // audio range and avoids a costly tanhf() call per sample.
+                const float driven = mix * 1.8f;
                 const float driven2 = driven * driven;
-                const float shaped =
-                    0.4050675f * driven * (27.0f + driven2) /
-                    (27.0f + 9.0f * driven2);
+                float shaped = (1.0f / 1.8f) * driven *
+                               (27.0f + driven2) / (27.0f + 9.0f * driven2);
+
+                // Keep the approximation bounded at the tanh limit for overloads.
+                if (shaped > 0.5555556f) shaped = 0.5555556f;
+                if (shaped < -0.5555556f) shaped = -0.5555556f;
                 mix += saturation * (shaped - mix);
             }
 
