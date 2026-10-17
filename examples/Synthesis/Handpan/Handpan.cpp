@@ -201,7 +201,7 @@ const char *phaseName(TestPhase phase)
     case TestPhase::REALISTIC_PATTERN: return "REALISTIC HANDPAN PATTERN";
     case TestPhase::ALL_PADS_RINGING: return "ALL 16 PADS / BODY TAILS";
     case TestPhase::RAPID_CHORDS: return "RAPID 4-NOTE BURSTS";
-    case TestPhase::DENSE_16_PAD_LOAD: return "DENSE 16-PAD SWEEP / MODAL LOAD";
+    case TestPhase::DENSE_16_PAD_LOAD: return "DENSE 16-PAD SWEEP / BODY LOAD";
     default: return "UNKNOWN";
     }
 }
@@ -278,8 +278,8 @@ void playAllPadsStep()
 
 void playDensePadLoadStep()
 {
-    // Four notes every 12 ms visits all 16 pads in 36 ms. The longer metallic
-    // modes overlap while the body modes continue ringing between strikes.
+    // Four notes every 12 ms visits all 16 pads in 36 ms. In the low-CPU preset
+    // the upper modes are disabled, so this stresses overlap of the 48 body modes.
     // This is deliberately synthetic worst-case material, not a musical phrase.
     for (uint8_t i = 0; i < 4; ++i) {
         const uint8_t slot = (uint8_t)(((stepIndex * 4U) + i) % PAD_COUNT);
