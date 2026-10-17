@@ -162,6 +162,13 @@ void AudioSynthHandpan::triggerNote(uint8_t slot, uint8_t velocity) {
     // or cutting off the previous ring.
     for (uint8_t i = 0; i < note.modeCount; ++i) {
         Resonator &mode = note.modes[i];
+
+        // Zero-gain modes are explicitly disabled in some low-CPU presets.
+        // Do not add them to the active list or spend a full audio block on them.
+        if (mode.config.gain <= 0.0f) {
+            continue;
+        }
+
         const float amplitude = mode.config.gain * velocityScale;
         mode.y1 += amplitude * mode.sinPhase;
         mode.y2 += amplitude * mode.previousStateScale;
