@@ -10,16 +10,7 @@
 
 #include <Audio.h>
 
-// Standalone musical demonstration. Set ELISA_HANDPAN_SAMPLE_RATE to 44100
-// for a 44.1-kHz run; 48 kHz is the default.
-// The output clock is set before configuring the resonators.
-#ifndef ELISA_HANDPAN_SAMPLE_RATE
-#define ELISA_HANDPAN_SAMPLE_RATE 48000
-#endif
-#if ELISA_HANDPAN_SAMPLE_RATE != 44100 && ELISA_HANDPAN_SAMPLE_RATE != 48000
-#error "ELISA_HANDPAN_SAMPLE_RATE must be 44100 or 48000"
-#endif
-constexpr uint32_t OUTPUT_SAMPLE_RATE = ELISA_HANDPAN_SAMPLE_RATE;
+// Standalone musical demonstration.
 
 AudioOutputI2S audioOut({
     PIN_I2S_BLCK, // BCLK
@@ -45,7 +36,6 @@ AudioConnection hallToWetMixer(hall, 0, dryWetMixer, 1);
 AudioConnection mixToLeft(dryWetMixer, 0, audioOut, 0);
 AudioConnection mixToRight(dryWetMixer, 0, audioOut, 1);
 
-namespace {
 
 // Pitches used in the first 30 seconds of the score-derived melody.
 // The isolated E6 at 25.833 s is lowered by one octave to E5 for this arrangement.
@@ -187,7 +177,6 @@ void playDueEvents(uint32_t now)
     }
 }
 
-} // namespace
 
 void setup()
 {
@@ -197,18 +186,11 @@ void setup()
     Serial.println();
     Serial.println("======================================");
     Serial.println(" Elisa's Hand Pan — Für Elise");
-    Serial.printf(" Output sample rate: %lu Hz\n", (unsigned long)OUTPUT_SAMPLE_RATE);
     Serial.printf(" Opening excerpt; %.1f seconds; %u note events; soft finger attack\n",
                   PHRASE_DURATION_MS / 1000.0f, (unsigned)PHRASE_EVENT_COUNT);
     Serial.println("======================================");
 
-    // Modal coefficients must be prepared at the selected output sample rate.
-    if (!audioOut.setSampleRate((float)OUTPUT_SAMPLE_RATE)) {
-        Serial.println("ERROR: Could not configure I2S sample rate");
-        while (true) delay(1000);
-    }
-
-    // H2 adds a little harmonic roughness without introducing another resonator.
+    //adds a little harmonic roughness without introducing another resonator.
     handpan.setSaturation(0.25f);
     if (!configureHandpan()) {
         Serial.println("ERROR: Could not configure the handpan pad bank");
