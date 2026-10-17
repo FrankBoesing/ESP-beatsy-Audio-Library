@@ -1,0 +1,96 @@
+/*
+ * AudioRecordFile example: write one short sine ping to an SD card as WAV.
+ *
+ * This example uses the library's default 44.1 kHz audio graph and records
+ * mono, 16-bit PCM. It does not require an audio codec or I2S output.
+ *
+ * The board-specific SD_MMC pins are supplied by platformio.ini.
+ * Recording uses the SD_MMC 4-bit bus.
+ */
+
+#include <Arduino.h>
+#include <FS.h>
+#include <SD_MMC.h>
+#include <Audio.h>
+
+constexpr uint32_t RECORD_SAMPLE_RATE = AUDIO_SAMPLE_RATE_EXACT;
+
+AudioSynthWaveformSine pingSine;
+AudioEffectEnvelope pingEnvelope;
+AudioRecordFile recorder;
+
+AudioConnection sineToEnvelope(pingSine, pingEnvelope);
+AudioConnection envelopeToRecorder(pingEnvelope, recorder);
+
+static void haltWithError(const char *message) {
+    Serial.println(message);
+    while (true) {
+        delay(1000);
+    }
+}
+
+static bool mountSD() {
+#if defined(PIN_SD_MMC_CLK) && defined(PIN_SD_MMC_CMD) && \
+    defined(PIN_SD_MMC_D0) && defined(PIN_SD_MMC_D1) && \
+    defined(PIN_SD_MMC_D2) && defined(PIN_SD_MMC_D3)
+    if (!SD_MMC.setPins(PIN_SD_MMC_CLK, PIN_SD_MMC_CMD,
+                        PIN_SD_MMC_D0, PIN_SD_MMC_D1,
+                        PIN_SD_MMC_D2, PIN_SD_MMC_D3)) {
+        return false;
+    }
+#endif
+
+    // mode1bit=false selects the 4-bit SD_MMC bus.
+    // Boards without explicit pin definitions use the framework defaults.
+    return SD_MMC.begin("/sdcard", false);
+}
+
+void setup() {
+    Serial.begin(115200);
+    delay(500);
+
+    Serial.println();
+    Serial.println("SD-card WAV recorder example");
+
+    if (!mountSD()) {
+        haltWithError("SD_MMC mount failed. Check card, DIP switches and pin configuration.");
+    }
+
+    // Audio graph and the shared audio-block pool.
+    AudioMemory(12);
+
+    // A short, decaying 880 Hz sine tone: a simple "ping".
+    pingSine.frequency(880.0f);
+    pingSine.amplitude(0.7f);
+
+    pingEnvelope.attack(3.0f);
+    pingEnvelope.hold(8.0f);
+    pingEnvelope.decay(180.0f);
+    pingEnvelope.sustain(0.0f);
+    pingEnvelope.release(60.0f);
+
+    // Creates /ping.tmp. On successful stop(), it becomes /ping.wav.
+    // The PSRAM ring buffer defaults to 512 KiB.
+    if (!recorder.begin(SD_MMC, "/ping", RECORD_SAMPLE_RATE, 1,
+                        AudioRecordFile::CORE_UNPINNED)) {
+        haltWithError("Could not start recorder. Check PSRAM, SD card and filenames.");
+    }
+
+    delay(30); // let recording and the writer task settle
+
+    pingEnvelope.noteOn();
+    delay(240);
+    pingEnvelope.noteOff();
+    delay(120); // retain the end of the envelope in the recording
+
+    if (recorder.stop()) {
+        Serial.println("Saved /ping.wav to SD card");
+    } else {
+        Serial.printf("Recording failed; error=%s. Check /ping.tmp for recovery.\n",
+                      recorder.hasError() ? "yes" : "no");
+    }
+}
+
+void loop() {
+    delay(1000);
+}

@@ -1,0 +1,194 @@
+
+#include <Arduino.h>
+#include <SD_MMC.h>
+#include <Audio.h>
+
+// ============================================================================
+// Audio objects
+// ============================================================================
+
+AudioOutputI2S output({
+    PIN_I2S_BLCK, // BCLK
+    PIN_I2S_WS,   // WS / LRCLK
+    PIN_I2S_DOUT, // DOUT
+    PIN_I2S_MLCK  // MCLK
+});
+
+#if defined(AUDIO_CODEC_ES8388)
+AudioControlES8388 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER_ACTIVE});
+#elif defined(AUDIO_CODEC_ES8311)
+AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER_ACTIVE});
+#else
+#error "AUDIO_CODEC not defined"
+#endif
+
+AudioSourceFile source;
+AudioPlayAac aac;
+
+// ============================================================================
+// Connections
+// ============================================================================
+
+AudioConnection patchCord1(aac, 0, output, 0);
+AudioConnection patchCord2(aac, 1, output, 1);
+
+// ============================================================================
+// Setup
+// ============================================================================
+
+void setup() {
+    Serial.begin(115200);
+
+    delay(1000);
+
+    Serial.println();
+    Serial.println("======================================");
+    Serial.println(" AudioPlayAac SD_MMC TEST");
+    Serial.println("======================================");
+
+    // ------------------------------------------------------------------------
+    // SD_MMC
+    // Mount the card before initializing the audio graph and codec, matching
+    // the known-working initialization order in DopplerHelicopter.
+    // ------------------------------------------------------------------------
+
+    Serial.println("Initializing SD_MMC...");
+
+    if (!SD_MMC.setPins(PIN_SD_MMC_CLK, PIN_SD_MMC_CMD,
+                        PIN_SD_MMC_D0, PIN_SD_MMC_D1,
+                        PIN_SD_MMC_D2, PIN_SD_MMC_D3)) {
+        Serial.println("ERROR: SD_MMC pin configuration failed");
+
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    // mode1bit=false selects the 4-bit SD_MMC bus.
+    if (!SD_MMC.begin("/sdcard", false)) {
+        Serial.println("ERROR: SD_MMC initialization failed");
+
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    Serial.println("SD_MMC initialized");
+
+    // ------------------------------------------------------------------------
+    // Audio memory
+    // ------------------------------------------------------------------------
+
+    AudioMemory(12);
+
+    Serial.println("Audio memory initialized");
+
+    // ------------------------------------------------------------------------
+    // ES8388
+    // ------------------------------------------------------------------------
+
+    Serial.println("Initializing Codec...");
+
+    if (!codec.enable()) {
+        Serial.println("ERROR: Codec initialization failed");
+
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    Serial.println("Codec initialized");
+
+    float volume = 0.2f;
+    codec.volume(volume);
+    Serial.print("Volume:");
+    Serial.println(volume, 2);
+
+    // ------------------------------------------------------------------------
+    // Open MP3
+    // ------------------------------------------------------------------------
+
+    Serial.println("Opening /test.aac...");
+
+    if (!source.open(SD_MMC, "/test.aac")) {
+        Serial.println("ERROR: Could not open /test.aac");
+
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    Serial.printf("AAC source opened, size=%llu bytes\n",
+                  (unsigned long long)source.size());
+
+    // ------------------------------------------------------------------------
+    // Start playback
+    // ------------------------------------------------------------------------
+
+    Serial.println("Starting AAC playback...");
+
+    if (!aac.play(source)) {
+        Serial.println("ERROR: AAC playback could not be started");
+
+        while (true) {
+            delay(1000);
+        }
+    }
+
+    Serial.println("AAC playback started");
+}
+
+// ============================================================================
+// Loop
+// ============================================================================
+
+void loop() {
+    static uint32_t lastStatus = 0;
+
+    if (millis() - lastStatus >= 1000) {
+        lastStatus = millis();
+
+        Serial.println();
+        Serial.println("--------------------------------------");
+
+        Serial.printf("Playing: %s\n", aac.isPlaying() ? "yes" : "no");
+
+        /*
+         * AudioStream statistics:
+         *   processorUsage()    = most recent update() execution
+         *   processorUsageMax() = maximum update() execution since start
+         */
+        Serial.printf("Audio CPU: AAC %.2f%% (max %.2f%%), "
+                      "I2S %.2f%% (max %.2f%%)\n",
+                      aac.AudioProcessorUsage(), aac.AudioProcessorUsageMax(),
+                      output.AudioProcessorUsage(), output.AudioProcessorUsageMax());
+
+        Serial.printf("Audio memory: %u / %u blocks "
+                      "(current / max)\n",
+                      AudioStream::AudioMemoryUsage(),
+                      AudioStream::AudioMemoryUsageMax());
+
+        const float cpu0 = AudioStream::processorUsage(0);
+        const float cpu1 = AudioStream::processorUsage(1);
+        if (cpu0 >= 0.0f && cpu1 >= 0.0f) {
+            Serial.printf("CPU load: core0 %.1f%%, core1 %.1f%%\n", cpu0, cpu1);
+        }
+
+        /*
+         * AAC-specific decoder load:
+         * total time inside MP3Decode(), relative to the audio time generated.
+         * Source/SD waiting and vTaskDelay() are deliberately excluded.
+         */
+#if SOFTCODEC_METRICS
+        Serial.printf("AAC decode: avg %.2f%%, frame max %.2f%%, "
+                      "frames %lu, decode %.3f s\n",
+                      aac.decodeProcessorUsage(), aac.decodeProcessorUsageMax(),
+                      (unsigned long)aac.decodeFrames(),
+                      (double)aac.decodeTimeUsTotal() / 1000000.0);
+#endif
+        Serial.printf("Position: %lu ms / %lu ms\n",
+                      (unsigned long)aac.positionMillis(),
+                      (unsigned long)aac.lengthMillis());
+    }
+    delay(500);
+}

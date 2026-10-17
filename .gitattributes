@@ -1,0 +1,2 @@
+# Exclude audio assets from generated source archives, but keep them in Git.
+*.mp3 export-ignore

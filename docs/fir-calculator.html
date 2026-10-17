@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESP-beatsy FIR Filter Calculator</title>
+<style>
+:root{color-scheme:light;--ink:#223142;--muted:#5c6b7a;--line:#cbd5df;--blue:#1677b8;--panel:#fff;--bg:#f3f6f9}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:#202833;color:#f1f5f9;padding:16px max(20px,calc((100vw - 1180px)/2));display:flex;align-items:center;justify-content:space-between;gap:20px}
+header h1{font-size:20px;margin:0;font-weight:650}header a{color:#a9d8ff;text-decoration:none;white-space:nowrap}
+main{max-width:1180px;margin:22px auto;padding:0 16px}.layout{display:grid;grid-template-columns:minmax(270px,350px) minmax(0,1fr);gap:18px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;box-shadow:0 2px 6px #1b2a3a0a}
+h2{font-size:17px;margin:0 0 14px}.field{margin-bottom:13px}label{display:block;font-size:13px;font-weight:650;margin-bottom:5px}
+input,select,textarea,button{font:inherit}input,select{width:100%;padding:8px 9px;border:1px solid #b9c6d2;border-radius:5px;background:#fff;color:var(--ink)}
+.help{font-size:12px;color:var(--muted);margin-top:4px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button,.button{display:inline-block;border:1px solid var(--blue);border-radius:5px;background:var(--blue);color:#fff;padding:9px 13px;cursor:pointer;text-decoration:none}
+button.secondary{background:#fff;color:var(--blue)}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+#error{display:none;color:#9b1c1c;background:#fff0f0;border:1px solid #efb6b6;padding:9px;border-radius:5px;margin-top:12px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 14px}.stat{background:#f1f5f8;border-radius:5px;padding:9px}
+.stat span{display:block;font-size:11px;color:var(--muted)}.stat strong{font-size:15px;font-variant-numeric:tabular-nums}
+canvas{display:block;width:100%;height:260px;border:1px solid #d9e1e8;border-radius:5px;background:#fff}
+textarea{width:100%;min-height:240px;resize:vertical;padding:10px;border:1px solid #b9c6d2;border-radius:5px;font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre}
+.note{font-size:12px;color:var(--muted);margin:10px 0 0}@media(max-width:760px){.layout{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:1fr 1fr 1fr}}
+</style>
+</head>
+<body>
+<header><h1>ESP-beatsy · FIR Filter Calculator</h1><a href="index.html">← Audio System Design Tool</a></header>
+<main><div class="layout">
+<section class="panel"><h2>Filter settings</h2>
+<form id="settings">
+<div class="field"><label for="type">Filter type</label><select id="type"><option value="lowpass">Low-pass</option><option value="highpass">High-pass</option><option value="bandpass">Band-pass</option><option value="bandstop">Band-stop</option></select></div>
+<div class="field"><label for="fs">Sample rate (Hz)</label><input id="fs" type="number" min="1" max="384000" step="1" value="44100" required></div>
+<div class="grid2">
+<div class="field" id="cut1"><label for="f1">Cutoff frequency (Hz)</label><input id="f1" type="number" min="1" step="1" value="4000" required></div>
+<div class="field" id="cut2" hidden><label for="f2">Upper cutoff (Hz)</label><input id="f2" type="number" min="1" step="1" value="8000"></div>
+</div>
+<div class="field"><label for="taps">Number of coefficients (taps)</label><input id="taps" type="number" min="4" max="200" step="2" value="64" required><div class="help">Even number, 4–200. The filter is designed with one fewer (odd) tap, then padded with a zero for AudioFilterFIR.</div></div>
+<div class="field"><label for="window">Window function</label><select id="window"><option value="hamming">Hamming</option><option value="hann">Hann</option><option value="blackman">Blackman</option><option value="rectangular">Rectangular</option></select></div>
+<div class="actions"><button type="submit">Calculate filter</button><button class="secondary" type="button" id="reset">Reset defaults</button></div>
+<div id="error" role="alert"></div>
+<p class="note">Calculation uses the windowed-sinc method. The result is quantized to signed 16-bit Q15 coefficients for <code>AudioFilterFIR::begin()</code>.</p>
+</form></section>
+<section class="panel"><h2>Frequency response</h2>
+<div class="stats"><div class="stat"><span>Tap count</span><strong id="statTaps">63</strong></div><div class="stat"><span>Group delay</span><strong id="statDelay">0.703 ms</strong></div><div class="stat"><span>DC gain</span><strong id="statDc">—</strong></div></div>
+<canvas id="plot" width="900" height="320" aria-label="Magnitude frequency response plot"></canvas>
+<p class="note">Magnitude response in dB, from 0 Hz to Nyquist. The graph is computed from the quantized coefficients.</p>
+<h2 style="margin-top:20px">C/C++ coefficients</h2>
+<textarea id="output" spellcheck="false" aria-label="Generated C++ coefficients" readonly></textarea>
+<div class="actions"><button type="button" id="copy">Copy coefficients</button><button type="button" class="secondary" id="download">Download .h</button></div>
+<p class="note">Use the generated array with <code>AudioFilterFIR filter; filter.begin(fir_coeffs, FIR_TAP_COUNT);</code>. Verify memory placement if you use a platform-specific flash attribute.</p>
+</section></div></main>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);let coeffs=[];
+function sinc(x){return Math.abs(x)<1e-12?1:Math.sin(Math.PI*x)/(Math.PI*x)}
+function windowValue(kind,n,N){if(N===1)return 1;const a=2*Math.PI*n/(N-1);if(kind==='hann')return 0.5-0.5*Math.cos(a);if(kind==='blackman')return 0.42-0.5*Math.cos(a)+0.08*Math.cos(2*a);if(kind==='rectangular')return 1;return 0.54-0.46*Math.cos(a)}
+function response(f,fs,h){let re=0,im=0;for(let n=0;n<h.length;n++){const a=-2*Math.PI*f*n/fs;re+=h[n]*Math.cos(a);im+=h[n]*Math.sin(a)}return Math.sqrt(re*re+im*im)}
+function calculate(){
+ const type=$('type').value,fs=Number($('fs').value),f1=Number($('f1').value),f2=Number($('f2').value),N=Number($('taps').value),win=$('window').value,err=$('error');
+ err.style.display='none';err.textContent='';
+ if(!Number.isFinite(fs)||fs<=0||fs>384000)return fail('Sample rate must be between 1 and 384000 Hz.');
+ if(!Number.isInteger(N)||N<4||N>200||N%2!==0)return fail('Tap count must be an even integer between 4 and 200.');
+ if(!Number.isFinite(f1)||f1<=0||f1>=fs/2)return fail('Cutoff must be above 0 Hz and below Nyquist (sample rate / 2).');
+ if((type==='bandpass'||type==='bandstop')&&(!Number.isFinite(f2)||f2<=f1||f2>=fs/2))return fail('Band filters need an upper cutoff greater than the lower cutoff and below Nyquist.');
+ // Design with an odd number of taps so the impulse has an integer center.
+ // AudioFilterFIR requires an even coefficient count, so append one zero afterward.
+ const designN=N-1,M=(designN-1)/2,raw=[];
+ for(let n=0;n<designN;n++){const k=n-M,lp1=2*f1/fs*sinc(2*f1*k/fs),lp2=2*f2/fs*sinc(2*f2*k/fs);let v;
+ if(type==='lowpass')v=lp1;else if(type==='highpass')v=(n===M?1:0)-lp1;else if(type==='bandpass')v=lp2-lp1;else v=(n===M?1:0)-(lp2-lp1);
+ raw.push(v*windowValue(win,n,designN))}
+ let normFreq=0;if(type==='highpass')normFreq=fs/2;if(type==='bandpass')normFreq=(f1+f2)/2;
+ const gain=response(normFreq,fs,raw);if(!Number.isFinite(gain)||gain<1e-12)return fail('Could not normalize this filter; try a different tap count or cutoff.');
+ coeffs=raw.map(v=>Math.max(-32768,Math.min(32767,Math.round(v/gain*32768))));
+ coeffs.push(0); // Pad to the even coefficient count required by AudioFilterFIR.
+ renderOutput(N,fs,type);drawPlot(fs);$('statTaps').textContent=N;$('statDelay').textContent=(M/fs*1000).toFixed(3)+' ms';$('statDc').textContent=(response(0,fs,coeffs)/32768).toFixed(4);
+}
+function fail(msg){const e=$('error');e.textContent=msg;e.style.display='block'}
+function renderOutput(N,fs,type){const arr=coeffs.map((v,i)=>'  '+String(v).padStart(6,' ')+(i===coeffs.length-1?'':',')+' // '+i).join('\n');$('output').value='// '+type+' FIR; sample rate: '+fs+' Hz; Q15; '+N+' taps\nconstexpr int FIR_TAP_COUNT = '+N+';\nconst int16_t fir_coeffs[FIR_TAP_COUNT] = {\n'+arr+'\n};\n'}
+function drawPlot(fs){
+ const c=$('plot'),ctx=c.getContext('2d'),w=c.width,h=c.height,p={l:56,r:14,t:14,b:35};ctx.clearRect(0,0,w,h);ctx.font='12px system-ui';
+ const dbs=[],points=600;for(let i=0;i<=points;i++){const f=i/points*fs/2;dbs.push(20*Math.log10(Math.max(response(f,fs,coeffs)/32768,1e-5)))}
+ for(let db=-100;db<=0;db+=20){const y=p.t+(5-db)/105*(h-p.t-p.b);ctx.strokeStyle='#e1e7ed';ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke();ctx.fillStyle='#5c6b7a';ctx.textAlign='right';ctx.fillText(db+' dB',p.l-8,y+4)}
+ for(let i=0;i<=4;i++){const x=p.l+i/4*(w-p.l-p.r);ctx.strokeStyle='#e1e7ed';ctx.beginPath();ctx.moveTo(x,p.t);ctx.lineTo(x,h-p.b);ctx.stroke();ctx.fillStyle='#5c6b7a';ctx.textAlign='center';ctx.fillText(Math.round(fs/2*i/4)+' Hz',x,h-12)}
+ ctx.strokeStyle='#1677b8';ctx.lineWidth=2;ctx.beginPath();dbs.forEach((db,i)=>{const x=p.l+i/points*(w-p.l-p.r),y=p.t+(5-Math.max(-100,Math.min(5,db)))/105*(h-p.t-p.b);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke()
+}
+$('type').addEventListener('change',()=>{const band=['bandpass','bandstop'].includes($('type').value);$('cut2').hidden=!band;$('f1').previousElementSibling.textContent=band?'Lower cutoff (Hz)':'Cutoff frequency (Hz)';$('f2').required=band});
+$('settings').addEventListener('submit',e=>{e.preventDefault();calculate()});
+$('reset').addEventListener('click',()=>{$('type').value='lowpass';$('fs').value=44100;$('f1').value=4000;$('f2').value=8000;$('taps').value=64;$('window').value='hamming';$('type').dispatchEvent(new Event('change'));calculate()});
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('output').value);$('copy').textContent='Copied';setTimeout(()=>$('copy').textContent='Copy coefficients',1200)}catch(e){$('output').focus();$('output').select();document.execCommand('copy')}});
+$('download').addEventListener('click',()=>{const blob=new Blob(['#pragma once\n#include <stdint.h>\n\n'+$('output').value],{type:'text/plain'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='fir_coefficients.h';a.click();URL.revokeObjectURL(a.href)});
+$('type').dispatchEvent(new Event('change'));calculate();
+})();
+</script>
+</body>
+</html>

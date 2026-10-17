@@ -1,0 +1,32 @@
+
+TODO: Röhrenklang
+
+
+3. Audio-Eingänge und -Ausgänge
+Hier ist die Liste länger, die Portierung sollte aber nicht durch blindes Kopieren der Teensy-Treiber erfolgen.
+Eingangsknoten fehlen noch
+- input_i2s, input_i2s2
+- input_i2s_quad, input_i2s_hex, input_i2s_oct
+- input_tdm, input_tdm2
+- input_pdm, input_pdm_i2s2
+Für eure Plattform wäre zunächst ein sauber integrierter AudioInputI2S-Knoten am naheliegendsten. ADC-, PDM- und Mehrkanal-Eingänge könnten später entsprechend dem tatsächlichen Hardwarebedarf folgen.
+Weitere Ausgangsknoten fehlen
+- output_i2s2
+- output_i2s_quad, output_i2s_hex, output_i2s_oct
+- output_pdm
+- output_spdif, output_spdif2, output_spdif3
+- output_pt8211, output_pt8211_2
+- output_tdm, output_tdm2, output_adat
+
+4. Codec-Steuerungen
+Der Teensy-Upstream unterstützt weitere Codec- und Audiochip-Treiber, die bei euch fehlen:
+- control_sgtl5000
+- control_wm8731
+- control_ak4558
+- control_cs4272
+- control_cs42448
+- control_tlv320aic3206
+
+
+5. Audio-Recorder
+- Recorder zum Mitschneiden der Audioausgabe; Zielmedium, Dateiformat und Pufferstrategie noch festlegen.

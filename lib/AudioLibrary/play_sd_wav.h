@@ -1,0 +1,172 @@
+#ifndef play_sd_wav_h_
+#define play_sd_wav_h_
+
+#include <Arduino.h>
+#include "AudioPlayer.h"
+#include "AudioSampleBuffer.h"
+#include "softcodecs/AudioSource.h"
+
+#if defined(ARDUINO_ARCH_ESP32)
+#include <FS.h>
+#include <SD_MMC.h>
+#endif
+
+class AudioPlaySdWav : public AudioPlayer {
+  public:
+    // No stream support here - needs a seekable source.
+    static constexpr const char *MIME_TYPES[] = {/*"audio/wav", "audio/x-wav"*/};
+    static constexpr AudioPlayerInfo INFO = {AudioCodec::WAV, "WAV", MIME_TYPES,
+                                             sizeof(MIME_TYPES) / sizeof(MIME_TYPES[0])};
+    AudioPlaySdWav()
+        : AudioPlayer(), state(STOPPED), source(nullptr), own_source(false), block_left(nullptr), block_right(nullptr) {
+        begin();
+    }
+
+    ~AudioPlaySdWav() override;
+
+    void begin();
+
+    // Bestehende API
+    bool play(const char *filename);
+
+    // Beliebiges Arduino-ESP32 Filesystem
+    bool play(fs::FS &fs, const char *filename);
+
+    // Generische AudioSource
+    bool play(AudioSource &source) override;
+    void stop() override;
+    void togglePlayPause();
+
+    bool isPlaying() const override;
+    bool isPaused();
+    bool isStopped();
+
+    uint32_t positionMillis() const override;
+    uint32_t lengthMillis() const override;
+
+    // Playback-rate multiplier: 1.0 = original speed/pitch.
+    // Resampling changes pitch too; this is not pitch-preserving time-stretch.
+    // Accepted range: 0.25 ... 4.0. Returns false for invalid values.
+    bool setPlaybackRate(float rate);
+    float playbackRate() const;
+
+    // Repeat the WAV data chunk while enabled. stop() halts playback but
+    // keeps the loop setting for the next play() call.
+    void setLoop(bool enabled);
+    bool isLooping() const;
+
+    // Load a PCM WAV into an owned mono int16_t PSRAM buffer for AudioPlayMemory.
+    // Use a dedicated, stopped loader instance with no active source.
+    // Stereo files are downmixed to mono. Supported rates: 11025, 22050, 44100 Hz.
+    // Fails without changing buffer if PSRAM cannot hold the entire decoded sample,
+    // retaining reserveBytes (64 KiB by default) for the rest of the application.
+    bool loadToMemory(fs::FS &fs, const char *filename, AudioSampleBuffer &buffer,
+                      size_t reserveBytes = 64U * 1024U);
+
+    const AudioPlayerInfo &info() const override {
+        return INFO;
+    }
+
+    void update() override;
+
+  private:
+    enum State : uint8_t { STOPPED, PLAYING, PAUSED };
+
+    State state;
+
+    /*
+     * Aktive AudioSource.
+     */
+    AudioSource *source;
+
+    /*
+     * true:
+     *   Der Player hat die Source selbst erzeugt
+     *   und ist für deren Lebensdauer verantwortlich.
+     *
+     * false:
+     *   Die Source gehört dem Aufrufer.
+     */
+    bool own_source;
+
+    uint64_t data_start;
+    uint64_t data_length;
+    uint32_t data_frames;
+
+    uint32_t sample_rate;
+    float output_sample_rate = AUDIO_SAMPLE_RATE_EXACT; // Captured at playback start
+    float source_step = 1.0f; // Source frames per output sample at unity rate
+    uint16_t channels;
+    uint16_t bits_per_sample;
+    uint16_t bytes_per_sample;
+    uint16_t block_align;
+
+    uint32_t source_frames_read;
+
+    // Batch file/source reads instead of calling AudioSource::read() per frame.
+    alignas(4) uint8_t source_buffer[512];
+    uint16_t source_buffer_offset = 0;
+    uint16_t source_buffer_size = 0;
+
+    audio_block_t *block_left;
+    audio_block_t *block_right;
+    uint16_t block_offset;
+
+    // Source WAV samples are converted to signed 32-bit
+    // internally before being reduced to the AudioStream format.
+    int32_t previous_left;
+    int32_t previous_right;
+    int32_t next_left;
+    int32_t next_right;
+
+    bool have_previous;
+    bool have_next;
+    bool source_ended = false; // End of the declared data chunk reached
+    bool source_error = false; // Read/seek failed before the declared end
+
+    // Fractional source-frame position between previous_* and next_*.
+    float source_phase = 0.0f;
+    float current_playback_rate = 1.0f; // Audio-update task only
+    float target_playback_rate = 1.0f;  // Protected by playback_rate_mux
+    bool loop_enabled = false;          // Protected by playback_rate_mux
+
+    /*
+     * Gemeinsamer Startpfad für alle Sources.
+     */
+    bool startPlayback(AudioSource &source, bool takeOwnership);
+
+    /*
+     * Source-Verwaltung.
+     */
+    void closeSource();
+
+    /*
+     * Source I/O.
+     */
+    bool readExact(void *buffer, size_t length);
+    bool seekAbsolute(uint64_t position);
+    bool skip(uint64_t length);
+
+    /*
+     * WAV parsing.
+     *
+     * Diese Funktionen entsprechen funktional dem
+     * bisherigen WAV-Parser.
+     */
+    bool parseWav();
+    bool parseFmtChunk(uint64_t position, uint32_t size);
+    bool findDataChunk();
+
+    /*
+     * PCM decoding.
+     */
+    bool readSourceFrame(int32_t &left, int32_t &right);
+
+    inline bool getOutputSample(int16_t &left, int16_t &right, float targetRate,
+                                float outputSampleRate, float sourceStep);
+
+    void releaseBlocks();
+    void finishPlayback(bool stopPlayback = true);
+};
+
+#endif
