@@ -47,8 +47,8 @@ void buildBuiltinAttack()
         if (magnitude > peak) peak = magnitude;
     }
 
-    // Intermediate level between the quiet and overly strong listening settings.
-    const float scale = peak > 0 ? (0.32f * 32767.0f) / (float)peak : 0.0f;
+    // A small lift over the previous level, while keeping the body dominant.
+    const float scale = peak > 0 ? (0.36f * 32767.0f) / (float)peak : 0.0f;
     for (uint32_t i = 0; i < BUILTIN_ATTACK_COUNT; ++i) {
         builtinAttackSample[i] = (int16_t)((float)builtinAttackSample[i] * scale);
     }
@@ -138,7 +138,14 @@ bool AudioSynthHandpan::configureNote(uint8_t slot, const ModeConfig *modes,
         mode.previousStateScale = sinf(cfg.phaseRadians - omega) / r;
     }
 
-    note.modeCount = modeCount;
+    // Trailing zero-gain modes cannot contribute to the output. Trim them from
+    // the render loops so disabled upper partials cost no per-sample work.
+    uint8_t activeModeCount = modeCount;
+    while (activeModeCount > 0 &&
+           note.modes[activeModeCount - 1U].config.gain <= 0.0f) {
+        --activeModeCount;
+    }
+    note.modeCount = activeModeCount;
     note.attackSample = attackSample;
     note.attackSampleCount = attackSampleCount;
     note.attackGain = attackGain;
@@ -232,6 +239,12 @@ void AudioSynthHandpan::triggerNote(uint8_t slot, uint8_t velocity) {
 
     Note &note = notes[slot];
     const float velocityScale = (float)velocity * (1.0f / 127.0f);
+
+    // An attack-only pad does not need a temporary resonator voice.
+    if (note.modeCount == 0) {
+        startAttack(slot, velocityScale);
+        return;
+    }
 
     // Start a separate resonator voice for this strike. Its contribution is
     // smoothly faded in over a few milliseconds; once the ramp ends, the state
