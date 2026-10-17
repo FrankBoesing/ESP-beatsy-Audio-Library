@@ -121,7 +121,7 @@ partial ratios `5.36, 5.96, 10.79` remain configured but have zero gain in these
 examples. `AudioSynthHandpan::triggerNote()` skips zero-gain modes, so only the
 three body resonators need to run during the sustained tail. This is the lowest-
 compute model among the previously compared variants, and avoids a separate
-pitched metallic line. The diagnostic example's procedural attack gain is `0.03`, and its generated attack is normalized to a 0.65 full-scale peak. The musical example uses the softer custom attack at a `0.055` gain and a 0.22 full-scale peak. Both examples use lower modal levels and a restrained `0.25` saturation blend. `setSaturation(0.0f)` bypasses the non-linear
+pitched metallic line. The diagnostic example's procedural attack gain is `0.03`, and its generated attack is normalized to a 0.65 full-scale peak. The musical example uses the softer custom attack at a `0.16` gain and a 0.42 full-scale peak so the contact is audible without needing a bright, sharp transient. Both examples use lower modal levels and a restrained `0.25` saturation blend. `setSaturation(0.0f)` bypasses the non-linear
 stage; intermediate values blend dry and saturated outputs. These are
 experimental listening parameters, not measured physical modes of a particular
 handpan; confirm them by listening on target hardware.
@@ -131,7 +131,7 @@ handpan; confirm them by listening on target hardware.
 There are two separate sketches:
 
 - `examples/Synthesis/HandpanMusic/HandpanMusic.cpp` is the musical example:
-  a 30-second excerpt from the opening of Beethoven's public-domain **“Für Elise” (WoO 59)**. The 109 note onsets come from the upper-staff melody and timing of the current Mutopia Project score/MIDI. For this handpan arrangement, the isolated E6 at 25.833 seconds is lowered by one octave to E5. The example adds a custom, softly filtered 30 ms finger-contact transient, with a gentle rise and reduced peak level; its body-mode phase is zero and the synthesizer applies a 5 ms strike ramp to reduce clicks. Resonators ring naturally rather than stopping at each written note duration. Source: [Mutopia Project, Für Elise](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931).
+  a 30-second excerpt from the opening of Beethoven's public-domain **“Für Elise” (WoO 59)**. The 109 note onsets come from the upper-staff melody and timing of the current Mutopia Project score/MIDI. For this handpan arrangement, the isolated E6 at 25.833 seconds is lowered by one octave to E5. The example adds a custom, softly filtered 30 ms finger-contact transient, with a gentle rise and a 0.42 full-scale peak; its body-mode phase is zero and the synthesizer applies a 5 ms strike ramp to reduce clicks. Resonators ring naturally rather than stopping at each written note duration. Source: [Mutopia Project, Für Elise](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931).
 - `examples/Synthesis/Handpan/Handpan.cpp` is the diagnostic/load-test sketch.
   It runs a moderate melody, a realistic phrase and increasingly dense pad
   patterns, reporting CPU load, audio-block use and rejected note events.
