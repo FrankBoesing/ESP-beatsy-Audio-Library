@@ -355,7 +355,7 @@ void setup()
     }
 
     // H2 adds a little harmonic roughness without introducing another resonator.
-    handpan.setSaturation(1.0f);
+    handpan.setSaturation(0.65f);
     buildExampleAttack();
     if (!configureHandpan()) {
         while (true) delay(1000);
