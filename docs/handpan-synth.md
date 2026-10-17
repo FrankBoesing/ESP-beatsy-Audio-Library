@@ -64,7 +64,7 @@ mix buffer. Optional soft saturation then shapes the combined waveform before
 it is clamped and converted to PCM16. The H2 curve is `tanh(1.8 * x) / 1.8`;
 `update()` uses a bounded rational approximation to avoid a per-sample `tanhf()`
 call. Set saturation to zero to bypass the non-linear stage; the examples use
-amount `1.0` for the H2 timbre. Strongly overlapping notes can still overload
+amount `0.65` for a softer H2 blend. Strongly overlapping notes can still overload
 the final range, so choose modal gains and graph gain accordingly.
 
 The PCM sample pointer is retained by the synthesizer, not copied. It may point
@@ -98,8 +98,8 @@ AudioSynthHandpan::ModeConfig modes[6] = {
     {1583.9720f, 0.0000f, 0.08f, 1.48f},
 };
 
-// Optional soft saturation (0 = bypass, 1 = H2 sound).
-handpan.setSaturation(1.0f);
+// Optional soft saturation (0 = bypass, 1 = full H2 curve).
+handpan.setSaturation(0.65f);
 // attack is a caller-owned signed mono PCM16 sample; nullptr disables it.
 handpan.configureNote(0, modes, 6, attack, attackSampleCount, 44100, 0.06f);
 handpan.noteOn(0, 100);
