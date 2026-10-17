@@ -28,8 +28,9 @@ strikes add energy to existing states instead of cutting off the previous ring.
 - Decay is specified as `T60`, the time for modal amplitude to fall by 60 dB.
 - A caller-supplied sample pointer is retained, not copied. Keep its data alive
   and unchanged during playback; `const` samples mapped from flash are suitable.
-  With a null pointer and zero sample count, the built-in transient is used.
-  Pass `attackGain = 0.0f` to disable the transient entirely.
+  The three-argument `configureNote(slot, modes, count)` overload selects the
+  built-in transient. The explicit sample overload preserves resonator-only
+  behavior when passed `nullptr` and a count of zero.
 - Configure the pad bank before starting audio updates (normally in `setup()`
   before `AudioMemory()`). Configure again after changing the global sample rate.
 - If `noteOn()` returns false, the event was not queued and should be retried or
