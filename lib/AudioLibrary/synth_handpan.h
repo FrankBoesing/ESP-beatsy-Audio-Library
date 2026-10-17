@@ -6,11 +6,11 @@
 
 #include <stdint.h>
 
-// Hybrid handpan synthesizer: an optional caller-supplied PCM16 attack sample
-// plus damped resonators for the sustained body and metallic ring. Each strike
-// uses a short onset ramp to avoid an abrupt resonator start.
-// Configure note slots before starting the audio graph. Sample memory must
-// remain valid for as long as this object may play it (const flash data is OK).
+// Hybrid handpan synthesizer: a built-in, procedurally generated PCM16 attack
+// plus damped resonators for the sustained body and metallic ring. A caller may
+// override the built-in attack with its own PCM16 data. Each strike uses a short
+// onset ramp to avoid an abrupt resonator start. Configure note slots before
+// starting the audio graph; caller-supplied sample memory must remain valid.
 class AudioSynthHandpan : public AudioStream {
   public:
     static constexpr uint8_t MAX_NOTES = 16;
@@ -32,14 +32,17 @@ class AudioSynthHandpan : public AudioStream {
     // Configure a logical pad (slot 0..15). Pass up to six modal components,
     // usually three body modes followed by three metallic ring modes. Each mode
     // has an independent frequency, gain, phase and decay time.
-    // attackSample is signed mono PCM16, not copied by this object. Use nullptr
-    // and a count of zero to synthesize the resonances without a sample attack.
-    // Call before AudioMemory()/starting updates, after selecting the sample rate.
+    // If attackSample is nullptr and attackSampleCount is zero, a soft 30 ms
+    // finger-contact transient is generated once in library-owned RAM and used
+    // by default. A supplied sample overrides it and is not copied. Set
+    // attackGain to 0.0f to disable the transient. Caller-owned sample memory
+    // must remain valid during playback. Call before AudioMemory()/updates,
+    // after selecting the sample rate.
     bool configureNote(uint8_t slot, const ModeConfig *modes, uint8_t modeCount,
                        const int16_t *attackSample = nullptr,
                        uint32_t attackSampleCount = 0,
                        uint32_t attackSampleRate = 44100,
-                       float attackGain = 0.09f);
+                       float attackGain = 0.10f);
 
     // Queue a strike. velocity is MIDI-like, 0..127. Returns false if the slot
     // is not configured or the fixed event queue is full. Each strike is faded
@@ -74,7 +77,7 @@ class AudioSynthHandpan : public AudioStream {
         uint32_t attackSampleCount = 0;
         uint32_t attackIncrementQ16 = 0;
         uint16_t onsetRampSamples = 0;
-        float attackGain = 0.09f;
+        float attackGain = 0.10f;
     };
 
     struct AttackVoice {
