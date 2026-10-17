@@ -10,16 +10,16 @@
 
 #include <Audio.h>
 
-// Standalone musical demonstration. Set HANDPAN_MUSIC_SAMPLE_RATE to 44100
+// Standalone musical demonstration. Set ELISA_HANDPAN_SAMPLE_RATE to 44100
 // for a 44.1-kHz run; 48 kHz is the default.
 // The output clock is set before configuring the resonators.
-#ifndef HANDPAN_MUSIC_SAMPLE_RATE
-#define HANDPAN_MUSIC_SAMPLE_RATE 48000
+#ifndef ELISA_HANDPAN_SAMPLE_RATE
+#define ELISA_HANDPAN_SAMPLE_RATE 48000
 #endif
-#if HANDPAN_MUSIC_SAMPLE_RATE != 44100 && HANDPAN_MUSIC_SAMPLE_RATE != 48000
-#error "HANDPAN_MUSIC_SAMPLE_RATE must be 44100 or 48000"
+#if ELISA_HANDPAN_SAMPLE_RATE != 44100 && ELISA_HANDPAN_SAMPLE_RATE != 48000
+#error "ELISA_HANDPAN_SAMPLE_RATE must be 44100 or 48000"
 #endif
-constexpr uint32_t OUTPUT_SAMPLE_RATE = HANDPAN_MUSIC_SAMPLE_RATE;
+constexpr uint32_t OUTPUT_SAMPLE_RATE = ELISA_HANDPAN_SAMPLE_RATE;
 
 AudioOutputI2S audioOut({
     PIN_I2S_BLCK, // BCLK
