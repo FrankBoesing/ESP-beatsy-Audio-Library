@@ -101,9 +101,10 @@ eight seconds for the body resonators and Freeverb to decay. The recorder writes
 `/ElisasHandPan.tmp` during capture and finalizes the `.wav` file only when
 `recorder.stop()` succeeds. It requires SD_MMC wiring from `platformio.ini` and
 PSRAM for the recorder ring buffer. Existing `.tmp` and `.wav` files are not
-overwritten; remove them from the card before recording another take. Copy the
-WAV from the card and convert it to MP3 offline; `AudioRecordFile` records PCM
-WAV and does not encode MP3.
+overwritten; remove them from the card before recording another take. A reference
+recording is available as [ElisasHandPan.mp3](../examples/Synthesis/ElisasHandPan/ElisasHandPan.mp3).
+Copy the WAV from the card and convert it to MP3 offline if you want to create
+your own recording; `AudioRecordFile` records PCM WAV and does not encode MP3.
 
 The frequency, gain and decay values are experimental synthesis parameters,
 not measured modes of a specific commercial handpan. Listen on the target
