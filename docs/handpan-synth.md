@@ -4,9 +4,8 @@
 a bank of damped resonators. The examples synthesize their own short attack,
 so no recorded handpan sample is required. The class supports three body modes
 and three optional upper partials; the low-CPU phrase preset leaves the upper
-partials disabled so they cannot sound like a second melodic instrument. The H2
-preset applies gentle soft saturation to the final mixed signal to add mild
-harmonic roughness. Resonators are independent per configured pad, and repeated
+partials disabled so they cannot sound like a second melodic instrument. A restrained soft-saturation blend can add mild harmonic roughness, but the
+examples prioritize avoiding peak overload by reducing resonator and attack gain. Resonators are independent per configured pad, and repeated
 strikes add energy to existing states instead of cutting off the previous ring.
 
 ## Limits and runtime behavior
@@ -64,7 +63,7 @@ mix buffer. Optional soft saturation then shapes the combined waveform before
 it is clamped and converted to PCM16. The H2 curve is `tanh(1.8 * x) / 1.8`;
 `update()` uses a bounded rational approximation to avoid a per-sample `tanhf()`
 call. Set saturation to zero to bypass the non-linear stage; the examples use
-amount `0.65` for a softer H2 blend. Strongly overlapping notes can still overload
+amount `0.25` for a restrained H2 blend; modal, attack and mixer gains are also lower to leave more headroom. Strongly overlapping notes can still overload
 the final range, so choose modal gains and graph gain accordingly.
 
 The PCM sample pointer is retained by the synthesizer, not copied. It may point
@@ -99,9 +98,9 @@ AudioSynthHandpan::ModeConfig modes[6] = {
 };
 
 // Optional soft saturation (0 = bypass, 1 = full H2 curve).
-handpan.setSaturation(0.65f);
+handpan.setSaturation(0.25f);
 // attack is a caller-owned signed mono PCM16 sample; nullptr disables it.
-handpan.configureNote(0, modes, 6, attack, attackSampleCount, 44100, 0.06f);
+handpan.configureNote(0, modes, 6, attack, attackSampleCount, 44100, 0.03f);
 handpan.noteOn(0, 100);
 ```
 
@@ -114,8 +113,7 @@ partial ratios `5.36, 5.96, 10.79` remain configured but have zero gain in these
 examples. `AudioSynthHandpan::triggerNote()` skips zero-gain modes, so only the
 three body resonators need to run during the sustained tail. This is the lowest-
 compute model among the previously compared variants, and avoids a separate
-pitched metallic line. The procedural attack gain has been reduced to `0.06`, and the musical/load-test
-examples enable H2 soft saturation. `setSaturation(0.0f)` bypasses the non-linear
+pitched metallic line. The procedural attack gain is `0.03`, the generated attack is normalized to a 0.65 full-scale peak, and the musical/load-test examples use lower modal levels and a restrained `0.25` saturation blend. `setSaturation(0.0f)` bypasses the non-linear
 stage; intermediate values blend dry and saturated outputs. These are
 experimental listening parameters, not measured physical modes of a particular
 handpan; confirm them by listening on target hardware.
@@ -125,10 +123,7 @@ handpan; confirm them by listening on target hardware.
 There are two separate sketches:
 
 - `examples/Synthesis/HandpanMusic/HandpanMusic.cpp` is the musical example:
-  a short, looping handpan arrangement of Beethoven's public-domain **“Für Elise”**
-  theme using the familiar upper-register opening and lower answer figures. The
-  equal-tempered notes follow a regular sixteenth-note timing grid, with variable
-  velocities and a gentle Freeverb return.
+  an approximately 96-second handpan arrangement of Beethoven's public-domain **“Für Elise”** theme. It revisits the opening motif, includes answering phrases and a contrasting middle section, then returns to the theme and coda. It uses a regular sixteenth-note grid, variable velocities and a restrained Freeverb return.
 - `examples/Synthesis/Handpan/Handpan.cpp` is the diagnostic/load-test sketch.
   It runs a moderate melody, a realistic phrase and increasingly dense pad
   patterns, reporting CPU load, audio-block use and rejected note events.
@@ -168,12 +163,7 @@ return and final mixer. Both default to 48 kHz and configure I2S before
 respective `HANDPAN_MUSIC_SAMPLE_RATE` or `HANDPAN_TEST_SAMPLE_RATE` macro to
 `44100` for a 44.1-kHz run.
 
-The Für Elise arrangement uses equal-tempered pitch values from G#3 to F5.
-The opening motif stays in its familiar upper register while lower answer figures
-use the lower-register notes from the composition. The 20-second loop uses a
-more even event grid, with longer note values represented by two- or four-step
-gaps. This is a handpan-style arrangement, not a transcription of a specific
-modern performance or recording.
+The Für Elise arrangement uses equal-tempered pitch values from G#3 to F5. Its 96-second loop is organized as twelve 8-second sections: opening motifs, lower answers, a contrasting middle section, theme returns and a coda. The notes are arranged for the available handpan pitch bank; this is a stylized arrangement rather than a note-for-note transcription of the full piano score.
 
 The example defaults to **48 kHz**. It calls `audioOut.setSampleRate()` before
 `AudioMemory()` and before configuring the resonators, so the modal coefficients
