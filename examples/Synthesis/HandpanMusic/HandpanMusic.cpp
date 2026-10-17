@@ -58,7 +58,7 @@ constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
     587.330f, 622.254f, 659.255f, 698.456f
 };
 
-// Keep the warm body modes and use the generated attack for the strike.
+// Keep the warm body modes; the musical example omits the PCM attack sample.
 // The upper partials remain disabled to limit CPU and avoid a second melody.
 constexpr float BODY_T60[3] = {3.00f, 3.00f, 4.00f};
 constexpr float BODY_RATIOS[3] = {1.000f, 2.011f, 2.984f};
