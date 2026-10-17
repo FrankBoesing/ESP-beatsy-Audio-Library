@@ -1,8 +1,5 @@
 #include "control_es8311.h"
-
-#if defined(ARDUINO_ARCH_ESP32)
-#include <esp32-hal-i2c.h>
-#endif
+#include "utility/AudioControlI2C.h"
 
 #include <cmath>
 #pragma GCC optimize("Os")
@@ -39,31 +36,15 @@ AudioControlES8311::AudioControlES8311(const Pins &pins)
       initialized_(false) {}
 
 bool AudioControlES8311::writeReg(uint8_t reg, uint8_t value) {
-    wire_->beginTransmission(i2cAddress_);
-    wire_->write(reg);
-    wire_->write(value);
-    return wire_->endTransmission() == 0;
+    return AudioControlI2C::writeReg(*wire_, i2cAddress_, reg, value);
 }
 
 bool AudioControlES8311::readReg(uint8_t reg, uint8_t &value) {
-    wire_->beginTransmission(i2cAddress_);
-    wire_->write(reg);
-
-    if (wire_->endTransmission(false) != 0) {
-        return false;
-    }
-
-    if (wire_->requestFrom((int)(i2cAddress_), 1) != 1) {
-        return false;
-    }
-
-    value = wire_->read();
-    return true;
+    return AudioControlI2C::readReg(*wire_, i2cAddress_, reg, value);
 }
 
 bool AudioControlES8311::isConnected() {
-    wire_->beginTransmission(i2cAddress_);
-    return wire_->endTransmission() == 0;
+    return AudioControlI2C::isConnected(*wire_, i2cAddress_);
 }
 
 bool AudioControlES8311::configureClock(uint32_t sampleRate) {
@@ -91,14 +72,14 @@ bool AudioControlES8311::configureClock(uint32_t sampleRate) {
     reg02 |= coeff->pre_multi << 3;
     ok &= writeReg(REG_CLK_MANAGER2, reg02);
 
-    // Register 0x03: ADC fsmode + osr.
-    ok &= writeReg(REG_CLK_MANAGER3, (coeff->fs_mode << 6) | coeff->adc_osr);
-
-    // Register 0x04: DAC osr.
-    ok &= writeReg(REG_CLK_MANAGER4, coeff->dac_osr);
-
-    // Register 0x05: ADC/DAC clock dividers.
-    ok &= writeReg(REG_CLK_MANAGER5, ((coeff->adc_div - 1) << 4) | (coeff->dac_div - 1));
+    // Registers 0x03..0x05: ADC/DAC sample-rate and divider settings.
+    const AudioControlI2C::RegisterValue clockRateSequence[] = {
+        {REG_CLK_MANAGER3, (uint8_t)((coeff->fs_mode << 6) | coeff->adc_osr)},
+        {REG_CLK_MANAGER4, coeff->dac_osr},
+        {REG_CLK_MANAGER5, (uint8_t)(((coeff->adc_div - 1) << 4) | (coeff->dac_div - 1))}
+    };
+    ok &= AudioControlI2C::writeRegisterSequence(
+        *wire_, i2cAddress_, clockRateSequence, sizeof(clockRateSequence) / sizeof(clockRateSequence[0]), false);
 
     // Register 0x06: BCLK divider (no inversion).
     uint8_t reg06 = 0;
@@ -130,13 +111,7 @@ bool AudioControlES8311::enable(uint32_t sampleRate) {
         digitalWrite(pins_.pa_enable, !pins_.pa_active);
     }
 
-#if defined(ARDUINO_ARCH_ESP32)
-    if (!i2cIsInit(wire_->getBusNum())) {
-        wire_->begin(pins_.sda, pins_.scl, ES8311_I2C_FREQUENCY);
-    }
-#else
-    wire_->begin(pins_.sda, pins_.scl, ES8311_I2C_FREQUENCY);
-#endif
+    AudioControlI2C::begin(*wire_, pins_.sda, pins_.scl, ES8311_I2C_FREQUENCY);
 
     if (!isConnected()) {
         return false;
@@ -176,9 +151,13 @@ bool AudioControlES8311::enable(uint32_t sampleRate) {
     ok &= writeReg(REG_SDPOUT, 0x0C);  // ADC: 16 bit.
 
     // Configure analog stages while the DAC remains muted and at minimum volume.
-    ok &= writeReg(REG_SYSTEM0D, 0x01); // Analog bias.
-    ok &= writeReg(REG_SYSTEM0E, 0x02); // Analog PGA + ADC modulator.
-    ok &= writeReg(REG_SYSTEM14, 0x10); // MIC1P/MIC1N, PGA initially 0 dB.
+    static constexpr AudioControlI2C::RegisterValue analogSetup[] = {
+        {REG_SYSTEM0D, 0x01}, // Analog bias.
+        {REG_SYSTEM0E, 0x02}, // Analog PGA + ADC modulator.
+        {REG_SYSTEM14, 0x10}  // MIC1P/MIC1N, PGA initially 0 dB.
+    };
+    ok &= AudioControlI2C::writeRegisterSequence(
+        *wire_, i2cAddress_, analogSetup, sizeof(analogSetup) / sizeof(analogSetup[0]), false);
 
     // ADC_SCALE fixed at 0 dB; inputLevel() controls the analog PGA only.
     uint8_t adcScale = 0;
@@ -191,10 +170,14 @@ bool AudioControlES8311::enable(uint32_t sampleRate) {
 
     // Power up the DAC and output drivers only after mute and minimum volume
     // are in place.
-    ok &= writeReg(REG_SYSTEM12, 0x00); // DAC on.
-    ok &= writeReg(REG_SYSTEM13, 0x10); // Headphone/line driver.
-    ok &= writeReg(REG_ADC1C, 0x6A);   // ADC EQ bypass, DC-offset correction.
-    ok &= writeReg(REG_DAC37, 0x18);   // DAC soft-ramp (rate 1) + EQ bypass.
+    static constexpr AudioControlI2C::RegisterValue outputPowerSequence[] = {
+        {REG_SYSTEM12, 0x00}, // DAC on.
+        {REG_SYSTEM13, 0x10}, // Headphone/line driver.
+        {REG_ADC1C, 0x6A},    // ADC EQ bypass, DC-offset correction.
+        {REG_DAC37, 0x18}     // DAC soft-ramp (rate 1) + EQ bypass.
+    };
+    ok &= AudioControlI2C::writeRegisterSequence(
+        *wire_, i2cAddress_, outputPowerSequence, sizeof(outputPowerSequence) / sizeof(outputPowerSequence[0]), false);
 
     if (!ok) {
         initialized_ = false;
@@ -329,9 +312,13 @@ bool AudioControlES8311::alcConfig(uint8_t maxVolume, uint8_t maxLevel,
     // Preserve ALC/automute enable bits and update only ALC_WINSIZE.
     reg = (uint8_t)((reg & 0xF0U) | windowSize);
 
-    return writeReg(REG_ADC17, maxVolume) &&
-           writeReg(REG_ADC19, (uint8_t)((maxLevel << 4) | minLevel)) &&
-           writeReg(REG_ADC18, reg);
+    const AudioControlI2C::RegisterValue alcSequence[] = {
+        {REG_ADC17, maxVolume},
+        {REG_ADC19, (uint8_t)((maxLevel << 4) | minLevel)},
+        {REG_ADC18, reg}
+    };
+    return AudioControlI2C::writeRegisterSequence(
+        *wire_, i2cAddress_, alcSequence, sizeof(alcSequence) / sizeof(alcSequence[0]));
 }
 
 bool AudioControlES8311::noiseGate(bool enable, uint8_t threshold,
@@ -349,9 +336,13 @@ bool AudioControlES8311::noiseGate(bool enable, uint8_t threshold,
     control = (uint8_t)((control & 0xBFU) | (enable ? 0x40U : 0x00U));
     attenuationReg = (uint8_t)((attenuationReg & 0x1FU) | (attenuation << 5));
 
-    return writeReg(REG_ADC1A, (uint8_t)((windowSize << 4) | threshold)) &&
-           writeReg(REG_ADC1B, attenuationReg) &&
-           writeReg(REG_ADC18, control);
+    const AudioControlI2C::RegisterValue noiseGateSequence[] = {
+        {REG_ADC1A, (uint8_t)((windowSize << 4) | threshold)},
+        {REG_ADC1B, attenuationReg},
+        {REG_ADC18, control}
+    };
+    return AudioControlI2C::writeRegisterSequence(
+        *wire_, i2cAddress_, noiseGateSequence, sizeof(noiseGateSequence) / sizeof(noiseGateSequence[0]));
 }
 
 bool AudioControlES8311::adcHighPassFilter(bool enable) {

@@ -1,8 +1,5 @@
 #include "control_es8388.h"
-
-#if defined(ARDUINO_ARCH_ESP32)
-#include <esp32-hal-i2c.h>
-#endif
+#include "utility/AudioControlI2C.h"
 
 #include <cmath>
 
@@ -35,44 +32,21 @@ AudioControlES8388::AudioControlES8388(const Pins &pins)
       initialized_(false), adcEnabled_(false) {}
 
 bool AudioControlES8388::writeReg(uint8_t reg, uint8_t value) {
-    wire_->beginTransmission(i2cAddress_);
-    wire_->write(reg);
-    wire_->write(value);
-    return wire_->endTransmission() == 0;
+    return AudioControlI2C::writeReg(*wire_, i2cAddress_, reg, value);
 }
 
 bool AudioControlES8388::readReg(uint8_t reg, uint8_t &value) {
-    wire_->beginTransmission(i2cAddress_);
-    wire_->write(reg);
-
-    if (wire_->endTransmission(false) != 0) {
-        return false;
-    }
-
-    if (wire_->requestFrom((int)(i2cAddress_), 1) != 1) {
-        return false;
-    }
-
-    value = wire_->read();
-    return true;
+    return AudioControlI2C::readReg(*wire_, i2cAddress_, reg, value);
 }
 
 bool AudioControlES8388::isConnected() {
-    wire_->beginTransmission(i2cAddress_);
-    return wire_->endTransmission() == 0;
+    return AudioControlI2C::isConnected(*wire_, i2cAddress_);
 }
 
 bool AudioControlES8388::enable() {
-#if defined(ARDUINO_ARCH_ESP32)
-    const bool wireInitialized = i2cIsInit(wire_->getBusNum());
-    if (initialized_ && wireInitialized) {
+    if (initialized_ && AudioControlI2C::isInitialized(*wire_)) {
         return true;
     }
-#else
-    if (initialized_) {
-        return true;
-    }
-#endif
 
     initialized_ = false;
     adcEnabled_ = false;
@@ -84,13 +58,7 @@ bool AudioControlES8388::enable() {
         digitalWrite(pins_.pa_enable, !pins_.pa_active);
     }
 
-#if defined(ARDUINO_ARCH_ESP32)
-    if (!i2cIsInit(wire_->getBusNum())) {
-        wire_->begin(pins_.sda, pins_.scl, ES8388_I2C_FREQUENCY);
-    }
-#else
-    wire_->begin(pins_.sda, pins_.scl, ES8388_I2C_FREQUENCY);
-#endif
+    AudioControlI2C::begin(*wire_, pins_.sda, pins_.scl, ES8388_I2C_FREQUENCY);
 
     if (!isConnected()) {
         return false;
@@ -100,9 +68,14 @@ bool AudioControlES8388::enable() {
     // codec power state machine. Unlike CONTROL1.SCPReset, this keeps the codec's
     // control registers available for a deterministic reinitialization and avoids
     // clearing the DAC mute bit as a side effect of a register reset.
-    if (!writeReg(REG_DACCONTROL3, 0x24) || // mute + DAC soft-ramp enabled
-        !setDacVolume(0xC0, 0xC0) ||
-        !writeReg(REG_DACPOWER, 0xC0)) {
+    static constexpr AudioControlI2C::RegisterValue silenceSequence[] = {
+        {REG_DACCONTROL3, 0x24}, // mute + DAC soft-ramp enabled
+        {REG_DACCONTROL4, 0xC0},
+        {REG_DACCONTROL5, 0xC0},
+        {REG_DACPOWER, 0xC0}
+    };
+    if (!AudioControlI2C::writeRegisterSequence(
+            *wire_, i2cAddress_, silenceSequence, sizeof(silenceSequence) / sizeof(silenceSequence[0]))) {
         return false;
     }
 
@@ -117,12 +90,7 @@ bool AudioControlES8388::enable() {
     }
     delay(20);
 
-    struct RegisterValue {
-        uint8_t reg;
-        uint8_t value;
-    };
-
-    static constexpr RegisterValue initSequence[] = {
+    static constexpr AudioControlI2C::RegisterValue initSequence[] = {
         // Keep DAC muted and enable digital volume soft-ramp.
         {REG_DACCONTROL3, 0x24},
 
@@ -164,10 +132,9 @@ bool AudioControlES8388::enable() {
         {REG_DACCONTROL27, 0x1E}
     };
 
-    for (const auto &entry : initSequence) {
-        if (!writeReg(entry.reg, entry.value)) {
-            return false;
-        }
+    if (!AudioControlI2C::writeRegisterSequence(
+            *wire_, i2cAddress_, initSequence, sizeof(initSequence) / sizeof(initSequence[0]))) {
+        return false;
     }
 
     // Allow the codec's analog stages to settle while muted and with outputs off.
@@ -214,9 +181,14 @@ bool AudioControlES8388::disable() {
 
     if (initialized_) {
         if (!mute()) return false;
-        ok &= writeReg(REG_ADCPOWER, 0xFF);
-        ok &= writeReg(REG_DACPOWER, 0xC0);
-        ok &= writeReg(REG_CHIPPOWER, 0xFF);
+
+        static constexpr AudioControlI2C::RegisterValue shutdownSequence[] = {
+            {REG_ADCPOWER, 0xFF},
+            {REG_DACPOWER, 0xC0},
+            {REG_CHIPPOWER, 0xFF}
+        };
+        ok &= AudioControlI2C::writeRegisterSequence(
+            *wire_, i2cAddress_, shutdownSequence, sizeof(shutdownSequence) / sizeof(shutdownSequence[0]), false);
     }
 
     if (pins_.pa_enable >= 0) {
@@ -313,20 +285,20 @@ bool AudioControlES8388::inputSelect(int input) {
     // Configure the ADC for the same 16-bit Philips I2S format and
     // 256 * Fs clocking used by AudioI2SPort. The ADC is kept powered down
     // until the input mux, gain, format and digital volume are configured.
-    bool ok = writeReg(REG_ADCPOWER, 0xFF);
-    ok &= writeReg(REG_ADCCONTROL1, 0x77); // 21 dB PGA gain, both channels.
-    ok &= writeReg(REG_ADCCONTROL2, inputConfig);
-    ok &= writeReg(REG_ADCCONTROL3, 0x02);
-    ok &= writeReg(REG_ADCCONTROL4, 0x0C); // 16-bit I2S.
-    ok &= writeReg(REG_ADCCONTROL5, 0x02); // Single speed, MCLK/LRCK = 256.
-    ok &= writeReg(REG_ADCCONTROL8, 0x00); // ADC digital volume: 0 dB, left.
-    ok &= writeReg(REG_ADCCONTROL9, 0x00); // ADC digital volume: 0 dB, right.
+    const AudioControlI2C::RegisterValue inputSequence[] = {
+        {REG_ADCPOWER, 0xFF},
+        {REG_ADCCONTROL1, 0x77}, // 21 dB PGA gain, both channels.
+        {REG_ADCCONTROL2, inputConfig},
+        {REG_ADCCONTROL3, 0x02},
+        {REG_ADCCONTROL4, 0x0C}, // 16-bit I2S.
+        {REG_ADCCONTROL5, 0x02}, // Single speed, MCLK/LRCK = 256.
+        {REG_ADCCONTROL8, 0x00}, // ADC digital volume: 0 dB, left.
+        {REG_ADCCONTROL9, 0x00}  // ADC digital volume: 0 dB, right.
+    };
+    const bool ok = AudioControlI2C::writeRegisterSequence(
+            *wire_, i2cAddress_, inputSequence, sizeof(inputSequence) / sizeof(inputSequence[0]), false);
 
-    if (ok) {
-        ok = writeReg(REG_ADCPOWER, 0x09); // Power up ADC and analog inputs.
-    }
-
-    if (!ok) {
+    if (!ok || !writeReg(REG_ADCPOWER, 0x09)) { // Power up ADC and analog inputs.
         writeReg(REG_ADCPOWER, 0xFF);
         adcEnabled_ = false;
         return false;
@@ -378,10 +350,14 @@ bool AudioControlES8388::alcConfig(uint8_t maxGain, uint8_t minGain,
     alcControl = (uint8_t)((alcControl & 0xC0U) | (maxGain << 3) | minGain);
     alcMode = (uint8_t)((alcMode & 0xE0U) | windowSize);
 
-    return writeReg(REG_ADCCONTROL10, alcControl) &&
-           writeReg(REG_ADCCONTROL11, (uint8_t)((targetLevel << 4) | holdTime)) &&
-           writeReg(REG_ADCCONTROL12, (uint8_t)((decayTime << 4) | attackTime)) &&
-           writeReg(REG_ADCCONTROL13, alcMode);
+    const AudioControlI2C::RegisterValue alcSequence[] = {
+        {REG_ADCCONTROL10, alcControl},
+        {REG_ADCCONTROL11, (uint8_t)((targetLevel << 4) | holdTime)},
+        {REG_ADCCONTROL12, (uint8_t)((decayTime << 4) | attackTime)},
+        {REG_ADCCONTROL13, alcMode}
+    };
+    return AudioControlI2C::writeRegisterSequence(
+            *wire_, i2cAddress_, alcSequence, sizeof(alcSequence) / sizeof(alcSequence[0]));
 }
 
 bool AudioControlES8388::noiseGate(bool enable, uint8_t threshold, bool muteAdcOutput) {
