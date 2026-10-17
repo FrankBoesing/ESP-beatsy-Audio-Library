@@ -69,6 +69,8 @@ constexpr float METAL_GAINS[3] = {0.0f, 0.0f, 0.0f};
 constexpr float METAL_PHASES[3] = {0.72f, 2.20f, 1.48f};
 
 // Three-body-mode levels vary by pad to avoid identical synthetic timbre.
+// Keep resonator phase at zero in this listening test: each new strike then
+// starts at a zero crossing instead of injecting an abrupt nonzero first sample.
 constexpr float BODY_LEVELS[PAD_COUNT][3] = {
     {0.70f,0.10f,0.30f},
     {0.66f,0.18f,0.26f},
@@ -84,21 +86,6 @@ constexpr float BODY_LEVELS[PAD_COUNT][3] = {
     {0.65f,0.23f,0.17f}
 };
 
-constexpr float BODY_PHASES[PAD_COUNT][3] = {
-    {0.12f,1.10f,2.05f},
-    {0.52f,1.75f,0.35f},
-    {0.40f,2.05f,1.30f},
-    {0.76f,0.60f,2.60f},
-    {1.12f,1.45f,0.90f},
-    {0.35f,2.20f,1.85f},
-    {0.62f,1.00f,2.40f},
-    {0.92f,2.55f,1.50f},
-    {0.24f,1.65f,2.20f},
-    {0.82f,0.45f,1.95f},
-    {1.42f,2.05f,0.66f},
-    {0.25f,1.34f,2.72f}
-};
-
 // The musical example intentionally omits the PCM attack transient.
 // This isolates the note onset produced by the resonator bank.
 
@@ -112,7 +99,7 @@ bool configureHandpan()
             modes[mode].frequencyHz = f0 * BODY_RATIOS[mode];
             modes[mode].gain = BODY_GAIN_BASE[mode] * BODY_LEVELS[pad][mode];
             modes[mode].decaySeconds = BODY_T60[mode];
-            modes[mode].phaseRadians = BODY_PHASES[pad][mode];
+            modes[mode].phaseRadians = 0.0f;
         }
 
         for (uint8_t mode = 0; mode < 3; ++mode) {
