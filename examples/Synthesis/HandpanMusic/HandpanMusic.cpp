@@ -150,7 +150,7 @@ bool configureHandpan()
 
         // Keep the generated transient modest; the modal bank supplies the long ring.
         if (!handpan.configureNote(pad, modes, 6, attackSample,
-                                   ATTACK_SAMPLE_COUNT, ATTACK_SAMPLE_RATE, 0.09f)) {
+                                   ATTACK_SAMPLE_COUNT, ATTACK_SAMPLE_RATE, 0.06f)) {
             Serial.print("Failed to configure pad ");
             Serial.println(pad);
             return false;
@@ -270,6 +270,8 @@ void setup()
         while (true) delay(1000);
     }
 
+    // H2 adds a little harmonic roughness without introducing another resonator.
+    handpan.setSaturation(1.0f);
     buildExampleAttack();
     if (!configureHandpan()) {
         Serial.println("ERROR: Could not configure the handpan pad bank");
