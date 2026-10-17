@@ -266,7 +266,7 @@ void AudioSynthHandpan::triggerNote(uint8_t slot, uint8_t velocity) {
     voice.position = 0;
     voice.active = true;
     activeStrikeVoiceIndices[activeStrikeVoiceCount++] = (uint8_t)selected;
-    for (uint8_t i = 0; i < MAX_MODES; ++i) {
+    for (uint8_t i = 0; i < note.modeCount; ++i) {
         voice.y1[i] = 0.0f;
         voice.y2[i] = 0.0f;
     }
