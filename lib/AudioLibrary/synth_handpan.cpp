@@ -57,6 +57,21 @@ void buildBuiltinAttack()
 
 AudioSynthHandpan::AudioSynthHandpan() : AudioStream(0, nullptr) {}
 
+bool AudioSynthHandpan::configureNote(uint8_t slot, const ModeConfig *modes,
+                                      uint8_t modeCount) {
+    if (slot >= MAX_NOTES || modes == nullptr || modeCount == 0 ||
+        modeCount > MAX_MODES) {
+        return false;
+    }
+
+    if (!builtinAttackReady) {
+        buildBuiltinAttack();
+        builtinAttackReady = true;
+    }
+    return configureNote(slot, modes, modeCount, builtinAttackSample,
+                        BUILTIN_ATTACK_COUNT, BUILTIN_ATTACK_RATE, 0.10f);
+}
+
 void AudioSynthHandpan::setSaturation(float amount) {
     if (!isfinite(amount)) {
         return;
@@ -95,21 +110,6 @@ bool AudioSynthHandpan::configureNote(uint8_t slot, const ModeConfig *modes,
         return false;
     }
 
-    // Use the library-generated soft transient when the caller provides none.
-    // A zero gain is an explicit, allocation-free way to request resonators only.
-    const int16_t *effectiveAttackSample = attackSample;
-    uint32_t effectiveAttackSampleCount = attackSampleCount;
-    uint32_t effectiveAttackSampleRate = attackSampleRate;
-    if (effectiveAttackSample == nullptr && attackGain > 0.0f) {
-        if (!builtinAttackReady) {
-            buildBuiltinAttack();
-            builtinAttackReady = true;
-        }
-        effectiveAttackSample = builtinAttackSample;
-        effectiveAttackSampleCount = BUILTIN_ATTACK_COUNT;
-        effectiveAttackSampleRate = BUILTIN_ATTACK_RATE;
-    }
-
     Note &note = notes[slot];
     for (uint8_t i = 0; i < MAX_MODES; ++i) {
         note.modes[i] = Resonator{};
@@ -139,14 +139,14 @@ bool AudioSynthHandpan::configureNote(uint8_t slot, const ModeConfig *modes,
     }
 
     note.modeCount = modeCount;
-    note.attackSample = effectiveAttackSample;
-    note.attackSampleCount = effectiveAttackSampleCount;
+    note.attackSample = attackSample;
+    note.attackSampleCount = attackSampleCount;
     note.attackGain = attackGain;
     note.attackIncrementQ16 = 0;
     const uint32_t rampSamples = (uint32_t)(fs * (float)ONSET_RAMP_US / 1000000.0f + 0.5f);
     note.onsetRampSamples = (uint16_t)(rampSamples < 2 ? 2 : rampSamples);
-    if (effectiveAttackSample != nullptr) {
-        const uint64_t increment = ((uint64_t)effectiveAttackSampleRate << 16) / (uint32_t)(fs + 0.5f);
+    if (attackSample != nullptr) {
+        const uint64_t increment = ((uint64_t)attackSampleRate << 16) / (uint32_t)(fs + 0.5f);
         if (increment == 0 || increment > UINT32_MAX) {
             note.configured = false;
             return false;
