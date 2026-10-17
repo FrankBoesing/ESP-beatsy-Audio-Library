@@ -22,10 +22,6 @@
 #endif
 constexpr uint32_t OUTPUT_SAMPLE_RATE = HANDPAN_MUSIC_SAMPLE_RATE;
 
-constexpr uint32_t ATTACK_SAMPLE_RATE = 44100;
-constexpr uint32_t ATTACK_SAMPLE_COUNT = 1323; // 30 ms at 44.1 kHz
-static int16_t attackSample[ATTACK_SAMPLE_COUNT];
-
 AudioOutputI2S audioOut({
     PIN_I2S_BLCK, // BCLK
     PIN_I2S_WS,   // WS / LRCLK
@@ -129,7 +125,7 @@ bool configureHandpan()
         }
 
         // No PCM attack sample: noteOn() excites the configured resonator modes directly.
-        if (!handpan.configureNote(pad, modes, 6, nullptr, 0, ATTACK_SAMPLE_RATE, 0.0f)) {
+        if (!handpan.configureNote(pad, modes, 6, nullptr, 0, 44100, 0.0f)) {
             Serial.print("Failed to configure pad ");
             Serial.println(pad);
             return false;
