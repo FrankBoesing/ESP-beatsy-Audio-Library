@@ -118,7 +118,7 @@ void buildSoftFingerAttack()
     }
 
     // Keep the sample well below full scale; the modal body should remain dominant.
-    const float scale = peak > 0 ? (0.22f * 32767.0f) / (float)peak : 0.0f;
+    const float scale = peak > 0 ? (0.42f * 32767.0f) / (float)peak : 0.0f;
     for (uint32_t i = 0; i < ATTACK_SAMPLE_COUNT; ++i) {
         attackSample[i] = (int16_t)((float)attackSample[i] * scale);
     }
@@ -165,7 +165,7 @@ bool configureHandpan()
 
         // The low-level sample supplies a rounded finger contact; resonators provide the body.
         if (!handpan.configureNote(pad, modes, 6, attackSample,
-                                   ATTACK_SAMPLE_COUNT, ATTACK_SAMPLE_RATE, 0.055f)) {
+                                   ATTACK_SAMPLE_COUNT, ATTACK_SAMPLE_RATE, 0.16f)) {
             Serial.print("Failed to configure pad ");
             Serial.println(pad);
             return false;
