@@ -45,7 +45,7 @@
 #define AUDIO_FFT_HAVE_ESP_DSP 0
 #endif
 
-#if 0
+
 #if AUDIO_FFT_HAVE_ESP_DSP
 #pragma message("AudioFFT: ESP-DSP headers found")
 
@@ -66,7 +66,7 @@
 #else
 #pragma message("AudioFFT: portable FFT fallback")
 #endif
-#endif
+
 
 namespace AudioFFT {
 namespace {
