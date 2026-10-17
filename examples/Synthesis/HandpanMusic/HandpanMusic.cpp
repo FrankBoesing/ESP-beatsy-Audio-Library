@@ -62,12 +62,16 @@ constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
     415.7f, 440.0f, 493.9f, 523.3f
 };
 
-constexpr float BODY_T60[3] = {2.00f, 1.05f, 0.58f};
-constexpr float BODY_RATIOS[3] = {1.0f, 2.0f, 3.0f};
-constexpr float METAL_RATIOS[3] = {6.35f, 8.85f, 11.65f};
-constexpr float METAL_T60[3] = {0.075f, 0.115f, 0.095f};
-constexpr float METAL_WEIGHTS[3] = {1.0f, 0.64f, 0.42f};
-constexpr float METAL_PHASES[3] = {0.90f, 2.15f, 0.25f};
+// S3 listening prototype: a longer body ring and prominent upper partials.
+// BODY_GAIN_BASE compensates for the per-pad level matrix so its mean gains are
+// approximately 0.35, 0.20 and 0.23, as in the offline S3 comparison.
+constexpr float BODY_T60[3] = {3.00f, 3.00f, 4.00f};
+constexpr float BODY_RATIOS[3] = {1.000f, 2.011f, 2.984f};
+constexpr float BODY_GAIN_BASE[3] = {0.55f, 0.56f, 0.96f};
+constexpr float METAL_RATIOS[3] = {5.36f, 5.96f, 10.79f};
+constexpr float METAL_T60[3] = {4.40f, 1.50f, 0.45f};
+constexpr float METAL_GAINS[3] = {0.1295f, 0.06475f, 0.0259f};
+constexpr float METAL_PHASES[3] = {0.72f, 2.20f, 1.48f};
 
 // Three-body-mode levels vary by pad to avoid identical synthetic timbre.
 constexpr float BODY_LEVELS[PAD_COUNT][3] = {
@@ -129,7 +133,7 @@ bool configureHandpan()
 
         for (uint8_t mode = 0; mode < 3; ++mode) {
             modes[mode].frequencyHz = f0 * BODY_RATIOS[mode];
-            modes[mode].gain = 0.45f * BODY_LEVELS[pad][mode];
+            modes[mode].gain = BODY_GAIN_BASE[mode] * BODY_LEVELS[pad][mode];
             modes[mode].decaySeconds = BODY_T60[mode];
             modes[mode].phaseRadians = BODY_PHASES[pad][mode];
         }
@@ -137,12 +141,12 @@ bool configureHandpan()
         for (uint8_t mode = 0; mode < 3; ++mode) {
             const float detune = 1.0f + 0.0015f * ((int)(pad % 3) - 1) * (float)(mode + 1);
             modes[mode + 3].frequencyHz = f0 * METAL_RATIOS[mode] * detune;
-            modes[mode + 3].gain = 0.055f * METAL_WEIGHTS[mode];
+            modes[mode + 3].gain = METAL_GAINS[mode];
             modes[mode + 3].decaySeconds = METAL_T60[mode];
             modes[mode + 3].phaseRadians = METAL_PHASES[mode] + 0.17f * (float)pad;
         }
 
-        // 0.09 is the attack level preferred in the Python reference comparison.
+        // Keep the generated transient modest; the modal bank supplies the long ring.
         if (!handpan.configureNote(pad, modes, 6, attackSample,
                                    ATTACK_SAMPLE_COUNT, ATTACK_SAMPLE_RATE, 0.09f)) {
             Serial.print("Failed to configure pad ");
