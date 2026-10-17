@@ -28,7 +28,8 @@ class AudioSynthHandpan : public AudioStream {
     AudioSynthHandpan();
 
     // Configure a logical pad (slot 0..15). Pass up to six modal components,
-    // usually three body modes followed by three short-lived metallic modes.
+    // usually three body modes followed by three metallic ring modes. Each mode
+    // has an independent frequency, gain, phase and decay time.
     // attackSample is signed mono PCM16, not copied by this object. Use nullptr
     // and a count of zero to synthesize the resonances without a sample attack.
     // Call before AudioMemory()/starting updates, after selecting the sample rate.
