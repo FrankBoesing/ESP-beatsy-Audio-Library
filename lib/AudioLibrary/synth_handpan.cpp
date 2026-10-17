@@ -187,6 +187,7 @@ void AudioSynthHandpan::triggerNote(uint8_t slot, uint8_t velocity) {
     voice.slot = slot;
     voice.position = 0;
     voice.active = true;
+    activeStrikeVoiceIndices[activeStrikeVoiceCount++] = (uint8_t)selected;
     for (uint8_t i = 0; i < MAX_MODES; ++i) {
         voice.y1[i] = 0.0f;
         voice.y2[i] = 0.0f;
@@ -210,10 +211,8 @@ bool AudioSynthHandpan::hasActiveSound() const {
     if (activeModeCount != 0) {
         return true;
     }
-    for (uint8_t i = 0; i < MAX_STRIKE_VOICES; ++i) {
-        if (strikeVoices[i].active) {
-            return true;
-        }
+    if (activeStrikeVoiceCount != 0) {
+        return true;
     }
     for (uint8_t i = 0; i < MAX_ATTACK_VOICES; ++i) {
         if (attackVoices[i].active) {
@@ -292,11 +291,9 @@ void AudioSynthHandpan::update() {
         // Render the newly triggered resonator voices with a smoothstep
         // envelope. The short onset fade avoids a discontinuity, while the
         // independent states let existing pad tails ring without being ducked.
-        for (uint8_t v = 0; v < MAX_STRIKE_VOICES; ++v) {
-            StrikeVoice &voice = strikeVoices[v];
-            if (!voice.active) {
-                continue;
-            }
+        for (uint8_t activeStrikeIndex = 0;
+             activeStrikeIndex < activeStrikeVoiceCount; ++activeStrikeIndex) {
+            StrikeVoice &voice = strikeVoices[activeStrikeVoiceIndices[activeStrikeIndex]];
 
             const Note &note = notes[voice.slot];
             const uint16_t rampSamples = note.onsetRampSamples;
@@ -380,14 +377,13 @@ void AudioSynthHandpan::update() {
 
     // At the end of the block, transfer fully ramped strike states into the
     // shared pad resonators. Both sets of states are now at the same time point.
-    for (uint8_t v = 0; v < MAX_STRIKE_VOICES; ++v) {
-        StrikeVoice &voice = strikeVoices[v];
-        if (!voice.active) {
-            continue;
-        }
-
+    uint8_t activeStrikeIndex = 0;
+    while (activeStrikeIndex < activeStrikeVoiceCount) {
+        const uint8_t voiceIndex = activeStrikeVoiceIndices[activeStrikeIndex];
+        StrikeVoice &voice = strikeVoices[voiceIndex];
         Note &note = notes[voice.slot];
         if (voice.position < note.onsetRampSamples) {
+            ++activeStrikeIndex;
             continue;
         }
 
@@ -407,6 +403,9 @@ void AudioSynthHandpan::update() {
             }
         }
         voice.active = false;
+        --activeStrikeVoiceCount;
+        activeStrikeVoiceIndices[activeStrikeIndex] =
+            activeStrikeVoiceIndices[activeStrikeVoiceCount];
     }
 
     if (block != nullptr) {
