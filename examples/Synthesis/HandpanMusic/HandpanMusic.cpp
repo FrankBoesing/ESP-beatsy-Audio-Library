@@ -1,9 +1,9 @@
 /*
  * Handpan — Für Elise (Beethoven)
  *
- * A handpan-style arrangement of the public-domain melody, transposed one octave
- * down. The notes are tuned to equal temperament; the strike transient is
- * generated procedurally and no third-party audio recording is bundled.
+ * An extended handpan-style arrangement of the public-domain theme, with
+ * repeated opening figures, answering phrases, a contrasting middle section,
+ * and a coda. The attack is generated procedurally; no recording is bundled.
  */
 
 #include <Audio.h>
@@ -52,13 +52,11 @@ namespace {
 
 constexpr uint8_t PAD_COUNT = 16;
 
-// Equal-tempered pitches spanning the recognizable Für Elise motifs. The
-// opening melody remains in its familiar register; lower answer phrases use
-// the lower notes naturally found in the composition. Slots:
-// G#3, A3, B3, C4, D4, D#4, E4, G4, G#4, A4, B4, C5, D5, D#5, E5, F5.
+// Equal-tempered pitches for the Für Elise motifs and contrasting middle section.
+// Slots: G#3, A3, B3, C4, D4, E4, F4, G4, G#4, A4, B4, C5, D5, D#5, E5, F5.
 constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
     207.652f, 220.000f, 246.942f, 261.626f,
-    293.665f, 311.127f, 329.628f, 391.995f,
+    293.665f, 329.628f, 349.228f, 391.995f,
     415.305f, 440.000f, 493.883f, 523.251f,
     587.330f, 622.254f, 659.255f, 698.456f
 };
@@ -68,7 +66,7 @@ constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
 // The optional sustained upper partials are disabled to avoid a second melody.
 constexpr float BODY_T60[3] = {3.00f, 3.00f, 4.00f};
 constexpr float BODY_RATIOS[3] = {1.000f, 2.011f, 2.984f};
-constexpr float BODY_GAIN_BASE[3] = {0.55f, 0.56f, 0.96f};
+constexpr float BODY_GAIN_BASE[3] = {0.30f, 0.31f, 0.52f};
 constexpr float METAL_RATIOS[3] = {5.36f, 5.96f, 10.79f};
 constexpr float METAL_T60[3] = {0.25f, 0.12f, 0.08f};
 constexpr float METAL_GAINS[3] = {0.0f, 0.0f, 0.0f};
@@ -122,7 +120,7 @@ void buildExampleAttack()
     }
 
     // Normalize in-place to a safe source peak without a large setup() stack array.
-    const float scale = peak > 0 ? (0.75f * 32767.0f) / (float)peak : 0.0f;
+    const float scale = peak > 0 ? (0.65f * 32767.0f) / (float)peak : 0.0f;
     for (uint32_t i = 0; i < ATTACK_SAMPLE_COUNT; ++i) {
         attackSample[i] = (int16_t)((float)attackSample[i] * scale);
     }
@@ -151,7 +149,7 @@ bool configureHandpan()
 
         // Keep the generated transient modest; the modal bank supplies the long ring.
         if (!handpan.configureNote(pad, modes, 6, attackSample,
-                                   ATTACK_SAMPLE_COUNT, ATTACK_SAMPLE_RATE, 0.06f)) {
+                                   ATTACK_SAMPLE_COUNT, ATTACK_SAMPLE_RATE, 0.03f)) {
             Serial.print("Failed to configure pad ");
             Serial.println(pad);
             return false;
@@ -160,49 +158,139 @@ bool configureHandpan()
     return true;
 }
 
-// Each velocity is an individual MIDI-like amplitude (0..127). Missing steps are
-// rests; offsetMs permits small timing offsets for ornaments if needed.
+// Each velocity is an individual MIDI-like amplitude (0..127). The offset
+// supports small timing adjustments without changing the main grid.
 struct PhraseEvent {
-    uint8_t step;
+    uint16_t step;
     uint16_t offsetMs;
     uint8_t pad;
     uint8_t velocity;
 };
 
-// Sixteenth-note pulse at 120 BPM. Events follow a more even grid, with
-// held notes represented by two- or four-step gaps rather than long empty spans.
-// The 160-step phrase lasts 20 seconds and loops without an extra scheduling gap.
+// A 120-BPM sixteenth-note grid. Twelve 8-second sections form a roughly
+// 96-second handpan arrangement: opening theme, answers, contrasting middle
+// section, return, and coda. This is an arranged theme, not a note-for-note score.
 constexpr uint32_t STEP_MS = 125;
-constexpr uint8_t PHRASE_STEPS = 160;
+constexpr uint16_t PHRASE_STEPS = 768;
 constexpr uint32_t PHRASE_DURATION_MS = STEP_MS * PHRASE_STEPS;
 
 constexpr PhraseEvent PHRASE[] = {
-    // Opening motif: E5-D#5-E5-D#5-E5, followed by B4-D5-C5-A4.
-    {  0, 0, 14,  92}, {  2, 0, 13,  78}, {  4, 0, 14,  88},
-    {  6, 0, 13,  78}, {  8, 0, 14,  92}, { 12, 0, 10,  82},
-    { 14, 0, 12,  80}, { 16, 0, 11,  82}, { 20, 0,  9,  88},
-
-    // First answer in the lower register, then the rising E-G#-B-C figure.
-    { 24, 0,  3,  76}, { 28, 0,  6,  82}, { 32, 0,  9,  86},
-    { 36, 0, 10,  88}, { 40, 0,  6,  78}, { 44, 0,  8,  82},
-    { 48, 0, 10,  86}, { 52, 0, 11,  90},
-
-    // Return to the opening motif; longer notes retain space without a full stop.
-    { 56, 0, 14,  92}, { 58, 0, 13,  78}, { 60, 0, 14,  88},
-    { 62, 0, 13,  78}, { 64, 0, 14,  92}, { 68, 0, 10,  82},
-    { 70, 0, 12,  80}, { 72, 0, 11,  82}, { 76, 0,  9,  88},
-
-    // The lower answering motif repeats with a steady pulse.
-    { 80, 0,  3,  74}, { 84, 0,  6,  80}, { 88, 0,  9,  84},
-    { 92, 0, 10,  86}, { 96, 0,  6,  78}, {100, 0, 11,  84},
-    {104, 0, 10,  80}, {108, 0,  9,  84},
-
-    // Rising cadence, then a short resolution that leads naturally into the loop.
-    {112, 0, 10,  82}, {116, 0, 11,  86}, {120, 0, 12,  90},
-    {124, 0, 14,  92}, {128, 0,  3,  74}, {132, 0,  9,  82},
-    {136, 0,  6,  78}, {140, 0,  6,  80}, {144, 0,  9,  84},
-    {148, 0, 10,  86}, {152, 0, 11,  90}, {156, 0, 12,  86},
-    {158, 0, 14,  92}
+    // Opening theme
+    {  0, 0, 14,  88}, {  1, 0, 13,  79}, {  2, 0, 14,  84},
+    {  3, 0, 13,  74}, {  4, 0, 14,  79}, {  8, 0, 10,  92},
+    { 10, 0, 12,  74}, { 12, 0, 11,  79}, { 16, 0,  9,  92},
+    { 20, 0,  3,  74}, { 22, 0,  5,  79}, { 24, 0,  9,  92},
+    { 26, 0, 10,  74}, { 30, 0,  5,  79}, { 32, 0,  8,  92},
+    { 34, 0, 10,  74}, { 36, 0, 11,  79}, { 40, 0,  5,  92},
+    { 42, 0, 14,  74}, { 43, 0, 13,  79}, { 44, 0, 14,  84},
+    { 45, 0, 13,  74}, { 46, 0, 14,  79}, { 50, 0, 10,  84},
+    { 52, 0, 12,  74}, { 54, 0, 11,  79}, { 58, 0,  9,  84},
+    { 60, 0,  3,  74}, { 62, 0,  5,  79},
+    // Opening theme — repeat
+    { 64, 0, 14,  90}, { 66, 0, 13,  82}, { 68, 0, 14,  87},
+    { 70, 0, 13,  77}, { 72, 0, 14,  92}, { 76, 0, 10,  87},
+    { 78, 0, 12,  77}, { 80, 0, 11,  92}, { 84, 0,  9,  87},
+    { 88, 0,  3,  90}, { 90, 0,  5,  82}, { 92, 0,  9,  87},
+    { 94, 0, 10,  77}, { 98, 0,  5,  82}, {100, 0,  8,  87},
+    {102, 0, 10,  77}, {104, 0, 11,  92}, {108, 0,  5,  87},
+    {110, 0, 14,  77}, {111, 0, 13,  82}, {112, 0, 14,  88},
+    {113, 0, 13,  77}, {114, 0, 14,  82}, {118, 0, 10,  87},
+    {120, 0, 12,  90}, {122, 0, 11,  82}, {126, 0,  9,  87},
+    // Lower answer and rising figure
+    {128, 0,  3,  92}, {130, 0,  5,  85}, {132, 0,  9,  75},
+    {134, 0, 10,  80}, {138, 0,  5,  85}, {140, 0,  8,  75},
+    {142, 0, 10,  80}, {144, 0, 11,  88}, {148, 0,  5,  75},
+    {150, 0, 10,  80}, {152, 0, 12,  88}, {154, 0, 11,  75},
+    {158, 0,  9,  80}, {162, 0,  3,  85}, {164, 0,  5,  75},
+    {166, 0,  9,  80}, {168, 0, 10,  88}, {172, 0,  5,  75},
+    {174, 0,  8,  80}, {176, 0, 10,  88}, {178, 0, 11,  75},
+    {182, 0, 10,  80}, {184, 0,  9,  88}, {188, 0,  8,  75},
+    {190, 0,  9,  80},
+    // Opening theme — varied repeat
+    {192, 0, 14,  88}, {193, 0, 13,  88}, {194, 0, 14,  78},
+    {195, 0, 13,  83}, {196, 0, 14,  88}, {200, 0, 10,  92},
+    {202, 0, 12,  83}, {204, 0, 11,  88}, {208, 0,  9,  92},
+    {212, 0,  3,  83}, {214, 0,  5,  88}, {216, 0,  9,  92},
+    {218, 0, 10,  83}, {222, 0,  5,  88}, {224, 0,  8,  92},
+    {226, 0, 10,  83}, {228, 0, 11,  88}, {232, 0,  5,  92},
+    {234, 0, 14,  83}, {236, 0, 13,  88}, {238, 0, 14,  78},
+    {240, 0, 13,  88}, {242, 0, 14,  88}, {246, 0, 10,  78},
+    {248, 0, 12,  88}, {250, 0, 11,  88}, {254, 0,  9,  78},
+    // Contrasting middle section
+    {256, 0, 10,  90}, {258, 0, 11,  76}, {260, 0, 12,  81},
+    {262, 0, 14,  86}, {266, 0,  9,  76}, {268, 0, 15,  81},
+    {270, 0, 14,  86}, {272, 0, 12,  92}, {276, 0,  8,  81},
+    {278, 0, 14,  86}, {280, 0, 12,  92}, {282, 0, 11,  81},
+    {286, 0,  6,  86}, {288, 0, 12,  92}, {290, 0, 11,  81},
+    {292, 0, 10,  86}, {296, 0,  5,  92}, {298, 0, 14,  81},
+    {300, 0, 12,  86}, {302, 0, 10,  76}, {306, 0,  9,  81},
+    {310, 0,  8,  86}, {314, 0, 10,  76}, {318, 0, 11,  81},
+    // Middle-section response
+    {320, 0, 11,  92}, {322, 0, 12,  79}, {324, 0, 14,  84},
+    {326, 0, 15,  74}, {328, 0, 14,  88}, {332, 0, 12,  84},
+    {334, 0, 11,  74}, {336, 0, 10,  88}, {340, 0,  9,  84},
+    {342, 0, 15,  74}, {344, 0, 14,  88}, {346, 0, 12,  84},
+    {350, 0,  8,  74}, {352, 0, 14,  88}, {354, 0, 12,  84},
+    {356, 0, 11,  74}, {360, 0,  6,  88}, {362, 0, 12,  84},
+    {364, 0, 11,  74}, {366, 0, 10,  79}, {370, 0,  5,  84},
+    {372, 0, 10,  74}, {374, 0, 12,  79}, {378, 0, 11,  84},
+    {382, 0, 10,  74},
+    // Bridge back to the theme
+    {384, 0,  5,  88}, {388, 0,  9,  82}, {392, 0, 10,  92},
+    {396, 0, 11,  77}, {400, 0, 12,  90}, {404, 0, 14,  87},
+    {406, 0, 13,  77}, {408, 0, 14,  90}, {410, 0, 13,  87},
+    {412, 0, 14,  77}, {416, 0, 10,  90}, {418, 0, 12,  87},
+    {420, 0, 11,  77}, {424, 0,  9,  90}, {428, 0,  3,  87},
+    {430, 0,  5,  77}, {432, 0,  9,  90}, {434, 0, 10,  87},
+    {438, 0,  8,  77}, {442, 0,  9,  82}, {446, 0, 10,  87},
+    // Main theme returns
+    {448, 0, 14,  90}, {449, 0, 13,  85}, {450, 0, 14,  75},
+    {451, 0, 13,  80}, {452, 0, 14,  85}, {456, 0, 10,  88},
+    {458, 0, 12,  80}, {460, 0, 11,  85}, {464, 0,  9,  88},
+    {468, 0,  3,  80}, {470, 0,  5,  85}, {472, 0,  9,  88},
+    {474, 0, 10,  80}, {478, 0,  5,  85}, {480, 0,  8,  88},
+    {482, 0, 10,  80}, {484, 0, 11,  85}, {488, 0,  5,  88},
+    {490, 0, 14,  80}, {491, 0, 13,  85}, {492, 0, 14,  75},
+    {493, 0, 13,  80}, {494, 0, 14,  85}, {498, 0, 10,  75},
+    {500, 0, 12,  80}, {502, 0, 11,  85}, {506, 0,  9,  75},
+    {508, 0,  3,  80}, {510, 0,  5,  85},
+    // Main theme — answer variation
+    {512, 0, 14,  92}, {514, 0, 13,  88}, {516, 0, 14,  78},
+    {518, 0, 13,  83}, {520, 0, 14,  88}, {524, 0, 10,  78},
+    {526, 0, 12,  83}, {528, 0, 11,  88}, {532, 0,  9,  78},
+    {536, 0,  3,  92}, {538, 0,  5,  88}, {540, 0,  9,  78},
+    {542, 0, 10,  83}, {546, 0,  5,  88}, {548, 0,  8,  78},
+    {550, 0, 10,  83}, {552, 0, 11,  88}, {556, 0,  5,  78},
+    {558, 0, 14,  83}, {560, 0, 13,  88}, {562, 0, 14,  78},
+    {564, 0, 13,  83}, {566, 0, 14,  88}, {570, 0, 10,  78},
+    {572, 0, 12,  83}, {574, 0, 11,  88},
+    // Middle section reprise
+    {576, 0, 10,  88}, {578, 0, 11,  76}, {580, 0, 12,  81},
+    {582, 0, 14,  86}, {586, 0,  9,  76}, {588, 0, 15,  81},
+    {590, 0, 14,  86}, {592, 0, 12,  90}, {596, 0,  8,  81},
+    {598, 0, 14,  86}, {600, 0, 12,  90}, {602, 0, 11,  81},
+    {606, 0,  6,  86}, {608, 0, 12,  90}, {610, 0, 11,  81},
+    {612, 0, 10,  86}, {616, 0,  5,  90}, {618, 0, 14,  81},
+    {620, 0, 12,  86}, {622, 0, 10,  76}, {626, 0,  9,  81},
+    {630, 0,  8,  86}, {634, 0, 10,  76}, {638, 0, 11,  81},
+    // Final return to the opening motif
+    {640, 0, 14,  90}, {642, 0, 13,  79}, {644, 0, 14,  84},
+    {646, 0, 13,  74}, {648, 0, 14,  92}, {652, 0, 10,  84},
+    {654, 0, 12,  74}, {656, 0, 11,  92}, {660, 0,  9,  84},
+    {664, 0,  3,  90}, {666, 0,  5,  79}, {668, 0,  9,  84},
+    {670, 0, 10,  74}, {674, 0,  5,  79}, {676, 0,  8,  84},
+    {678, 0, 10,  74}, {680, 0, 11,  92}, {684, 0,  5,  84},
+    {686, 0, 14,  74}, {688, 0, 13,  92}, {690, 0, 14,  84},
+    {692, 0, 13,  74}, {694, 0, 14,  79}, {698, 0, 10,  84},
+    {700, 0, 12,  74}, {702, 0, 11,  79},
+    // Coda — leading back into the opening
+    {704, 0, 14,  92}, {706, 0, 13,  82}, {708, 0, 14,  87},
+    {710, 0, 13,  77}, {712, 0, 14,  88}, {716, 0, 10,  87},
+    {718, 0, 12,  77}, {720, 0, 11,  88}, {724, 0,  9,  87},
+    {728, 0,  3,  92}, {732, 0,  5,  82}, {736, 0,  9,  90},
+    {740, 0, 10,  77}, {744, 0,  5,  88}, {748, 0,  9,  87},
+    {752, 0, 11,  92}, {756, 0, 10,  82}, {760, 0,  9,  90},
+    {764, 0, 13,  77}, {766, 0, 13,  82}
 };
 
 constexpr size_t PHRASE_EVENT_COUNT = sizeof(PHRASE) / sizeof(PHRASE[0]);
@@ -251,7 +339,7 @@ void setup()
     Serial.println("======================================");
     Serial.println(" Handpan — Für Elise");
     Serial.printf(" Output sample rate: %lu Hz\n", (unsigned long)OUTPUT_SAMPLE_RATE);
-    Serial.println(" Für Elise arrangement one octave down; 20-second loop");
+    Serial.println(" Extended 96-second arrangement; 12 sections");
     Serial.println("======================================");
 
     // Modal coefficients must be prepared at the selected output sample rate.
@@ -261,7 +349,7 @@ void setup()
     }
 
     // H2 adds a little harmonic roughness without introducing another resonator.
-    handpan.setSaturation(0.65f);
+    handpan.setSaturation(0.25f);
     buildExampleAttack();
     if (!configureHandpan()) {
         Serial.println("ERROR: Could not configure the handpan pad bank");
@@ -274,8 +362,8 @@ void setup()
     if (!hallReady) {
         Serial.println("WARNING: Freeverb allocation failed; continuing without wet return");
     }
-    dryWetMixer.gain(0, 0.84f);
-    dryWetMixer.gain(1, hallReady ? 0.18f : 0.0f);
+    dryWetMixer.gain(0, 0.72f);
+    dryWetMixer.gain(1, hallReady ? 0.14f : 0.0f);
 
     audioOut.setChannelCount(codec.channels());
     AudioMemory(32);
