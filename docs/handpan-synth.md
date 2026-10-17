@@ -84,16 +84,26 @@ Saturation is optional and can be bypassed with `setSaturation(0.0f)`.
 
 ## Example details
 
-`ElisasHandPan.cpp` defaults to 48 kHz. It sets the I2S sample rate before
-configuring modal coefficients and before calling `AudioMemory()`. For a
-44.1-kHz comparison, change `ELISA_HANDPAN_SAMPLE_RATE` near the top of the
-example to `44100` and rebuild.
+`ElisasHandPan.cpp` uses the library's default 44.1 kHz sample rate. The
+recording variant, `examples/Synthesis/ElisasHandPanRecord/ElisasHandPanRecord.cpp`,
+explicitly configures I2S for `AUDIO_SAMPLE_RATE_EXACT` before calculating
+modal coefficients, so the saved WAV matches the synthesizer's sample rate.
 
 The excerpt contains 109 note events and 12 distinct pitches: C4, E4, F4, G4,
 G#4, A4, B4, C5, D5, D#5, E5 and F5. Note onset times are preserved, except
 that the isolated E6 at 25.833 seconds is played as E5. Resonators ring
 according to their decay settings rather than following piano note-off
 envelopes exactly.
+
+The recording variant writes a one-shot **stereo 16-bit PCM WAV** to the SD
+card as `/ElisasHandPan.wav`. It records the 30-second phrase plus an additional
+eight seconds for the body resonators and Freeverb to decay. The recorder writes
+`/ElisasHandPan.tmp` during capture and finalizes the `.wav` file only when
+`recorder.stop()` succeeds. It requires SD_MMC wiring from `platformio.ini` and
+PSRAM for the recorder ring buffer. Existing `.tmp` and `.wav` files are not
+overwritten; remove them from the card before recording another take. Copy the
+WAV from the card and convert it to MP3 offline; `AudioRecordFile` records PCM
+WAV and does not encode MP3.
 
 The frequency, gain and decay values are experimental synthesis parameters,
 not measured modes of a specific commercial handpan. Listen on the target
