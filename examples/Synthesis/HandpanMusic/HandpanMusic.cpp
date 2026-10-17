@@ -1,5 +1,5 @@
 /*
- * Handpan — Für Elise, opening excerpt (Beethoven, WoO 59)
+ * Elisa's Hand Pan — Für Elise, opening excerpt (Beethoven, WoO 59)
  *
  * Uses the first 30 seconds of the upper-staff melody from the current,
  * public-domain Mutopia Project MIDI derived from the Breitkopf & Härtel
@@ -58,15 +58,10 @@ constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
     587.330f, 622.254f, 659.255f, 698.456f
 };
 
-// Keep the warm body modes and add a soft, damped finger-contact transient.
-// The upper partials remain disabled to limit CPU and avoid a second melody.
+// Three damped body modes keep the warm, handpan-like tone.
 constexpr float BODY_T60[3] = {3.00f, 3.00f, 4.00f};
 constexpr float BODY_RATIOS[3] = {1.000f, 2.011f, 2.984f};
 constexpr float BODY_GAIN_BASE[3] = {0.30f, 0.31f, 0.52f};
-constexpr float METAL_RATIOS[3] = {5.36f, 5.96f, 10.79f};
-constexpr float METAL_T60[3] = {0.25f, 0.12f, 0.08f};
-constexpr float METAL_GAINS[3] = {0.0f, 0.0f, 0.0f};
-constexpr float METAL_PHASES[3] = {0.72f, 2.20f, 1.48f};
 
 // Three-body-mode levels vary by pad to avoid identical synthetic timbre.
 // Keep resonator phase at zero in this listening test: each new strike then
@@ -89,7 +84,7 @@ constexpr float BODY_LEVELS[PAD_COUNT][3] = {
 bool configureHandpan()
 {
     for (uint8_t pad = 0; pad < PAD_COUNT; ++pad) {
-        AudioSynthHandpan::ModeConfig modes[AudioSynthHandpan::MAX_MODES] = {};
+        AudioSynthHandpan::ModeConfig modes[3] = {};
         const float f0 = PAD_FREQUENCIES[pad];
 
         for (uint8_t mode = 0; mode < 3; ++mode) {
@@ -99,17 +94,8 @@ bool configureHandpan()
             modes[mode].phaseRadians = 0.0f;
         }
 
-        for (uint8_t mode = 0; mode < 3; ++mode) {
-            const float detune = 1.0f + 0.0015f * ((int)(pad % 3) - 1) * (float)(mode + 1);
-            modes[mode + 3].frequencyHz = f0 * METAL_RATIOS[mode] * detune;
-            modes[mode + 3].gain = METAL_GAINS[mode];
-            modes[mode + 3].decaySeconds = METAL_T60[mode];
-            modes[mode + 3].phaseRadians = METAL_PHASES[mode] + 0.17f * (float)pad;
-        }
-
         // The synth supplies its built-in soft finger-contact transient.
-        // No attack buffer or waveform-generation code is needed in this sketch.
-        if (!handpan.configureNote(pad, modes, 6)) {
+        if (!handpan.configureNote(pad, modes, 3)) {
             Serial.print("Failed to configure pad ");
             Serial.println(pad);
             return false;
@@ -210,7 +196,7 @@ void setup()
 
     Serial.println();
     Serial.println("======================================");
-    Serial.println(" Handpan — Für Elise");
+    Serial.println(" Elisa's Hand Pan — Für Elise");
     Serial.printf(" Output sample rate: %lu Hz\n", (unsigned long)OUTPUT_SAMPLE_RATE);
     Serial.printf(" Opening excerpt; %.1f seconds; %u note events; soft finger attack\n",
                   PHRASE_DURATION_MS / 1000.0f, (unsigned)PHRASE_EVENT_COUNT);
