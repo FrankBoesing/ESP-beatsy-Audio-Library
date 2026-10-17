@@ -140,12 +140,12 @@ bool AudioSynthHandpan::configureNote(uint8_t slot, const ModeConfig *modes,
 
     // Trailing zero-gain modes cannot contribute to the output. Trim them from
     // the render loops so disabled upper partials cost no per-sample work.
-    uint8_t activeModeCount = modeCount;
-    while (activeModeCount > 0 &&
-           note.modes[activeModeCount - 1U].config.gain <= 0.0f) {
-        --activeModeCount;
+    uint8_t effectiveModeCount = modeCount;
+    while (effectiveModeCount > 0 &&
+           note.modes[effectiveModeCount - 1U].config.gain <= 0.0f) {
+        --effectiveModeCount;
     }
-    note.modeCount = activeModeCount;
+    note.modeCount = effectiveModeCount;
     note.attackSample = attackSample;
     note.attackSampleCount = attackSampleCount;
     note.attackGain = attackGain;
