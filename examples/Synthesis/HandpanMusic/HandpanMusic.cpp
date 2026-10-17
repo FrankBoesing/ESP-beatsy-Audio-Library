@@ -62,13 +62,13 @@ constexpr float PAD_FREQUENCIES[PAD_COUNT] = {
     415.7f, 440.0f, 493.9f, 523.3f
 };
 
-// Conservative S3-inspired balance for a phrase, not an isolated strike:
-// shorten the body overtones and keep the long upper-metal ring at a lower level.
+// Phrase-oriented balance: high partials must not become a second melody.
+// Keep one faint metallic ring; the other upper modes are short strike coloration.
 constexpr float BODY_T60[3] = {2.00f, 1.05f, 0.58f};
 constexpr float BODY_RATIOS[3] = {1.000f, 2.011f, 2.984f};
 constexpr float METAL_RATIOS[3] = {5.36f, 5.96f, 10.79f};
-constexpr float METAL_T60[3] = {2.60f, 0.65f, 0.22f};
-constexpr float METAL_GAINS[3] = {0.070f, 0.035f, 0.014f};
+constexpr float METAL_T60[3] = {1.80f, 0.45f, 0.16f};
+constexpr float METAL_GAINS[3] = {0.016f, 0.0045f, 0.0015f};
 constexpr float METAL_PHASES[3] = {0.72f, 2.20f, 1.48f};
 
 // Three-body-mode levels vary by pad to avoid identical synthetic timbre.
