@@ -18,9 +18,10 @@ Teensy Audio System Design Tool for the ESP-beatsy Audio Library.
 - Export: generates the Audio graph declarations and `AudioConnection` lines
   as a starting point for an Arduino/PlatformIO sketch. If `AudioOutputUSB` is
   present, it adds `USB.h`/`USBAudioCard.h`, a stereo 48 kHz card declaration and
-  a comment with the native-USB PlatformIO flags. USB event handling, `begin()`,
-  sample-rate setup before `AudioMemory()`, and regular `service()` calls remain
-  application responsibilities.
+  a comment with the native-USB PlatformIO flags. USB event handling, `begin()`
+  and sample-rate setup before `AudioMemory()` remain application responsibilities.
+  `AudioOutputUSB` feeds the TinyUSB FIFO automatically from the AudioStream update
+  cycle; no regular `service()` call in `loop()` is needed.
 - `AudioOutputUSB`: experimental 16-bit USB UAC1 microphone/capture output from
   the ESP32 to a host. Both the GUI node and the library implementation are
   stereo-only and require `UAC_MIC_STEREO`. Graph, decoder and USB rates must
