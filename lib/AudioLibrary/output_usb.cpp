@@ -40,6 +40,9 @@ void AudioOutputUSB::update() {
     audio_block_t *blocks[2] = {receiveReadOnly(0), receiveReadOnly(1)};
 
     if (!configured_ || !streaming_.load(std::memory_order_acquire)) {
+        // Discard queued data while capture is stopped, so restart never sends stale audio.
+        readIndex_.store(writeIndex_.load(std::memory_order_acquire),
+                         std::memory_order_release);
         if (blocks[0] != nullptr) {
             release(blocks[0]);
         }
@@ -86,10 +89,14 @@ GCC_UNROLL
     if (blocks[1] != nullptr) {
         release(blocks[1]);
     }
+
+    // Drain at the AudioStream cadence instead of requiring loop() polling.
+    // USBAudioCard::write() feeds TinyUSB's internal FIFO; USB packets transfer asynchronously.
+    serviceUsb();
 }
 
 OSPEED
-void AudioOutputUSB::service() {
+void AudioOutputUSB::serviceUsb() {
     // When the host stops capture, discard queued samples. Only this consumer
     // writes readIndex_, so the SPSC ownership rule remains intact.
     if (!configured_ || !streaming_.load(std::memory_order_acquire)) {
