@@ -97,8 +97,8 @@ GCC_UNROLL
 
 OSPEED
 void AudioOutputUSB::serviceUsb() {
-    // When the host stops capture, discard queued samples. Only this consumer
-    // writes readIndex_, so the SPSC ownership rule remains intact.
+    // When the host stops capture, discard queued samples. AudioTask is the
+    // sole owner of readIndex_; it also clears the ring in update() while stopped.
     if (!configured_ || !streaming_.load(std::memory_order_acquire)) {
         readIndex_.store(writeIndex_.load(std::memory_order_acquire),
                          std::memory_order_release);
