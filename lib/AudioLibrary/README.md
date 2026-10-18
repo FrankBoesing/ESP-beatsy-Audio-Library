@@ -310,7 +310,7 @@ AudioConnection usbRight(source, 1, usbOutput, 1);
 
 `AudioOutputUSB` übergibt gepufferte Samples automatisch in jedem `AudioStream`-Update an den TinyUSB-FIFO. Dafür ist weder ein Aufruf aus `loop()` noch ein zusätzlicher Task erforderlich. Der FIFO-Schreibzugriff läuft im `AudioTask` und gehört damit zur Laufzeit von `AudioOutputUSB::update()`; seine Echtzeitwirkung muss auf der Zielhardware gemessen werden.
 
-Der Audio-Graph schreibt in einen SPSC-Ringpuffer mit 1024 `int16_t`-Werten (2 KiB); bei Stereo entspricht das 512 interleavten Sample-Frames. `droppedSamples()` zählt verworfene PCM-Werte, `shortWrites()` zählt unvollständige USB-Schreibvorgänge. Diese Zähler sind für Diagnose gedacht.
+Der Audio-Graph schreibt in einen Ringpuffer mit 1024 `int16_t`-Werten (2 KiB); bei Stereo entspricht das 512 interleavten Sample-Frames. Er wird innerhalb des Audio-Updates befüllt und zum TinyUSB-FIFO geleert. `droppedSamples()` zählt verworfene PCM-Werte, `shortWrites()` zählt unvollständige USB-Schreibvorgänge. Diese Zähler sind für Diagnose gedacht.
 
 #### PlatformIO und Framework
 
