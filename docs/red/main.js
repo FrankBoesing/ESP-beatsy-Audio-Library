@@ -60,8 +60,33 @@ var RED = (function() {
 			nns.sort(function(a,b){ return (a.x + a.y/250) - (b.x + b.y/250); });
 			//console.log(JSON.stringify(nns));
 
-			var cpp = "#include <Audio.h>\n\n"
-				+ "// GUItool: begin automatically generated code\n";
+			var hasUsbAudio = nns.some(function(n) { return n.type === "AudioOutputUSB"; });
+			var usbAudioNodes = nns.filter(function(n) { return n.type === "AudioOutputUSB"; });
+			var usbOutputName = usbAudioNodes.length ? make_name(usbAudioNodes[0]) : null;
+			var cpp = "#include <Audio.h>\n";
+			if (hasUsbAudio) {
+				cpp += "#include <USB.h>\n#include <USBAudioCard.h>\n\n";
+				cpp += "/*\n"
+					+ " * USB Audio / PlatformIO (tested with ESP32-S3 and Arduino-ESP32 TinyUSB UAC1):\n"
+					+ " *   build_unflags = -DARDUINO_USB_MODE\n"
+					+ " *   build_flags =\n"
+					+ " *       ${common.build_flags}\n"
+					+ " *       -DARDUINO_USB_MODE=0\n"
+					+ " *       -DARDUINO_USB_CDC_ON_BOOT=0\n"
+					+ " * The framework must enable CONFIG_TINYUSB_AUDIO_ENABLED.\n"
+					+ " * For the tested Windows CDC + UAC1 composite on Arduino-ESP32 3.3.12,\n"
+					+ " * this repository's version-specific workaround may be needed:\n"
+					+ " *   extra_scripts = pre:scripts/patch_uac1_audio_iad.py\n"
+					+ " * In setup(), call guiUsbAudioCard.begin() and USB.begin().\n"
+					+ " * Before AudioMemory(), call " + usbOutputName + ".setGraphSampleRate(48000).\n"
+					+ " * Forward interface-enable events to " + usbOutputName + ".setStreaming(...),\n"
+					+ " * and call " + usbOutputName + ".service() frequently from loop(). No resampling.\n"
+					+ " */\n"
+					+ "USBAudioCard guiUsbAudioCard(48000, UAC_BPS_16, UAC_SPK_NONE, UAC_MIC_STEREO);\n\n";
+			} else {
+				cpp += "\n";
+			}
+			cpp += "// GUItool: begin automatically generated code\n";
 			// generate code for all audio processing nodes
 			for (var i=0; i<nns.length; i++) {
 				var n = nns[i];
@@ -69,8 +94,12 @@ var RED = (function() {
 				if (node && (node.outputs > 0 || node._def.inputs > 0)) {
 					cpp += n.type + " ";
 					for (var j=n.type.length; j<24; j++) cpp += " ";
-					var name = make_name(n)
-					cpp += name + "; ";
+					var name = make_name(n);
+					if (n.type === "AudioOutputUSB") {
+						cpp += name + "(guiUsbAudioCard); ";
+					} else {
+						cpp += name + "; ";
+					}
 					for (var j=n.id.length; j<14; j++) cpp += " ";
 					cpp += "//xy=" + n.x + "," + n.y + "\n";
 				}

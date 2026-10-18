@@ -537,6 +537,22 @@ span.mainfunction {color: #993300; font-weight: bolder}
 			}
 		},
 		{
+			"type": "AudioOutputUSB",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "usb",
+				"inputs": 2,
+				"outputs": 0,
+				"category": "output-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
 			"type": "AudioAmplifier",
 			"data": {
 				"defaults": {
@@ -2699,7 +2715,7 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 <script type="text/x-red" data-help-name="AudioOutputUSB">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Send stereo audio to a PC or Mac when the target's USB stack supports USB Audio.</p>
+	<p>Send stereo 16-bit PCM from the ESP-beatsy audio graph to a PC or Mac through the USB UAC1 microphone endpoint.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -2707,17 +2723,13 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		<tr class=odd><td align=center>In 0</td><td>Left Channel</td></tr>
 		<tr class=odd><td align=center>In 1</td><td>Right Channel</td></tr>
 	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams from it's 2 input ports to the USB.</p>
-	<!--
-	<h3>Hardware</h3>
-	-->
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; WavFilePlayerUSB</p>
-	</p>
+	<h3>Export and sketch integration</h3>
+	<p>The graph export adds <code>&lt;USB.h&gt;</code> and <code>&lt;USBAudioCard.h&gt;</code>, a stereo <code>USBAudioCard</code> configured for 48 kHz / 16-bit PCM, and a constructor call for <code>AudioOutputUSB</code>. Adjust the sample rate if required. The generated graph does not replace the application's USB setup.</p>
+	<p>In <code>setup()</code>, register <code>ARDUINO_USB_AUDIO_CARD_INTERFACE_ENABLE_EVENT</code> for the generated <code>guiUsbAudioCard</code>, call <code>guiUsbAudioCard.begin()</code> and <code>USB.begin()</code>, then call <code>setGraphSampleRate(48000)</code> on the generated output object before <code>AudioMemory()</code>. Forward the microphone interface-enable state to that output object's <code>setStreaming()</code> and call its <code>service()</code> frequently from <code>loop()</code>.</p>
+	<h3>PlatformIO</h3>
+	<p>Use a target with native USB OTG and a framework build with <code>CONFIG_TINYUSB_AUDIO_ENABLED</code>. For the tested ESP32-S3 setup, set <code>-DARDUINO_USB_MODE=0</code> and <code>-DARDUINO_USB_CDC_ON_BOOT=0</code> in <code>build_flags</code> (remove the default <code>-DARDUINO_USB_MODE</code> with <code>build_unflags</code> where needed). For the tested Windows CDC + UAC1 composite on Arduino-ESP32 3.3.12, this repository has a version-specific workaround: <code>extra_scripts = pre:scripts/patch_uac1_audio_iad.py</code>.</p>
 	<h3>Notes</h3>
-	<p>USB Audio support and device configuration depend on the target platform's USB stack. USB Audio is work in progress in this port; verify output support on the selected board before relying on this node.</p>
+	<p>The experimental USB microphone path has been tested on ESP32-S3 with the Arduino-ESP32 TinyUSB UAC1 stack and simultaneous CDC diagnostics. <code>AudioOutputUSB</code> implements stereo only and requires <code>UAC_MIC_STEREO</code>. More channels require changes to the class, framework descriptors and TinyUSB configuration. Sample-rate conversion is not implemented. Windows may require selecting a matching microphone format and reinitializing the device after a format change.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputUSB">
 	<div class="form-row">

@@ -32,6 +32,8 @@ AudioStreamRx --AudioSourceStream-Ringpuffer--> AudioDecoder
                                                   | PCM-Puffer
                                                   v
 Audio-Graph / AudioTask --direkte DMA-Befüllung--> I2S (PCM) / PDM (Hardware-DAC)
+       |
+       +-- AudioOutputUSB --SPSC-Ring--> service() in loop() --> TinyUSB UAC1-Mikrofon
        ^
        |
 Software-Timer oder I2S-TX-DMA-Callback
@@ -72,7 +74,7 @@ Bei 128 Samples und 44.100 Hz ergibt sich:
 \frac{128}{44100}\,\text{s} \approx 2{,}90\,\text{ms}
 \]
 
-Wird die Sample-Rate oder die Blockgröße geändert, ändert sich die Blockperiode entsprechend.
+Wird die Sample-Rate oder die Blockgröße geändert, ändert sich die Blockperiode entsprechend. `AudioOutputUSB` unterstützt ausschließlich Stereo mit 16-Bit-PCM und benötigt eine `USBAudioCard`-Konfiguration mit `UAC_MIC_STEREO`. Die linken und rechten Graph-Ausgänge werden separat mit Eingängen 0 und 1 verbunden; der USB-Ausgang interleavt die Samples als L/R. Die Klasse führt keine Sample-Rate-Konvertierung aus: Die Audio-Graph-Rate muss zur Decoder-Rate und zur von `USBAudioCard` angebotenen beziehungsweise vom Host verwendeten USB-Rate passen. `AudioOutputUSB::setGraphSampleRate(rate)` setzt die globale Graph-Rate und muss vor `AudioMemory()` aufgerufen werden. `AudioOutputUSB::service()` muss regelmäßig aus `loop()` aufgerufen werden; USB-Schreibzugriffe erfolgen bewusst nicht im Audio-Graph-Update-Kontext.
 
 - **Ohne aktiven I2S-Taktgeber:** Ein periodischer Software-Timer löst die Audio-Updates aus.
 - **Mit aktivem I2S-Ein- oder -Ausgang:** Der zuständige DMA-Callback liefert den Takt und benachrichtigt `AudioTask`; der Software-Audio-Timer bleibt abgeschaltet.
@@ -92,6 +94,7 @@ Die folgende Tabelle unterscheidet den globalen Audio-Blockpool von separaten I2
 | `AudioMemory(n)` / Audio-Blockpool | `n` Blöcke; standardmäßig 128 Mono-Samples pro Block | `AudioMemory(n)` legt den Pool statisch an; `n` wird vom Anwendungsprogramm festgelegt. Ein Block enthält bei 128 Samples 256 Byte PCM sowie 4 Byte Verwaltungsfelder, insgesamt 260 Byte für `audio_block_t`. Hinzu kommt die Verfügbarkeitsmaske des Pools. |
 | I2S-Blockpaar-Ring (PCM) | 4 Stereo-Blockpaare | Fester Ring im `AudioOutputI2S`-Objekt; enthält nur Blockzeiger und benötigt keine FreeRTOS-Queue. |
 | PDM-Blockpaar-Ring | 4 Stereo-Blockpaare | Fester Ring im `AudioOutputPDM`-Objekt; enthält nur Blockzeiger und benötigt keine FreeRTOS-Queue. |
+| USB-Audio-Ringpuffer | 1024 PCM-Werte (`int16_t`, 2 KiB; Stereo: 512 Frames) | `AudioOutputUSB` entkoppelt den Audio-Graph von `USBAudioCard::write()` über einen SPSC-Ringpuffer. Die Einspeisung läuft nur bei aktivem Mikrofon-Interface; volle Puffer werden über `droppedSamples()` gezählt. `service()` wird von `loop()` aufgerufen. |
 | I2S-Ausgabepuffer | Kein separater PCM-Puffer | `AudioOutputI2S::update()` packt PCM direkt in den vom TX-Callback gemeldeten DMA-Puffer. |
 | I2S-DMA (Standard-PCM) | 2 Deskriptoren mit jeweils 128 Stereo-Frames | 512 Byte pro Deskriptor, insgesamt 1 KiB DMA-Nutzdaten. Dieselbe Deskriptorzahl gilt für TX und RX. |
 | PDM-DMA | 2 Deskriptoren mit jeweils 128 PCM-Frames | 256 Byte pro Mono-Deskriptor oder 512 Byte pro Stereo-Deskriptor; `AudioOutputPDM::update()` schreibt direkt in den DMA-Puffer. |
@@ -265,6 +268,7 @@ Ohne `AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME` würden bei `delete` die Einträge de
 ## 8. Hinweise für die Praxis
 
 - **Audio-Blockpool dimensionieren:** `AudioMemory(n)` ist für den gesamten Graphen zuständig. FFT1024, Delays und Effekte, die Blöcke halten oder zusätzliche Blöcke erzeugen, müssen bei der Dimensionierung berücksichtigt werden.
+
 - **PSRAM und interner RAM unterscheiden:** Der Streaming-Ringpuffer liegt im PSRAM; Audio-Blöcke, MP3-Eingabe und PCM-Decoder-Puffer sind separate Speicherbereiche. Die Größe eines Rings sagt daher nichts über die noch verfügbaren Audio-Blöcke aus.
 - **Latenz korrekt einordnen:** Blockperiode, FFT-Frame-Dauer und Queue-/I/O-Timeouts beschreiben unterschiedliche Sachverhalte und sollten nicht miteinander verwechselt werden.
 - **Fenster- und Sample-Puffer gültig halten:** Bei `AudioEffectGranular` und benutzerdefinierten FFT-Fenstern werden Zeiger übergeben. Der zugehörige Speicher muss über die gesamte Nutzungsdauer gültig bleiben.
@@ -272,6 +276,64 @@ Ohne `AUDIOSTREAM_ENABLE_DYNAMIC_LIFETIME` würden bei `delete` die Einträge de
 - **Blockpool-Zeigerprüfung:** Für zusätzliche defensive Prüfung kann `-DAUDIOSTREAM_ENABLE_POOL_POINTER_CHECKS` aktiviert werden. Ohne dieses Debug-Flag entfällt die Bereichs-/Ausrichtungsprüfung in `release_locked()` aus dem Echtzeitpfad; Blöcke müssen dann ausschließlich mit gültigen, aus dem Audio-Blockpool stammenden Zeigern freigegeben werden.
 - **Versionsabhängige Parameter prüfen:** Nach Änderungen am Audio-Graphen, an ESP-IDF/Arduino-Core oder an den Task-Erstellungen sollten insbesondere Task-Stacks, Prioritäten, Timeouts, Queue-Längen und Puffergrößen mit dem tatsächlich gebauten Quellcode abgeglichen werden.
 
+
+### USB-Audio-Ausgabe mit `AudioOutputUSB` (experimentell)
+
+`AudioOutputUSB` sendet 16-Bit-PCM aus dem Audio-Graphen über den UAC1-Mikrofon-Endpunkt des Arduino-ESP32-Frameworks an einen Host-PC. Der Host sieht das Gerät damit als Audioeingang/Mikrofon. Die Gegenrichtung (USB-Audio vom PC in den ESP32) wird von dieser Klasse nicht implementiert.
+
+#### Stereo-Verbindungen
+
+Die Kanalzahl des Objekts muss zur `USBAudioCard`-Konfiguration passen:
+
+- Die Klasse verlangt `UAC_MIC_STEREO` und wird mit `AudioOutputUSB(usbAudio)` konstruiert. Linke und rechte Quelle werden getrennt mit den Eingängen 0 und 1 verbunden. `AudioOutputUSB` interleavt die beiden Blöcke anschließend als L/R/L/R für den USB-Endpunkt.
+
+Beispiel für eine Stereo-Deklaration (die Quellobjekte und die Event-/Setup-Logik sind projektspezifisch):
+
+```cpp
+#include <USB.h>
+#include <USBAudioCard.h>
+#include "Audio.h"
+
+static const uint32_t usbRateHz = 48000;
+USBAudioCard usbAudio(usbRateHz, UAC_BPS_16, UAC_SPK_NONE, UAC_MIC_STEREO);
+AudioOutputUSB usbOutput(usbAudio);
+AudioConnection usbLeft(source, 0, usbOutput, 0);
+AudioConnection usbRight(source, 1, usbOutput, 1);
+```
+
+#### Initialisierung und Laufzeit
+
+1. Registriere einen Handler für `ARDUINO_USB_AUDIO_CARD_INTERFACE_ENABLE_EVENT`. Wenn das Ereignis den Mikrofon-Endpunkt aktiviert/deaktiviert, rufe `usbOutput.setStreaming(enabled)` auf.
+2. Rufe `usbAudio.begin()` und danach `USB.begin()` auf.
+3. Rufe `usbOutput.setGraphSampleRate(usbRateHz)` **vor** `AudioMemory()` auf. Die Methode setzt die globale `AudioStream`-Sample-Rate.
+4. Rufe `usbOutput.service()` häufig aus `loop()` auf. Der USB-Schreibzugriff wird absichtlich nicht aus `AudioStream::update()` ausgeführt.
+5. Decoder-, Graph- und vom USB-Host gewählte Sample-Rate müssen übereinstimmen. Eine Sample-Rate-Konvertierung ist nicht implementiert.
+
+Der Audio-Graph schreibt in einen SPSC-Ringpuffer mit 1024 `int16_t`-Werten (2 KiB); bei Stereo entspricht das 512 interleavten Sample-Frames. `droppedSamples()` zählt verworfene PCM-Werte, `shortWrites()` zählt unvollständige USB-Schreibvorgänge. Diese Zähler sind für Diagnose gedacht.
+
+#### PlatformIO und Framework
+
+Die Klasse wird nur für Targets mit USB-OTG und bei aktiviertem `CONFIG_TINYUSB_AUDIO_ENABLED` bereitgestellt. Der verifizierte Aufbau ist ein ESP32-S3 mit nativem USB und Arduino-ESP32 3.3.12 (pioarduino platform release `55.03.312-1`). Die getestete Konfiguration verwendet im betreffenden `platformio.ini`-Environment:
+
+```ini
+build_unflags =
+    -DARDUINO_USB_MODE
+
+build_flags =
+    ${common.build_flags}
+    -DARDUINO_USB_MODE=0
+    -DARDUINO_USB_CDC_ON_BOOT=0
+```
+
+Beim gleichzeitig verwendeten USB-CDC-Diagnosekanal und UAC1-Mikrofon ist unter Windows mit der getesteten Framework-Version zusätzlich der versionsspezifische Workaround erforderlich:
+
+```ini
+extra_scripts = pre:scripts/patch_uac1_audio_iad.py
+```
+
+Das Script verändert `USBAudioCard.cpp` im installierten Framework, ergänzt einen UAC1 Audio Interface Association Descriptor (IAD) für die Windows-Enumeration und ist ausdrücklich eine versionsabhängige Übergangslösung. Nicht unbesehen auf andere Arduino-ESP32-Versionen übertragen.
+
+`AudioOutputUSB` unterstützt ausschließlich Stereo. Mehr Kanäle setzen Änderungen an der Klasse, den Framework-Deskriptoren und der TinyUSB-Endpunkt-/Pufferkonfiguration voraus.
 
 ## 9. Freeverb: Messstand und Optimierungspotenzial
 

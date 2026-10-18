@@ -1,5 +1,10 @@
 # TODO
 
+## USB Audio
+
+- [ ] **Explore USB multichannel capture beyond stereo.** Extend Arduino-ESP32 `USBAudioCard` channel configuration, UAC descriptors and TinyUSB endpoint/FIFO settings; measure the practical maximum for the ESP32-S3 Full-Speed USB bus, memory and CPU, and validate host compatibility. This is not a CPU-only limit.
+- [ ] **Add optional sample-rate conversion to `AudioOutputUSB`.** Keep the USB/UAC rate selected by the host independent of the radio decoder's 44.1/48 kHz source rate; use a stateful resampler with anti-alias filtering and verify audio quality, CPU load, latency and long-duration buffer stability. Defer until the remaining USB Audio path is stable.
+
 ## Audio filter tools
 
 - [ ] **Make sample-rate handling consistent in the Biquad Calculator and EQ Chain Designer.** Ensure the selected sample rate matches the library's compile-time `AUDIO_SAMPLE_RATE_EXACT`, or clearly validate/report mismatches before exporting setter calls.

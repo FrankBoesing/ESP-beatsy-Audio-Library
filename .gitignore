@@ -12,7 +12,6 @@ copilot-instructions.md
 info/
 secrets.h
 src/secrets.h
-src/
 include/
 test/
 pc-test/
