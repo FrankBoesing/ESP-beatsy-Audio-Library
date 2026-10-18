@@ -219,6 +219,8 @@ AudioOutputSPDIF spdifOut(PIN_SPDIF_OUT);
 void setup() {
     spdifOut.setSampleRate(44100.0f);
     // Set up AudioMemory() and the source/patch cords before starting playback.
+    AudioMemory(10);
+    //...
 }
 
 void loop() {}
