@@ -92,21 +92,15 @@ GCC_UNROLL
 
     // Drain at the AudioStream cadence instead of requiring loop() polling.
     // USBAudioCard::write() feeds TinyUSB's internal FIFO; USB packets transfer asynchronously.
-    serviceUsb(read);
-}
-
-OSPEED
-void AudioOutputUSB::serviceUsb(uint32_t read) {
-    // When the host stops capture, discard queued samples. AudioTask is the
-    // sole owner of readIndex_; it also clears the ring in update() while stopped.
+    // Recheck streaming in case the host disabled capture during this update.
     if (!configured_ || !streaming_.load(std::memory_order_acquire)) {
         readIndex_.store(writeIndex_.load(std::memory_order_acquire),
                          std::memory_order_release);
         return;
     }
 
-    const uint32_t write = writeIndex_.load(std::memory_order_acquire);
-    const uint32_t available = write - read;
+    const uint32_t writeAfterCopy = writeIndex_.load(std::memory_order_acquire);
+    const uint32_t available = writeAfterCopy - read;
     if (available == 0) {
         return;
     }
