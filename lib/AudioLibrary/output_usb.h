@@ -19,11 +19,11 @@ class USBAudioCard;
  * as L, R, L, R, ... for the USB endpoint.
  *
  * The host controls whether the USB microphone is streaming. The application
- * should forward ARDUINO_USB_AUDIO_CARD_INTERFACE_ENABLE_EVENT to setStreaming()
- * and call service() frequently from a non-ISR context (normally loop()).
+ * should forward ARDUINO_USB_AUDIO_CARD_INTERFACE_ENABLE_EVENT to setStreaming().
  *
- * AudioStream updates and service() use a single-producer/single-consumer ring
- * buffer so USB writes never run from the audio graph update context.
+ * The ring buffer is drained automatically from AudioOutputUSB::update() at the
+ * AudioStream cadence. No loop() polling or additional service task is required.
+ * TinyUSB FIFO writes therefore execute in the AudioTask context, never in an ISR.
  */
 class AudioOutputUSB : public AudioStream {
 public:
@@ -42,9 +42,6 @@ public:
     // Set the global AudioStream graph rate before AudioMemory() initializes the scheduler.
     // USBAudioCard's advertised USB rate must be configured to the same value.
     bool setGraphSampleRate(uint32_t sampleRateHz);
-
-    // Send queued PCM to TinyUSB. Call frequently from loop(); never from an ISR.
-    void service();
 
     // Number of queued interleaved int16_t PCM values.
     uint32_t availableSamples() const;
@@ -68,8 +65,9 @@ private:
     const bool configured_;
     int16_t ring_[kRingSamples];
 
-    // Monotonic indices count int16_t values; AudioStream update() is producer,
-    // service() is consumer. The even capacity preserves stereo-frame alignment.
+    // Monotonic indices count int16_t values; update() enqueues and drains
+    // serially in AudioTask. Atomics also allow diagnostic reads from other tasks.
+    void serviceUsb();
     std::atomic<uint32_t> readIndex_;
     std::atomic<uint32_t> writeIndex_;
     std::atomic<uint32_t> droppedSamples_;
