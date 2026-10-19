@@ -38,11 +38,11 @@ uint32_t AudioOutputUSB::availableSamples() const {
 OSPEED
 void AudioOutputUSB::update() {
     audio_block_t *blocks[2] = {receiveReadOnly(0), receiveReadOnly(1)};
+    const uint32_t write = writeIndex_.load(std::memory_order_relaxed);
 
     if (!configured_ || !streaming_.load(std::memory_order_acquire)) {
         // Discard queued data while capture is stopped, so restart never sends stale audio.
-        readIndex_.store(writeIndex_.load(std::memory_order_acquire),
-                         std::memory_order_release);
+        readIndex_.store(write, std::memory_order_release);
         if (blocks[0] != nullptr) {
             release(blocks[0]);
         }
@@ -52,7 +52,6 @@ void AudioOutputUSB::update() {
         return;
     }
 
-    const uint32_t write = writeIndex_.load(std::memory_order_relaxed);
     const uint32_t read = readIndex_.load(std::memory_order_acquire);
     const uint32_t usedSamples = write - read;
     const uint32_t freeSamples = usedSamples < kRingSamples ? kRingSamples - usedSamples : 0;
@@ -74,8 +73,9 @@ GCC_UNROLL
         ring_[index + 1] = right[frame];
     }
 
+    const uint32_t writeAfterCopy = write + copyFrames * 2;
     if (copyFrames != 0) {
-        writeIndex_.store(write + copyFrames * 2, std::memory_order_release);
+        writeIndex_.store(writeAfterCopy, std::memory_order_release);
     }
 
     if (copyFrames < AUDIO_BLOCK_SAMPLES) {
@@ -94,12 +94,10 @@ GCC_UNROLL
     // USBAudioCard::write() feeds TinyUSB's internal FIFO; USB packets transfer asynchronously.
     // Recheck streaming in case the host disabled capture during this update.
     if (!configured_ || !streaming_.load(std::memory_order_acquire)) {
-        readIndex_.store(writeIndex_.load(std::memory_order_acquire),
-                         std::memory_order_release);
+        readIndex_.store(writeAfterCopy, std::memory_order_release);
         return;
     }
 
-    const uint32_t writeAfterCopy = writeIndex_.load(std::memory_order_acquire);
     const uint32_t available = writeAfterCopy - read;
     if (available == 0) {
         return;
