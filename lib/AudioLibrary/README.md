@@ -94,7 +94,7 @@ Die folgende Tabelle unterscheidet den globalen Audio-Blockpool von separaten I2
 | `AudioMemory(n)` / Audio-Blockpool | `n` Blöcke; standardmäßig 128 Mono-Samples pro Block | `AudioMemory(n)` legt den Pool statisch an; `n` wird vom Anwendungsprogramm festgelegt. Ein Block enthält bei 128 Samples 256 Byte PCM sowie 4 Byte Verwaltungsfelder, insgesamt 260 Byte für `audio_block_t`. Hinzu kommt die Verfügbarkeitsmaske des Pools. |
 | I2S-Blockpaar-Ring (PCM) | 4 Stereo-Blockpaare | Fester Ring im `AudioOutputI2S`-Objekt; enthält nur Blockzeiger und benötigt keine FreeRTOS-Queue. |
 | PDM-Blockpaar-Ring | 4 Stereo-Blockpaare | Fester Ring im `AudioOutputPDM`-Objekt; enthält nur Blockzeiger und benötigt keine FreeRTOS-Queue. |
-| USB-Audio-Ringpuffer | 1024 PCM-Werte (`int16_t`, 2 KiB; Stereo: 512 Frames) | `AudioOutputUSB` puffert interleavtes PCM, bevor es automatisch pro Audio-Update an `USBAudioCard::write()` übergeben wird. Die Einspeisung läuft nur bei aktivem Mikrofon-Interface; `droppedSamples()` und `shortWrites()` dienen zur Diagnose von Pufferverlusten beziehungsweise unvollständigen Schreibvorgängen. |
+| USB-Audio-Ringpuffer | 1024 PCM-Werte (`int16_t`, 2 KiB; Stereo: 512 Frames) | `AudioOutputUSB` puffert interleavtes PCM, bevor es automatisch pro Audio-Update an `USBAudioCard::write()` übergeben wird. Die Einspeisung läuft nur bei aktivem Mikrofon-Interface. |
 | I2S-Ausgabepuffer | Kein separater PCM-Puffer | `AudioOutputI2S::update()` packt PCM direkt in den vom TX-Callback gemeldeten DMA-Puffer. |
 | I2S-DMA (Standard-PCM) | 2 Deskriptoren mit jeweils 128 Stereo-Frames | 512 Byte pro Deskriptor, insgesamt 1 KiB DMA-Nutzdaten. Dieselbe Deskriptorzahl gilt für TX und RX. |
 | PDM-DMA | 2 Deskriptoren mit jeweils 128 PCM-Frames | 256 Byte pro Mono-Deskriptor oder 512 Byte pro Stereo-Deskriptor; `AudioOutputPDM::update()` schreibt direkt in den DMA-Puffer. |
@@ -310,7 +310,7 @@ AudioConnection usbRight(source, 1, usbOutput, 1);
 
 `AudioOutputUSB` übergibt gepufferte Samples automatisch in jedem `AudioStream`-Update an den TinyUSB-FIFO. Dafür ist weder ein Aufruf aus `loop()` noch ein zusätzlicher Task erforderlich. Der FIFO-Schreibzugriff läuft im `AudioTask` und gehört damit zur Laufzeit von `AudioOutputUSB::update()`; seine Echtzeitwirkung muss auf der Zielhardware gemessen werden.
 
-Der Audio-Graph schreibt in einen Ringpuffer mit 1024 `int16_t`-Werten (2 KiB); bei Stereo entspricht das 512 interleavten Sample-Frames. Er wird innerhalb des Audio-Updates befüllt und zum TinyUSB-FIFO geleert. `droppedSamples()` zählt verworfene PCM-Werte, `shortWrites()` zählt unvollständige USB-Schreibvorgänge. Diese Zähler sind für Diagnose gedacht.
+Der Audio-Graph schreibt in einen Ringpuffer mit 1024 `int16_t`-Werten (2 KiB); bei Stereo entspricht das 512 interleavten Sample-Frames. Er wird innerhalb des Audio-Updates befüllt und zum TinyUSB-FIFO geleert.
 
 #### PlatformIO und Framework
 
