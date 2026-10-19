@@ -122,9 +122,6 @@ void AudioOutputUSB::serviceUsb(uint32_t read) {
 
     const uint16_t bytes = (uint16_t)(sampleCount * sizeof(int16_t));
     uint16_t written = usbAudio_.write(&ring_[read & kRingMask], bytes);
-    if (written > bytes) {
-        written = bytes;
-    }
 
     const uint32_t samplesWritten = written / sizeof(int16_t);
     const uint16_t bytesPerFrame = 2 * sizeof(int16_t);
