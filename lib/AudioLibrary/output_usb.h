@@ -67,7 +67,7 @@ private:
 
     // Monotonic indices count int16_t values; update() enqueues and drains
     // serially in AudioTask. Atomics also allow diagnostic reads from other tasks.
-    void serviceUsb();
+    void serviceUsb(uint32_t read);
     std::atomic<uint32_t> readIndex_;
     std::atomic<uint32_t> writeIndex_;
     std::atomic<uint32_t> droppedSamples_;
