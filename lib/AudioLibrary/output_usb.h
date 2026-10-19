@@ -43,17 +43,6 @@ public:
     // USBAudioCard's advertised USB rate must be configured to the same value.
     bool setGraphSampleRate(uint32_t sampleRateHz);
 
-    // Number of queued interleaved int16_t PCM values.
-    uint32_t availableSamples() const;
-
-    // Counters are interleaved PCM sample values, rather than sample frames.
-    uint32_t droppedSamples() const {
-        return droppedSamples_.load(std::memory_order_relaxed);
-    }
-    uint32_t shortWrites() const {
-        return shortWrites_.load(std::memory_order_relaxed);
-    }
-
     void update() override;
 
 private:
@@ -65,12 +54,11 @@ private:
     const bool configured_;
     int16_t ring_[kRingSamples];
 
-    // Monotonic indices count int16_t values; update() enqueues and drains
-    // serially in AudioTask. Atomics also allow diagnostic reads from other tasks.
-    std::atomic<uint32_t> readIndex_;
-    std::atomic<uint32_t> writeIndex_;
-    std::atomic<uint32_t> droppedSamples_;
-    std::atomic<uint32_t> shortWrites_;
+    // Monotonic indices are owned exclusively by update() in AudioTask.
+    uint32_t readIndex_;
+    uint32_t writeIndex_;
+
+    // Shared with the USB interface callback, which may run outside AudioTask.
     std::atomic<bool> streaming_;
 };
 #endif // CONFIG_TINYUSB_AUDIO_ENABLED
