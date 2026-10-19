@@ -12,8 +12,6 @@ AudioOutputUSB::AudioOutputUSB(USBAudioCard &usbAudio)
       ring_{},
       readIndex_(0),
       writeIndex_(0),
-      droppedSamples_(0),
-      shortWrites_(0),
       streaming_(false) {}
 
 AudioOutputUSB::~AudioOutputUSB() = default;
@@ -29,20 +27,14 @@ bool AudioOutputUSB::setGraphSampleRate(uint32_t sampleRateHz) {
     return AudioStream::setSampleRate((float)sampleRateHz);
 }
 
-uint32_t AudioOutputUSB::availableSamples() const {
-    const uint32_t read = readIndex_.load(std::memory_order_acquire);
-    const uint32_t write = writeIndex_.load(std::memory_order_acquire);
-    return write - read;
-}
-
 OSPEED
 void AudioOutputUSB::update() {
     audio_block_t *blocks[2] = {receiveReadOnly(0), receiveReadOnly(1)};
-    const uint32_t write = writeIndex_.load(std::memory_order_relaxed);
+    const uint32_t write = writeIndex_;
 
     if (!configured_ || !streaming_.load(std::memory_order_acquire)) {
         // Discard queued data while capture is stopped, so restart never sends stale audio.
-        readIndex_.store(write, std::memory_order_release);
+        readIndex_ = write;
         if (blocks[0] != nullptr) {
             release(blocks[0]);
         }
@@ -52,7 +44,7 @@ void AudioOutputUSB::update() {
         return;
     }
 
-    const uint32_t read = readIndex_.load(std::memory_order_acquire);
+    const uint32_t read = readIndex_;
     const uint32_t usedSamples = write - read;
     const uint32_t freeSamples = usedSamples < kRingSamples ? kRingSamples - usedSamples : 0;
     const uint32_t freeFrames = freeSamples / 2;
@@ -75,12 +67,7 @@ GCC_UNROLL
 
     const uint32_t writeAfterCopy = write + copyFrames * 2;
     if (copyFrames != 0) {
-        writeIndex_.store(writeAfterCopy, std::memory_order_release);
-    }
-
-    if (copyFrames < AUDIO_BLOCK_SAMPLES) {
-        droppedSamples_.fetch_add(((uint32_t)AUDIO_BLOCK_SAMPLES - copyFrames) * 2,
-                                  std::memory_order_relaxed);
+        writeIndex_ = writeAfterCopy;
     }
 
     if (blocks[0] != nullptr) {
@@ -94,7 +81,7 @@ GCC_UNROLL
     // USBAudioCard::write() feeds TinyUSB's internal FIFO; USB packets transfer asynchronously.
     // Recheck streaming in case the host disabled capture during this update.
     if (!configured_ || !streaming_.load(std::memory_order_acquire)) {
-        readIndex_.store(writeAfterCopy, std::memory_order_release);
+        readIndex_ = writeAfterCopy;
         return;
     }
 
@@ -120,19 +107,14 @@ GCC_UNROLL
     if ((written % bytesPerFrame) != 0) {
         // TinyUSB accepted a partial PCM frame. Drop the remainder of this
         // submission so subsequent writes start at a clean channel-frame boundary.
-        droppedSamples_.fetch_add(sampleCount - samplesWritten, std::memory_order_relaxed);
-        readIndex_.store(read + sampleCount, std::memory_order_release);
-        shortWrites_.fetch_add(1, std::memory_order_relaxed);
+        readIndex_ = read + sampleCount;
         return;
     }
 
     if (samplesWritten != 0) {
-        readIndex_.store(read + samplesWritten, std::memory_order_release);
+        readIndex_ = read + samplesWritten;
     }
 
-    if (written != bytes) {
-        shortWrites_.fetch_add(1, std::memory_order_relaxed);
-    }
 }
 
 #endif // SOC_USB_OTG_SUPPORTED && CONFIG_TINYUSB_AUDIO_ENABLED
