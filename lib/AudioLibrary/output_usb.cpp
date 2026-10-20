@@ -18,7 +18,7 @@ void AudioOutputUSB::setStreaming(bool enabled) {
     streaming_.store(enabled && configured_, std::memory_order_release);
 }
 
-bool AudioOutputUSB::setGraphSampleRate(uint32_t sampleRateHz) {
+bool AudioOutputUSB::setSampleRate(float sampleRateHz) {
     if (!configured_ || sampleRateHz == 0) {
         return false;
     }
