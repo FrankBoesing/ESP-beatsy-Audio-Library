@@ -78,6 +78,21 @@ void AudioSynthWaveform::update(void) {
     uint32_t i, ph, index, index2, scale;
     const uint32_t inc = phase_increment;
 
+    // Apply restart requests in the audio update context.
+    if (restart_phase_accumulator) {
+        phase_accumulator = 0;
+        restart_phase_accumulator = false;
+        // Reinitialize the band-limited waveform's history as well.
+        if (tone_type == WAVEFORM_BANDLIMIT_SQUARE) {
+            band_limit_waveform.init_square(inc);
+        } else if (tone_type == WAVEFORM_BANDLIMIT_PULSE) {
+            band_limit_waveform.init_pulse(inc, pulse_width);
+        } else if (tone_type == WAVEFORM_BANDLIMIT_SAWTOOTH ||
+                   tone_type == WAVEFORM_BANDLIMIT_SAWTOOTH_REVERSE) {
+            band_limit_waveform.init_sawtooth(inc);
+        }
+    }
+
     ph = phase_accumulator + phase_offset;
     if (magnitude == 0) {
         phase_accumulator += inc * AUDIO_BLOCK_SAMPLES;
@@ -260,6 +275,21 @@ void AudioSynthWaveformModulated::update(void) {
     int16_t magnitude15;
     uint32_t i, ph, index, index2, scale, priorphase;
     const uint32_t inc = phase_increment;
+
+    // Apply restart requests in the audio update context.
+    if (restart_phase_accumulator) {
+        phase_accumulator = 0;
+        restart_phase_accumulator = false;
+        // Reinitialize the band-limited waveform's history as well.
+        if (tone_type == WAVEFORM_BANDLIMIT_SQUARE) {
+            band_limit_waveform.init_square(inc);
+        } else if (tone_type == WAVEFORM_BANDLIMIT_PULSE) {
+            band_limit_waveform.init_pulse(inc, 0x80000000u);
+        } else if (tone_type == WAVEFORM_BANDLIMIT_SAWTOOTH ||
+                   tone_type == WAVEFORM_BANDLIMIT_SAWTOOTH_REVERSE) {
+            band_limit_waveform.init_sawtooth(inc);
+        }
+    }
 
     moddata = receiveReadOnly(0);
     shapedata = receiveReadOnly(1);
