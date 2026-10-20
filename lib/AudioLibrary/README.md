@@ -183,6 +183,36 @@ hier die Laufzeit-Sample-Rate. Die Implementierung nutzt die Teensy-kompatible
 257-Einträge-Sinustabelle und portable Festkommaarithmetik; ein bitidentischer
 Ausgang gegenüber Teensy ist damit nicht zugesichert.
 
+### `AudioSynthWaveform` und `AudioSynthWaveformModulated`
+
+Beide Oszillatorklassen bieten `restart()`. Der Aufruf fordert an, den
+Phasenakkumulator am Anfang des nächsten Audio-Updates auf null zu setzen;
+er führt den Neustart nicht unmittelbar im aufrufenden Code aus. Frequenz,
+Amplitude, Wellenformtyp und Modulationseinstellungen bleiben unverändert.
+Bei `AudioSynthWaveform` bleibt außerdem der mit `phase(angle)` konfigurierte
+Phasenoffset erhalten.
+
+Bei bandbegrenzten Sägezahn-, Rechteck- und Pulswellen wird zusätzlich der
+interne Verlaufsspeicher des Bandbegrenzers neu initialisiert. Das verhindert,
+dass der Phasenakkumulator zwar auf null springt, der Bandbegrenzer aber noch
+Schritte aus dem vorherigen Zyklus verarbeitet.
+
+Die Neustartanforderung wird als atomisches Flag zwischen Anwendung und
+`AudioTask` übergeben. Mehrere Aufrufe derselben Instanz vor dem nächsten
+Update werden zu einer Anforderung zusammengefasst. Sollen mehrere
+Oszillatoren synchron im selben Update neu starten, gruppiere die Aufrufe:
+
+```cpp
+AudioNoInterrupts();
+osc1.restart();
+osc2.restart();
+AudioInterrupts();
+```
+
+Der Schutz ist insbesondere für den gemeinsamen Neustart mehrerer Oszillatoren
+wichtig: Ohne ihn kann ein laufendes Audio-Update eine Instanz bereits
+verarbeiten, bevor die übrigen Neustartanforderungen gesetzt wurden.
+
 ### `AudioEffectMultiply`
 
 Multipliziert die beiden Eingangssignale sampleweise. Das Produkt wird in 32 Bit berechnet, mit Q15-Skalierung auf 16-Bit-PCM zurückgeführt und dabei begrenzt. Fehlt einer der beiden Eingangsblöcke, erzeugt der Effekt in diesem Update keinen Ausgangsblock.
