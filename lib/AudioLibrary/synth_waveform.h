@@ -28,6 +28,7 @@
 #define synth_waveform_h_
 
 #include <Arduino.h> // github.com/PaulStoffregen/cores/blob/master/teensy4/Arduino.h
+#include <atomic>
 #include "AudioStream.h"
 
 // waveforms.c
@@ -116,8 +117,9 @@ class AudioSynthWaveform : public AudioStream {
         }
         phase_offset = angle * (float)(4294967296.0 / 360.0);
     }
-    // Restart the waveform phase on the next audio update.
-    void restart() { restart_phase_accumulator = true; }
+    // Request a phase restart at the start of the next audio block. For
+    // synchronized restarts, group calls with AudioNoInterrupts()/AudioInterrupts().
+    void restart() { restart_phase_accumulator.store(1, std::memory_order_relaxed); }
     void amplitude(float n) { // 0 to 1.0
         if (n < 0) {
             n = 0;
@@ -175,7 +177,7 @@ class AudioSynthWaveform : public AudioStream {
     short tone_type;
     int16_t tone_offset;
     BandLimitedWaveform band_limit_waveform;
-    bool restart_phase_accumulator;
+    std::atomic<uint32_t> restart_phase_accumulator;
 };
 
 class AudioSynthWaveformModulated : public AudioStream {
@@ -197,8 +199,9 @@ class AudioSynthWaveformModulated : public AudioStream {
         if (phase_increment > 0x7FFE0000u)
             phase_increment = 0x7FFE0000;
     }
-    // Restart the waveform phase on the next audio update.
-    void restart() { restart_phase_accumulator = true; }
+    // Request a phase restart at the start of the next audio block. For
+    // synchronized restarts, group calls with AudioNoInterrupts()/AudioInterrupts().
+    void restart() { restart_phase_accumulator.store(1, std::memory_order_relaxed); }
     void amplitude(float n) { // 0 to 1.0
         if (n < 0) {
             n = 0;
@@ -266,7 +269,7 @@ class AudioSynthWaveformModulated : public AudioStream {
     uint8_t tone_type;
     uint8_t modulation_type;
     BandLimitedWaveform band_limit_waveform;
-    bool restart_phase_accumulator;
+    std::atomic<uint32_t> restart_phase_accumulator;
 };
 
 #endif
