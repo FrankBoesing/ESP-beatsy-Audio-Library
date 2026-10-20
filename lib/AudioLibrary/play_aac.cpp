@@ -1,8 +1,9 @@
-#include "play_aac.h"
-
+#include <Arduino.h>
 #include <SD_MMC.h>
 #include <algorithm>
 #include <cstring>
+
+#include "play_aac.h"
 
 namespace {
 constexpr const char *TAG = "AudioPlayAac";

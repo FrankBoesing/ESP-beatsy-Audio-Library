@@ -17,23 +17,26 @@ Teensy Audio System Design Tool for the ESP-beatsy Audio Library.
   audio block and forwards the primary input unchanged (both inputs for MidSide).
 - Export: generates the Audio graph declarations and `AudioConnection` lines
   as a starting point for an Arduino/PlatformIO sketch. If `AudioInputUSB` or
-  `AudioOutputUSB` is present, it adds `USB.h`/`USBAudioCard.h` and a card
-  declaration using `AUDIO_SAMPLE_RATE_EXACT`; the speaker and microphone endpoints
-  are enabled only when their matching graph node is present. It also emits the
-  native-USB PlatformIO settings as comments. The application must still register
-  the appropriate interface-enable event handler and call `usbAudio.begin()` and
-  `USB.begin()`. `AudioInputUSB` uses `USBAudioCard::onData()` and owns that speaker
-  callback; `AudioOutputUSB` feeds the TinyUSB FIFO automatically from `AudioTask`.
-  Neither direction needs regular polling in `loop()`.
+  `AudioOutputUSB` is present, it explains the required native-USB PlatformIO flags;
+  the generated nodes use the library-managed constructors. At `AudioMemory()`, the
+  library configures one shared `USBAudioCard`, starts USB audio and CDC, and routes
+  interface-enable events to the matching node. The sketch does not need explicit
+  USB includes, a card object, `usbAudio.begin()`, `USB.begin()` or a custom event
+  handler. The USB environment enables `AUDIO_USB_REDIRECT_SERIAL`, so ordinary `Serial.print()` targets managed CDC; `Serial0` remains UART0. Runtime ESP-IDF logs are also redirected while the host terminal is connected.
+  `AudioInputUSB` owns the `USBAudioCard::onData()` speaker callback, while
+  `AudioOutputUSB` feeds the TinyUSB FIFO automatically from `AudioTask`. Neither
+  direction needs regular polling in `loop()`.
 - `AudioInputUSB`: experimental stereo-only, 16-bit USB playback input from a PC
-  through `UAC_SPK_STEREO`. Forward speaker-interface enable events to
-  `AudioInputUSB::setStreaming()`. The host and graph must use the same compile-time
+  through `UAC_SPK_STEREO`. The default constructor uses managed USB startup and
+  CDC; no event handler is required. The host and graph must use the same compile-time
   sample rate; resampling and more than two channels are not supported. A working
   ESP32-S3 example is `examples/HardwareTesting/USBHostPlayback/USBHostPlayback.cpp`.
 - `AudioOutputUSB`: experimental stereo-only, 16-bit USB capture output from the
-  ESP32 to a host through `UAC_MIC_STEREO`. Forward microphone-interface enable
-  events to `AudioOutputUSB::setStreaming()`. The graph and host sample rates must
-  match; resampling and more than two channels are not supported.
+  ESP32 to a host through `UAC_MIC_STEREO`. Its default constructor uses the same
+  managed USB device; `AUDIO_USB_REDIRECT_SERIAL` maps ordinary `Serial` output to
+  managed CDC while preserving `Serial0` for UART0. The graph and host sample rates must match; resampling and more than two
+  channels are not supported. Explicit-`USBAudioCard` constructors remain available
+  when an application needs manual control.
 - Biquad Calculator: standalone offline tool for low-pass, high-pass, band-pass, notch, peaking EQ and shelf filters. It plots the response and exports normalized Q30 coefficients and `AudioFilterBiquad` setup code.
 - EQ Chain Designer: designs and plots up to four cascaded `AudioFilterBiquad` stages and exports the corresponding setup calls. It supports low-/high-pass, band-pass, notch, peaking EQ and low-/high-shelf filters.
 - FFT Window Lab: offline simulator for `AudioAnalyzeFFT256` and `AudioAnalyzeFFT1024`, embedding the exact Q15 window coefficient tables from `lib/AudioLibrary/utility/data_windows.c`. Plots the window, input/windowed samples and FFT spectrum; reports bin spacing, timing, coherent gain and equivalent noise bandwidth. Models FFT256's default eight-frame power averaging and FFT1024's single-frame output, but does not reproduce target-specific FFT rounding bit for bit.

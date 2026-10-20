@@ -4,15 +4,44 @@
 
 #include <USBAudioCard.h>
 #include "esp32-hal-tinyusb.h"
+#include "utility/audio_usb_manager.h"
+
+AudioOutputUSB::AudioOutputUSB()
+    : AudioStream(2, inputQueueArray_),
+      usbAudio_(nullptr),
+      configured_(false),
+      managerManaged_(true),
+      interleaved_{},
+      streaming_(false) {
+    audio_detail::USBManager::instance().registerOutput(this);
+}
 
 AudioOutputUSB::AudioOutputUSB(USBAudioCard &usbAudio)
     : AudioStream(2, inputQueueArray_),
-      usbAudio_(usbAudio),
+      usbAudio_(&usbAudio),
       configured_(usbAudio.micChannels() == UAC_MIC_STEREO),
+      managerManaged_(false),
       interleaved_{},
       streaming_(false) {}
 
 AudioOutputUSB::~AudioOutputUSB() = default;
+
+void AudioOutputUSB::attachManagedDevice(USBAudioCard *usbAudio) {
+    usbAudio_ = usbAudio;
+    configured_ = usbAudio_ != nullptr &&
+                  usbAudio_->micChannels() == UAC_MIC_STEREO;
+}
+
+bool AudioOutputUSB::beginHardware() {
+    if (!managerManaged_) {
+        return true;
+    }
+    if (!audio_detail::USBManager::instance().begin()) {
+        configured_ = false;
+        return false;
+    }
+    return configured_;
+}
 
 void AudioOutputUSB::setStreaming(bool enabled) {
     streaming_.store(enabled && configured_, std::memory_order_release);
@@ -57,7 +86,7 @@ GCC_UNROLL
     }
 
     const uint16_t bytes = (uint16_t)sizeof(interleaved_);
-    const uint16_t written = usbAudio_.write(interleaved_, bytes);
+    const uint16_t written = usbAudio_->write(interleaved_, bytes);
     constexpr uint16_t bytesPerFrame = 2 * sizeof(int16_t);
 
     // A whole-frame short write drops the unaccepted tail of this block.

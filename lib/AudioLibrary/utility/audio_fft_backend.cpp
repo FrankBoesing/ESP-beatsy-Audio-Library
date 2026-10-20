@@ -24,6 +24,7 @@
  * THE SOFTWARE.
  */
 
+#include <Arduino.h>
 #include "audio_fft_backend.h"
 
 #include <math.h>

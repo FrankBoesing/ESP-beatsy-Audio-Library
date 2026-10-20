@@ -4,6 +4,11 @@
 #include <limits.h>
 #include "synth_sine.h"
 #include "sine_table.h"
+#include "utility/dspinst.h"
+extern "C" {
+extern const int16_t AudioWaveformSine[257];
+}
+
 
 OSPEED
 void AudioSynthWaveformSine::update() {
@@ -115,4 +120,60 @@ void AudioSynthWaveformSineHires::update() {
 
     transmit(lsw, 1);
     release(lsw);
+}
+
+OSPEED
+void AudioSynthWaveformSineModulated::update() {
+    audio_block_t *modinput = receiveReadOnly();
+    audio_block_t *block = allocate();
+    uint32_t phase = phase_accumulator;
+    const uint32_t increment = phase_increment;
+    const int32_t mag = magnitude;
+
+    // Match the Teensy phase progression even when no output block is available.
+    if (!block) {
+        if (modinput) {
+            for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                const int32_t modulationQ16 = (int32_t)modinput->data[i] * 65536;
+                const int32_t modulationIncrement =
+                    multiply_32x32_rshift32((int32_t)increment, modulationQ16) * 2;
+                phase += increment + (uint32_t)modulationIncrement;
+            }
+            release(modinput);
+        } else {
+            phase += increment * (uint32_t)AUDIO_BLOCK_SAMPLES;
+        }
+
+        phase_accumulator = phase;
+        return;
+    }
+
+    for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        const uint32_t index = phase >> 24;
+        int32_t val1 = AudioWaveformSine[index];
+        int32_t val2 = AudioWaveformSine[index + 1];
+        const uint32_t scale = (phase >> 8) & 0xFFFF;
+
+        val2 *= (int32_t)scale;
+        val1 *= (int32_t)(0x10000 - scale);
+        block->data[i] = (int16_t)multiply_32x32_rshift32(val1 + val2, mag);
+
+        if (modinput) {
+            const int32_t modulationQ16 = (int32_t)modinput->data[i] * 65536;
+            const int32_t modulationIncrement =
+                multiply_32x32_rshift32((int32_t)increment, modulationQ16) * 2;
+            phase += increment + (uint32_t)modulationIncrement;
+        } else {
+            phase += increment;
+        }
+    }
+
+    phase_accumulator = phase;
+
+    if (modinput) {
+        release(modinput);
+    }
+
+    transmit(block);
+    release(block);
 }

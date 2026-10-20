@@ -91,10 +91,28 @@ void AudioSynthKarplusStrong::noteOff(float /*velocity*/) {
     portEXIT_CRITICAL(&stateMux);
 }
 
+void AudioSynthKarplusStrong::damping(float amount) {
+    if (!(amount >= 0.0f)) {
+        amount = 0.0f;
+    } else if (amount > 1.0f) {
+        amount = 1.0f;
+    }
+
+    // Cap the feedback smoothing mix at 95%; a full sample hold would stop
+    // the filter from responding to new samples.
+    const uint16_t mixQ15 = (uint16_t)(amount * 31129.0f);
+
+    portENTER_CRITICAL(&stateMux);
+    dampingMixQ15 = mixQ15;
+    portEXIT_CRITICAL(&stateMux);
+}
+
 OSPEED
 void AudioSynthKarplusStrong::update() {
     uint16_t localBufferLen;
     uint16_t localBufferIndex;
+    uint16_t localDampingMixQ15;
+    int16_t localFilterState = filterState;
     int32_t localMagnitude;
     uint32_t localGeneration;
     uint8_t localState;
@@ -108,6 +126,7 @@ void AudioSynthKarplusStrong::update() {
 
     localBufferLen = bufferLen;
     localBufferIndex = bufferIndex;
+    localDampingMixQ15 = dampingMixQ15;
     localMagnitude = magnitude;
     localGeneration = stateGeneration;
     portEXIT_CRITICAL(&stateMux);
@@ -135,6 +154,12 @@ void AudioSynthKarplusStrong::update() {
             return;
         }
         localState = 2;
+
+        // Start the additional filter at the first undamped loop sample to
+        // avoid an artificial click when a new string note is triggered.
+        const int32_t first = ((int32_t)buffer[0] * 32686 +
+                               (int32_t)buffer[localBufferLen - 1U] * 32686) >> 16;
+        localFilterState = (int16_t)first;
     }
 
     if (localState != 2 || localBufferLen == 0) {
@@ -158,12 +183,17 @@ GCC_UNROLL
     for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const int16_t input = buffer[localBufferIndex];
 
-        // Averaging adjacent samples with a slight loss creates the
-        // characteristic decay of the Karplus-Strong string model.
-        const int32_t output = ((int32_t)input * 32686 + (int32_t)prior * 32686) >> 16;
+        // Keep the original averaging filter and loss. The optional one-pole
+        // filter mixes this feedback sample with its previous filtered value.
+        const int32_t averaged = ((int32_t)input * 32686 + (int32_t)prior * 32686) >> 16;
+        const int32_t filtered =
+            (averaged * (32768 - (int32_t)localDampingMixQ15) +
+             (int32_t)localFilterState * localDampingMixQ15) >> 15;
+        const int16_t output = saturate16(filtered);
 
-        block->data[i] = saturate16(output);
-        buffer[localBufferIndex] = block->data[i];
+        block->data[i] = output;
+        buffer[localBufferIndex] = output;
+        localFilterState = output;
         prior = input;
 
         if (++localBufferIndex >= localBufferLen) {
@@ -175,6 +205,7 @@ GCC_UNROLL
     portENTER_CRITICAL(&stateMux);
     if (stateGeneration == localGeneration && state == 2) {
         bufferIndex = localBufferIndex;
+        filterState = localFilterState;
         stillCurrent = true;
     }
     portEXIT_CRITICAL(&stateMux);

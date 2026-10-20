@@ -16,10 +16,6 @@
 
 #include <Arduino.h>
 #include <Audio.h>
-#include <USB.h>
-#include <USBAudioCard.h>
-
-static const uint32_t usbRateHz = (uint32_t)AUDIO_SAMPLE_RATE_EXACT;
 
 AudioOutputI2S i2sOut({
     PIN_I2S_BLCK, // BCLK
@@ -36,8 +32,7 @@ AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER
 #error "AUDIO_CODEC not defined"
 #endif
 
-USBAudioCard usbAudio(usbRateHz, UAC_BPS_16, UAC_SPK_STEREO, UAC_MIC_NONE);
-AudioInputUSB usbInput(usbAudio);
+AudioInputUSB usbInput;
 
 AudioConnection usbLeft(usbInput, 0, i2sOut, 0);
 AudioConnection usbRight(usbInput, 1, i2sOut, 1);
@@ -49,61 +44,27 @@ static void stopOnError(const char *message) {
     }
 }
 
-static void onUsbAudioEvent(void *arg, esp_event_base_t eventBase,
-                            int32_t eventId, void *eventData) {
-    (void)arg;
-    (void)eventBase;
-    (void)eventId;
-
-    if (eventData == nullptr) {
-        return;
-    }
-
-    const arduino_usb_audio_card_event_data_t *data =
-        (const arduino_usb_audio_card_event_data_t *)eventData;
-
-    if (data->interface_enable.interface != UAC_INTERFACE_SPK) {
-        return;
-    }
-
-    usbInput.setStreaming(data->interface_enable.enable);
-    Serial.printf("USB playback %s\n",
-                  data->interface_enable.enable ? "started" : "stopped");
-}
-
 void setup() {
-    Serial.begin(115200);
-    delay(500);
+    // AudioOutputI2S initializes before AudioInputUSB because it was declared
+    // first; the USB manager starts only after all graph nodes are registered.
+    AudioMemory(12);
 
     Serial.println();
     Serial.println("USB host playback -> I2S audio output");
     Serial.printf("Audio rate: %lu Hz, stereo, 16-bit PCM\n",
-                  (unsigned long)usbRateHz);
+                            (unsigned long)(uint32_t)AUDIO_SAMPLE_RATE_EXACT);
 
     if (!usbInput.isConfigured()) {
-        stopOnError("ERROR: AudioInputUSB configuration does not match AUDIO_SAMPLE_RATE_EXACT.");
+        stopOnError("ERROR: managed AudioInputUSB initialization failed.");
     }
 
-    // Start the audio graph and its I2S clock before the PC can start streaming.
-    AudioMemory(12);
-
 #if defined(AUDIO_CODEC_ES8311)
-    const bool codecReady = codec.enable(usbRateHz);
+    const bool codecReady = codec.enable((uint32_t)AUDIO_SAMPLE_RATE_EXACT);
 #else
     const bool codecReady = codec.enable();
 #endif
     if (!codecReady || !codec.volume(0.2f)) {
         stopOnError("ERROR: Audio codec initialization failed.");
-    }
-
-    // Register before starting USB so interface-enable events cannot be missed.
-    usbAudio.onEvent(ARDUINO_USB_AUDIO_CARD_INTERFACE_ENABLE_EVENT, onUsbAudioEvent);
-
-    if (!usbAudio.begin()) {
-        stopOnError("ERROR: Could not start USBAudioCard.");
-    }
-    if (!USB.begin()) {
-        stopOnError("ERROR: USB.begin() failed.");
     }
 
     Serial.println("Ready. Select the ESP32 USB audio device as the PC's audio output.");

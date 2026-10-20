@@ -1,8 +1,8 @@
 // based on helix mp3 decoder
 #pragma once
 
-#include "Arduino.h"
-#include "assert.h"
+#include <Arduino.h>
+#include <assert.h>
 
 static constexpr uint8_t  m_HUFF_PAIRTABS          =32;
 static constexpr uint8_t  m_BLOCK_SIZE             =18;
