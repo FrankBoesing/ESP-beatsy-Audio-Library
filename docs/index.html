@@ -1996,29 +1996,21 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 <script type="text/x-red" data-help-name="AudioInputUSB">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Receive stereo audio from a PC or Mac when the target's USB stack supports USB Audio.</p>
+	<p>Receive stereo 16-bit PCM playback from the host through the UAC speaker endpoint of <code>USBAudioCard</code>.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Right Channel</td></tr>
+		<tr class=odd><td align=center>Out 0</td><td>Left channel</td></tr>
+		<tr class=odd><td align=center>Out 1</td><td>Right channel</td></tr>
 	</table>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>volume</span>();</p>
-	<p class=desc>Returns the volume setting requested by the USB host.
-		Range is 0 to 1.0.  To make the PC's volume control work, this
-		setting should be read periodically and used to control the
-		system processing the signal.
-	</p>
-	<!--
-	<h3>Hardware</h3>
-	-->
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughUSB</p>
-	</p>
+	<h3>Setup</h3>
+	<p>Configure <code>USBAudioCard</code> with <code>UAC_SPK_STEREO</code>, <code>UAC_BPS_16</code> and the rate configured by <code>AUDIO_SAMPLE_RATE_EXACT</code>. Call <code>usbAudio.begin()</code> and <code>USB.begin()</code> in the sketch. Forward speaker interface-enable events (<code>UAC_INTERFACE_SPK</code>) to this object's <code>setStreaming()</code>.</p>
+	<p>This node uses <code>USBAudioCard::onData()</code> and therefore owns the speaker-data callback; do not install another speaker-data callback at the same time. A small two-block queue bridges the framework receive task and <code>AudioTask</code>; no additional task or <code>loop()</code> polling is required.</p>
+	<h3>Example</h3>
+	<p>See <code>examples/HardwareTesting/USBHostPlayback/USBHostPlayback.cpp</code> for a complete ESP32-S3 setup that routes PC playback to the I2S codec output. It uses the PlatformIO environment <code>freenove_esp32_s3_display_USBAUDIO</code>.</p>
 	<h3>Notes</h3>
-	<p>USB Audio support and device configuration depend on the target platform's USB stack. USB Audio is work in progress in this port; verify input support on the selected board before relying on this node.</p>
+	<p>The host and audio graph must use the same compile-time sample rate. No sample-rate conversion is performed. Availability depends on the selected board and Arduino-ESP32 USB Audio configuration.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioInputUSB">
 	<div class="form-row">
@@ -2724,12 +2716,12 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		<tr class=odd><td align=center>In 1</td><td>Right Channel</td></tr>
 	</table>
 	<h3>Export and sketch integration</h3>
-	<p>The graph export adds <code>&lt;USB.h&gt;</code> and <code>&lt;USBAudioCard.h&gt;</code>, a stereo <code>USBAudioCard</code> configured for 48 kHz / 16-bit PCM, and a constructor call for <code>AudioOutputUSB</code>. Adjust the sample rate if required. The generated graph does not replace the application's USB setup.</p>
-	<p>In <code>setup()</code>, register <code>ARDUINO_USB_AUDIO_CARD_INTERFACE_ENABLE_EVENT</code> for the generated <code>guiUsbAudioCard</code>, call <code>guiUsbAudioCard.begin()</code> and <code>USB.begin()</code>, then call <code>setGraphSampleRate(48000)</code> on the generated output object before <code>AudioMemory()</code>. Forward the microphone interface-enable state to that output object's <code>setStreaming()</code>. The USB FIFO is serviced automatically at the AudioStream update cadence; no <code>service()</code> call in <code>loop()</code> is required.</p>
+	<p>The graph export adds <code>&lt;USB.h&gt;</code> and <code>&lt;USBAudioCard.h&gt;</code> and a stereo <code>USBAudioCard</code> using <code>AUDIO_SAMPLE_RATE_EXACT</code>. Speaker and microphone endpoints are enabled according to whether the graph contains <code>AudioInputUSB</code>, <code>AudioOutputUSB</code>, or both. Set the macro to the desired USB rate in the build flags before compiling. The generated graph does not replace the application's USB setup.</p>
+	<p>In <code>setup()</code>, register <code>ARDUINO_USB_AUDIO_CARD_INTERFACE_ENABLE_EVENT</code> for the generated <code>guiUsbAudioCard</code>, initialize the graph with <code>AudioMemory()</code>, then call <code>guiUsbAudioCard.begin()</code> and <code>USB.begin()</code>. The USB device and audio graph both use <code>AUDIO_SAMPLE_RATE_EXACT</code>, set through the build flags; no runtime rate setter is provided. If the graph contains <code>AudioInputUSB</code>, forward <code>UAC_INTERFACE_SPK</code> enable events to that object's <code>setStreaming()</code>; if it contains <code>AudioOutputUSB</code>, forward <code>UAC_INTERFACE_MIC</code> events to its <code>setStreaming()</code>. The USB FIFO is serviced automatically at the AudioStream update cadence; no <code>service()</code> call in <code>loop()</code> is required.</p>
 	<h3>PlatformIO</h3>
 	<p>Use a target with native USB OTG and a framework build with <code>CONFIG_TINYUSB_AUDIO_ENABLED</code>. For the tested ESP32-S3 setup, set <code>-DARDUINO_USB_MODE=0</code> and <code>-DARDUINO_USB_CDC_ON_BOOT=0</code> in <code>build_flags</code> (remove the default <code>-DARDUINO_USB_MODE</code> with <code>build_unflags</code> where needed). For the tested Windows CDC + UAC1 composite on Arduino-ESP32 3.3.12, this repository has a version-specific workaround: <code>extra_scripts = pre:scripts/patch_uac1_audio_iad.py</code>.</p>
 	<h3>Notes</h3>
-	<p>The experimental USB microphone path has been tested on ESP32-S3 with the Arduino-ESP32 TinyUSB UAC1 stack and simultaneous CDC diagnostics. <code>AudioOutputUSB</code> implements stereo only and requires <code>UAC_MIC_STEREO</code>. More channels require changes to the class, framework descriptors and TinyUSB configuration. Sample-rate conversion is not implemented. Windows may require selecting a matching microphone format and reinitializing the device after a format change.</p>
+	<p>USB playback through <code>AudioInputUSB</code> and USB capture through <code>AudioOutputUSB</code> are experimental and stereo-only. The input requires <code>UAC_SPK_STEREO</code>; the output requires <code>UAC_MIC_STEREO</code>. More channels require changes to the classes, framework descriptors and TinyUSB configuration. Sample-rate conversion is not implemented. The USB playback path has been verified with the ESP32-S3 I2S codec output; verify behavior on other boards and framework versions. Windows may require selecting a matching microphone format and reinitializing the device after a format change.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputUSB">
 	<div class="form-row">
