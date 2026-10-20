@@ -3,26 +3,62 @@
 #if SOC_USB_OTG_SUPPORTED && CONFIG_TINYUSB_AUDIO_ENABLED
 
 #include <USBAudioCard.h>
+#include "utility/audio_usb_manager.h"
 
 std::atomic<AudioInputUSB *> AudioInputUSB::instance_{nullptr};
 std::atomic<uint32_t> AudioInputUSB::callbackCount_{0};
 
+AudioInputUSB::AudioInputUSB()
+    : AudioStream(0, nullptr),
+      usbAudio_(nullptr),
+      configured_(false),
+      managerManaged_(true) {
+    audio_detail::USBManager::instance().registerInput(this);
+}
+
 AudioInputUSB::AudioInputUSB(USBAudioCard &usbAudio)
     : AudioStream(0, nullptr),
-      usbAudio_(usbAudio),
+      usbAudio_(&usbAudio),
       configured_(usbAudio.speakerChannels() == UAC_SPK_STEREO &&
                   usbAudio.bitsPerSample() == UAC_BPS_16 &&
-                  usbAudio.sampleRate() == (uint32_t)AUDIO_SAMPLE_RATE_EXACT) {
-    if (configured_) {
-        // Publish a fully initialized object to any already-installed callback.
-        registered_ = true;
-        AudioInputUSB *expected = nullptr;
-        if (instance_.compare_exchange_strong(expected, this)) {
-            usbAudio_.onData(&AudioInputUSB::onUsbData);
-        } else {
-            registered_ = false;
-        }
+                  usbAudio.sampleRate() == (uint32_t)AUDIO_SAMPLE_RATE_EXACT),
+      managerManaged_(false) {
+    registerDataCallback();
+}
+
+void AudioInputUSB::attachManagedDevice(USBAudioCard *usbAudio) {
+    usbAudio_ = usbAudio;
+    configured_ = usbAudio_ != nullptr &&
+                  usbAudio_->speakerChannels() == UAC_SPK_STEREO &&
+                  usbAudio_->bitsPerSample() == UAC_BPS_16 &&
+                  usbAudio_->sampleRate() == (uint32_t)AUDIO_SAMPLE_RATE_EXACT;
+    registerDataCallback();
+}
+
+void AudioInputUSB::registerDataCallback() {
+    if (!configured_ || usbAudio_ == nullptr || registered_) {
+        return;
     }
+
+    // Publish a fully initialized object to any installed callback.
+    registered_ = true;
+    AudioInputUSB *expected = nullptr;
+    if (instance_.compare_exchange_strong(expected, this)) {
+        usbAudio_->onData(&AudioInputUSB::onUsbData);
+    } else {
+        registered_ = false;
+    }
+}
+
+bool AudioInputUSB::beginHardware() {
+    if (!managerManaged_) {
+        return true;
+    }
+    if (!audio_detail::USBManager::instance().begin()) {
+        configured_ = false;
+        return false;
+    }
+    return isConfigured();
 }
 
 AudioInputUSB::~AudioInputUSB() {
@@ -68,7 +104,7 @@ void AudioInputUSB::receiveData(void *data, uint16_t len) {
     }
 
     // Apply the host's speaker volume/mute controls before adding the samples.
-    usbAudio_.applyVolume(data, len);
+    usbAudio_->applyVolume(data, len);
     const int16_t *source = (const int16_t *)data;
     const uint32_t frameCount = len / bytesPerFrame;
     uint32_t write = writeBlockIndex_.load(std::memory_order_relaxed);

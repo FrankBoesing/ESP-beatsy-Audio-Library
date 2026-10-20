@@ -65,38 +65,27 @@ var RED = (function() {
 			var hasUsbInput = usbInputNodes.length > 0;
 			var hasUsbOutput = usbOutputNodes.length > 0;
 			var hasUsbAudio = hasUsbInput || hasUsbOutput;
-			var usbInputName = hasUsbInput ? make_name(usbInputNodes[0]) : null;
-			var usbOutputName = hasUsbOutput ? make_name(usbOutputNodes[0]) : null;
-			var usbSpeakerMode = hasUsbInput ? "UAC_SPK_STEREO" : "UAC_SPK_NONE";
-			var usbMicMode = hasUsbOutput ? "UAC_MIC_STEREO" : "UAC_MIC_NONE";
 			var cpp = "#include <Audio.h>\n";
-			if (hasUsbAudio) {
-				cpp += "#include <USB.h>\n#include <USBAudioCard.h>\n\n";
-				cpp += "/*\n"
-					+ " * USB Audio / PlatformIO (tested with ESP32-S3 and Arduino-ESP32 TinyUSB UAC1):\n"
-					+ " *   build_unflags = -DARDUINO_USB_MODE\n"
-					+ " *   build_flags =\n"
-					+ " *       ${common.build_flags}\n"
-					+ " *       -DARDUINO_USB_MODE=0\n"
-					+ " *       -DARDUINO_USB_CDC_ON_BOOT=0\n"
-					+ " *       -D AUDIO_SAMPLE_RATE_EXACT=48000.0f\n"
-					+ " * The framework must enable CONFIG_TINYUSB_AUDIO_ENABLED.\n"
-					+ " * For the tested Windows CDC + UAC1 composite on Arduino-ESP32 3.3.12,\n"
-					+ " * this repository's version-specific workaround may be needed:\n"
-					+ " *   extra_scripts = pre:scripts/patch_uac1_audio_iad.py\n"
-					+ " * In setup(), call guiUsbAudioCard.begin() and USB.begin().\n"
-					+ " * Set AUDIO_SAMPLE_RATE_EXACT to the USB rate before compiling.\n"
-					+ " * USBAudioCard uses the same macro; no runtime rate setter is needed.\n"
-					+ (hasUsbInput ? " * Forward UAC_INTERFACE_SPK enable events to " + usbInputName + ".setStreaming(...).\n" : "")
-					+ (hasUsbOutput ? " * Forward UAC_INTERFACE_MIC enable events to " + usbOutputName + ".setStreaming(...).\n" : "")
-					+ (hasUsbInput ? " * AudioInputUSB owns the USBAudioCard speaker-data callback.\n" : "")
-					+ " * No loop() polling or sample-rate conversion is used.\n"
-					+ " */\n"
-					+ "USBAudioCard guiUsbAudioCard((uint32_t)AUDIO_SAMPLE_RATE_EXACT, UAC_BPS_16, " + usbSpeakerMode + ", " + usbMicMode + ");\n\n";
-			} else {
-				cpp += "\n";
-			}
-			cpp += "// GUItool: begin automatically generated code\n";
+if (hasUsbAudio) {
+	cpp += "/*\n"
+		+ " * USB Audio is managed by the library. Default AudioInputUSB / AudioOutputUSB\n"
+		+ " * constructors select the required speaker/microphone endpoints.\n"
+		+ " * AudioMemory() starts the shared USB Audio + CDC device and routes stream\n"
+		+ " * enable events. No USB includes, USBAudioCard object, USB.begin() or custom\n"
+		+ " * event callback are needed in this managed mode.\n"
+		+ " * AUDIO_USB_REDIRECT_SERIAL maps Serial to managed CDC; use Serial0 for UART0.\n"
+		+ " * Add -D AUDIO_USB_REDIRECT_SERIAL to PlatformIO build_src_flags for the sketch.\n"
+		+ " * Runtime ESP-IDF logs are routed to CDC while the host terminal is connected.\n"
+		+ " * Set AUDIO_SAMPLE_RATE_EXACT to the intended USB rate before compiling.\n"
+		+ " * The framework must enable CONFIG_TINYUSB_AUDIO_ENABLED.\n"
+		+ " * For the tested Windows CDC + UAC1 composite on Arduino-ESP32 3.3.12,\n"
+		+ " * this repository's version-specific workaround may be needed:\n"
+		+ " *   extra_scripts = pre:scripts/patch_uac1_audio_iad.py\n"
+		+ " */\n\n";
+} else {
+	cpp += "\n";
+}
+cpp += "// GUItool: begin automatically generated code\n";
 			// generate code for all audio processing nodes
 			for (var i=0; i<nns.length; i++) {
 				var n = nns[i];
@@ -105,11 +94,7 @@ var RED = (function() {
 					cpp += n.type + " ";
 					for (var j=n.type.length; j<24; j++) cpp += " ";
 					var name = make_name(n);
-					if (n.type === "AudioOutputUSB" || n.type === "AudioInputUSB") {
-						cpp += name + "(guiUsbAudioCard); ";
-					} else {
-						cpp += name + "; ";
-					}
+					cpp += name + "; ";
 					for (var j=n.id.length; j<14; j++) cpp += " ";
 					cpp += "//xy=" + n.x + "," + n.y + "\n";
 				}

@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "AudioDecoderStream.h"
 
 #include <esp_heap_caps.h>

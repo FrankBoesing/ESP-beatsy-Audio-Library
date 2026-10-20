@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "AudioSourceStream.h"
 #include <algorithm>
 #include <cstring>

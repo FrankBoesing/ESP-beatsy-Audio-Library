@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "AudioControlI2C.h"
 
 #include <esp32-hal-i2c.h>

@@ -10,6 +10,9 @@
 #include "sdkconfig.h"
 #if CONFIG_TINYUSB_AUDIO_ENABLED
 class USBAudioCard;
+namespace audio_detail {
+class USBManager;
+}
 
 /**
  * Stereo audio source receiving 16-bit PCM from the host through the
@@ -19,12 +22,16 @@ class USBAudioCard;
  * its own task, so a small two-block SPSC buffer decouples that callback from
  * AudioTask. No additional task or polling in loop() is used.
  *
- * Configure USBAudioCard for UAC_SPK_STEREO / UAC_BPS_16 and use
- * AUDIO_SAMPLE_RATE_EXACT as its sample rate. Forward speaker-interface enable
- * events to setStreaming().
+ * The default constructor lets the library configure USB audio, CDC and stream
+ * enable events. The explicit USBAudioCard constructor leaves USB startup and
+ * event routing to the application.
  */
 class AudioInputUSB : public AudioStream {
 public:
+    // Managed mode: the library configures TinyUSB audio and USB CDC.
+    AudioInputUSB();
+
+    // Advanced mode: the application owns USBAudioCard and its startup.
     explicit AudioInputUSB(USBAudioCard &usbAudio);
     ~AudioInputUSB() override;
 
@@ -38,8 +45,13 @@ public:
 
 protected:
     void update() override;
+    bool beginHardware() override;
 
 private:
+    friend class audio_detail::USBManager;
+    void attachManagedDevice(USBAudioCard *usbAudio);
+    void registerDataCallback();
+
     static constexpr uint32_t RX_RING_BLOCKS = 2;
     static_assert((RX_RING_BLOCKS & (RX_RING_BLOCKS - 1U)) == 0,
                   "USB RX ring size must be a power of two");
@@ -47,8 +59,9 @@ private:
     static void onUsbData(void *data, uint16_t len);
     void receiveData(void *data, uint16_t len);
 
-    USBAudioCard &usbAudio_;
-    const bool configured_;
+    USBAudioCard *usbAudio_;
+    bool configured_;
+    const bool managerManaged_;
     bool registered_ = false;
 
     // One ring slot is filled by the USBAudioCard receive task while AudioTask

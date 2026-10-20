@@ -44,16 +44,23 @@ class AudioSynthKarplusStrong : public AudioStream {
     // for source compatibility with the original Teensy API.
     void noteOff(float velocity);
 
+    // Additional low-pass filtering in the feedback loop: 0 = original sound,
+    // 1 = strongest setting. The value is normalized and clamped to 0..1.
+    void damping(float amount);
+
     void update() override;
 
   private:
-    static constexpr uint16_t MAX_BUFFER_LENGTH = 536;
+    // 1024 samples cover guitar low E (E2) at both 44.1 and 48 kHz.
+    static constexpr uint16_t MAX_BUFFER_LENGTH = 1024;
 
     // State: 0 = stopped, 1 = initialize a new excitation, 2 = playing.
     uint8_t state = 0;
     uint16_t bufferLen = 0;
     uint16_t bufferIndex = 0;
     int32_t magnitude = 0;
+    uint16_t dampingMixQ15 = 0;
+    int16_t filterState = 0;
     static uint32_t seed;
     int16_t buffer[MAX_BUFFER_LENGTH] = {};
 

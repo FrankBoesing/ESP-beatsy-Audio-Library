@@ -2,9 +2,10 @@
 #ifndef AUDIO_DECODER_STREAM_H
 #define AUDIO_DECODER_STREAM_H
 
+#include <Arduino.h>
 #include "AudioPlayer.h"
-#include <stddef.h>
-#include <stdint.h>
+//#include <stddef.h>
+//#include <stdint.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 

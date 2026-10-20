@@ -1,6 +1,10 @@
 #ifndef Audio_h_
 #define Audio_h_
+
+#include <Arduino.h>
+#include <esp_log.h>
 #include <cstring>
+
 
 #include "common.h"
 
@@ -66,5 +70,15 @@
 #include "synth_simple_drum.h"
 #include "synth_karplusstrong.h"
 #include "synth_handpan.h"
+
+
+// Always route Serial to the library-managed USB CDC port when native
+// USB Audio is supported. This does not depend on AUDIO_USB_REDIRECT_SERIAL
+// or another sketch-level PlatformIO flag. Use Serial0 for physical UART.
+#if defined(SOC_USB_OTG_SUPPORTED) && SOC_USB_OTG_SUPPORTED && \
+    defined(CONFIG_TINYUSB_AUDIO_ENABLED) && CONFIG_TINYUSB_AUDIO_ENABLED
+#undef Serial
+#define Serial AudioUSBSerial()
+#endif
 
 #endif

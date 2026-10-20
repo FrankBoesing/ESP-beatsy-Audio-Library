@@ -2005,7 +2005,8 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		<tr class=odd><td align=center>Out 1</td><td>Right channel</td></tr>
 	</table>
 	<h3>Setup</h3>
-	<p>Configure <code>USBAudioCard</code> with <code>UAC_SPK_STEREO</code>, <code>UAC_BPS_16</code> and the rate configured by <code>AUDIO_SAMPLE_RATE_EXACT</code>. Call <code>usbAudio.begin()</code> and <code>USB.begin()</code> in the sketch. Forward speaker interface-enable events (<code>UAC_INTERFACE_SPK</code>) to this object's <code>setStreaming()</code>.</p>
+	<p>The default <code>AudioInputUSB</code> constructor uses the library-managed USB device. The library configures <code>UAC_SPK_STEREO</code> and the rate from <code>AUDIO_SAMPLE_RATE_EXACT</code>, starts USB audio and CDC during <code>AudioMemory()</code>, and routes speaker interface-enable events automatically. No <code>USBAudioCard</code> object or manual <code>USB.begin()</code> call is needed in this mode.</p>
+	<p>The USB build enables <code>AUDIO_USB_REDIRECT_SERIAL</code>, so ordinary <code>Serial.print()</code> calls use managed CDC; use <code>Serial0</code> for physical UART0. Runtime <code>ESP_LOGE</code>/<code>ESP_LOGW</code>/<code>ESP_LOGI</code> output is also redirected while a terminal is connected. The explicit <code>AudioInputUSB(usbAudio)</code> constructor remains available for manual setup.</p>
 	<p>This node uses <code>USBAudioCard::onData()</code> and therefore owns the speaker-data callback; do not install another speaker-data callback at the same time. A small two-block queue bridges the framework receive task and <code>AudioTask</code>; no additional task or <code>loop()</code> polling is required.</p>
 	<h3>Example</h3>
 	<p>See <code>examples/HardwareTesting/USBHostPlayback/USBHostPlayback.cpp</code> for a complete ESP32-S3 setup that routes PC playback to the I2S codec output. It uses the PlatformIO environment <code>freenove_esp32_s3_display_USBAUDIO</code>.</p>
@@ -2716,8 +2717,8 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		<tr class=odd><td align=center>In 1</td><td>Right Channel</td></tr>
 	</table>
 	<h3>Export and sketch integration</h3>
-	<p>The graph export adds <code>&lt;USB.h&gt;</code> and <code>&lt;USBAudioCard.h&gt;</code> and a stereo <code>USBAudioCard</code> using <code>AUDIO_SAMPLE_RATE_EXACT</code>. Speaker and microphone endpoints are enabled according to whether the graph contains <code>AudioInputUSB</code>, <code>AudioOutputUSB</code>, or both. Set the macro to the desired USB rate in the build flags before compiling. The generated graph does not replace the application's USB setup.</p>
-	<p>In <code>setup()</code>, register <code>ARDUINO_USB_AUDIO_CARD_INTERFACE_ENABLE_EVENT</code> for the generated <code>guiUsbAudioCard</code>, initialize the graph with <code>AudioMemory()</code>, then call <code>guiUsbAudioCard.begin()</code> and <code>USB.begin()</code>. The USB device and audio graph both use <code>AUDIO_SAMPLE_RATE_EXACT</code>, set through the build flags; no runtime rate setter is provided. If the graph contains <code>AudioInputUSB</code>, forward <code>UAC_INTERFACE_SPK</code> enable events to that object's <code>setStreaming()</code>; if it contains <code>AudioOutputUSB</code>, forward <code>UAC_INTERFACE_MIC</code> events to its <code>setStreaming()</code>. The USB FIFO is serviced automatically at the AudioStream update cadence; no <code>service()</code> call in <code>loop()</code> is required.</p>
+	<p>The graph export now uses the managed default constructors. At <code>AudioMemory()</code>, the library configures a shared <code>USBAudioCard</code> with the speaker and/or microphone endpoint required by the graph, starts USB audio and CDC once, and routes interface-enable events to the matching node. A sketch no longer needs <code>USB.h</code>, <code>USBAudioCard.h</code>, its own card object, <code>begin()</code> calls, or a custom event handler. Set <code>AUDIO_SAMPLE_RATE_EXACT</code> to the intended USB rate in the build flags before compiling.</p>
+	<p>The USB build enables <code>AUDIO_USB_REDIRECT_SERIAL</code>, so ordinary <code>Serial</code> output uses managed CDC and <code>Serial0</code> remains UART0. Runtime ESP-IDF log output is routed to CDC while a terminal is connected. The explicit constructors that accept a <code>USBAudioCard</code> remain available for applications that need manual startup and event routing. The USB FIFO is serviced automatically at the AudioStream update cadence; no polling in <code>loop()</code> is required.</p>
 	<h3>PlatformIO</h3>
 	<p>Use a target with native USB OTG and a framework build with <code>CONFIG_TINYUSB_AUDIO_ENABLED</code>. For the tested ESP32-S3 setup, set <code>-DARDUINO_USB_MODE=0</code> and <code>-DARDUINO_USB_CDC_ON_BOOT=0</code> in <code>build_flags</code> (remove the default <code>-DARDUINO_USB_MODE</code> with <code>build_unflags</code> where needed). For the tested Windows CDC + UAC1 composite on Arduino-ESP32 3.3.12, this repository has a version-specific workaround: <code>extra_scripts = pre:scripts/patch_uac1_audio_iad.py</code>.</p>
 	<h3>Notes</h3>
@@ -3288,6 +3289,17 @@ The actual packets are taken
 	<p class=func><span class=keyword>noteOff</span>(velocity);</p>
 	<p class=desc>Stop the sound output.
 	</p>
+	<p class=func><span class=keyword>damping</span>(amount);</p>
+	<p class=desc>Set additional low-pass filtering in the feedback path from 0.0 to 1.0.
+		The default 0.0 preserves the original sound; higher values attenuate upper
+		partials more strongly. The strongest setting mixes about 95% of the previous
+		filtered sample into the feedback signal. This is a normalized control, not
+		a cutoff frequency, and pitch-dependent compensation is not automatic.
+	</p>
+	<p class=desc>The internal delay buffer holds up to 1024 samples (2048 bytes per
+		instance), supporting approximately 43 Hz at 44.1 kHz or 47 Hz at 48 kHz.
+		Lower frequencies are limited by this buffer size.
+	</p>
 	<h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Synthesis &gt; Guitar
 	</p>
@@ -3391,9 +3403,11 @@ The actual packets are taken
 <script type="text/x-red" data-help-name="AudioSynthWaveformSineModulated">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Create a modulated sine wave, using any audio signal to continuously
-		modulate the sine wave frequency.  Note: limited modulation range,
-		use waveformMod for FM synthesis needing wide modulation range.</p>
+	<p>Create a sine oscillator whose phase increment is changed linearly by an audio
+		input. Zero input gives the carrier frequency, negative full-scale input
+		stops phase progression, and positive full-scale input approaches twice
+		the carrier frequency. For wide-range or exponential FM, use
+		AudioSynthWaveformModulated instead.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -3406,11 +3420,12 @@ The actual packets are taken
 	<p class=desc>Set the amplitude, from 0 to 1.0.
 	</p>
 	<p class=func><span class=keyword>frequency</span>(freq);</p>
-	<p class=desc>Set the center frequency, from 0 to 11000.  The output will
-		be this center frequency when the input modulation signal is zero.
-		Modulation input 1.0 causes the frequency to double, and input -1.0
-		causes zero Hz (DC) output.  For less modulation, attenuate the input
-		signal (perhaps with a mixer object) before it arrives here.
+	<p class=desc>Set the unmodulated carrier frequency from 0 to one quarter of the
+		currently configured audio sample rate (Fs/4; 11025 Hz at 44.1 kHz).
+		The output frequency equals this setting when the modulation input is
+		zero. Negative full-scale input stops phase progression (0 Hz/DC);
+		positive full-scale input approaches twice the carrier frequency.
+		Attenuate the modulation signal with a mixer if a smaller range is needed.
 	</p>
 	<p class=func><span class=keyword>phase</span>(angle);</p>
 	<p class=desc>
@@ -3426,14 +3441,12 @@ The actual packets are taken
 	</p>
 -->
 	<h3>Notes</h3>
-	<p>This modulated sine wave offers only limited range, and the control
-		input scales differently than "volt per octave" commonly used
-		with FM synthesis.  Use the newer AudioSynthWaveformModulated
-		(waveformMod) waveform when wide range is needed.  This simple
-		sine wave uses a very simple algorithm, written in the earliest
-		versions of the audio library. The newer waveformMod
-		offers up to 12 octaves modulation with control input mapped
-		to modulation in the way commonly used by audio synthesis.</p>
+	<p>This is the simple, linear-FM sine oscillator retained for Teensy API
+		compatibility. The configured carrier is limited to Fs/4 so full-scale
+		positive modulation cannot exceed the Nyquist frequency. The implementation
+		uses the Teensy-compatible 257-entry sine table and fixed-point phase
+		interpolation. For modulation mapped in octaves, use
+		AudioSynthWaveformModulated instead.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioSynthWaveformSineModulated">
 	<div class="form-row">

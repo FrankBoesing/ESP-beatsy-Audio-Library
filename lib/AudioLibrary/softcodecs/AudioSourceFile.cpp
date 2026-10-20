@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "AudioSourceFile.h"
 #include "optimize.h"
 
