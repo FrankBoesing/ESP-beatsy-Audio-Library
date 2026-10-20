@@ -67,9 +67,10 @@ GCC_UNROLL
     const uint16_t written = usbAudio_.write(interleaved_, bytes);
     constexpr uint16_t bytesPerFrame = 2 * sizeof(int16_t);
 
+    // A whole-frame short write drops the unaccepted tail of this block.
+    // A partial stereo frame would desynchronize L/R, so clear the FIFO to
+    // restore frame alignment; queued audio is sacrificed only on this error path.
     if ((written % bytesPerFrame) != 0) {
-        // A partial stereo frame would desynchronize L/R. Clear the FIFO to
-        // restore frame alignment; queued audio is sacrificed only on this error path.
         (void)tud_audio_clear_ep_in_ff();
     }
 }
