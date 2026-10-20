@@ -52,6 +52,8 @@ AudioConnection patchCord9(mixer2, 0, audio_out, 1);
 const int finger_delay = 5;
 const int hand_delay = 220;
 
+constexpr unsigned int kAudioMemoryBlocks = 15;
+
 int chordnum = 0;
 
 
@@ -104,7 +106,7 @@ void strum_dn(const float *chord, float velocity) {
 
 void setup() {
     // AudioOutputUSB initializes USB Audio and CDC during AudioMemory().
-    AudioMemory(15);
+    AudioMemory(kAudioMemoryBlocks);
 
     Serial.begin(115200);
     delay(2000);
@@ -119,7 +121,7 @@ void setup() {
     mixer1.gain(1, gain);
     mixer1.gain(2, gain);
     mixer1.gain(3, gain);
-    mixer2.gain(0, gain); // mixer1 output: strings 1–4
+    mixer2.gain(0, 1.0f); // mixer1 output: strings 1–4
     mixer2.gain(1, gain);
     mixer2.gain(2, gain);
 
@@ -180,6 +182,12 @@ void loop() {
     Serial.print("Max CPU Usage = ");
     Serial.print(AudioProcessorUsageMax(), 1);
     Serial.println("%");
+
+    Serial.print("Max Audio Memory = ");
+    Serial.print(AudioMemoryUsageMax());
+    Serial.print(" / ");
+    Serial.print(kAudioMemoryBlocks);
+    Serial.println(" blocks");
 }
 
 

@@ -166,16 +166,9 @@ void AudioSynthKarplusStrong::update() {
         return;
     }
 
+    // Advance the string even if no output block is available. A temporary
+    // pool shortage may drop this block, but must not stop the voice.
     audio_block_t *block = allocate();
-    if (block == nullptr) {
-        portENTER_CRITICAL(&stateMux);
-        if (stateGeneration == localGeneration && state == 2) {
-            state = 0;
-            ++stateGeneration;
-        }
-        portEXIT_CRITICAL(&stateMux);
-        return;
-    }
 
     int16_t prior = localBufferIndex > 0 ? buffer[localBufferIndex - 1U] : buffer[localBufferLen - 1U];
 
@@ -191,7 +184,9 @@ GCC_UNROLL
              (int32_t)localFilterState * localDampingMixQ15) >> 15;
         const int16_t output = saturate16(filtered);
 
-        block->data[i] = output;
+        if (block != nullptr) {
+            block->data[i] = output;
+        }
         buffer[localBufferIndex] = output;
         localFilterState = output;
         prior = input;
@@ -210,8 +205,10 @@ GCC_UNROLL
     }
     portEXIT_CRITICAL(&stateMux);
 
-    if (stillCurrent) {
+    if (stillCurrent && block != nullptr) {
         transmit(block);
     }
-    release(block);
+    if (block != nullptr) {
+        release(block);
+    }
 }
