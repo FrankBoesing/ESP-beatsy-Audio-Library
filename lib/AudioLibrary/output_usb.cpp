@@ -22,7 +22,7 @@ bool AudioOutputUSB::setSampleRate(float sampleRateHz) {
     if (!configured_ || sampleRateHz == 0) {
         return false;
     }
-    return AudioStream::setSampleRate((float)sampleRateHz);
+    return AudioStream::setSampleRate(sampleRateHz);
 }
 
 OSPEED
