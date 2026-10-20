@@ -21,9 +21,11 @@ class USBAudioCard;
  * The host controls whether the USB microphone is streaming. The application
  * should forward ARDUINO_USB_AUDIO_CARD_INTERFACE_ENABLE_EVENT to setStreaming().
  *
- * The ring buffer is drained automatically from AudioOutputUSB::update() at the
- * AudioStream cadence. No loop() polling or additional service task is required.
- * TinyUSB FIFO writes therefore execute in the AudioTask context, never in an ISR.
+ * Each AudioOutputUSB::update() interleaves one complete stereo block in a
+ * fixed working buffer and copies it into TinyUSB's internal FIFO. The FIFO
+ * buffers data between AudioTask updates and asynchronous USB transfers.
+ * No loop() polling or additional service task is required; FIFO writes execute
+ * in AudioTask context, never in an ISR.
  */
 class AudioOutputUSB : public AudioStream {
 public:
@@ -46,17 +48,13 @@ public:
     void update() override;
 
 private:
-    static constexpr uint32_t kRingSamples = 1024;
-    static constexpr uint32_t kRingMask = kRingSamples - 1;
-
     audio_block_t *inputQueueArray_[2];
     USBAudioCard &usbAudio_;
     const bool configured_;
-    int16_t ring_[kRingSamples];
 
-    // Monotonic indices are owned exclusively by update() in AudioTask.
-    uint32_t readIndex_;
-    uint32_t writeIndex_;
+    // One interleaved stereo AudioStream block (512 bytes at 128 samples/channel).
+    // USBAudioCard::write() copies it to TinyUSB's FIFO before returning.
+    int16_t interleaved_[AUDIO_BLOCK_SAMPLES * 2];
 
     // Shared with the USB interface callback, which may run outside AudioTask.
     std::atomic<bool> streaming_;
