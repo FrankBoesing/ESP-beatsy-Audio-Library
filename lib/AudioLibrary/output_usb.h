@@ -41,9 +41,6 @@ public:
     // Called from the USBAudioCard interface-enable event callback.
     void setStreaming(bool enabled);
 
-    // Set the global AudioStream graph rate before AudioMemory() initializes the scheduler.
-    // USBAudioCard's advertised USB rate must be configured to the same value.
-    bool setSampleRate(float sampleRateHz);
 
 protected:
     void update() override;
