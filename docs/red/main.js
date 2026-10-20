@@ -60,9 +60,15 @@ var RED = (function() {
 			nns.sort(function(a,b){ return (a.x + a.y/250) - (b.x + b.y/250); });
 			//console.log(JSON.stringify(nns));
 
-			var hasUsbAudio = nns.some(function(n) { return n.type === "AudioOutputUSB"; });
-			var usbAudioNodes = nns.filter(function(n) { return n.type === "AudioOutputUSB"; });
-			var usbOutputName = usbAudioNodes.length ? make_name(usbAudioNodes[0]) : null;
+			var usbInputNodes = nns.filter(function(n) { return n.type === "AudioInputUSB"; });
+			var usbOutputNodes = nns.filter(function(n) { return n.type === "AudioOutputUSB"; });
+			var hasUsbInput = usbInputNodes.length > 0;
+			var hasUsbOutput = usbOutputNodes.length > 0;
+			var hasUsbAudio = hasUsbInput || hasUsbOutput;
+			var usbInputName = hasUsbInput ? make_name(usbInputNodes[0]) : null;
+			var usbOutputName = hasUsbOutput ? make_name(usbOutputNodes[0]) : null;
+			var usbSpeakerMode = hasUsbInput ? "UAC_SPK_STEREO" : "UAC_SPK_NONE";
+			var usbMicMode = hasUsbOutput ? "UAC_MIC_STEREO" : "UAC_MIC_NONE";
 			var cpp = "#include <Audio.h>\n";
 			if (hasUsbAudio) {
 				cpp += "#include <USB.h>\n#include <USBAudioCard.h>\n\n";
@@ -73,16 +79,20 @@ var RED = (function() {
 					+ " *       ${common.build_flags}\n"
 					+ " *       -DARDUINO_USB_MODE=0\n"
 					+ " *       -DARDUINO_USB_CDC_ON_BOOT=0\n"
+					+ " *       -D AUDIO_SAMPLE_RATE_EXACT=48000.0f\n"
 					+ " * The framework must enable CONFIG_TINYUSB_AUDIO_ENABLED.\n"
 					+ " * For the tested Windows CDC + UAC1 composite on Arduino-ESP32 3.3.12,\n"
 					+ " * this repository's version-specific workaround may be needed:\n"
 					+ " *   extra_scripts = pre:scripts/patch_uac1_audio_iad.py\n"
 					+ " * In setup(), call guiUsbAudioCard.begin() and USB.begin().\n"
-					+ " * Before AudioMemory(), call " + usbOutputName + ".setGraphSampleRate(48000).\n"
-					+ " * Forward interface-enable events to " + usbOutputName + ".setStreaming(...).\n"
-					+ " * USB FIFO servicing is automatic; no service() call in loop(). No resampling.\n"
+					+ " * Set AUDIO_SAMPLE_RATE_EXACT to the USB rate before compiling.\n"
+					+ " * USBAudioCard uses the same macro; no runtime rate setter is needed.\n"
+					+ (hasUsbInput ? " * Forward UAC_INTERFACE_SPK enable events to " + usbInputName + ".setStreaming(...).\n" : "")
+					+ (hasUsbOutput ? " * Forward UAC_INTERFACE_MIC enable events to " + usbOutputName + ".setStreaming(...).\n" : "")
+					+ (hasUsbInput ? " * AudioInputUSB owns the USBAudioCard speaker-data callback.\n" : "")
+					+ " * No loop() polling or sample-rate conversion is used.\n"
 					+ " */\n"
-					+ "USBAudioCard guiUsbAudioCard(48000, UAC_BPS_16, UAC_SPK_NONE, UAC_MIC_STEREO);\n\n";
+					+ "USBAudioCard guiUsbAudioCard((uint32_t)AUDIO_SAMPLE_RATE_EXACT, UAC_BPS_16, " + usbSpeakerMode + ", " + usbMicMode + ");\n\n";
 			} else {
 				cpp += "\n";
 			}
@@ -95,7 +105,7 @@ var RED = (function() {
 					cpp += n.type + " ";
 					for (var j=n.type.length; j<24; j++) cpp += " ";
 					var name = make_name(n);
-					if (n.type === "AudioOutputUSB") {
+					if (n.type === "AudioOutputUSB" || n.type === "AudioInputUSB") {
 						cpp += name + "(guiUsbAudioCard); ";
 					} else {
 						cpp += name + "; ";

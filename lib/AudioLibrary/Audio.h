@@ -47,7 +47,7 @@
 #include "output_spdif2.h"
 #include "output_spdif3.h"
 #include "output_pdm.h"
-//#include "input_usb.h"
+#include "input_usb.h"
 #include "output_usb.h"
 #include "play_aac.h"
 #include "play_memory.h"

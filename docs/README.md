@@ -16,15 +16,23 @@ Teensy Audio System Design Tool for the ESP-beatsy Audio Library.
   their block-wise `bypass(bool)` API. A bypass setting is read at the start of each
   audio block and forwards the primary input unchanged (both inputs for MidSide).
 - Export: generates the Audio graph declarations and `AudioConnection` lines
-  as a starting point for an Arduino/PlatformIO sketch. If `AudioOutputUSB` is
-  present, it adds `USB.h`/`USBAudioCard.h`, a stereo 48 kHz card declaration and
-  a comment with the native-USB PlatformIO flags. USB event handling, `begin()`
-  and sample-rate setup before `AudioMemory()` remain application responsibilities.
-  `AudioOutputUSB` feeds the TinyUSB FIFO automatically from the AudioStream update
-  cycle; no regular `service()` call in `loop()` is needed.
-- `AudioOutputUSB`: experimental 16-bit USB UAC1 microphone/capture output from
-  the ESP32 to a host. Both the GUI node and the library implementation are
-  stereo-only and require `UAC_MIC_STEREO`. Graph, decoder and USB rates must
+  as a starting point for an Arduino/PlatformIO sketch. If `AudioInputUSB` or
+  `AudioOutputUSB` is present, it adds `USB.h`/`USBAudioCard.h` and a card
+  declaration using `AUDIO_SAMPLE_RATE_EXACT`; the speaker and microphone endpoints
+  are enabled only when their matching graph node is present. It also emits the
+  native-USB PlatformIO settings as comments. The application must still register
+  the appropriate interface-enable event handler and call `usbAudio.begin()` and
+  `USB.begin()`. `AudioInputUSB` uses `USBAudioCard::onData()` and owns that speaker
+  callback; `AudioOutputUSB` feeds the TinyUSB FIFO automatically from `AudioTask`.
+  Neither direction needs regular polling in `loop()`.
+- `AudioInputUSB`: experimental stereo-only, 16-bit USB playback input from a PC
+  through `UAC_SPK_STEREO`. Forward speaker-interface enable events to
+  `AudioInputUSB::setStreaming()`. The host and graph must use the same compile-time
+  sample rate; resampling and more than two channels are not supported. A working
+  ESP32-S3 example is `examples/HardwareTesting/USBHostPlayback/USBHostPlayback.cpp`.
+- `AudioOutputUSB`: experimental stereo-only, 16-bit USB capture output from the
+  ESP32 to a host through `UAC_MIC_STEREO`. Forward microphone-interface enable
+  events to `AudioOutputUSB::setStreaming()`. The graph and host sample rates must
   match; resampling and more than two channels are not supported.
 - Biquad Calculator: standalone offline tool for low-pass, high-pass, band-pass, notch, peaking EQ and shelf filters. It plots the response and exports normalized Q30 coefficients and `AudioFilterBiquad` setup code.
 - EQ Chain Designer: designs and plots up to four cascaded `AudioFilterBiquad` stages and exports the corresponding setup calls. It supports low-/high-pass, band-pass, notch, peaking EQ and low-/high-shelf filters.

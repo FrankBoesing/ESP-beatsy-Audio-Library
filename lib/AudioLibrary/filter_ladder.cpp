@@ -31,19 +31,17 @@
 #define MAX_RESONANCE 1.8f
 
 const float AudioFilterLadder::interpolation_coeffs[AudioFilterLadder::INTERPOLATION_TAPS] = {
-    -14.30851541590154240E-6f,  0.001348560352009071f, 0.004029285548698377f, 0.007644563345368599f,
-     0.010936856250494802f,    0.011982063548666887f, 0.008882946305001046f, 0.0008266598116471556070f,
-    -0.011008071930708746f,   -0.023014151355548934f,-0.029736402750934567f,-0.025405787911977455f,
-    -0.006012006772274640f,    0.028729626071574525f, 0.074466890595619062f, 0.122757573409695370f,
-     0.163145421379242955f,    0.186152844567746417f, 0.186152844567746417f, 0.163145421379242955f,
-     0.122757573409695370f,    0.074466890595619062f, 0.028729626071574525f,-0.006012006772274640f,
-    -0.025405787911977455f,   -0.029736402750934567f,-0.023014151355548934f,-0.011008071930708746f,
-     0.0008266598116471556070f,0.008882946305001046f, 0.011982063548666887f, 0.010936856250494802f,
-     0.007644563345368599f,    0.004029285548698377f, 0.001348560352009071f,-14.30851541590154240E-6f
-};
+    -14.30851541590154240E-6f, 0.001348560352009071f,  0.004029285548698377f,  0.007644563345368599f,
+    0.010936856250494802f,     0.011982063548666887f,  0.008882946305001046f,  0.0008266598116471556070f,
+    -0.011008071930708746f,    -0.023014151355548934f, -0.029736402750934567f, -0.025405787911977455f,
+    -0.006012006772274640f,    0.028729626071574525f,  0.074466890595619062f,  0.122757573409695370f,
+    0.163145421379242955f,     0.186152844567746417f,  0.186152844567746417f,  0.163145421379242955f,
+    0.122757573409695370f,     0.074466890595619062f,  0.028729626071574525f,  -0.006012006772274640f,
+    -0.025405787911977455f,    -0.029736402750934567f, -0.023014151355548934f, -0.011008071930708746f,
+    0.0008266598116471556070f, 0.008882946305001046f,  0.011982063548666887f,  0.010936856250494802f,
+    0.007644563345368599f,     0.004029285548698377f,  0.001348560352009071f,  -14.30851541590154240E-6f};
 
-AudioFilterLadder::AudioFilterLadder()
-    : AudioStream(3, inputQueueArray) {
+AudioFilterLadder::AudioFilterLadder() : AudioStream(3, inputQueueArray) {
     computeCoefficients(baseFrequency, sampleRate(), alpha, qAdjust);
 }
 
@@ -141,7 +139,8 @@ void AudioFilterLadder::interpolationMethod(AudioFilterLadderInterpolation metho
 }
 
 OSPEED
-void AudioFilterLadder::computeCoefficients(float fc, float currentSampleRate, float &newAlpha, float &newQAdjust) const {
+void AudioFilterLadder::computeCoefficients(float fc, float currentSampleRate, float &newAlpha,
+                                            float &newQAdjust) const {
     if (!isfinite(fc)) {
         fc = 5.0f;
     }
@@ -153,20 +152,18 @@ void AudioFilterLadder::computeCoefficients(float fc, float currentSampleRate, f
         fc = 5.0f;
     }
 
-    const float wc = fc * (2.0f * MOOG_PI /
-                           ((float)INTERPOLATION * currentSampleRate));
+    const float wc = fc * (2.0f * MOOG_PI / ((float)INTERPOLATION * currentSampleRate));
     const float wc2 = wc * wc;
 
-    newAlpha = 0.9892f * wc - 0.4324f * wc2 +
-               0.1381f * wc * wc2 - 0.0202f * wc2 * wc2;
-    newQAdjust = 1.006f + 0.0536f * wc - 0.095f * wc2 -
-                 0.05f * wc2 * wc2;
+    //https://github.com/PaulStoffregen/Audio/issues/477
+    //newAlpha = 0.9892f * wc - 0.4324f * wc2 + 0.1381f * wc * wc2 - 0.0202f * wc2 * wc2;
+    newAlpha = 0.9892f * wc - 0.4342f * wc2 + 0.1381f * wc * wc2 - 0.0202f * wc2 * wc2;
+    newQAdjust = 1.006f + 0.0536f * wc - 0.095f * wc2 - 0.05f * wc2 * wc2;
 }
 
 OSPEED
 float AudioFilterLadder::lpf(float sample, int stage) {
-    float filtered = sample * (1.0f / 1.3f) +
-                     (0.3f / 1.3f) * z0[stage] - z1[stage];
+    float filtered = sample * (1.0f / 1.3f) + (0.3f / 1.3f) * z0[stage] - z1[stage];
     filtered = filtered * alpha + z1[stage];
     z1[stage] = filtered;
     z0[stage] = sample;
@@ -237,8 +234,7 @@ void AudioFilterLadder::interpolateBlock(const int16_t *input, float drive) {
         // Match CMSIS state timing: only append the current sample before
         // calculating its four interpolated output samples. Copying the full
         // block first would make future input samples visible to the FIR.
-        interpolationState[(phaseLength - 1) + i] =
-            ((float)input[i] * drive * (float)INTERPOLATION) / 32768.0f;
+        interpolationState[(phaseLength - 1) + i] = ((float)input[i] * drive * (float)INTERPOLATION) / 32768.0f;
 
         const float *state = interpolationState + i;
 
@@ -247,8 +243,7 @@ void AudioFilterLadder::interpolateBlock(const int16_t *input, float drive) {
             const int coefficientPhase = phase - 1;
 
             for (int tap = 0; tap < phaseLength; ++tap) {
-                sum += state[tap] * interpolation_coeffs[
-                    coefficientPhase + tap * INTERPOLATION];
+                sum += state[tap] * interpolation_coeffs[coefficientPhase + tap * INTERPOLATION];
             }
 
             oversampled[i * INTERPOLATION + (INTERPOLATION - phase)] = sum;
@@ -256,9 +251,7 @@ void AudioFilterLadder::interpolateBlock(const int16_t *input, float drive) {
     }
 
     // Preserve the previous phaseLength-1 input samples for the next block.
-    memmove(interpolationState,
-            interpolationState + AUDIO_BLOCK_SAMPLES,
-            (phaseLength - 1) * sizeof(float));
+    memmove(interpolationState, interpolationState + AUDIO_BLOCK_SAMPLES, (phaseLength - 1) * sizeof(float));
 }
 
 // Portable equivalent of CMSIS arm_fir_decimate_f32() for M=4, 36 taps.
@@ -269,8 +262,7 @@ void AudioFilterLadder::decimateBlock() {
     constexpr int tapHistory = INTERPOLATION_TAPS - 1;
     constexpr int inputSamples = AUDIO_BLOCK_SAMPLES * INTERPOLATION;
 
-    memcpy(decimationState + tapHistory, oversampled,
-           inputSamples * sizeof(float));
+    memcpy(decimationState + tapHistory, oversampled, inputSamples * sizeof(float));
 
     for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const float *state = decimationState + i * INTERPOLATION;
@@ -284,9 +276,7 @@ void AudioFilterLadder::decimateBlock() {
     }
 
     // Keep the final tapHistory samples as history for the next call.
-    memmove(decimationState,
-            decimationState + inputSamples,
-            tapHistory * sizeof(float));
+    memmove(decimationState, decimationState + inputSamples, tapHistory * sizeof(float));
 }
 
 OSPEED
@@ -366,9 +356,7 @@ void AudioFilterLadder::update() {
             for (int os = 0; os < INTERPOLATION; ++os) {
                 const int index = i * INTERPOLATION + os;
                 const float input = oversampled[index];
-                float u = input -
-                          (z1[3] - config.passbandGain * input) *
-                              totalResonance * qAdjust;
+                float u = input - (z1[3] - config.passbandGain * input) * totalResonance * qAdjust;
                 u = fastTanh(u);
 
                 const float stage1 = lpf(u, 0);
@@ -386,8 +374,7 @@ void AudioFilterLadder::update() {
     } else {
         // Lower-CPU mode: linear interpolation between consecutive input samples.
         for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            const float input =
-                ((float)block->data[i] * config.overdrive) / 32768.0f;
+            const float input = ((float)block->data[i] * config.overdrive) / 32768.0f;
 
             if (frequencyModulationActive) {
                 const float octave = (float)frequencyBlock->data[i] * config.octaveScale;
@@ -412,10 +399,8 @@ void AudioFilterLadder::update() {
             float total = 0.0f;
             float interpolation = 0.0f;
             for (int os = 0; os < INTERPOLATION; ++os) {
-                float u = (interpolation * oldInput +
-                           (1.0f - interpolation) * input) -
-                          (z1[3] - config.passbandGain * input) *
-                              totalResonance * qAdjust;
+                float u = (interpolation * oldInput + (1.0f - interpolation) * input) -
+                          (z1[3] - config.passbandGain * input) * totalResonance * qAdjust;
                 u = fastTanh(u);
 
                 const float stage1 = lpf(u, 0);
