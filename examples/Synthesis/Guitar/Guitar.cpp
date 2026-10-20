@@ -121,7 +121,7 @@ void setup() {
     mixer1.gain(1, gain);
     mixer1.gain(2, gain);
     mixer1.gain(3, gain);
-    mixer2.gain(0, gain); // mixer1 output: strings 1–4
+    mixer2.gain(0, 1.0f); // mixer1 output: strings 1–4
     mixer2.gain(1, gain);
     mixer2.gain(2, gain);
 
