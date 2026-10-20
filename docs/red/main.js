@@ -78,7 +78,7 @@ var RED = (function() {
 					+ " * this repository's version-specific workaround may be needed:\n"
 					+ " *   extra_scripts = pre:scripts/patch_uac1_audio_iad.py\n"
 					+ " * In setup(), call guiUsbAudioCard.begin() and USB.begin().\n"
-					+ " * Before AudioMemory(), call " + usbOutputName + ".setGraphSampleRate(48000).\n"
+					+ " * Before AudioMemory(), call " + usbOutputName + ".setSampleRate(48000).\n"
 					+ " * Forward interface-enable events to " + usbOutputName + ".setStreaming(...).\n"
 					+ " * USB FIFO servicing is automatic; no service() call in loop(). No resampling.\n"
 					+ " */\n"
