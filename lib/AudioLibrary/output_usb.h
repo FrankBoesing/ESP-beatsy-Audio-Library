@@ -45,6 +45,7 @@ public:
     // USBAudioCard's advertised USB rate must be configured to the same value.
     bool setGraphSampleRate(uint32_t sampleRateHz);
 
+protected:
     void update() override;
 
 private:
