@@ -294,7 +294,7 @@ Beispiel für eine Stereo-Deklaration (die Quellobjekte und die Event-/Setup-Log
 #include <USBAudioCard.h>
 #include "Audio.h"
 
-static const uint32_t usbRateHz = 48000;
+static const uint32_t usbRateHz = (uint32_t)AUDIO_SAMPLE_RATE_EXACT;
 USBAudioCard usbAudio(usbRateHz, UAC_BPS_16, UAC_SPK_NONE, UAC_MIC_STEREO);
 AudioOutputUSB usbOutput(usbAudio);
 AudioConnection usbLeft(source, 0, usbOutput, 0);
@@ -305,7 +305,7 @@ AudioConnection usbRight(source, 1, usbOutput, 1);
 
 1. Registriere einen Handler für `ARDUINO_USB_AUDIO_CARD_INTERFACE_ENABLE_EVENT`. Wenn das Ereignis den Mikrofon-Endpunkt aktiviert/deaktiviert, rufe `usbOutput.setStreaming(enabled)` auf.
 2. Rufe `usbAudio.begin()` und danach `USB.begin()` auf.
-3. Rufe `usbOutput.setSampleRate(usbRateHz)` **vor** `AudioMemory()` auf. Die Methode setzt die globale `AudioStream`-Sample-Rate.
+3. Lege `AUDIO_SAMPLE_RATE_EXACT` vor dem Kompilieren über die Build-Flags auf die gewünschte USB-Rate fest (z. B. `-D AUDIO_SAMPLE_RATE_EXACT=48000.0f`). `AudioStream` und das Beispiel für `USBAudioCard` verwenden damit denselben Wert; ein separater Setter-Aufruf ist nicht erforderlich.
 4. Decoder-, Graph- und vom USB-Host gewählte Sample-Rate müssen übereinstimmen. Eine Sample-Rate-Konvertierung ist nicht implementiert.
 
 `AudioOutputUSB` übergibt gepufferte Samples automatisch in jedem `AudioStream`-Update an den TinyUSB-FIFO. Dafür ist weder ein Aufruf aus `loop()` noch ein zusätzlicher Task erforderlich. Der FIFO-Schreibzugriff läuft im `AudioTask` und gehört damit zur Laufzeit von `AudioOutputUSB::update()`; seine Echtzeitwirkung muss auf der Zielhardware gemessen werden.
