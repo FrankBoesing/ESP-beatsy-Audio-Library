@@ -43,7 +43,7 @@ public:
 
     // Set the global AudioStream graph rate before AudioMemory() initializes the scheduler.
     // USBAudioCard's advertised USB rate must be configured to the same value.
-    bool setGraphSampleRate(uint32_t sampleRateHz);
+    bool setSampleRate(float sampleRateHz);
 
 protected:
     void update() override;
