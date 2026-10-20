@@ -79,9 +79,8 @@ void AudioSynthWaveform::update(void) {
     const uint32_t inc = phase_increment;
 
     // Apply restart requests in the audio update context.
-    if (restart_phase_accumulator) {
+    if (restart_phase_accumulator.exchange(0, std::memory_order_relaxed)) {
         phase_accumulator = 0;
-        restart_phase_accumulator = false;
         // Reinitialize the band-limited waveform's history as well.
         if (tone_type == WAVEFORM_BANDLIMIT_SQUARE) {
             band_limit_waveform.init_square(inc);
@@ -277,9 +276,8 @@ void AudioSynthWaveformModulated::update(void) {
     const uint32_t inc = phase_increment;
 
     // Apply restart requests in the audio update context.
-    if (restart_phase_accumulator) {
+    if (restart_phase_accumulator.exchange(0, std::memory_order_relaxed)) {
         phase_accumulator = 0;
-        restart_phase_accumulator = false;
         // Reinitialize the band-limited waveform's history as well.
         if (tone_type == WAVEFORM_BANDLIMIT_SQUARE) {
             band_limit_waveform.init_square(inc);
