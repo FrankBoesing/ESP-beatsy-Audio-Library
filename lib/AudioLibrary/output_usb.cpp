@@ -18,13 +18,6 @@ void AudioOutputUSB::setStreaming(bool enabled) {
     streaming_.store(enabled && configured_, std::memory_order_release);
 }
 
-bool AudioOutputUSB::setSampleRate(float sampleRateHz) {
-    if (!configured_ || sampleRateHz == 0) {
-        return false;
-    }
-    return AudioStream::setSampleRate(sampleRateHz);
-}
-
 OSPEED
 void AudioOutputUSB::update() {
     audio_block_t *blocks[2] = {receiveReadOnly(0), receiveReadOnly(1)};
