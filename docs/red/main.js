@@ -73,16 +73,18 @@ var RED = (function() {
 					+ " *       ${common.build_flags}\n"
 					+ " *       -DARDUINO_USB_MODE=0\n"
 					+ " *       -DARDUINO_USB_CDC_ON_BOOT=0\n"
+					+ " *       -D AUDIO_SAMPLE_RATE_EXACT=48000.0f\n"
 					+ " * The framework must enable CONFIG_TINYUSB_AUDIO_ENABLED.\n"
 					+ " * For the tested Windows CDC + UAC1 composite on Arduino-ESP32 3.3.12,\n"
 					+ " * this repository's version-specific workaround may be needed:\n"
 					+ " *   extra_scripts = pre:scripts/patch_uac1_audio_iad.py\n"
 					+ " * In setup(), call guiUsbAudioCard.begin() and USB.begin().\n"
-					+ " * Before AudioMemory(), call " + usbOutputName + ".setSampleRate(48000).\n"
+					+ " * Set AUDIO_SAMPLE_RATE_EXACT to the USB rate before compiling.\n"
+					+ " * USBAudioCard uses the same macro; no runtime rate setter is needed.\n"
 					+ " * Forward interface-enable events to " + usbOutputName + ".setStreaming(...).\n"
 					+ " * USB FIFO servicing is automatic; no service() call in loop(). No resampling.\n"
 					+ " */\n"
-					+ "USBAudioCard guiUsbAudioCard(48000, UAC_BPS_16, UAC_SPK_NONE, UAC_MIC_STEREO);\n\n";
+					+ "USBAudioCard guiUsbAudioCard((uint32_t)AUDIO_SAMPLE_RATE_EXACT, UAC_BPS_16, UAC_SPK_NONE, UAC_MIC_STEREO);\n\n";
 			} else {
 				cpp += "\n";
 			}
