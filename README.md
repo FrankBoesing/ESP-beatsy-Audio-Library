@@ -156,6 +156,8 @@ MP3 and AAC use the ESP-beatsy software-decoder/AudioDecoderStream path. The rad
 
 The shared `AudioSineTable` helper uses a 513-entry interpolated Q15 table. `AudioSynthWaveformSineModulated` deliberately retains the Teensy-compatible 257-entry `AudioWaveformSine` table and fixed-point interpolation for its linear FM path.
 
+`AudioSynthWaveform` and `AudioSynthWaveformModulated` also expose `restart()`, which requests a phase-accumulator reset on the next audio update. To synchronize multiple oscillators, call their `restart()` methods between `AudioNoInterrupts()` and `AudioInterrupts()`. The Audio System Design Tool documents the method in both oscillator nodes.
+
 ## Audio analysis
 
 - **AudioAnalyzeFFT256** — 256-point FFT analysis.
