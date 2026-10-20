@@ -3,8 +3,6 @@
 #if SOC_USB_OTG_SUPPORTED && CONFIG_TINYUSB_AUDIO_ENABLED
 
 #include <USBAudioCard.h>
-
-#if SOC_USB_OTG_SUPPORTED && CONFIG_TINYUSB_AUDIO_ENABLED
 #include "esp32-hal-tinyusb.h"
 
 AudioOutputUSB::AudioOutputUSB(USBAudioCard &usbAudio)
