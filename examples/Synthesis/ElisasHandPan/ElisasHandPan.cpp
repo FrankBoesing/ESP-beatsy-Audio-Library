@@ -211,7 +211,7 @@ void setup()
 
     bool codecReady = false;
 #if defined(AUDIO_CODEC_ES8311)
-    codecReady = codec.enable(OUTPUT_SAMPLE_RATE);
+    codecReady = codec.enable(AUDIO_SAMPLE_RATE);
 #else
     codecReady = codec.enable();
 #endif
