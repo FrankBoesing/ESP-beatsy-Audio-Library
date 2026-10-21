@@ -26,45 +26,10 @@
 
 #include <Arduino.h>
 #include <stdint.h>
-#include <limits.h>
 #include "synth_waveform.h"
+#include "utility/dspinst.h"
 
 #pragma GCC optimize("O3")
-
-// Portable replacements for the Teensy ARM DSP intrinsics used by the
-// original implementation. The arithmetic width is kept explicit so the
-// waveform code retains the original fixed-point behaviour.
-static inline int32_t audio_signed_saturate_rshift(int32_t x, unsigned int r, unsigned int /*sat*/) {
-    int32_t y = x >> r;
-    if (y > INT16_MAX) return INT16_MAX;
-    if (y < INT16_MIN) return INT16_MIN;
-    return y;
-}
-
-static inline int32_t audio_multiply_32x32_rshift32(int32_t a, int32_t b) {
-    return (int32_t)(((int64_t)a * (int64_t)b) >> 32);
-}
-
-static inline int32_t audio_multiply_32x32_rshift32_rounded(int32_t a, int32_t b) {
-    int64_t product = (int64_t)a * (int64_t)b;
-    return (int32_t)((product + (INT64_C(1) << 31)) >> 32);
-}
-
-static inline int32_t audio_multiply_accumulate_32x32_rshift32_rounded(int32_t a, int32_t b, int32_t c) {
-    int64_t product = (int64_t)b * (int64_t)c;
-    product += ((int64_t)a << 32);
-    return (int32_t)((product + (INT64_C(1) << 31)) >> 32);
-}
-
-static inline int16_t audio_signed_multiply_32x16t(uint32_t a, uint32_t b) {
-    return (int16_t)(((int64_t)(int32_t)a * (int64_t)(int32_t)b) >> 32);
-}
-
-#define signed_saturate_rshift audio_signed_saturate_rshift
-#define multiply_32x32_rshift32 audio_multiply_32x32_rshift32
-#define multiply_32x32_rshift32_rounded audio_multiply_32x32_rshift32_rounded
-#define multiply_accumulate_32x32_rshift32_rounded audio_multiply_accumulate_32x32_rshift32_rounded
-#define signed_multiply_32x16t audio_signed_multiply_32x16t
 
 // uncomment for more accurate but more computationally expensive frequency modulation
 //#define IMPROVE_EXPONENTIAL_ACCURACY
