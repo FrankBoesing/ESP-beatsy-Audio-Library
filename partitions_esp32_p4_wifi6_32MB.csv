@@ -1,5 +1,7 @@
 # Name,   Type, SubType, Offset,   Size,      Flags
-nvs,      data, nvs,     0x9000,  0x5000,
-otadata,  data, ota,     0xE000,  0x2000,
-app0,     app,  factory, 0x10000, 0x1FE0000,
+# Partition table is at 0x10000; app0 starts at 0x20000 to leave additional
+# room for the ESP32-P4 bootloader.
+nvs,      data, nvs,     0x11000, 0x5000,
+otadata,  data, ota,     0x16000, 0x2000,
+app0,     app,  factory, 0x20000, 0x1FD0000,
 coredump, data, coredump,0x1FF0000,0x10000,
