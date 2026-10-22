@@ -20,6 +20,11 @@ CONFIG_ESP_HOSTED_P4_DEV_BOARD_FUNC_BOARD=y
 CONFIG_ESP_HOSTED_SDIO_HOST_INTERFACE=y
 CONFIG_ESP_HOSTED_SDIO_4_BIT_BUS=y
 
+# ESP32-P4 external QSPI NOR flash: use quad I/O at runtime.
+# esptool/PlatformIO still writes the image header in DIO mode as required
+# by the boot flow; the bootloader switches to QIO when this option is enabled.
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+
 # ESP32-P4NRW32 stacked 32 MB PSRAM.
 # Enable the driver itself; selecting HEX mode alone does not enable PSRAM.
 CONFIG_SPIRAM=y
