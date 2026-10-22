@@ -455,7 +455,7 @@ static inline Word64 MADD64(Word64 sum64, int x, int y) {
     return u.w64;
 }
 
-#elif defined(__GNUC__) && (defined(__XTENSA__) || defined(ESP32))
+#elif defined(ESP32)
 
 typedef int64_t Word64;
 
@@ -471,11 +471,9 @@ static inline int MULSHIFT32(int x, int y) {
     return (int)(((int64_t)x * (int64_t)y) >> 32);
 }
 
-static inline short CLIPTOSHORT(int x) {
-    if (x > 32767)
-        return 32767;
-    if (x < -32768)
-        return -32768;
+short CLIPTOSHORT(int x) {
+    x = (x > 32767) ? 32767 : x;
+    x = (x < -32768) ? -32768 : x;
     return (short)x;
 }
 
@@ -503,18 +501,11 @@ static inline Word64 SAR64(Word64 value, int shift) {
     return value >> shift;
 }
 
-static inline int32_t CLIP_2N(int32_t y, unsigned n)
+int32_t CLIP_2N(int32_t y, unsigned n)
 {
     int32_t x = (int32_t)1 << n;
-
-    if (y < -x)
-        y = -x;
-
-    --x;
-
-    if (y > x)
-        y = x;
-
+    if (y < -x) y = -x;
+    if (y >= x) y = x - 1;
     return y;
 }
 
