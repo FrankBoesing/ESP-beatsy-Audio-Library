@@ -9,7 +9,7 @@ Use `[env:esp32-p4-wifi6]` in the root `platformio.ini`. This environment differ
 - It uses `framework = arduino, espidf`, so the Arduino core is built as an ESP-IDF component.
 - It is pinned to pioarduino `55.03.312-1` (Arduino-ESP32 3.3.12 / ESP-IDF 5.5.5) as a compatibility baseline for the hosted components.
 - The ESP32-P4 target pulls `espressif/esp_hosted` and `espressif/esp_wifi_remote` from the Arduino core's ESP-IDF component manifest.
-- `custom_sdkconfig` selects the ESP32-C6 coprocessor and the P4 Function-EV-compatible SDIO pin preset used by the Waveshare board.
+- `board_build.cmake_extra_args` selects the tracked `sdkconfig.defaults.esp32-p4-wifi6` through `SDKCONFIG_DEFAULTS`. This is needed because pioarduino ignores `custom_sdkconfig` in the combined `arduino, espidf` mode. The defaults select the ESP32-C6 coprocessor, a 1 kHz FreeRTOS tick rate and the P4 Function-EV-compatible SDIO pin preset.
 
 The SDIO signals are CLK=GPIO18, CMD=GPIO19, D0-D3=GPIO14-17, with C6 reset on GPIO54. These pins are reserved while Hosted Wi-Fi is enabled; do not reuse them for other peripherals. The onboard microSD interface uses different pins.
 
@@ -25,6 +25,8 @@ Copy `examples/HardwareTesting/P4WifiStation/P4WifiStation.cpp` to your local Pl
 ```
 
 Do not commit real Wi-Fi credentials. The ESP32-C6 on this board uses 2.4 GHz Wi-Fi; a 5 GHz-only SSID will not work.
+
+If changing the SDK defaults after the first build, rename or remove the generated `sdkconfig.esp32-p4-wifi6` first; otherwise ESP-IDF will reuse its previous values. Keep a backup if you have customized it.
 
 Build, upload and open the monitor:
 
