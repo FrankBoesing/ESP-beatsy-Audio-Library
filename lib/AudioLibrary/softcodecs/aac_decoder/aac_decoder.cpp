@@ -5341,24 +5341,25 @@ int32_t AACDecoder::DecodeSBRData(int32_t chBase, int16_t *outbuf) {
 
         /* save delay */
         for (l = 0; l < HF_GEN; l++) {
-        for (k = 0; k < 64; k++) {
-            m_PSInfoSBR->XBufDelay[chBase + ch][l][k][0] = m_PSInfoSBR->XBuf[l + 32][k][0];
-            m_PSInfoSBR->XBufDelay[chBase + ch][l][k][1] = m_PSInfoSBR->XBuf[l + 32][k][1];
+            for (k = 0; k < 64; k++) {
+                m_PSInfoSBR->XBufDelay[chBase + ch][l][k][0] = m_PSInfoSBR->XBuf[l + 32][k][0];
+                m_PSInfoSBR->XBufDelay[chBase + ch][l][k][1] = m_PSInfoSBR->XBuf[l + 32][k][1];
+            }
         }
+        sbrChan->gbMask[0] = sbrChan->gbMask[1];
+        sbrChan->gbMask[1] = 0;
+
+        if (sbrHdr->count > 0)
+            sbrChan->reset = 0;
     }
-    sbrChan->gbMask[0] = sbrChan->gbMask[1];
-    sbrChan->gbMask[1] = 0;
 
-    if (sbrHdr->count > 0)
-        sbrChan->reset = 0;
-}
-sbrFreq->kStartPrev = sbrFreq->kStart;
-sbrFreq->numQMFBandsPrev = sbrFreq->numQMFBands;
+    sbrFreq->kStartPrev = sbrFreq->kStart;
+    sbrFreq->numQMFBandsPrev = sbrFreq->numQMFBands;
 
-if (m_AACDecInfo->nChans > 0 && (chBase + ch) == m_AACDecInfo->nChans)
-    m_PSInfoSBR->frameCount++;
+    if (m_AACDecInfo->nChans > 0 && (chBase + ch) == m_AACDecInfo->nChans)
+        m_PSInfoSBR->frameCount++;
 
-return ERR_AAC_NONE;
+    return ERR_AAC_NONE;
 }
 
 #endif
