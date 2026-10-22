@@ -13,6 +13,8 @@ Use [env:esp32-p4-wifi6] in the root [platformio.ini](../platformio.ini). This e
 
 The P4-side SDIO signals are CLK=GPIO18, CMD=GPIO19, D0-D3=GPIO14-17, with C6 reset on GPIO54. These pins are reserved while Hosted Wi-Fi is enabled; do not reuse them for other peripherals. The onboard microSD interface uses different pins.
 
+The P4-WIFI6 profile also enables the 32 MB stacked PSRAM in HEX mode at 200 MHz via `CONFIG_SPIRAM`, `CONFIG_SPIRAM_MODE_HEX`, and `CONFIG_SPIRAM_SPEED_200M`. The `extra_scripts` pre-build hook patches the unparenthesized `SRAM_START`/`SRAM_SIZE` macro expressions in the pinned ESP-IDF 5.5.5 ESP32-P4 linker template; this fixes an oversized `sram_seg` length that otherwise triggers `cannot assign memory region sram_seg to chip memory type`. The hook validates the expected upstream text and fails the build if the framework template changes unexpectedly.
+
 ## Verify Wi-Fi connectivity
 
 Copy [P4WifiStation.cpp](../examples/HardwareTesting/P4WifiStation/P4WifiStation.cpp) to your local PlatformIO project's \`src/main.cpp\`. Create \`src/secrets.h\` locally with your network details:
