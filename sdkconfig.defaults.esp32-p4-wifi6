@@ -20,6 +20,10 @@ CONFIG_ESP_HOSTED_P4_DEV_BOARD_FUNC_BOARD=y
 CONFIG_ESP_HOSTED_SDIO_HOST_INTERFACE=y
 CONFIG_ESP_HOSTED_SDIO_4_BIT_BUS=y
 
+# The P4 bootloader overlaps the default 0x8000 partition-table location.
+# Move the table to 0x10000; the custom CSV moves data/app partitions too.
+CONFIG_PARTITION_TABLE_OFFSET=0x10000
+
 # ESP32-P4 external QSPI NOR flash: use quad I/O at runtime.
 # esptool/PlatformIO still writes the image header in DIO mode as required
 # by the boot flow; the bootloader switches to QIO when this option is enabled.
