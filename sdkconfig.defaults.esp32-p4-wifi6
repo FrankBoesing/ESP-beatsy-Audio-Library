@@ -6,6 +6,11 @@
 CONFIG_FREERTOS_HZ=1000
 CONFIG_AUTOSTART_ARDUINO=y
 
+# Arduino's NetworkClientSecure/ssl_client.cpp currently gates its TLS
+# implementation on these PSK options. Enable both to provide its symbols.
+CONFIG_MBEDTLS_PSK_MODES=y
+CONFIG_MBEDTLS_KEY_EXCHANGE_PSK=y
+
 # ESP32-C6 coprocessor via ESP-Hosted / esp_wifi_remote.
 CONFIG_ESP_HOSTED_ENABLED=y
 CONFIG_ESP_WIFI_REMOTE_ENABLED=y
