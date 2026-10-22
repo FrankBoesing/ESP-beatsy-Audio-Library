@@ -5290,9 +5290,13 @@ int32_t AACDecoder::DecodeSBRData(int32_t chBase, int16_t *outbuf) {
                     m_PSInfoSBR->XBuf[l][k][1] = 0;
                 }
             }*/
-            for (l = 0; l < endL; l++) {
-                memset(&XBuf[l][kStartPrev][0], 0, (kStart - kStartPrev) * 2 * sizeof(int32_t));
-            } //fb
+            if (sbrFreq->kStart > sbrFreq->kStartPrev) {
+                const size_t bytes = (size_t)(sbrFreq->kStart - sbrFreq->kStartPrev) * 2 * sizeof(int32_t);
+                const int32_t endL = sbrGrid->envTimeBorder[0] + HF_ADJ;
+                for (l = 0; l < endL; l++) {
+                    memset(&m_PSInfoSBR->XBuf[l][sbrFreq->kStartPrev][0], 0, bytes);
+                }
+            }
         }
         /* step 2 - HF generation */
         GenerateHighFreq(sbrGrid, sbrFreq, sbrChan, ch);
@@ -5306,9 +5310,13 @@ int32_t AACDecoder::DecodeSBRData(int32_t chBase, int16_t *outbuf) {
             }
         }
         */
-       for (l = HF_ADJ; l < endL; l++) { //fb
-            memcpy(&XBuf[l][kStartPrev][0], &XBufDelay[chBase + ch][l][kStartPrev][0],
-                   (kStart - kStartPrev) * 2 * sizeof(int32_t));
+        if (sbrFreq->kStart > sbrFreq->kStartPrev) {
+            const size_t bytes = (size_t)(sbrFreq->kStart - sbrFreq->kStartPrev) * 2 * sizeof(int32_t);
+            const int32_t endL = sbrGrid->envTimeBorder[0] + HF_ADJ;
+            for (l = HF_ADJ; l < endL; l++) {
+                memcpy(&m_PSInfoSBR->XBuf[l][sbrFreq->kStartPrev][0],
+                       &m_PSInfoSBR->XBufDelay[chBase + ch][l][sbrFreq->kStartPrev][0], bytes);
+            }
         }
 
         /* step 3 - HF adjustment */
@@ -5330,10 +5338,9 @@ int32_t AACDecoder::DecodeSBRData(int32_t chBase, int16_t *outbuf) {
                          &(m_PSInfoSBR->delayIdxQMFS[chBase + ch]), qmfsBands, outptr, outputStride);
             outptr += 64 * outputStride;
         }
-    }
 
-    /* save delay */
-    for (l = 0; l < HF_GEN; l++) {
+        /* save delay */
+        for (l = 0; l < HF_GEN; l++) {
         for (k = 0; k < 64; k++) {
             m_PSInfoSBR->XBufDelay[chBase + ch][l][k][0] = m_PSInfoSBR->XBuf[l + 32][k][0];
             m_PSInfoSBR->XBufDelay[chBase + ch][l][k][1] = m_PSInfoSBR->XBuf[l + 32][k][1];
