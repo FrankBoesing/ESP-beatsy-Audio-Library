@@ -34,13 +34,11 @@ static inline int64_t MADD64(int64_t sum64, int32_t x, int32_t y) {
     sum64 += (int64_t)x * (int64_t)y;
     return sum64;
 }
-static inline int16_t CLIPTOSHORT(int32_t x) {
-    if (x > 32767)
-        return 32767;
-    if (x < -32768)
-        return -32768;
-    return (int16_t)x;
-} // Heutige compiler erkennen das und nutzen den Saturierungs-Assembler-Befehl // fb
+short CLIPTOSHORT(int x) {
+    x = (x > 32767) ? 32767 : x;
+    x = (x < -32768) ? -32768 : x;
+    return (short)x;
+}
 
 static inline int32_t CLIP_2N(int32_t y, int32_t n) {
 #ifdef __XTENSA__ //fb
