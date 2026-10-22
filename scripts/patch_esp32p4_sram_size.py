@@ -24,8 +24,8 @@ marker = "ESP_BEATSY_P4_SRAM_SIZE_FIX"
 if marker in original:
     print("ESP32-P4 SRAM linker-size fix already present.")
 else:
-    start_pattern = r"(?m)^#define\\s+SRAM_START\\s+0x4FF00000\\s+\\+\\s+CONFIG_CACHE_L2_CACHE_SIZE\\s*$"
-    size_pattern = r"(?m)^#define\\s+SRAM_SIZE\\s+SRAM_END\\s*-\\s*SRAM_START\\s*$"
+    start_pattern = r"(?m)^#define[ \t]+SRAM_START[ \t]+0x4FF00000[ \t]+\+[ \t]+CONFIG_CACHE_L2_CACHE_SIZE[ \t]*$"
+    size_pattern = r"(?m)^#define[ \t]+SRAM_SIZE[ \t]+SRAM_END[ \t]*-[ \t]*SRAM_START[ \t]*$"
 
     if len(re.findall(start_pattern, original)) != 1:
         raise RuntimeError("Unexpected SRAM_START definition in ESP32-P4 linker template; refusing to patch.")
