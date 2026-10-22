@@ -6,6 +6,10 @@
 .vscode/launch.json
 .vscode/ipch
 .venv/
+managed_components/
+sdkconfig.esp32-p4-wifi6
+CMakeLists.txt
+dependencies.lock
 compile_commands.json
 copilot-instructions.md
 .github/*

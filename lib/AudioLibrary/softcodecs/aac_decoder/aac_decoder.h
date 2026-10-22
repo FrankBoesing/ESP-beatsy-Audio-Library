@@ -7,8 +7,8 @@
 
 #define AAC_ENABLE_MPEG4
 
-#if (defined CONFIG_IDF_TARGET_ESP32S3 && defined BOARD_HAS_PSRAM)
-//#define AAC_ENABLE_SBR // needs additional 60KB DRAM,
+#if defined (BOARD_HAS_PSRAM)
+#define AAC_ENABLE_SBR // needs additional 60KB DRAM,
 #endif
 
 #define ASSERT(x) /* do nothing */
