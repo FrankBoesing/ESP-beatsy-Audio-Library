@@ -73,10 +73,12 @@
 #include "synth_handpan.h"
 
 
-// Always route Serial to the library-managed USB CDC port when native
-// USB Audio is supported. This does not depend on AUDIO_USB_REDIRECT_SERIAL
-// or another sketch-level PlatformIO flag. Use Serial0 for physical UART.
-#if defined(SOC_USB_OTG_SUPPORTED) && SOC_USB_OTG_SUPPORTED && \
+// Redirect Serial to the library-managed USB CDC only in builds that enable
+// the library's USB-audio path. USB-capable chips such as ESP32-P4 must retain
+// their normal Serial console in configurations that do not use USB audio.
+// This does not require the separate AUDIO_USB_REDIRECT_SERIAL flag.
+#if (defined(AUDIO_OUTPUT_USB) || defined(AUDIO_INPUT_USB)) && \
+    defined(SOC_USB_OTG_SUPPORTED) && SOC_USB_OTG_SUPPORTED && \
     defined(CONFIG_TINYUSB_AUDIO_ENABLED) && CONFIG_TINYUSB_AUDIO_ENABLED
 #undef Serial
 #define Serial AudioUSBSerial()
