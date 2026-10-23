@@ -14,7 +14,7 @@ To compile without SD-card support, change this macro at the top of `CathedralBe
 #define CATHEDRAL_RECORD_TO_SD 0
 ```
 
-The selected PlatformIO environment must define the board's `PIN_SD_MMC_CLK`, `PIN_SD_MMC_CMD` and `PIN_SD_MMC_D0`–`PIN_SD_MMC_D3` pins for a custom pin mapping. The example uses SD_MMC in 4-bit mode and the recorder requires PSRAM. If mounting or recording fails, audio playback continues without recording.
+The selected PlatformIO environment must define the board's `PIN_SD_MMC_CLK`, `PIN_SD_MMC_CMD` and `PIN_SD_MMC_D0`–`PIN_SD_MMC_D3` pins for a custom pin mapping. Recording requires PSRAM. The example defaults to 1-bit SD_MMC mode for robustness; set `CATHEDRAL_SDMMC_1BIT` to `0` to use the full 4-bit bus. If mounting or recording fails, audio playback continues without recording.
 
 The recorder intentionally does not overwrite an existing `/cathedral_bells.wav` or unfinished `/cathedral_bells.tmp`; rename or remove either file before recording again. If recording ends successfully, the temporary file is renamed to WAV after the audio writer drains its buffer.
 
