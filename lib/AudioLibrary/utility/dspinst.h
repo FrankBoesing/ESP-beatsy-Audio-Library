@@ -220,4 +220,113 @@ static inline uint32_t sqrt_uint32_approx(uint32_t in) {
     return n;
 }
 
+#include "../common.h"
+#include <string.h>
+
+static inline __attribute__((optimize("O2"))) void copyPlanarToInterleaved(
+    uint32_t *__restrict__ buffer, const int16_t *__restrict__ left, const int16_t *__restrict__ right)
+{
+    if (left && right) {
+#pragma GCC unroll 2
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            const uint32_t l = (uint16_t)left[i];
+            const uint32_t r = (uint16_t)right[i];
+            buffer[i] = l | (r << 16);
+        }
+        return;
+    }
+
+    if (!left && !right) {
+        memset(buffer, 0, sizeof(int32_t) * AUDIO_BLOCK_SAMPLES);
+        return;
+    }
+
+    if (left) {
+#pragma GCC unroll 2
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            const uint32_t l = (uint16_t)left[i];
+            buffer[i] = l ;
+        }
+        return;
+    }
+
+    /* if(right) */ {
+#pragma GCC unroll 2
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            const uint32_t r = (uint16_t)right[i];
+            buffer[i] = (r << 16);
+        }
+        return;
+    }
+}
+
+
+static inline __attribute__((optimize("O2"))) void copyPlanarToInterleavedMono(
+    uint32_t *__restrict__ buffer, const int16_t *__restrict__ left, const int16_t *__restrict__ right)
+{
+if (left && right) {
+#pragma GCC unroll 2
+    for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        int32_t mono = ((int32_t)left[i] + (int32_t)right[i]) / 2;
+        buffer[i] = (uint16_t)((int16_t)mono);
+    }
+    return;
+}
+
+if (left) {
+#pragma GCC unroll 2
+    for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        buffer[i] = (uint16_t)((int16_t)left[i]);
+    }
+    return;
+}
+
+/*
+if (right) {
+#pragma GCC unroll 2
+    for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        buffer[i] = (uint16_t)((int16_t)right[i]);
+    }
+    return;
+}
+*/
+
+// Weder left noch right vorhanden -> Puffer mit Nullen füllen.
+memset(buffer, 0, AUDIO_BLOCK_SAMPLES * sizeof(uint32_t));
+
+}
+
+static inline __attribute__((optimize("O2"))) void copyInterleavedToPlanar(
+    const uint32_t *__restrict__ src,
+    int16_t *__restrict__ left,
+    int16_t *__restrict__ right)
+{
+    if (left && right) {
+#pragma GCC unroll 2
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            const uint32_t sample = src[i];
+            left[i]  = (int16_t)(uint16_t)sample;
+            right[i] = (int16_t)(uint16_t)(sample >> 16);
+        }
+        return;
+    }
+
+    if (!left && !right) {
+        return;
+    }
+
+    if (left) {
+#pragma GCC unroll 2
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            left[i] = (int16_t)(uint16_t)src[i];
+        }
+        return;
+    }
+
+    /* if (right) */
+#pragma GCC unroll 2
+    for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        right[i] = (int16_t)(uint16_t)(src[i] >> 16);
+    }
+}
 #endif
