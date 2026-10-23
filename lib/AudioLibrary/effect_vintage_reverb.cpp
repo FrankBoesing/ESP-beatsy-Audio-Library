@@ -14,64 +14,99 @@ bool AudioEffectVintageReverb::begin()
   // Buffer allocation and clearing must not overlap realtime graph updates.
   audio_detail::GraphUpdateLock lock;
 
-  if (core_.ready()) {
+  const float fs = sampleRate();
+  if (!(fs > 0.0f) || !isfinite(fs)) {
+    ESP_LOGE("AudioEffectVintageReverb", "Invalid audio sample rate");
+    return false;
+  }
+
+  if (core_.ready() && fabsf(fs - initializedSampleRate_) <= 0.1f) {
     return true;
   }
 
+  const size_t requiredFloats =
+      vrv::VintageReverbCore::memoryRequired(fs, kMaxPreDelayMs);
+  const size_t requiredBytes = requiredFloats * sizeof(float);
+
   if (externalMemory_ != nullptr) {
-    attach(externalMemory_, externalMemoryFloats_);
-    if (core_.ready()) {
-      return true;
+    if (externalMemoryFloats_ < requiredFloats) {
+      if (!allocation_error_logged) {
+        ESP_LOGE("AudioEffectVintageReverb",
+                 "Caller memory is too small for the current sample rate: need %u floats",
+                 (unsigned int)requiredFloats);
+        allocation_error_logged = true;
+      }
+      return false;
     }
 
-    if (!allocation_error_logged) {
-      ESP_LOGE("AudioEffectVintageReverb",
-               "Caller-supplied memory is too small for the current sample rate");
-      allocation_error_logged = true;
+    attach(externalMemory_, externalMemoryFloats_);
+    if (core_.ready()) {
+      initializedSampleRate_ = fs;
+      allocation_error_logged = false;
+      return true;
     }
     return false;
   }
 
-  const float fs = sampleRate();
-  const size_t n = vrv::VintageReverbCore::memoryRequired(fs, kMaxPreDelayMs);
-  const size_t bytes = n * sizeof(float);
-
-  ownedMemory_ = (float *)heap_caps_malloc(
-      bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-
-  if (ownedMemory_ != nullptr) {
-    using_psram = false;
-  } else {
-    ownedMemory_ = (float *)heap_caps_malloc(
-        bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    using_psram = ownedMemory_ != nullptr;
+  // Reuse the current owned buffer when it is large enough for the new rate.
+  if (ownedMemory_ != nullptr && ownedMemoryFloats_ >= requiredFloats) {
+    attach(ownedMemory_, ownedMemoryFloats_);
+    if (core_.ready()) {
+      initializedSampleRate_ = fs;
+      allocation_error_logged = false;
+      return true;
+    }
+    return false;
   }
 
-  if (ownedMemory_ == nullptr) {
-    using_psram = false;
+  // Allocate a replacement before freeing the old buffer so a failed
+  // reconfiguration leaves the existing allocation intact.
+  float *newMemory = (float *)heap_caps_malloc(
+      requiredBytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  bool newUsingPsram = false;
+
+  if (newMemory == nullptr) {
+    newMemory = (float *)heap_caps_malloc(
+        requiredBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    newUsingPsram = newMemory != nullptr;
+  }
+
+  if (newMemory == nullptr) {
     if (!allocation_error_logged) {
       ESP_LOGE("AudioEffectVintageReverb",
                "Unable to allocate %u bytes for reverb delay lines",
-               (unsigned int)bytes);
+               (unsigned int)requiredBytes);
       allocation_error_logged = true;
     }
     return false;
   }
 
-  attach(ownedMemory_, n);
+  float *oldMemory = ownedMemory_;
+  const size_t oldMemoryFloats = ownedMemoryFloats_;
+  attach(newMemory, requiredFloats);
+
   if (!core_.ready()) {
-    heap_caps_free(ownedMemory_);
-    ownedMemory_ = nullptr;
-    using_psram = false;
+    heap_caps_free(newMemory);
     return false;
   }
 
+  ownedMemory_ = newMemory;
+  ownedMemoryFloats_ = requiredFloats;
+  using_psram = newUsingPsram;
+  initializedSampleRate_ = fs;
   allocation_error_logged = false;
+
+  if (oldMemory != nullptr) {
+    heap_caps_free(oldMemory);
+  }
+
   if (using_psram) {
     ESP_LOGI("AudioEffectVintageReverb",
              "Delay memory allocated in PSRAM (%u bytes)",
-             (unsigned int)bytes);
+             (unsigned int)requiredBytes);
   }
+
+  (void)oldMemoryFloats;
   return true;
 }
 
@@ -89,8 +124,22 @@ AudioEffectVintageReverb::~AudioEffectVintageReverb()
 
 void AudioEffectVintageReverb::attach(float *memory, size_t memoryFloats)
 {
-  core_.init(memory, memoryFloats, sampleRate(), kMaxPreDelayMs);
-  apply(typeDefaults(HALL));
+  const bool wasReady = core_.ready();
+  const Settings oldSettings = settings();
+  const Type oldType = type_;
+  const Preset oldPreset = preset_;
+
+  if (!core_.init(memory, memoryFloats, sampleRate(), kMaxPreDelayMs)) {
+    return;
+  }
+
+  if (wasReady) {
+    apply(oldSettings);
+    type_ = oldType;
+    preset_ = oldPreset;
+  } else {
+    apply(typeDefaults(HALL));
+  }
 }
 
 void AudioEffectVintageReverb::reset()
@@ -241,7 +290,7 @@ void AudioEffectVintageReverb::update(void)
   audio_block_t *inL = receiveReadOnly(0);
   audio_block_t *inR = receiveReadOnly(1);
 
-  if (!core_.ready() || bypass_) {
+  if (!core_.ready() || bypass_ || fabsf(sampleRate() - initializedSampleRate_) > 0.1f) {
     // pass through
     if (inL) { transmit(inL, 0); release(inL); }
     if (inR) { transmit(inR, 1); release(inR); }
