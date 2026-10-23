@@ -42,7 +42,7 @@
 
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
 #define OSIZE __attribute__((optimize("Os")))
-#define OSPEED __attribute__((optimize("O3")))
+#define OSPEED __attribute__((optimize("O2")))
 
 #ifndef SOFTCODECS_COLD
 #define SOFTCODECS_COLD OSIZE
@@ -52,11 +52,7 @@
 #define SOFTCODECS_HOT OSPEED
 #endif
 
-#ifdef __XTENSA__
-#define GCC_UNROLL _Pragma("GCC unroll 2") // no loop overhead, but a hint that 32 bit access for audioblocks can be used
-#else
-#define GCC_UNROLL _Pragma("GCC unroll 4")
-#endif
+#define GCC_UNROLL _Pragma("GCC unroll 2")
 
 #define AUDIO_SAMPLE_RATE AUDIO_SAMPLE_RATE_EXACT
 

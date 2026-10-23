@@ -31,7 +31,6 @@
 
 static portMUX_TYPE playback_state_mux = portMUX_INITIALIZER_UNLOCKED;
 
-
 namespace {
 static inline uint32_t sampleRateForFormat(uint8_t format) {
     switch (format) {
@@ -61,14 +60,10 @@ static inline int16_t sampleAt(const unsigned int *data, uint8_t format, uint32_
 } // namespace
 
 OSIZE
-void AudioPlayMemory::play(const unsigned int *data)
-{
-    play(data, isLooping());
-}
+void AudioPlayMemory::play(const unsigned int *data) { play(data, isLooping()); }
 
 OSIZE
-void AudioPlayMemory::play(const unsigned int *data, bool loop)
-{
+void AudioPlayMemory::play(const unsigned int *data, bool loop) {
     if (data == nullptr) {
         stop();
         return;
@@ -93,17 +88,12 @@ void AudioPlayMemory::play(const unsigned int *data, bool loop)
 }
 
 OSIZE
-bool AudioPlayMemory::play(const AudioSampleBuffer &buffer)
-{
-    return play(buffer, isLooping());
-}
+bool AudioPlayMemory::play(const AudioSampleBuffer &buffer) { return play(buffer, isLooping()); }
 
 OSIZE
-bool AudioPlayMemory::play(const AudioSampleBuffer &buffer, bool loop)
-{
+bool AudioPlayMemory::play(const AudioSampleBuffer &buffer, bool loop) {
     const uint32_t rate = buffer.sampleRate();
-    if (!buffer.isValid() ||
-        (rate != 11025 && rate != 22050 && rate != 44100)) {
+    if (!buffer.isValid() || (rate != 11025 && rate != 22050 && rate != 44100)) {
         return false;
     }
 
@@ -126,8 +116,7 @@ bool AudioPlayMemory::play(const AudioSampleBuffer &buffer, bool loop)
 }
 
 OSIZE
-void AudioPlayMemory::stop()
-{
+void AudioPlayMemory::stop() {
     portENTER_CRITICAL(&playback_state_mux);
     playing = 0;
     ++playback_generation;
@@ -135,8 +124,7 @@ void AudioPlayMemory::stop()
 }
 
 OSIZE
-bool AudioPlayMemory::isPlaying()
-{
+bool AudioPlayMemory::isPlaying() {
     portENTER_CRITICAL(&playback_state_mux);
     const bool result = playing != 0;
     portEXIT_CRITICAL(&playback_state_mux);
@@ -144,16 +132,14 @@ bool AudioPlayMemory::isPlaying()
 }
 
 OSIZE
-void AudioPlayMemory::setLoop(bool enabled)
-{
+void AudioPlayMemory::setLoop(bool enabled) {
     portENTER_CRITICAL(&playback_state_mux);
     loop_enabled = enabled;
     portEXIT_CRITICAL(&playback_state_mux);
 }
 
 OSIZE
-bool AudioPlayMemory::isLooping() const
-{
+bool AudioPlayMemory::isLooping() const {
     portENTER_CRITICAL(&playback_state_mux);
     const bool result = loop_enabled;
     portEXIT_CRITICAL(&playback_state_mux);
@@ -161,8 +147,7 @@ bool AudioPlayMemory::isLooping() const
 }
 
 OSIZE
-bool AudioPlayMemory::setPlaybackRate(float rate)
-{
+bool AudioPlayMemory::setPlaybackRate(float rate) {
     if (!(rate >= 0.25f && rate <= 4.0f)) {
         return false;
     }
@@ -174,8 +159,7 @@ bool AudioPlayMemory::setPlaybackRate(float rate)
 }
 
 OSIZE
-float AudioPlayMemory::playbackRate() const
-{
+float AudioPlayMemory::playbackRate() const {
     portENTER_CRITICAL(&playback_state_mux);
     const float result = target_playback_rate;
     portEXIT_CRITICAL(&playback_state_mux);
@@ -183,8 +167,7 @@ float AudioPlayMemory::playbackRate() const
 }
 
 OSPEED
-void AudioPlayMemory::update()
-{
+void AudioPlayMemory::update() {
     portENTER_CRITICAL(&playback_state_mux);
     const uint8_t play_format = playing;
     const unsigned int *data = beginning;
@@ -211,8 +194,7 @@ void AudioPlayMemory::update()
     }
 
     const uint32_t sourceRate = rawPcm ? pcmRate : sampleRateForFormat(play_format);
-    if ((rawPcm ? pcmData == nullptr : data == nullptr) ||
-        total_samples == 0 || sourceRate == 0) {
+    if ((rawPcm ? pcmData == nullptr : data == nullptr) || total_samples == 0 || sourceRate == 0) {
         portENTER_CRITICAL(&playback_state_mux);
         if (playback_generation == generation) {
             playing = 0;
@@ -231,8 +213,7 @@ void AudioPlayMemory::update()
 
     const float baseStep = (float)sourceRate / outputSampleRate;
     const bool unityRate = targetRate == 1.0f && currentRate == 1.0f;
-    const bool directRate = unityRate && fraction == 0.0f &&
-                            (float)sourceRate == outputSampleRate;
+    const bool directRate = unityRate && fraction == 0.0f && (float)sourceRate == outputSampleRate;
     int16_t *out = block->data;
     bool finished = false;
 
@@ -240,23 +221,18 @@ void AudioPlayMemory::update()
         // Native-rate fast path: copy valid samples without per-sample
         // end-of-buffer checks, then zero-pad the remainder of the block.
         const uint32_t available = index < total_samples ? total_samples - index : 0;
-        const uint32_t count = available < AUDIO_BLOCK_SAMPLES
-                                   ? available
-                                   : AUDIO_BLOCK_SAMPLES;
+        const uint32_t count = available < AUDIO_BLOCK_SAMPLES ? available : AUDIO_BLOCK_SAMPLES;
         for (uint32_t i = 0; i < count; ++i) {
             out[i] = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
             ++index;
         }
         if (count < AUDIO_BLOCK_SAMPLES) {
-            memset(out + count, 0,
-                   (AUDIO_BLOCK_SAMPLES - count) * sizeof(*out));
+            memset(out + count, 0, (AUDIO_BLOCK_SAMPLES - count) * sizeof(*out));
         }
     } else {
         uint32_t i = 0;
         for (; i < AUDIO_BLOCK_SAMPLES && index < total_samples; ++i) {
-            const uint32_t index1 = (index + 1U < total_samples)
-                                        ? index + 1U
-                                        : index;
+            const uint32_t index1 = (index + 1U < total_samples) ? index + 1U : index;
             const int32_t s0 = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
             const int32_t s1 = rawPcm ? pcmData[index1] : sampleAt(data, play_format, index1);
             out[i] = (int16_t)(s0 + (int32_t)((s1 - s0) * fraction));
@@ -277,7 +253,6 @@ void AudioPlayMemory::update()
             const uint32_t advance = (uint32_t)fraction;
             index += advance;
             fraction -= (float)advance;
-
         }
         if (i < AUDIO_BLOCK_SAMPLES) {
             memset(out + i, 0, (AUDIO_BLOCK_SAMPLES - i) * sizeof(*out));
@@ -309,8 +284,7 @@ void AudioPlayMemory::update()
 }
 
 OSIZE
-uint32_t AudioPlayMemory::positionMillis()
-{
+uint32_t AudioPlayMemory::positionMillis() {
     portENTER_CRITICAL(&playback_state_mux);
     const uint8_t format = playing;
     const uint32_t index = sample_index;
@@ -332,8 +306,7 @@ uint32_t AudioPlayMemory::positionMillis()
 }
 
 OSIZE
-uint32_t AudioPlayMemory::lengthMillis()
-{
+uint32_t AudioPlayMemory::lengthMillis() {
     portENTER_CRITICAL(&playback_state_mux);
     const uint8_t format = playing;
     const uint32_t samples = length;

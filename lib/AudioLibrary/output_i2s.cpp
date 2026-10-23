@@ -7,6 +7,7 @@
 #include <esp_err.h>
 #include <cmath>
 #include "i2s_port.h"
+#include "utility/dspinst.h"
 
 static constexpr char TAG[] = "I2S";
 
@@ -170,36 +171,13 @@ void AudioOutputI2S::update() {
         return;
     }
 
-    if (numChannels == 1) {
-        const int16_t *__restrict left = ready.left ? ready.left->data : nullptr;
-        const int16_t *__restrict right = ready.right ? ready.right->data : nullptr;
-        GCC_UNROLL
-        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            int32_t mono;
+    const int16_t *__restrict left = ready.left ? ready.left->data : nullptr;
+    const int16_t *__restrict right = ready.right ? ready.right->data : nullptr;
 
-            if (left && right) {
-                mono = ((int32_t)left[i] + (int32_t)right[i]) / 2;
-            } else if (left) {
-                mono = left[i];
-            } else if (right) {
-                mono = right[i];
-            } else {
-                mono = 0;
-            }
-
-            const uint32_t sample = (uint16_t)((int16_t)(mono));
-            dmaBuffer[i] = sample | (sample << 16);
-        }
-    } else {
-        const int16_t *left = ready.left ? ready.left->data : audio_zeroblock;
-        const int16_t *right = ready.right ? ready.right->data : audio_zeroblock;
-
-        GCC_UNROLL
-        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            const uint32_t l = (uint16_t)(left[i]);
-            const uint32_t r = (uint16_t)(right[i]);
-            dmaBuffer[i] = l | (r << 16);
-        }
+    if (numChannels == 2) {
+        copyPlanarToInterleaved(dmaBuffer, left, right);
+    } else { //numChannels == 1
+        copyPlanarToInterleavedMono(dmaBuffer, left, right);
     }
 
     // Match ESP-IDF: sync DMA buffers on targets whose internal RAM uses L1 cache.
