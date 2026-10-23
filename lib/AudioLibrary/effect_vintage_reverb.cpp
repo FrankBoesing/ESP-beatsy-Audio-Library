@@ -82,7 +82,6 @@ bool AudioEffectVintageReverb::begin()
   }
 
   float *oldMemory = ownedMemory_;
-  const size_t oldMemoryFloats = ownedMemoryFloats_;
   attach(newMemory, requiredFloats);
 
   if (!core_.ready()) {
@@ -106,7 +105,6 @@ bool AudioEffectVintageReverb::begin()
              (unsigned int)requiredBytes);
   }
 
-  (void)oldMemoryFloats;
   return true;
 }
 
