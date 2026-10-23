@@ -5,10 +5,27 @@
  * slow bell-like strikes, which are sent through AudioEffectVintageReverb
  * to stereo I2S output.
  *
+ * Optional: record the post-reverb stereo signal as a WAV file on SD_MMC.
+ * Set CATHEDRAL_RECORD_TO_SD to 0 to build without SD-card recording.
+ *
  * Original reverb DSP core by Bas Scheffers, MIT license.
  */
 
+#ifndef CATHEDRAL_RECORD_TO_SD
+#define CATHEDRAL_RECORD_TO_SD 1
+#endif
+
+// The WAV file is finalized automatically after this duration.
+// Override from build flags if a longer/shorter sample is wanted.
+#ifndef CATHEDRAL_RECORD_DURATION_MS
+#define CATHEDRAL_RECORD_DURATION_MS 60000UL
+#endif
+
 #include <Audio.h>
+
+#if CATHEDRAL_RECORD_TO_SD
+#include <SD_MMC.h>
+#endif
 
 AudioOutputI2S audioOut({
     PIN_I2S_BLCK, // BCLK
@@ -28,10 +45,20 @@ AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER
 AudioSynthHandpan bells;
 AudioEffectVintageReverb cathedral;
 
+#if CATHEDRAL_RECORD_TO_SD
+AudioRecordFile recorder;
+#endif
+
 AudioConnection bellsToLeft(bells, 0, cathedral, 0);
 AudioConnection bellsToRight(bells, 0, cathedral, 1);
 AudioConnection reverbToLeft(cathedral, 0, audioOut, 0);
 AudioConnection reverbToRight(cathedral, 1, audioOut, 1);
+
+#if CATHEDRAL_RECORD_TO_SD
+// Tap the stereo signal after reverb, in parallel with the I2S output.
+AudioConnection reverbToRecordLeft(cathedral, 0, recorder, 0);
+AudioConnection reverbToRecordRight(cathedral, 1, recorder, 1);
+#endif
 
 namespace {
 
@@ -83,6 +110,52 @@ constexpr uint32_t PHRASE_LENGTH_MS = 26000;
 uint32_t phraseStartMs = 0;
 size_t nextBellEvent = 0;
 uint32_t droppedBellEvents = 0;
+
+#if CATHEDRAL_RECORD_TO_SD
+constexpr uint32_t RECORD_SAMPLE_RATE = (uint32_t)AUDIO_SAMPLE_RATE_EXACT;
+bool recordingActive = false;
+uint32_t recordingStartMs = 0;
+
+bool mountSD()
+{
+#if defined(PIN_SD_MMC_CLK) && defined(PIN_SD_MMC_CMD) && \
+    defined(PIN_SD_MMC_D0) && defined(PIN_SD_MMC_D1) && \
+    defined(PIN_SD_MMC_D2) && defined(PIN_SD_MMC_D3)
+    if (!SD_MMC.setPins(PIN_SD_MMC_CLK, PIN_SD_MMC_CMD,
+                        PIN_SD_MMC_D0, PIN_SD_MMC_D1,
+                        PIN_SD_MMC_D2, PIN_SD_MMC_D3)) {
+        Serial.println("ERROR: SD_MMC pin configuration failed");
+        return false;
+    }
+#endif
+
+    // mode1bit=false selects the 4-bit SD_MMC bus.
+    if (!SD_MMC.begin("/sdcard", false)) {
+        Serial.println("WARNING: SD_MMC mount failed; continuing without recording");
+        return false;
+    }
+
+    return true;
+}
+
+void finishRecording(const char *reason)
+{
+    if (!recordingActive) {
+        return;
+    }
+
+    recordingActive = false;
+    Serial.println(reason);
+
+    if (recorder.stop()) {
+        Serial.println("Saved /cathedral_bells.wav to SD card");
+    } else {
+        Serial.printf("WAV finalization failed (recorder error=%s); "
+                      "/cathedral_bells.tmp may remain\n",
+                      recorder.hasError() ? "yes" : "no");
+    }
+}
+#endif
 
 bool configureBells()
 {
@@ -150,6 +223,15 @@ void setup()
     Serial.println("VERBtrix Cathedral Bells");
     Serial.println("Synthetic bell strikes -> vintage reverb -> stereo I2S");
 
+#if CATHEDRAL_RECORD_TO_SD
+    const bool sdMounted = mountSD();
+    if (!sdMounted) {
+        Serial.println("SD recording disabled for this run; audio playback continues");
+    }
+#else
+    Serial.println("SD recording disabled (CATHEDRAL_RECORD_TO_SD=0)");
+#endif
+
     // The modal synth must be configured before the audio graph starts.
     if (!configureBells()) {
         Serial.println("ERROR: bell configuration failed");
@@ -177,6 +259,26 @@ void setup()
                   cathedral.usingPSRAM() ? "PSRAM" : "internal RAM",
                   cathedral.ready() ? "yes" : "no");
 
+#if CATHEDRAL_RECORD_TO_SD
+    if (sdMounted) {
+        if (SD_MMC.exists("/cathedral_bells.wav") ||
+            SD_MMC.exists("/cathedral_bells.tmp")) {
+            Serial.println("Recording skipped: /cathedral_bells.wav or .tmp already exists");
+            Serial.println("Rename/remove the old file before recording again");
+        } else if (recorder.begin(SD_MMC, "/cathedral_bells",
+                                  RECORD_SAMPLE_RATE, 2,
+                                  AudioRecordFile::CORE_UNPINNED)) {
+            recordingActive = true;
+            recordingStartMs = millis();
+            Serial.printf("Recording stereo WAV at %lu Hz for %lu seconds\n",
+                          (unsigned long)RECORD_SAMPLE_RATE,
+                          (unsigned long)(CATHEDRAL_RECORD_DURATION_MS / 1000UL));
+        } else {
+            Serial.println("WARNING: could not start SD recording; check SD card and PSRAM");
+        }
+    }
+#endif
+
     phraseStartMs = millis();
     nextBellEvent = 0;
 }
@@ -185,6 +287,16 @@ void loop()
 {
     const uint32_t now = millis();
     playBellEvents(now);
+
+#if CATHEDRAL_RECORD_TO_SD
+    if (recordingActive) {
+        if (!recorder.isRecording()) {
+            finishRecording("Recording stopped unexpectedly; finalizing partial file");
+        } else if ((uint32_t)(now - recordingStartMs) >= CATHEDRAL_RECORD_DURATION_MS) {
+            finishRecording("Recording duration reached; finalizing WAV file");
+        }
+    }
+#endif
 
     static uint32_t lastStatsMs = 0;
     if (now - lastStatsMs >= 5000) {
