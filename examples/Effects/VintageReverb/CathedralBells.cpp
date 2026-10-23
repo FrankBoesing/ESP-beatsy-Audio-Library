@@ -15,6 +15,13 @@
 #define CATHEDRAL_RECORD_TO_SD 1
 #endif
 
+// The P4 SDMMC bus can be tested in 1-bit mode if 4-bit transfers report CRC
+// or timeout errors. One data line has ample throughput for 44.1/48 kHz stereo
+// PCM. Set to 0 to use all four data lines (D0-D3).
+#ifndef CATHEDRAL_SDMMC_1BIT
+#define CATHEDRAL_SDMMC_1BIT 1
+#endif
+
 // The WAV file is finalized automatically after this duration.
 // Override from build flags if a longer/shorter sample is wanted.
 #ifndef CATHEDRAL_RECORD_DURATION_MS
@@ -129,8 +136,12 @@ bool mountSD()
     }
 #endif
 
-    // mode1bit=false selects the 4-bit SD_MMC bus.
-    if (!SD_MMC.begin("/sdcard", false)) {
+    Serial.printf("Initializing SD_MMC in %u-bit mode\\n",
+                  CATHEDRAL_SDMMC_1BIT ? 1U : 4U);
+
+    // 1-bit mode is sufficient for PCM recording and is a useful diagnostic
+    // when 4-bit data-line integrity is uncertain.
+    if (!SD_MMC.begin("/sdcard", CATHEDRAL_SDMMC_1BIT != 0)) {
         Serial.println("WARNING: SD_MMC mount failed; continuing without recording");
         return false;
     }
