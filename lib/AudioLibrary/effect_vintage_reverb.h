@@ -89,7 +89,8 @@ public:
   AudioEffectVintageReverb(float *memory, size_t memoryFloats);
   virtual ~AudioEffectVintageReverb();
 
-  // Initialize using AudioStream's current runtime sample rate.
+  // Initialize using AudioStream's current runtime sample rate. Call begin()
+  // again after changing the rate; processing is bypassed until reinitialized.
   // Internally allocated memory prefers internal RAM and falls back to PSRAM.
   bool begin();
   bool usingPSRAM() const { return using_psram; }
@@ -186,6 +187,8 @@ private:
   float *ownedMemory_ = nullptr;
   float *externalMemory_ = nullptr;
   size_t externalMemoryFloats_ = 0;
+  size_t ownedMemoryFloats_ = 0;
+  float  initializedSampleRate_ = 0.0f;
   bool   using_psram = false;
   bool   allocation_error_logged = false;
   bool   bypass_ = false;
