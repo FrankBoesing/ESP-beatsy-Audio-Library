@@ -4,20 +4,6 @@
 #include <math.h>
 #include <string.h>
 
-namespace {
-
-// Convert normalized reverb output to signed PCM16. For normal finite audio
-// samples this rounds half values away from zero without a library call.
-static inline int16_t floatToPcm16(float sample)
-{
-  const float x = sample * 32767.0f;
-  const float offset = __builtin_copysignf(0.5f, x);
-  const int32_t v = (int32_t)(x + offset);
-  return (int16_t)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));
-}
-
-} // namespace
-
 AudioEffectVintageReverb::AudioEffectVintageReverb()
   : AudioStream(2, inputQueueArray_)
 {
@@ -353,8 +339,10 @@ void AudioEffectVintageReverb::update(void)
     int16_t *dstL = outL->data;
     int16_t *dstR = outR->data;
     for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-      dstL[i] = floatToPcm16(bufL[i]);
-      dstR[i] = floatToPcm16(bufR[i]);
+      int32_t l = (int32_t)lrintf(bufL[i] * 32767.0f);
+      int32_t r = (int32_t)lrintf(bufR[i] * 32767.0f);
+      dstL[i] = (int16_t)(l > 32767 ? 32767 : (l < -32768 ? -32768 : l));
+      dstR[i] = (int16_t)(r > 32767 ? 32767 : (r < -32768 ? -32768 : r));
     }
     transmit(outL, 0);
     release(outL);
@@ -365,7 +353,8 @@ void AudioEffectVintageReverb::update(void)
     if (outL) {
       int16_t *dstL = outL->data;
       for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        dstL[i] = floatToPcm16(bufL[i]);
+        int32_t v = (int32_t)lrintf(bufL[i] * 32767.0f);
+        dstL[i] = (int16_t)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));
       }
       transmit(outL, 0);
       release(outL);
@@ -373,7 +362,8 @@ void AudioEffectVintageReverb::update(void)
     if (outR) {
       int16_t *dstR = outR->data;
       for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        dstR[i] = floatToPcm16(bufR[i]);
+        int32_t v = (int32_t)lrintf(bufR[i] * 32767.0f);
+        dstR[i] = (int16_t)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));
       }
       transmit(outR, 1);
       release(outR);
