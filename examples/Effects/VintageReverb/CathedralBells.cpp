@@ -1,7 +1,7 @@
 /*
  * Cathedral Bells - standalone VERBtrix demonstration.
  *
- * No I2S input is used. A small procedural modal synthesizer generates
+ * A procedural modal synthesizer generates
  * slow bell-like strikes, which are sent through AudioEffectVintageReverb
  * to stereo I2S output.
  *
@@ -12,7 +12,7 @@
  */
 
 #ifndef CATHEDRAL_RECORD_TO_SD
-#define CATHEDRAL_RECORD_TO_SD 1
+#define CATHEDRAL_RECORD_TO_SD 0
 #endif
 
 // The P4 SDMMC bus can be tested in 1-bit mode if 4-bit transfers report CRC
