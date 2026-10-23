@@ -46,6 +46,7 @@ These examples are present in the repository. Their board-specific pin and codec
 | [Play Queue Demo](examples/Queues/PlayQueueDemo.cpp) | Generates a sine wave in application code and demonstrates AudioPlayQueue buffer/sample submission, including non-stalling operation. |
 | [Record to LittleFS](examples/RecordLittleFS/RecordLittleFS.cpp) | Generates a short 880 Hz sine ping with an envelope and records mono PCM WAV to LittleFS using AudioRecordFile. Requires PSRAM and a mounted/formatted LittleFS partition. |
 | [Record to SD](examples/RecordSD/RecordSD.cpp) | Generates the same short sine ping and records mono PCM WAV to an SD card using AudioRecordFile. SD_MMC uses the board-specific 4-bit pin mapping from the project configuration. |
+| [VERBtrix vintage reverb](examples/Effects/VintageReverb/VintageReverb.cpp) | Stereo I2S line-in through the VERBtrix-derived 8-line FDN reverb to stereo I2S output; demonstrates initialization and a concert-hall preset. |
 | [Delay effect](examples/Effects/Effect-Delay/Effect_Delay.cpp) | Generates a sine chirp, shapes it with an envelope and mixes several delayed taps to the opposite output channel. |
 | [FIR and Biquad filters](examples/Effects/Filter_FIR/Filter_FIR.cpp) | Sends white noise through FIR and low-pass biquad paths to the left and right outputs for comparison. |
 | [Guitar synthesis](examples/Synthesis/Guitar/Guitar.cpp) | Uses six Karplus–Strong string generators with per-string `damping()` settings, mixers and chord data to synthesize strummed chords. Exercises the 1024-sample buffer with the low E string at 44.1/48 kHz. |
@@ -83,6 +84,7 @@ These examples are present in the repository. Their board-specific pin and codec
 | **AudioEffectFlange** | Flanging effect; the application supplies the delay-line memory. |
 | **AudioEffectFreeverb** | Mono Freeverb reverb. |
 | **AudioEffectFreeverbStereo** | Stereo Freeverb variant sharing the ESP32-adapted implementation. |
+| **AudioEffectVintageReverb** | VERBtrix-derived stereo, modulated 8-line FDN reverb. Call `begin()` during setup; its roughly 268 KB float delay buffer prefers internal RAM and falls back to PSRAM. The DSP core is imported without additional ESP-specific micro-optimizations. |
 | **AudioEffectGranular** | Granular freeze and pitch-shift modes using an application-owned sample buffer. |
 | **AudioEffectMidSide** | Encodes stereo left/right to mid/side and decodes mid/side back to left/right. Supports block-wise `bypass(bool)`, forwarding both inputs unchanged to their matching outputs. |
 | **AudioEffectMultiply** | Multiplies two input signals sample by sample. Supports block-wise `bypass(bool)`, forwarding input 0 unchanged. |
