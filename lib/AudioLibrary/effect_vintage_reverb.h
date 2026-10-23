@@ -5,17 +5,19 @@
  * A modulated 8-line feedback delay network with input diffusion, in-loop
  * allpass diffusers, frequency dependent decay (bass multiplier, high
  * damping), pre-delay, size, freeze and dry/wet mix. All DSP runs in floating
- * point on the Cortex-M7 FPU. See VintageReverbCore.h for the algorithm.
+ * point. The DSP core is portable C++ and targets ESP32 builds with a
+ * single-precision floating-point unit. See vintage_reverb_core.h for details.
  *
  * Inputs : 0 = left, 1 = right   (feed the same source to both for mono)
  * Outputs: 0 = left, 1 = right
  *
- * Memory: about 268 KB of delay memory (float). By default it is taken from
- * the heap (RAM2 / OCRAM on Teensy 4.x). To keep RAM2 free, allocate the
- * buffer yourself, for instance in PSRAM on a Teensy 4.1:
+ * Memory: about 268 KB of delay memory (float) at 44.1 kHz. Call begin()
+ * during setup after configuring the audio sample rate. By default it first
+ * requests internal RAM and falls back to PSRAM when available.
  *
- *     EXTMEM float reverbMem[AudioEffectVintageReverb::memoryFloats()];
- *     AudioEffectVintageReverb reverb(reverbMem, AudioEffectVintageReverb::memoryFloats());
+ * Caller-owned memory can be supplied through the memory-taking constructor;
+ * call begin() afterward so the buffers are initialized at the current runtime
+ * sample rate. The buffer must contain at least memoryFloats() floats.
  *
  * Usage:
  *     AudioEffectVintageReverb reverb;
@@ -154,7 +156,8 @@ public:
   void freeze(bool on)         { core_.setFreeze(on); }
   // Wet output level, linear 0 .. 4 (default 1.0).
   void wetGain(float g)        { core_.setWetGain(g); }
-  // Hard bypass (dry passthrough, delay memory keeps running so no click on return).
+  // Hard bypass. The current implementation forwards dry input and pauses
+  // reverb processing until bypass is cleared.
   void bypass(bool on)         { bypass_ = on; }
   // Clear the tail immediately.
   void reset();
