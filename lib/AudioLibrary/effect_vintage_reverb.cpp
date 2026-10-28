@@ -4,6 +4,20 @@
 #include <math.h>
 #include <string.h>
 
+namespace {
+
+// Convert normalized reverb output to signed PCM16. For normal finite audio
+// samples this rounds half values away from zero without a library call.
+static inline int16_t floatToPcm16(float sample)
+{
+  const float x = sample * 32767.0f;
+  const float offset = __builtin_copysignf(0.5f, x);
+  const int32_t v = (int32_t)(x + offset);
+  return (int16_t)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));
+}
+
+} // namespace
+
 AudioEffectVintageReverb::AudioEffectVintageReverb()
   : AudioStream(2, inputQueueArray_)
 {
@@ -299,19 +313,33 @@ void AudioEffectVintageReverb::update(void)
   float bufR[AUDIO_BLOCK_SAMPLES];
   const float toFloat = 1.0f / 32768.0f;
 
-  if (inL) {
-    const int16_t *s = inL->data;
-    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) bufL[i] = (float)s[i] * toFloat;
+  if (inL && inR) {
+    // Common case: convert both channels in one pass.
+    const int16_t *srcL = inL->data;
+    const int16_t *srcR = inR->data;
+    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+      bufL[i] = (float)srcL[i] * toFloat;
+      bufR[i] = (float)srcR[i] * toFloat;
+    }
     release(inL);
-  } else {
-    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) bufL[i] = 0.0f;
-  }
-  if (inR) {
-    const int16_t *s = inR->data;
-    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) bufR[i] = (float)s[i] * toFloat;
     release(inR);
   } else {
-    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) bufR[i] = 0.0f;
+    // Preserve the zero-input path when either side is unconnected or starved.
+    if (inL) {
+      const int16_t *srcL = inL->data;
+      for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) bufL[i] = (float)srcL[i] * toFloat;
+      release(inL);
+    } else {
+      for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) bufL[i] = 0.0f;
+    }
+
+    if (inR) {
+      const int16_t *srcR = inR->data;
+      for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) bufR[i] = (float)srcR[i] * toFloat;
+      release(inR);
+    } else {
+      for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) bufR[i] = 0.0f;
+    }
   }
 
   // The tail must keep running even when no input blocks arrive.
@@ -320,22 +348,35 @@ void AudioEffectVintageReverb::update(void)
   audio_block_t *outL = allocate();
   audio_block_t *outR = allocate();
 
-  if (outL) {
-    int16_t *d = outL->data;
-    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
-      int32_t v = (int32_t)lrintf(bufL[i] * 32767.0f);
-      d[i] = (int16_t)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));
+  if (outL && outR) {
+    // Common case: convert both channels in one pass.
+    int16_t *dstL = outL->data;
+    int16_t *dstR = outR->data;
+    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+      dstL[i] = floatToPcm16(bufL[i]);
+      dstR[i] = floatToPcm16(bufR[i]);
     }
     transmit(outL, 0);
     release(outL);
-  }
-  if (outR) {
-    int16_t *d = outR->data;
-    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
-      int32_t v = (int32_t)lrintf(bufR[i] * 32767.0f);
-      d[i] = (int16_t)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));
-    }
     transmit(outR, 1);
     release(outR);
+  } else {
+    // Handle memory-pool pressure without changing channel ownership semantics.
+    if (outL) {
+      int16_t *dstL = outL->data;
+      for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        dstL[i] = floatToPcm16(bufL[i]);
+      }
+      transmit(outL, 0);
+      release(outL);
+    }
+    if (outR) {
+      int16_t *dstR = outR->data;
+      for (int i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        dstR[i] = floatToPcm16(bufR[i]);
+      }
+      transmit(outR, 1);
+      release(outR);
+    }
   }
 }
