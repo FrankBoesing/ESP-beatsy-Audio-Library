@@ -7,7 +7,6 @@
 // Copy a short, mono, 44.1 kHz / 16-bit PCM rotor loop to the SD card as
 // /Helicopter.wav. The sample is preloaded into PSRAM before playback.
 
-namespace {
 constexpr char SAMPLE_FILE[] = "/Helicopter.wav";
 
 constexpr float SPEED_OF_SOUND_MPS = 343.0f;
@@ -32,7 +31,6 @@ bool mountSD() {
 
     return true;
 }
-} // namespace
 
 // Example-local mono-to-stereo panner. The loaded PCM buffer is mono, so the
 // flight model controls its entire stereo position.

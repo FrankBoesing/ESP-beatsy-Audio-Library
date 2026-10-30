@@ -62,7 +62,6 @@ AudioConnection chordToMain(chordEnvelope, 0, mainMixer, 2);
 AudioConnection mainToLeft(mainMixer, 0, audioOut, 0);
 AudioConnection mainToRight(mainMixer, 0, audioOut, 1);
 
-namespace {
 
 // C major scale, represented as semitone offsets from C.
 constexpr int8_t SCALE_SEMITONES[7] = {0, 2, 4, 5, 7, 9, 11};
@@ -235,7 +234,6 @@ void printStatistics()
     AudioMemoryUsageMaxReset();
 }
 
-} // namespace
 
 void setup()
 {
