@@ -83,7 +83,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
       </select>
       <label for="arraySuffix">Table name suffix</label>
       <input id="arraySuffix" type="text" value="MySound" autocomplete="off" spellcheck="false">
-      <p class="help">Supports mono and stereo, 16-bit integer PCM WAV files. Stereo output is stored as interleaved left/right sample pairs and uses both <code>AudioPlayMemory</code> outputs; a mono source is duplicated to left and right. Resampling is performed when needed.</p>
+      <p class="help">Supports mono and stereo, 16-bit integer PCM WAV files. Stereo output is stored as interleaved left/right sample pairs and uses both <code>AudioPlayMemory</code> outputs; a mono source is duplicated to left and right. When the output rate differs from the source, conversion uses an 80-tap, 512-phase windowed-sinc FIR resampler with anti-alias filtering for downsampling.</p>
       <button id="convertButton" type="button" disabled>Convert WAV</button>
       <div id="convertStatus" class="status" role="status" aria-live="polite"></div>
       <div id="outputPanel" class="result hidden">
@@ -261,6 +261,108 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
     return view.getInt16(offset + 2, true);
   }
 
+  // Modified Bessel function I0, used by the Kaiser window.
+  function besselI0(value) {
+    var half = value * 0.5;
+    var term = 1;
+    var sum = 1;
+    for (var k = 1; k <= 30; k++) {
+      term *= (half / k) * (half / k);
+      sum += term;
+      if (term < sum * 1e-14) break;
+    }
+    return sum;
+  }
+
+  // Build a polyphase table of windowed-sinc low-pass FIR coefficients.
+  // The cutoff follows the output/input ratio so downsampling suppresses
+  // frequencies above the new Nyquist limit.
+  function createPolyphaseFir(inputRate, outputRate) {
+    var taps = 80;
+    var phases = 512;
+    var leftTaps = taps / 2 - 1;
+    var radius = taps / 2;
+    var beta = 8.6;
+    var ratio = outputRate / inputRate;
+    var cutoff = Math.min(1, ratio) * 0.94;
+    var i0Beta = besselI0(beta);
+    var coefficients = new Float32Array(phases * taps);
+
+    for (var phase = 0; phase < phases; phase++) {
+      var fraction = phase / phases;
+      var offset = phase * taps;
+      var sum = 0;
+
+      for (var tap = 0; tap < taps; tap++) {
+        var x = (tap - leftTaps) - fraction;
+        var normalized = x / radius;
+        var window = 0;
+
+        if (Math.abs(normalized) <= 1) {
+          var windowArg = beta * Math.sqrt(Math.max(0, 1 - normalized * normalized));
+          window = besselI0(windowArg) / i0Beta;
+        }
+
+        var sinc = x === 0 ? cutoff :
+          Math.sin(Math.PI * cutoff * x) / (Math.PI * x);
+        var coefficient = sinc * window;
+        coefficients[offset + tap] = coefficient;
+        sum += coefficient;
+      }
+
+      if (sum !== 0) {
+        var inverseSum = 1 / sum;
+        for (var tap = 0; tap < taps; tap++) {
+          coefficients[offset + tap] *= inverseSum;
+        }
+      }
+    }
+
+    return {
+      taps: taps,
+      phases: phases,
+      leftTaps: leftTaps,
+      coefficients: coefficients
+    };
+  }
+
+  function resampleOutputSample(view, wav, sourcePosition, channel, stereo, fir) {
+    if (fir === null) {
+      var directIndex = Math.min(wav.frameCount - 1, Math.round(sourcePosition));
+      return readOutputSample(view, wav, directIndex, channel, stereo);
+    }
+
+    var base = Math.floor(sourcePosition);
+    var fraction = sourcePosition - base;
+    var phase = Math.round(fraction * fir.phases);
+
+    // Rounding can move a phase to the next source frame.
+    if (phase === fir.phases) {
+      base++;
+      phase = 0;
+    }
+
+    var coefficientOffset = phase * fir.taps;
+    var firstFrame = base - fir.leftTaps;
+    var sum = 0;
+
+    for (var tap = 0; tap < fir.taps; tap++) {
+      var frame = firstFrame + tap;
+      // Extend the first/last sample at file boundaries to avoid edge fades.
+      if (frame < 0) frame = 0;
+      else if (frame >= wav.frameCount) frame = wav.frameCount - 1;
+
+      var sample = readOutputSample(view, wav, frame, channel, stereo);
+      sum += sample * fir.coefficients[coefficientOffset + tap];
+    }
+
+    return Math.max(-32768, Math.min(32767, Math.round(sum)));
+  }
+
+  function yieldToBrowser() {
+    return new Promise(function(resolve) { setTimeout(resolve, 0); });
+  }
+
   function safeIdentifier(value) {
     var result = value.trim().replace(/[^A-Za-z0-9_]/g, "_");
     if (!result) result = "MySound";
@@ -285,7 +387,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
     return stereo ? (code | 0x10) : code;
   }
 
-  function makeHeader(view, wav, rate, name, sourceName, channelMode) {
+  async function makeHeader(view, wav, rate, name, sourceName, channelMode) {
     var stereo = channelMode === "stereo";
     var sampleCount = Math.round(wav.frameCount * rate / wav.sampleRate);
     if (sampleCount < 1) throw new Error("No output samples would be generated.");
@@ -294,6 +396,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
 
     var rateCode = formatCodeForRate(rate, stereo);
     var format = ((rateCode << 24) | sampleCount) >>> 0;
+    var fir = rate === wav.sampleRate ? null : createPolyphaseFir(wav.sampleRate, rate);
     var lines = [];
     var line = [];
     var wordInLine = 0;
@@ -311,37 +414,26 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
     if (stereo) {
       // Stereo tables contain one packed word per frame: left low, right high.
       for (var outIndex = 0; outIndex < sampleCount; outIndex++) {
-        var sourcePos = outIndex * wav.sampleRate / rate;
-        var source0 = Math.min(wav.frameCount - 1, Math.floor(sourcePos));
-        var source1 = Math.min(wav.frameCount - 1, source0 + 1);
-        var fraction = sourcePos - source0;
-        var left0 = readOutputSample(view, wav, source0, 0, true);
-        var left1 = readOutputSample(view, wav, source1, 0, true);
-        var right0 = readOutputSample(view, wav, source0, 1, true);
-        var right1 = readOutputSample(view, wav, source1, 1, true);
-        var left = Math.round(left0 + (left1 - left0) * fraction);
-        var right = Math.round(right0 + (right1 - right0) * fraction);
-        left = Math.max(-32768, Math.min(32767, left));
-        right = Math.max(-32768, Math.min(32767, right));
+        var sourcePosition = outIndex * wav.sampleRate / rate;
+        var left = resampleOutputSample(view, wav, sourcePosition, 0, true, fir);
+        var right = resampleOutputSample(view, wav, sourcePosition, 1, true, fir);
         pushWord((((right & 0xFFFF) << 16) | (left & 0xFFFF)) >>> 0);
+
+        if ((outIndex & 4095) === 4095) await yieldToBrowser();
       }
     } else {
       var lowSample = 0;
       for (var outIndex = 0; outIndex < sampleCount; outIndex++) {
-        var sourcePos = outIndex * wav.sampleRate / rate;
-        var source0 = Math.min(wav.frameCount - 1, Math.floor(sourcePos));
-        var source1 = Math.min(wav.frameCount - 1, source0 + 1);
-        var fraction = sourcePos - source0;
-        var sample0 = readOutputSample(view, wav, source0, 0, false);
-        var sample1 = readOutputSample(view, wav, source1, 0, false);
-        var sample = Math.round(sample0 + (sample1 - sample0) * fraction);
-        sample = Math.max(-32768, Math.min(32767, sample));
+        var sourcePosition = outIndex * wav.sampleRate / rate;
+        var sample = resampleOutputSample(view, wav, sourcePosition, 0, false, fir);
         var encoded = sample & 0xFFFF;
         if ((outIndex & 1) === 0) {
           lowSample = encoded;
         } else {
           pushWord(((encoded << 16) | lowSample) >>> 0);
         }
+
+        if ((outIndex & 4095) === 4095) await yieldToBrowser();
       }
       if (sampleCount & 1) pushWord(lowSample >>> 0);
     }
@@ -355,6 +447,10 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
     if (stereo) {
       output += "// Stereo word layout: left sample in bits 0..15, right sample in bits 16..31.\n";
       output += "// AudioPlayMemory sends left to output 0 and right to output 1.\n";
+    }
+    if (fir !== null) {
+      output += "// Resampled with an " + fir.taps + "-tap, " + fir.phases +
+        "-phase Kaiser-windowed sinc FIR.\n";
     }
     output += "// First word: AudioPlayMemory format/rate plus 24-bit sample/frame count.\n";
     output += "#pragma once\n#include <Arduino.h>\n\n";
@@ -381,7 +477,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
       var channelMode = channelModeSelect.value;
       var modeLabel = channelMode === "stereo" ? "stereo" : "mono";
       var name = safeIdentifier(arraySuffix.value);
-      generatedCode = makeHeader(view, wav, rate, name, file.name, channelMode);
+      generatedCode = await makeHeader(view, wav, rate, name, file.name, channelMode);
       generatedName = name + ".h";
       outputCode.value = generatedCode;
       outputPanel.classList.remove("hidden");
