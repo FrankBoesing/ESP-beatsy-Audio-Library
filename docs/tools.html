@@ -527,7 +527,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
     output += "// " + (stereo ? "Stereo" : "Mono") + " signed 16-bit PCM, " + rate +
       " Hz, " + sampleCount + " sample frames (" + duration.toFixed(3) + " s).\n";
     output += "// Storage: " + storageBytes.toLocaleString("en-US") + " bytes (" +
-      storageKiB.toFixed(2) + " KiB).\\n";
+      storageKiB.toFixed(2) + " KiB).\n";
     if (stereo) {
       output += "// Stereo word layout: left sample in bits 0..15, right sample in bits 16..31.\n";
       output += "// AudioPlayMemory sends left to output 0 and right to output 1.\n";
