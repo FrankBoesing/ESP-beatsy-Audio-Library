@@ -263,7 +263,7 @@ bool AudioPlaySdWav::startPlayback(AudioSource &newSource, bool takeOwnership) {
              (unsigned long)sample_rate, channels, bits_per_sample,
              (unsigned long long)data_length);
 
-    if (sample_rate != 11025 && sample_rate != 22050 && sample_rate != 44100) {
+    if (sample_rate != 11025 && sample_rate != 22050 && sample_rate != 44100 && sample_rate != 48000) {
         ESP_LOGE(TAG, "Unsupported sample rate: %lu Hz",
                  (unsigned long)sample_rate);
 
@@ -352,7 +352,7 @@ bool AudioPlaySdWav::loadToMemory(fs::FS &fs, const char *filename,
         return false;
     }
 
-    if ((sample_rate != 11025 && sample_rate != 22050 && sample_rate != 44100) ||
+    if ((sample_rate != 11025 && sample_rate != 22050 && sample_rate != 44100 && sample_rate != 48000) ||
         channels == 0 || block_align == 0 || data_length == 0 ||
         data_length % block_align != 0) {
         ESP_LOGE(TAG, "Unsupported WAV format or sample length for memory playback");

@@ -32,7 +32,13 @@
 static portMUX_TYPE playback_state_mux = portMUX_INITIALIZER_UNLOCKED;
 
 namespace {
+static inline bool isStereoFormat(uint8_t format) {
+    return (format & 0x10U) != 0;
+}
+
 static inline uint32_t sampleRateForFormat(uint8_t format) {
+    // Bit 4 selects stereo; the lower format code remains the sample rate.
+    format = (uint8_t)(format & (uint8_t)(~0x10U));
     switch (format) {
     case 0x81:
         return 44100;
@@ -40,16 +46,25 @@ static inline uint32_t sampleRateForFormat(uint8_t format) {
         return 22050;
     case 0x83:
         return 11025;
+    case 0x85:
+        return 48000;
     default:
         return 0;
     }
 }
 
-static inline int16_t sampleAt(const unsigned int *data, uint8_t format, uint32_t index) {
+static inline int16_t sampleAt(const unsigned int *data, uint8_t format,
+                               uint32_t index, uint8_t channel) {
+    if (isStereoFormat(format)) {
+        const uint32_t packed = data[index];
+        return channel ? (int16_t)(packed >> 16) : (int16_t)packed;
+    }
+
     switch (format) {
     case 0x81:
     case 0x82:
-    case 0x83: {
+    case 0x83:
+    case 0x85: {
         const uint32_t packed = data[index >> 1];
         return (index & 1U) ? (int16_t)(packed >> 16) : (int16_t)packed;
     }
@@ -93,7 +108,7 @@ bool AudioPlayMemory::play(const AudioSampleBuffer &buffer) { return play(buffer
 OSIZE
 bool AudioPlayMemory::play(const AudioSampleBuffer &buffer, bool loop) {
     const uint32_t rate = buffer.sampleRate();
-    if (!buffer.isValid() || (rate != 11025 && rate != 22050 && rate != 44100)) {
+    if (!buffer.isValid() || (rate != 11025 && rate != 22050 && rate != 44100 && rate != 48000)) {
         return false;
     }
 
@@ -188,8 +203,14 @@ void AudioPlayMemory::update() {
         return;
     }
 
+    const bool stereo = !rawPcm && isStereoFormat(play_format);
     audio_block_t *block = allocate();
     if (block == nullptr) {
+        return;
+    }
+    audio_block_t *rightBlock = stereo ? allocate() : nullptr;
+    if (stereo && rightBlock == nullptr) {
+        release(block);
         return;
     }
 
@@ -202,6 +223,7 @@ void AudioPlayMemory::update() {
         }
         portEXIT_CRITICAL(&playback_state_mux);
         release(block);
+        if (rightBlock != nullptr) release(rightBlock);
         return;
     }
 
@@ -215,6 +237,7 @@ void AudioPlayMemory::update() {
     const bool unityRate = targetRate == 1.0f && currentRate == 1.0f;
     const bool directRate = unityRate && fraction == 0.0f && (float)sourceRate == outputSampleRate;
     int16_t *out = block->data;
+    int16_t *rightOut = rightBlock != nullptr ? rightBlock->data : nullptr;
     bool finished = false;
 
     if (directRate) {
@@ -223,19 +246,33 @@ void AudioPlayMemory::update() {
         const uint32_t available = index < total_samples ? total_samples - index : 0;
         const uint32_t count = available < AUDIO_BLOCK_SAMPLES ? available : AUDIO_BLOCK_SAMPLES;
         for (uint32_t i = 0; i < count; ++i) {
-            out[i] = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
+            if (rawPcm) {
+                out[i] = pcmData[index];
+            } else {
+                out[i] = sampleAt(data, play_format, index, 0);
+                if (stereo) rightOut[i] = sampleAt(data, play_format, index, 1);
+            }
             ++index;
         }
         if (count < AUDIO_BLOCK_SAMPLES) {
             memset(out + count, 0, (AUDIO_BLOCK_SAMPLES - count) * sizeof(*out));
+            if (stereo) {
+                memset(rightOut + count, 0, (AUDIO_BLOCK_SAMPLES - count) * sizeof(*rightOut));
+            }
         }
     } else {
         uint32_t i = 0;
         for (; i < AUDIO_BLOCK_SAMPLES && index < total_samples; ++i) {
             const uint32_t index1 = (index + 1U < total_samples) ? index + 1U : index;
-            const int32_t s0 = rawPcm ? pcmData[index] : sampleAt(data, play_format, index);
-            const int32_t s1 = rawPcm ? pcmData[index1] : sampleAt(data, play_format, index1);
+            const int32_t s0 = rawPcm ? pcmData[index] : sampleAt(data, play_format, index, 0);
+            const int32_t s1 = rawPcm ? pcmData[index1] : sampleAt(data, play_format, index1, 0);
             out[i] = (int16_t)(s0 + (int32_t)((s1 - s0) * fraction));
+
+            if (stereo) {
+                const int32_t r0 = sampleAt(data, play_format, index, 1);
+                const int32_t r1 = sampleAt(data, play_format, index1, 1);
+                rightOut[i] = (int16_t)(r0 + (int32_t)((r1 - r0) * fraction));
+            }
 
             // Unity rate still needs sample-rate conversion for 11.025/22.05 kHz,
             // but it does not need the per-sample rate-smoothing calculation.
@@ -256,6 +293,9 @@ void AudioPlayMemory::update() {
         }
         if (i < AUDIO_BLOCK_SAMPLES) {
             memset(out + i, 0, (AUDIO_BLOCK_SAMPLES - i) * sizeof(*out));
+            if (stereo) {
+                memset(rightOut + i, 0, (AUDIO_BLOCK_SAMPLES - i) * sizeof(*rightOut));
+            }
         }
     }
 
@@ -267,6 +307,7 @@ void AudioPlayMemory::update() {
     if (playback_generation != generation) {
         portEXIT_CRITICAL(&playback_state_mux);
         release(block);
+        if (rightBlock != nullptr) release(rightBlock);
         return;
     }
 
@@ -279,8 +320,12 @@ void AudioPlayMemory::update() {
     }
     portEXIT_CRITICAL(&playback_state_mux);
 
-    transmit(block);
+    transmit(block, 0);
     release(block);
+    if (rightBlock != nullptr) {
+        transmit(rightBlock, 1);
+        release(rightBlock);
+    }
 }
 
 OSIZE

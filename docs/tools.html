@@ -70,22 +70,31 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
       <input id="wavFile" type="file" accept=".wav,audio/wav,audio/x-wav">
       <label for="sampleRate">Output sample rate</label>
       <select id="sampleRate">
-        <option value="auto">Keep source rate when supported (otherwise 44100 Hz)</option>
-        <option value="44100">44100 Hz</option>
+        <option value="44100" selected>44100 Hz (default)</option>
+        <option value="auto">Keep source rate when supported</option>
+        <option value="48000">48000 Hz</option>
         <option value="22050">22050 Hz</option>
         <option value="11025">11025 Hz</option>
       </select>
+      <label for="channelMode">Output channels</label>
+      <select id="channelMode">
+        <option value="mono">Mono (downmix stereo input)</option>
+        <option value="stereo">Stereo (preserve left and right)</option>
+      </select>
       <label for="arraySuffix">Table name suffix</label>
       <input id="arraySuffix" type="text" value="MySound" autocomplete="off" spellcheck="false">
-      <p class="help">The generated symbol will be <code>AudioSample</code> plus this suffix. Mono and stereo, 16-bit integer PCM WAV files are supported; stereo is downmixed to mono and the samples are resampled when needed.</p>
+      <p class="help">Supports mono and stereo, 16-bit integer PCM WAV files. Stereo output is stored as interleaved left/right sample pairs and uses both <code>AudioPlayMemory</code> outputs; a mono source is duplicated to left and right. When the output rate differs from the source, conversion uses an 80-tap, 512-phase windowed-sinc FIR resampler with anti-alias filtering for downsampling.</p>
       <button id="convertButton" type="button" disabled>Convert WAV</button>
       <div id="convertStatus" class="status" role="status" aria-live="polite"></div>
       <div id="outputPanel" class="result hidden">
         <label for="outputCode">Generated .h file contents</label>
         <textarea id="outputCode" readonly spellcheck="false"></textarea>
+        <button id="playPreview" type="button" class="secondary" disabled>Play</button>
+        <audio id="previewAudio" preload="none" class="hidden"></audio>
         <button id="downloadHeader" type="button">Download .h</button>
         <button id="copyHeader" type="button" class="secondary">Copy code</button>
-        <p class="help">Include the header in one sketch source file, then call <code>player.play(AudioSampleYourName);</code>. The table format is for <code>AudioPlayMemory</code>, not the filesystem-based <code>AudioPlaySdWav</code>.</p>
+        <p class="help">Play previews the converted PCM data exactly as it is stored in the generated sample table.</p>
+        <p class="help">Include the header in one sketch source file, then call <code>player.play(AudioSampleYourName);</code>. For stereo output, connect <code>AudioPlayMemory</code> output 0 to the left destination and output 1 to the right destination. The table format is for <code>AudioPlayMemory</code>, not the filesystem-based <code>AudioPlaySdWav</code>.</p>
       </div>
       <div class="note">To keep browser memory usage reasonable and match the table format, output is limited to 100 seconds and the 24-bit sample-count limit of <code>AudioPlayMemory</code>.</div>
     </section>
@@ -101,6 +110,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
   var repairStatus = document.getElementById("repairStatus");
   var wavFile = document.getElementById("wavFile");
   var sampleRateSelect = document.getElementById("sampleRate");
+  var channelModeSelect = document.getElementById("channelMode");
   var arraySuffix = document.getElementById("arraySuffix");
   var convertButton = document.getElementById("convertButton");
   var convertStatus = document.getElementById("convertStatus");
@@ -108,6 +118,9 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
   var outputCode = document.getElementById("outputCode");
   var downloadHeader = document.getElementById("downloadHeader");
   var copyHeader = document.getElementById("copyHeader");
+  var playPreview = document.getElementById("playPreview");
+  var previewAudio = document.getElementById("previewAudio");
+  var previewUrl = "";
   var generatedName = "";
   var generatedCode = "";
 
@@ -132,6 +145,47 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
     link.remove();
     window.setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }
+
+  function clearPreview() {
+    previewAudio.pause();
+    previewAudio.removeAttribute("src");
+    previewAudio.load();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = "";
+    playPreview.disabled = true;
+    playPreview.textContent = "Play";
+  }
+
+  function installPreview(blob) {
+    clearPreview();
+    previewUrl = URL.createObjectURL(blob);
+    previewAudio.src = previewUrl;
+    playPreview.disabled = false;
+    playPreview.textContent = "Play";
+  }
+
+  playPreview.addEventListener("click", async function () {
+    if (!previewUrl) return;
+    if (!previewAudio.paused) {
+      previewAudio.pause();
+      return;
+    }
+    try {
+      var playback = previewAudio.play();
+      playPreview.textContent = "Pause";
+      await playback;
+    } catch (error) {
+      playPreview.textContent = "Play";
+      setStatus(convertStatus, "Browser playback failed: " + error.message, "bad");
+    }
+  });
+
+  previewAudio.addEventListener("pause", function () {
+    playPreview.textContent = "Play";
+  });
+  previewAudio.addEventListener("ended", function () {
+    playPreview.textContent = "Play";
+  });
 
   tmpFile.addEventListener("change", function () {
     repairButton.disabled = !(tmpFile.files && tmpFile.files.length);
@@ -198,6 +252,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
     setStatus(convertStatus, "", "");
     outputPanel.classList.add("hidden");
     generatedCode = "";
+    clearPreview();
     if (wavFile.files && wavFile.files.length && (!arraySuffix.value || arraySuffix.value === "MySound")) {
       arraySuffix.value = suggestedSuffix(wavFile.files[0].name);
     }
@@ -246,6 +301,117 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
     return Math.round((left + right) / 2);
   }
 
+  function readOutputSample(view, wav, frameIndex, channel, stereo) {
+    var offset = wav.dataStart + frameIndex * wav.blockAlign;
+    if (!stereo) return readMonoSample(view, wav, frameIndex);
+    // A mono input is duplicated to both stereo output channels.
+    if (wav.channels === 1 || channel === 0) return view.getInt16(offset, true);
+    return view.getInt16(offset + 2, true);
+  }
+
+  // Modified Bessel function I0, used by the Kaiser window.
+  function besselI0(value) {
+    var half = value * 0.5;
+    var term = 1;
+    var sum = 1;
+    for (var k = 1; k <= 30; k++) {
+      term *= (half / k) * (half / k);
+      sum += term;
+      if (term < sum * 1e-14) break;
+    }
+    return sum;
+  }
+
+  // Build a polyphase table of windowed-sinc low-pass FIR coefficients.
+  // Cutoff is normalized to the input Nyquist frequency. Downsampling uses
+  // a 6% guard band below the new Nyquist limit; upsampling keeps the full
+  // input bandwidth while the FIR still performs band-limited interpolation.
+  function createPolyphaseFir(inputRate, outputRate) {
+    var taps = 80;
+    var phases = 512;
+    var leftTaps = taps / 2 - 1;
+    var radius = taps / 2;
+    var beta = 8.6;
+    var ratio = outputRate / inputRate;
+    var cutoff = ratio < 1 ? ratio * 0.94 : 1.0;
+    var i0Beta = besselI0(beta);
+    var coefficients = new Float32Array(phases * taps);
+
+    for (var phase = 0; phase < phases; phase++) {
+      var fraction = phase / phases;
+      var offset = phase * taps;
+      var sum = 0;
+
+      for (var tap = 0; tap < taps; tap++) {
+        var x = (tap - leftTaps) - fraction;
+        var normalized = x / radius;
+        var window = 0;
+
+        if (Math.abs(normalized) <= 1) {
+          var windowArg = beta * Math.sqrt(Math.max(0, 1 - normalized * normalized));
+          window = besselI0(windowArg) / i0Beta;
+        }
+
+        var sinc = x === 0 ? cutoff :
+          Math.sin(Math.PI * cutoff * x) / (Math.PI * x);
+        var coefficient = sinc * window;
+        coefficients[offset + tap] = coefficient;
+        sum += coefficient;
+      }
+
+      if (sum !== 0) {
+        var inverseSum = 1 / sum;
+        for (var tap = 0; tap < taps; tap++) {
+          coefficients[offset + tap] *= inverseSum;
+        }
+      }
+    }
+
+    return {
+      taps: taps,
+      phases: phases,
+      leftTaps: leftTaps,
+      coefficients: coefficients
+    };
+  }
+
+  function resampleOutputSample(view, wav, sourcePosition, channel, stereo, fir) {
+    if (fir === null) {
+      var directIndex = Math.min(wav.frameCount - 1, Math.round(sourcePosition));
+      return readOutputSample(view, wav, directIndex, channel, stereo);
+    }
+
+    var base = Math.floor(sourcePosition);
+    var fraction = sourcePosition - base;
+    var phase = Math.round(fraction * fir.phases);
+
+    // Rounding can move a phase to the next source frame.
+    if (phase === fir.phases) {
+      base++;
+      phase = 0;
+    }
+
+    var coefficientOffset = phase * fir.taps;
+    var firstFrame = base - fir.leftTaps;
+    var sum = 0;
+
+    for (var tap = 0; tap < fir.taps; tap++) {
+      var frame = firstFrame + tap;
+      // Extend the first/last sample at file boundaries to avoid edge fades.
+      if (frame < 0) frame = 0;
+      else if (frame >= wav.frameCount) frame = wav.frameCount - 1;
+
+      var sample = readOutputSample(view, wav, frame, channel, stereo);
+      sum += sample * fir.coefficients[coefficientOffset + tap];
+    }
+
+    return Math.max(-32768, Math.min(32767, Math.round(sum)));
+  }
+
+  function yieldToBrowser() {
+    return new Promise(function(resolve) { setTimeout(resolve, 0); });
+  }
+
   function safeIdentifier(value) {
     var result = value.trim().replace(/[^A-Za-z0-9_]/g, "_");
     if (!result) result = "MySound";
@@ -257,14 +423,55 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
     return "0x" + (value >>> 0).toString(16).padStart(8, "0");
   }
 
-  function makeHeader(view, wav, rate, name, sourceName) {
+  function writeAscii(bytes, offset, text) {
+    for (var i = 0; i < text.length; i++) bytes[offset + i] = text.charCodeAt(i);
+  }
+
+  function makePreviewWav(sampleRate, channels, sampleCount) {
+    var dataBytes = sampleCount * channels * 2;
+    var bytes = new Uint8Array(44 + dataBytes);
+    var view = new DataView(bytes.buffer);
+    writeAscii(bytes, 0, "RIFF");
+    view.setUint32(4, 36 + dataBytes, true);
+    writeAscii(bytes, 8, "WAVE");
+    writeAscii(bytes, 12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, channels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * channels * 2, true);
+    view.setUint16(32, channels * 2, true);
+    view.setUint16(34, 16, true);
+    writeAscii(bytes, 36, "data");
+    view.setUint32(40, dataBytes, true);
+    return { bytes: bytes, view: view };
+  }
+
+  function formatCodeForRate(rate, stereo) {
+    var code;
+    switch (rate) {
+    case 48000: code = 0x85; break;
+    case 44100: code = 0x81; break;
+    case 22050: code = 0x82; break;
+    case 11025: code = 0x83; break;
+    default: throw new Error("Unsupported AudioPlayMemory sample rate: " + rate + " Hz.");
+    }
+    // Bit 4 marks a stereo table. 0x84 remains reserved for raw PCM playback.
+    return stereo ? (code | 0x10) : code;
+  }
+
+  async function makeHeader(view, wav, rate, name, sourceName, channelMode) {
+    var stereo = channelMode === "stereo";
     var sampleCount = Math.round(wav.frameCount * rate / wav.sampleRate);
     if (sampleCount < 1) throw new Error("No output samples would be generated.");
     if (sampleCount > 0xFFFFFF) throw new Error("The sample count exceeds AudioPlayMemory's 24-bit limit.");
     if (sampleCount > rate * 100) throw new Error("The output exceeds the 100-second limit for one table.");
-    var rateCode = rate === 44100 ? 0x81 : (rate === 22050 ? 0x82 : 0x83);
+
+    var rateCode = formatCodeForRate(rate, stereo);
     var format = ((rateCode << 24) | sampleCount) >>> 0;
-    var wordCount = Math.ceil(sampleCount / 2);
+    var fir = rate === wav.sampleRate ? null : createPolyphaseFir(wav.sampleRate, rate);
+    var preview = makePreviewWav(rate, stereo ? 2 : 1, sampleCount);
+    var previewView = preview.view;
     var lines = [];
     var line = [];
     var wordInLine = 0;
@@ -278,36 +485,66 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
       }
     }
     pushWord(format);
-    var lowSample = 0;
-    for (var outIndex = 0; outIndex < sampleCount; outIndex++) {
-      var sourcePos = outIndex * wav.sampleRate / rate;
-      var source0 = Math.min(wav.frameCount - 1, Math.floor(sourcePos));
-      var source1 = Math.min(wav.frameCount - 1, source0 + 1);
-      var fraction = sourcePos - source0;
-      var sample0 = readMonoSample(view, wav, source0);
-      var sample1 = readMonoSample(view, wav, source1);
-      var sample = Math.round(sample0 + (sample1 - sample0) * fraction);
-      if (sample > 32767) sample = 32767;
-      if (sample < -32768) sample = -32768;
-      var encoded = sample & 0xFFFF;
-      if ((outIndex & 1) === 0) {
-        lowSample = encoded;
-      } else {
-        pushWord(((encoded << 16) | lowSample) >>> 0);
+
+    if (stereo) {
+      // Stereo tables contain one packed word per frame: left low, right high.
+      for (var outIndex = 0; outIndex < sampleCount; outIndex++) {
+        var sourcePosition = outIndex * wav.sampleRate / rate;
+        var left = resampleOutputSample(view, wav, sourcePosition, 0, true, fir);
+        var right = resampleOutputSample(view, wav, sourcePosition, 1, true, fir);
+        pushWord((((right & 0xFFFF) << 16) | (left & 0xFFFF)) >>> 0);
+        var previewOffset = 44 + outIndex * 4;
+        previewView.setInt16(previewOffset, left, true);
+        previewView.setInt16(previewOffset + 2, right, true);
+
+        if ((outIndex & 4095) === 4095) await yieldToBrowser();
       }
+    } else {
+      var lowSample = 0;
+      for (var outIndex = 0; outIndex < sampleCount; outIndex++) {
+        var sourcePosition = outIndex * wav.sampleRate / rate;
+        var sample = resampleOutputSample(view, wav, sourcePosition, 0, false, fir);
+        var encoded = sample & 0xFFFF;
+        previewView.setInt16(44 + outIndex * 2, sample, true);
+        if ((outIndex & 1) === 0) {
+          lowSample = encoded;
+        } else {
+          pushWord(((encoded << 16) | lowSample) >>> 0);
+        }
+
+        if ((outIndex & 4095) === 4095) await yieldToBrowser();
+      }
+      if (sampleCount & 1) pushWord(lowSample >>> 0);
     }
-    if (sampleCount & 1) pushWord(lowSample >>> 0);
+
     if (line.length) lines.push(line.join(", ") + ",");
     var duration = sampleCount / rate;
+    // Include the 32-bit format word and the packed 32-bit sample data.
+    var storageBytes = 4 + (stereo ? sampleCount * 4 : Math.ceil(sampleCount / 2) * 4);
+    var storageKiB = storageBytes / 1024;
     var output = "// Generated by ESP-beatsy Audio Tools (WAV to Sketch).\n";
     output += "// Source: " + sourceName.replace(/[\r\n]/g, " ").replace(/\*\//g, "* /") + "\n";
-    output += "// Mono signed 16-bit PCM, " + rate + " Hz, " + sampleCount + " samples (" + duration.toFixed(3) + " s).\n";
-    output += "// First word: AudioPlayMemory format/rate plus 24-bit sample count.\n";
+    output += "// " + (stereo ? "Stereo" : "Mono") + " signed 16-bit PCM, " + rate +
+      " Hz, " + sampleCount + " sample frames (" + duration.toFixed(3) + " s).\n";
+    output += "// Storage: " + storageBytes.toLocaleString() + " bytes (" +
+      storageKiB.toFixed(2) + " KiB).\n";
+    if (stereo) {
+      output += "// Stereo word layout: left sample in bits 0..15, right sample in bits 16..31.\n";
+      output += "// AudioPlayMemory sends left to output 0 and right to output 1.\n";
+    }
+    if (fir !== null) {
+      output += "// Resampled with an " + fir.taps + "-tap, " + fir.phases +
+        "-phase Kaiser-windowed sinc FIR.\n";
+    }
+    output += "// First word: AudioPlayMemory format/rate plus 24-bit sample/frame count.\n";
     output += "#pragma once\n#include <Arduino.h>\n\n";
     output += "const unsigned int " + name + "[] PROGMEM = {\n  ";
     output += lines.join("\n  ");
     output += "\n};\n";
-    return output;
+    return {
+      code: output,
+      previewBlob: new Blob([preview.bytes], { type: "audio/wav" })
+    };
   }
 
   convertButton.addEventListener("click", async function () {
@@ -315,6 +552,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
     if (!file) return;
     convertButton.disabled = true;
     outputPanel.classList.add("hidden");
+    clearPreview();
     setStatus(convertStatus, "Reading WAV data and generating the sample table…", "");
     try {
       var buffer = await file.arrayBuffer();
@@ -322,10 +560,14 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
       var wav = findWavChunks(view);
       var selectedRate = sampleRateSelect.value;
       var rate = selectedRate === "auto" ?
-        ([11025, 22050, 44100].indexOf(wav.sampleRate) >= 0 ? wav.sampleRate : 44100) :
+        ([11025, 22050, 44100, 48000].indexOf(wav.sampleRate) >= 0 ? wav.sampleRate : 44100) :
         parseInt(selectedRate, 10);
+      var channelMode = channelModeSelect.value;
+      var modeLabel = channelMode === "stereo" ? "stereo" : "mono";
       var name = safeIdentifier(arraySuffix.value);
-      generatedCode = makeHeader(view, wav, rate, name, file.name);
+      var conversion = await makeHeader(view, wav, rate, name, file.name, channelMode);
+      generatedCode = conversion.code;
+      installPreview(conversion.previewBlob);
       generatedName = name + ".h";
       outputCode.value = generatedCode;
       outputPanel.classList.remove("hidden");
@@ -333,11 +575,12 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
       var outputCount = Math.round(wav.frameCount * rate / wav.sampleRate);
       setStatus(convertStatus,
         "Converted " + file.name + ": " + wav.channels + " input channel(s), " +
-        wav.sampleRate + " Hz → mono " + rate + " Hz, " + outputCount.toLocaleString() +
-        " samples (" + sourceDuration.toFixed(2) + " s). Header: " + generatedName + ".",
+        wav.sampleRate + " Hz → " + modeLabel + " " + rate + " Hz, " + outputCount.toLocaleString() +
+        " sample frames (" + sourceDuration.toFixed(2) + " s). Header: " + generatedName + ".",
         "good");
     } catch (error) {
       generatedCode = "";
+      clearPreview();
       setStatus(convertStatus, "Conversion failed: " + error.message, "bad");
     } finally {
       convertButton.disabled = false;

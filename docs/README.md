@@ -37,6 +37,7 @@ Teensy Audio System Design Tool for the ESP-beatsy Audio Library.
   managed CDC while preserving `Serial0` for UART0. The graph and host sample rates must match; resampling and more than two
   channels are not supported. Explicit-`USBAudioCard` constructors remain available
   when an application needs manual control.
+- Drum synthesizers: `drum-synths.md` documents the sample-free `AudioSynthKick`, `AudioSynthTom` and `AudioSynthSnare` voices. The sequenced `examples/Synthesis/AnalogDrumKit/AnalogDrumKit.cpp` demonstrates their use with velocity accents, hi-hats and tom fills.
 - Biquad Calculator: standalone offline tool for low-pass, high-pass, band-pass, notch, peaking EQ and shelf filters. It plots the response and exports normalized Q30 coefficients and `AudioFilterBiquad` setup code.
 - EQ Chain Designer: designs and plots up to four cascaded `AudioFilterBiquad` stages and exports the corresponding setup calls. It supports low-/high-pass, band-pass, notch, peaking EQ and low-/high-shelf filters.
 - FFT Window Lab: offline simulator for `AudioAnalyzeFFT256` and `AudioAnalyzeFFT1024`, embedding the exact Q15 window coefficient tables from `lib/AudioLibrary/utility/data_windows.c`. Plots the window, input/windowed samples and FFT spectrum; reports bin spacing, timing, coherent gain and equivalent noise bandwidth. Models FFT256's default eight-frame power averaging and FFT1024's single-frame output, but does not reproduce target-specific FFT rounding bit for bit.

@@ -240,13 +240,20 @@ if (hasUsbAudio) {
 		+ " * AudioMemory() starts the shared USB Audio + CDC device and routes stream\n"
 		+ " * enable events. No USB includes, USBAudioCard object, USB.begin() or custom\n"
 		+ " * event callback are needed in this managed mode.\n"
-		+ " * AUDIO_USB_REDIRECT_SERIAL maps Serial to managed CDC; use Serial0 for UART0.\n"
-		+ " * Add -D AUDIO_USB_REDIRECT_SERIAL to PlatformIO build_src_flags for the sketch.\n"
+		+ " * Audio.h redirects Serial to managed CDC when the matching node macro\n"
+		+ " * is defined for the sketch; use Serial0 for physical UART0.\n"
+		+ (hasUsbInput ? " *   -D AUDIO_INPUT_USB\n" : "")
+		+ (hasUsbOutput ? " *   -D AUDIO_OUTPUT_USB\n" : "")
+		+ " * Put these optional Serial-routing defines in PlatformIO build_src_flags.\n"
 		+ " * Runtime ESP-IDF logs are routed to CDC while the host terminal is connected.\n"
-		+ " * Set AUDIO_SAMPLE_RATE_EXACT to the intended USB rate before compiling.\n"
-		+ " * The framework must enable CONFIG_TINYUSB_AUDIO_ENABLED.\n"
-		+ " * For the tested Windows CDC + UAC1 composite on Arduino-ESP32 3.3.12,\n"
-		+ " * this repository's version-specific workaround may be needed:\n"
+		+ " * Set AUDIO_SAMPLE_RATE_EXACT to the intended USB rate in build_flags.\n"
+		+ " * The target must provide native USB OTG and enable CONFIG_TINYUSB_AUDIO_ENABLED.\n"
+		+ " * For the tested ESP32-S3 TinyUSB configuration, use these build_flags:\n"
+		+ " *   -DARDUINO_USB_MODE=0\n"
+		+ " *   -DARDUINO_USB_CDC_ON_BOOT=0\n"
+		+ " * Remove an inherited -DARDUINO_USB_MODE via build_unflags if necessary.\n"
+		+ " * The tested Windows CDC + UAC1 composite on Arduino-ESP32 3.3.12 uses\n"
+		+ " * this version-specific framework workaround:\n"
 		+ " *   extra_scripts = pre:scripts/patch_uac1_audio_iad.py\n"
 		+ " */\n\n";
 } else {

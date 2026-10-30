@@ -626,7 +626,7 @@ span.mainfunction {color: #993300; font-weight: bolder}
 				},
 				"shortName": "playMem",
 				"inputs": 0,
-				"outputs": 1,
+				"outputs": 2,
 				"category": "play-function",
 				"color": "#E6E0F8",
 				"icon": "arrow-in.png"
@@ -705,6 +705,54 @@ span.mainfunction {color: #993300; font-weight: bolder}
 					}
 				},
 				"shortName": "drum",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthKick",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "kick",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthTom",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "tom",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthSnare",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "snare",
 				"inputs": 0,
 				"outputs": 1,
 				"category": "synth-function",
@@ -1888,7 +1936,7 @@ AudioMemory(12);</code></pre>
 	</table>
 	<h3>Setup</h3>
 	<p>The default <code>AudioInputUSB</code> constructor uses the library-managed USB device. The library configures <code>UAC_SPK_STEREO</code> and the rate from <code>AUDIO_SAMPLE_RATE_EXACT</code>, starts USB audio and CDC during <code>AudioMemory()</code>, and routes speaker interface-enable events automatically. No <code>USBAudioCard</code> object or manual <code>USB.begin()</code> call is needed in this mode.</p>
-	<p>The USB build enables <code>AUDIO_USB_REDIRECT_SERIAL</code>, so ordinary <code>Serial.print()</code> calls use managed CDC; use <code>Serial0</code> for physical UART0. Runtime <code>ESP_LOGE</code>/<code>ESP_LOGW</code>/<code>ESP_LOGI</code> output is also redirected while a terminal is connected. The explicit <code>AudioInputUSB(usbAudio)</code> constructor remains available for manual setup.</p>
+	<p>To redirect ordinary <code>Serial</code> output to the managed CDC port, add <code>-D AUDIO_INPUT_USB</code> to the sketch's PlatformIO <code>build_src_flags</code>. If the graph also contains <code>AudioOutputUSB</code>, add <code>-D AUDIO_OUTPUT_USB</code> as well. These defines activate the <code>Audio.h</code> Serial alias; they are not needed for the USB endpoint manager itself. Use <code>Serial0</code> for physical UART0. Runtime <code>ESP_LOGE</code>/<code>ESP_LOGW</code>/<code>ESP_LOGI</code> output is redirected while a terminal is connected. The explicit <code>AudioInputUSB(usbAudio)</code> constructor remains available for manual setup.</p>
 	<p>This node uses <code>USBAudioCard::onData()</code> and therefore owns the speaker-data callback; do not install another speaker-data callback at the same time. A small two-block queue bridges the framework receive task and <code>AudioTask</code>; no additional task or <code>loop()</code> polling is required.</p>
 	<h3>Example</h3>
 	<p>See <code>examples/HardwareTesting/USBHostPlayback/USBHostPlayback.cpp</code> for a complete setup that routes PC playback to an I2S output.</p>
@@ -1915,7 +1963,7 @@ AudioMemory(12);</code></pre>
 	</table>
 	<h3>Export and sketch integration</h3>
 	<p>The graph export now uses the managed default constructors. At <code>AudioMemory()</code>, the library configures a shared <code>USBAudioCard</code> with the speaker and/or microphone endpoint required by the graph, starts USB audio and CDC once, and routes interface-enable events to the matching node. A sketch no longer needs <code>USB.h</code>, <code>USBAudioCard.h</code>, its own card object, <code>begin()</code> calls, or a custom event handler. Set <code>AUDIO_SAMPLE_RATE_EXACT</code> to the intended USB rate in the build flags before compiling.</p>
-	<p>The USB build enables <code>AUDIO_USB_REDIRECT_SERIAL</code>, so ordinary <code>Serial</code> output uses managed CDC and <code>Serial0</code> remains UART0. Runtime ESP-IDF log output is routed to CDC while a terminal is connected. The explicit constructors that accept a <code>USBAudioCard</code> remain available for applications that need manual startup and event routing. The USB FIFO is serviced automatically at the AudioStream update cadence; no polling in <code>loop()</code> is required.</p>
+	<p>To redirect ordinary <code>Serial</code> output to managed CDC, add <code>-D AUDIO_OUTPUT_USB</code> to the sketch's PlatformIO <code>build_src_flags</code>. If the graph also contains <code>AudioInputUSB</code>, add <code>-D AUDIO_INPUT_USB</code> as well. These defines activate the <code>Audio.h</code> Serial alias; they are not needed for the USB endpoint manager itself. Use <code>Serial0</code> for UART0. Runtime ESP-IDF log output is routed to CDC while a terminal is connected. The explicit constructors that accept a <code>USBAudioCard</code> remain available for applications that need manual startup and event routing. The USB FIFO is serviced automatically at the AudioStream update cadence; no polling in <code>loop()</code> is required.</p>
 	<h3>PlatformIO</h3>
 	<p>Use a target with native USB OTG and a framework build with <code>CONFIG_TINYUSB_AUDIO_ENABLED</code>. For the tested ESP32-S3 setup, set <code>-DARDUINO_USB_MODE=0</code> and <code>-DARDUINO_USB_CDC_ON_BOOT=0</code> in <code>build_flags</code> (remove the default <code>-DARDUINO_USB_MODE</code> with <code>build_unflags</code> where needed). For the tested Windows CDC + UAC1 composite on Arduino-ESP32 3.3.12, this repository has a version-specific workaround: <code>extra_scripts = pre:scripts/patch_uac1_audio_iad.py</code>.</p>
 	<h3>Notes</h3>
@@ -2054,16 +2102,17 @@ AudioMemory(12);</code></pre>
 <script type="text/x-red" data-help-name="AudioPlayMemory">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Play sample data from memory. In addition to legacy uncompressed PCM arrays generated by <a href="https://github.com/PaulStoffregen/Audio/tree/master/extras/wav2sketch" target="_blank">wav2sketch</a>, this ESP32 implementation can play an <code>AudioSampleBuffer</code> without copying its PCM data.</p>
+	<p>Play mono or stereo sample data from memory. In addition to legacy uncompressed PCM arrays generated by <a href="https://github.com/PaulStoffregen/Audio/tree/master/extras/wav2sketch" target="_blank">wav2sketch</a>, this ESP32 implementation supports stereo tables generated by ESP-beatsy Audio Tools and can play an <code>AudioSampleBuffer</code> without copying its PCM data.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Mono Sound Output</td></tr>
+		<tr class=odd><td align=center>Out 0</td><td>Mono output or stereo left channel</td></tr>
+		<tr class=odd><td align=center>Out 1</td><td>Stereo right channel (stereo tables only)</td></tr>
 	</table>
 	<h3>Functions</h3>
 	<p class=func><span class=keyword>play</span>(data);</p>
-	<p class=desc>Play a legacy uncompressed PCM sample array created by wav2sketch. μ-law-encoded arrays are not supported. Any current playback is replaced.</p>
+	<p class=desc>Play a packed uncompressed PCM sample array. Mono tables use output 0; stereo tables send left to output 0 and right to output 1. Supported table sample rates are 11025, 22050, 44100 and 48000 Hz. μ-law-encoded arrays are not supported.</p>
 	<p class=func><span class=keyword>play</span>(data, loop);</p>
 	<p class=desc>Play an uncompressed PCM sample array, optionally repeating it.</p>
 	<p class=func><span class=keyword>play</span>(buffer); <span class=keyword>play</span>(buffer, loop);</p>
@@ -2077,7 +2126,7 @@ AudioMemory(12);</code></pre>
 	<p class=func><span class=keyword>positionMillis</span>(); <span class=keyword>lengthMillis</span>();</p>
 	<p class=desc>Return the source-sample position and sample length in milliseconds.</p>
 	<h3>Notes</h3>
-	<p>AudioSampleBuffer playback supports source sample rates of 11025, 22050 and 44100 Hz. AudioPlaySdWav::loadToMemory() can load a supported PCM WAV into a mono AudioSampleBuffer allocated in PSRAM; stereo WAV input is downmixed to mono.</p>
+	<p>AudioSampleBuffer playback supports source sample rates of 11025, 22050, 44100 and 48000 Hz. AudioPlaySdWav::loadToMemory() can load a supported PCM WAV into a mono AudioSampleBuffer allocated in PSRAM; stereo WAV input is downmixed to mono.</p>
 	<p>For AudioSampleBuffer playback, the buffer must outlive the AudioPlayMemory playback and must not be released or modified while it is being read.</p>
 	<p>Legacy wav2sketch arrays (uncompressed PCM only) and AudioSampleBuffer PCM samples are different data formats; use the matching play() overload. μ-law-encoded legacy arrays are not decoded.</p>
 </script>
@@ -2092,7 +2141,7 @@ AudioMemory(12);</code></pre>
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
 	<p>Play an uncompressed PCM WAV file from an Arduino-ESP32 filesystem or a seekable <code>AudioSource</code>.</p>
-	<p>Supported WAV audio: mono or stereo, 11025, 22050 or 44100 Hz, and 8, 16, 24 or 32 bits per sample.</p>
+	<p>Supported WAV audio: mono or stereo, 11025, 22050, 44100 or 48000 Hz, and 8, 16, 24 or 32 bits per sample.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
@@ -2123,7 +2172,7 @@ AudioMemory(12);</code></pre>
 	<p class=desc>Preload a WAV into an AudioSampleBuffer in PSRAM for AudioPlayMemory. Stereo is downmixed to mono signed 16-bit PCM. The player must be stopped and have no active source; reserveBytes defaults to 64 KiB. The buffer must outlive playback.</p>
 	<h3>Notes</h3>
 	<p>This implementation targets ESP32. It reads the file during playback and therefore needs a seekable source; a non-seekable network stream such as AudioSourceStream is not supported.</p>
-	<p>Preloading with loadToMemory() requires enough available PSRAM for the complete decoded sample while preserving the requested reserve. The preload helper supports 11025, 22050 and 44100 Hz.</p>
+	<p>Preloading with loadToMemory() requires enough available PSRAM for the complete decoded sample while preserving the requested reserve. The preload helper supports 11025, 22050, 44100 and 48000 Hz.</p>
 </script>
 
 <script type="text/x-red" data-help-name="AudioPlayMp3">
@@ -2498,6 +2547,100 @@ recorder.begin(SD_MMC, "/recording", AUDIO_SAMPLE_RATE_EXACT, 2);</code></pre>
 	</p>
 </script>
 <script type="text/x-red" data-template-name="AudioSynthSimpleDrum">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
+
+
+<script type="text/x-red" data-help-name="AudioSynthKick">
+	<h3>Summary</h3>
+	<div class=tooltipinfo>
+	<p>Sample-free analog-style bass drum. A pitch-swept sine body is combined with a short noise beater transient.</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class=doc align=center cellpadding=3>
+		<tr class=top><th>Port</th><th>Purpose</th></tr>
+		<tr class=odd><td align=center>Out 0</td><td>Kick output</td></tr>
+	</table>
+	<h3>Functions</h3>
+	<p class=func><span class=keyword>noteOn</span>(velocity = 100);</p>
+	<p class=desc>Trigger the kick. Velocity is 0–127; zero is ignored.</p>
+	<p class=func><span class=keyword>frequency</span>(hz);</p>
+	<p class=desc>Set the final body frequency. Default is 52 Hz.</p>
+	<p class=func><span class=keyword>length</span>(milliseconds);</p>
+	<p class=desc>Set the approximate amplitude decay time to -60 dB. Default is 210 ms.</p>
+	<p class=func><span class=keyword>pitchSweep</span>(octaves);</p>
+	<p class=desc>Set the initial pitch rise above the body frequency, from 0 to 3 octaves. Default is 2 octaves.</p>
+	<p class=func><span class=keyword>pitchDecay</span>(milliseconds);</p>
+	<p class=desc>Set the exponential time constant of the pitch drop. Default is 27 ms.</p>
+	<p class=func><span class=keyword>click</span>(level);</p>
+	<p class=desc>Set the beater-noise amount from 0 to 1. Default is 0.16.</p>
+</script>
+<script type="text/x-red" data-template-name="AudioSynthKick">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
+
+<script type="text/x-red" data-help-name="AudioSynthTom">
+	<h3>Summary</h3>
+	<div class=tooltipinfo>
+	<p>Sample-free tuned tom based on three inharmonic circular-membrane modes. The upper modes decay faster than the fundamental; a short filtered-noise burst models the stick impact.</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class=doc align=center cellpadding=3>
+		<tr class=top><th>Port</th><th>Purpose</th></tr>
+		<tr class=odd><td align=center>Out 0</td><td>Tom output</td></tr>
+	</table>
+	<h3>Functions</h3>
+	<p class=func><span class=keyword>noteOn</span>(velocity = 100);</p>
+	<p class=desc>Trigger the tom. Velocity is 0–127; zero is ignored.</p>
+	<p class=func><span class=keyword>frequency</span>(hz);</p>
+	<p class=desc>Set the fundamental frequency. The upper membrane modes are at 1.593 and 2.136 times this frequency. Default is 125 Hz.</p>
+	<p class=func><span class=keyword>length</span>(milliseconds);</p>
+	<p class=desc>Set the approximate amplitude decay time to -60 dB for the fundamental. The upper modes decay faster. Default is 420 ms.</p>
+	<p class=func><span class=keyword>pitchSweep</span>(octaves);</p>
+	<p class=desc>Set the initial pitch rise from 0 to 1.5 octaves. Default is 0.26.</p>
+	<p class=func><span class=keyword>pitchDecay</span>(milliseconds);</p>
+	<p class=desc>Set the exponential time constant of the pitch drop. Default is 42 ms.</p>
+	<p class=func><span class=keyword>secondMix</span>(level);</p>
+	<p class=desc>Set the amount of both upper membrane modes from 0 to 1. Zero leaves only the fundamental. Default is 0.55.</p>
+	<p class=func><span class=keyword>attack</span>(level);</p>
+	<p class=desc>Set the short filtered-noise stick transient from 0 to 1. Set to zero to disable it. Default is 0.22.</p>
+</script>
+<script type="text/x-red" data-template-name="AudioSynthTom">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
+
+<script type="text/x-red" data-help-name="AudioSynthSnare">
+	<h3>Summary</h3>
+	<div class=tooltipinfo>
+	<p>Sample-free snare combining a band-limited noise burst with two damped shell modes.</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class=doc align=center cellpadding=3>
+		<tr class=top><th>Port</th><th>Purpose</th></tr>
+		<tr class=odd><td align=center>Out 0</td><td>Snare output</td></tr>
+	</table>
+	<h3>Functions</h3>
+	<p class=func><span class=keyword>noteOn</span>(velocity = 100);</p>
+	<p class=desc>Trigger the snare. Velocity is 0–127; zero is ignored.</p>
+	<p class=func><span class=keyword>frequency</span>(hz);</p>
+	<p class=desc>Set the shell fundamental. The second mode is at 1.78 times this frequency. Default is 185 Hz.</p>
+	<p class=func><span class=keyword>length</span>(milliseconds);</p>
+	<p class=desc>Set both decay tails. The wire/noise tail fades close to the shell decay rather than disappearing early. Default is 190 ms.</p>
+	<p class=func><span class=keyword>snappy</span>(level);</p>
+	<p class=desc>Set the snare-wire/noise contribution from 0 to 1. Higher values give a brighter, rattling crack; lower values leave more of the shell tone. Default is 0.85.</p>
+	<p class=func><span class=keyword>tone</span>(level);</p>
+	<p class=desc>Set the tuned shell contribution from 0 to 1. Default is 0.62.</p>
+</script>
+<script type="text/x-red" data-template-name="AudioSynthSnare">
 	<div class="form-row">
 		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
 		<input type="text" id="node-input-name" placeholder="Name">

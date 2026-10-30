@@ -36,9 +36,8 @@ AudioSynthSimpleDrum::AudioSynthSimpleDrum() : AudioStream(1, inputQueueArray) {
     length(600);
     frequency(60.0f);
 
-    // Keep the original default argument. pitchMod() clamps it to 1.0f,
-    // which gives the characteristic strong initial pitch drop.
-    pitchMod(0x200);
+    // Neutral pitch modulation: 0.5 maps to zero modulation.
+    pitchMod(0.5f);
     secondMix(0.0f);
 }
 
