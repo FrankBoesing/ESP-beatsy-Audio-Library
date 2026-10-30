@@ -1,0 +1,32 @@
+{
+  "name": "esp-beatsy-audio-library",
+  "version": "1.0.0",
+  "description": "ESP32-oriented audio library based on the Teensy Audio Library API.",
+  "keywords": [
+    "audio",
+    "dsp",
+    "esp32",
+    "teensy"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FrankBoesing/ESP-beatsy-Audio-Library.git"
+  },
+  "homepage": "https://github.com/FrankBoesing/ESP-beatsy-Audio-Library",
+  "authors": [
+    {
+      "name": "Frank Boesing",
+      "maintainer": true
+    }
+  ],
+  "frameworks": [
+    "arduino"
+  ],
+  "platforms": [
+    "espressif32"
+  ],
+  "build": {
+    "srcDir": "src",
+    "includeDir": "src"
+  }
+}

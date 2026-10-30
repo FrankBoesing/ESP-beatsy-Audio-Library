@@ -6,6 +6,11 @@ ESP-beatsy is an ESP32-oriented port and adaptation of the [Teensy Audio Library
 
 **The project is work in progress.**  It is not a claim that every class has full Teensy feature parity or has been tested on every ESP32 target.
 
+## Arduino library layout
+
+The repository root is an Arduino library package. Library headers and implementation files are in `src/`; include the public API with `#include <Audio.h>`. The repository provides both `library.properties` for the Arduino Library Manager and `library.json` for PlatformIO. The PlatformIO test application is kept separately in `pio-test/`.
+
+
 ## Teensy Audio Library compatibility
 
 The library deliberately keeps the central Teensy concepts:
@@ -122,7 +127,7 @@ These examples are present in the repository. Their board-specific pin and codec
 | **AudioRecordFile** | Stand-alone mono/stereo 16-bit PCM WAV recorder. Uses a PSRAM ring buffer (512 KiB by default) and a separate writer task, optionally pinned to a core. WAV sizes are finalized and the temporary file renamed on successful stop. |
 
 
-The I2S2/I2S3 wrappers do not add extra hardware: they select a controller index. Whether those controllers exist, can be used concurrently and expose suitable pins depends on the particular ESP32 variant and board. AudioControlES8311 and AudioControlES8388 are available as codec-control classes, not as audio-stream inputs or outputs themselves. PDM direct-DAC output requires a compatible SoC/ESP-IDF combination; see [I2S.md](lib/I2S.md) for pin mapping and clock configuration.
+The I2S2/I2S3 wrappers do not add extra hardware: they select a controller index. Whether those controllers exist, can be used concurrently and expose suitable pins depends on the particular ESP32 variant and board. AudioControlES8311 and AudioControlES8388 are available as codec-control classes, not as audio-stream inputs or outputs themselves. PDM direct-DAC output requires a compatible SoC/ESP-IDF combination; see [I2S.md](docs/I2S.md) for pin mapping and clock configuration.
 
 USB audio capture from the ESP32 to the host is experimental through `AudioOutputUSB`, and host playback into the ESP32 is provided by `AudioInputUSB`. The default constructors automatically configure the required shared endpoints and route stream-enable events; `AudioMemory()` starts the managed USB device. The USB environment enables `AUDIO_USB_REDIRECT_SERIAL`, so ordinary `Serial` output uses managed CDC; `Serial0` remains UART0. Runtime `ESP_LOGE`/`ESP_LOGW`/`ESP_LOGI` messages are redirected to CDC while the host terminal is connected. The explicit-`USBAudioCard` constructors remain available for manual/advanced setup. Keep the compile-time audio sample rate aligned with the USB rate. S/PDIF output variants `AudioOutputSPDIF`, `AudioOutputSPDIF2` and `AudioOutputSPDIF3` are exposed through `Audio.h`. Each output requires exclusive use of its selected I2S controller; physical controller availability varies by SoC.
 TDM is planned; PDM output is implemented on supported targets.
@@ -176,4 +181,4 @@ Use the PlatformIO environments in [platformio.ini](platformio.ini) as the start
 
 All SD-card examples use `SD_MMC` in **4-bit mode**. The ESP32-A1S Audio Kit and Freenove ESP32-S3 Display pin mappings (`CLK`, `CMD`, `D0`–`D3`) are defined in `platformio.ini`; the old SPI SD pin definitions have been removed. On the ESP32-A1S Audio Kit, set the SD-card switches `CMD` and `DATA3` to ON.
 
-For board-specific requirements, implementation details and buffer/task notes, see the [library technical overview](lib/AudioLibrary/README.md). The current implementation is evolving, so treat the source in the selected branch as authoritative when an API or hardware detail matters.
+For board-specific requirements, implementation details and buffer/task notes, see the [library technical overview](docs/library-architecture.md). The current implementation is evolving, so treat the source in the selected branch as authoritative when an API or hardware detail matters.

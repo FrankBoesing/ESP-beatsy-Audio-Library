@@ -1810,7 +1810,7 @@ pdm.begin(PDM_DATA_PIN);</code></pre>
 	<p class="func"><span class="keyword">setSampleRate</span>(sampleRate);</p>
 	<p class="desc">Sets the PCM sample rate. The supported range is 16000–48000 Hz; changing it reconfigures the shared I²S clock and can briefly disturb active I²S streams.</p>
 	<h3>Notes</h3>
-	<p>Use separate low-pass filters for the left and right DATA lines in stereo mode. See <a href="../lib/AudioLibrary/I2S.md">the I²S/PDM implementation notes</a> for clocking details and target limitations.</p>
+	<p>Use separate low-pass filters for the left and right DATA lines in stereo mode. See <a href="I2S.md">the I²S/PDM implementation notes</a> for clocking details and target limitations.</p>
 </script>
 
 <script type="text/x-red" data-template-name="AudioOutputPDM">
@@ -4250,8 +4250,8 @@ reverb.mix(0.30f);</pre>
 
 <h3>Implementation</h3>
 	<p>No dedicated Ladder Filter example is currently included in this repository.
-		See <a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/lib/AudioLibrary/filter_ladder.h" target="_blank">filter_ladder.h</a>
-		for the API and <a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/lib/AudioLibrary/filter_ladder.cpp" target="_blank">filter_ladder.cpp</a>
+		See <a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/src/filter_ladder.h" target="_blank">filter_ladder.h</a>
+		for the API and <a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/src/filter_ladder.cpp" target="_blank">filter_ladder.cpp</a>
 		for the implementation.</p>
 	<h3>Notes</h3>
 	<p>This port uses floating-point math and internally oversamples by 4x. Processing
