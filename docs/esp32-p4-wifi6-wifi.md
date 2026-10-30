@@ -19,7 +19,7 @@ The P4 bootloader image overlaps the default partition-table address `0x8000` in
 
 ## Verify Wi-Fi connectivity
 
-Copy [P4WifiStation.cpp](../examples/HardwareTesting/P4WifiStation/P4WifiStation.cpp) to your local PlatformIO project's \`src/main.cpp\`. Create \`src/secrets.h\` locally with your network details:
+Copy [P4WifiStation.ino](../examples/HardwareTesting/P4WifiStation/P4WifiStation.ino) to your local PlatformIO project's \`pio-test/\`. Create \`pio-test/secrets.h\` locally with your network details:
 
 \`\`\`cpp
 #define WIFI_SSID "your-2.4-GHz-SSID"
@@ -74,7 +74,7 @@ This avoids relying on the missing Espressif URL and avoids putting a firmware i
    \`\`\`
 
 3. Run \`ipconfig\` and note the PC's IPv4 address for the same WLAN/Ethernet LAN as the P4. If the PC address is \`192.168.178.10\`, the image URL will be \`http://192.168.178.10:8000/network_adapter.bin\`. Allow Python through Windows Firewall for private networks if prompted. Do not expose this server to the public internet.
-4. In your local, untracked \`src/secrets.h\`, keep the Wi-Fi definitions and add the image URL:
+4. In your local, untracked \`pio-test/secrets.h\`, keep the Wi-Fi definitions and add the image URL:
 
    \`\`\`cpp
    #define WIFI_SSID "your-2.4-GHz-SSID"
@@ -86,7 +86,7 @@ This avoids relying on the missing Espressif URL and avoids putting a firmware i
 
 ## Run the custom OTA updater
 
-Copy [P4WifiHostedOTA.cpp](../examples/HardwareTesting/P4WifiHostedOTA/P4WifiHostedOTA.cpp) to your local PlatformIO project's \`src/main.cpp\`. It downloads the explicit \`HOSTED_FW_URL\`, streams the image to the C6 through the core's \`hostedBeginUpdate/hostedWriteUpdate/hostedEndUpdate/hostedActivateUpdate\` calls, and restarts the P4 after success. It does not use the hard-coded, currently missing v2.13.0 URL from \`ESP_HostedOTA\`.
+Copy [P4WifiHostedOTA.ino](../examples/HardwareTesting/P4WifiHostedOTA/P4WifiHostedOTA.ino) to your local PlatformIO project's \`pio-test/\`. It downloads the explicit \`HOSTED_FW_URL\`, streams the image to the C6 through the core's \`hostedBeginUpdate/hostedWriteUpdate/hostedEndUpdate/hostedActivateUpdate\` calls, and restarts the P4 after success. It does not use the hard-coded, currently missing v2.13.0 URL from \`ESP_HostedOTA\`.
 
 \`\`\`powershell
 pio run -e esp32-p4-wifi6 -t clean

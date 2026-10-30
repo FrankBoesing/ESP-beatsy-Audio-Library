@@ -67,7 +67,6 @@ AudioConnection openHatToRight(openHatEnvelope, 0, rightMixer, 2);
 AudioConnection leftToOutput(leftMixer, 0, audioOut, 0);
 AudioConnection rightToOutput(rightMixer, 0, audioOut, 1);
 
-namespace {
 
 constexpr uint32_t BPM = 118;
 constexpr uint32_t STEP_MS = 60000UL / (BPM * 4U);
@@ -185,7 +184,6 @@ void printStatistics()
     AudioMemoryUsageMaxReset();
 }
 
-} // namespace
 
 void setup()
 {

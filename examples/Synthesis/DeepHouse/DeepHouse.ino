@@ -98,7 +98,6 @@ AudioConnection reverbToRight(chordReverb, 1, rightMixer, 3);
 AudioConnection leftToOutput(leftMixer, 0, audioOut, 0);
 AudioConnection rightToOutput(rightMixer, 0, audioOut, 1);
 
-namespace {
 
 constexpr uint32_t BPM = 125;
 constexpr uint32_t STEP_MS = 60000UL / (BPM * 4U); // one sixteenth note
@@ -338,7 +337,6 @@ void printStatistics()
     AudioMemoryUsageMaxReset();
 }
 
-} // namespace
 
 void setup()
 {

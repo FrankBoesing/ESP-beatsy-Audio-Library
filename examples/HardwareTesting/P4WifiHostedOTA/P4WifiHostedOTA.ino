@@ -3,7 +3,7 @@
 // Build a matching ESP-Hosted v2.13.0 slave image first (see
 // docs/esp32-p4-wifi6-wifi.md). Copy the resulting network_adapter.bin to a
 // folder served by a temporary HTTP server on the same trusted LAN.
-// Define WIFI_SSID, WIFI_PASS and HOSTED_FW_URL in local src/secrets.h.
+// Define WIFI_SSID, WIFI_PASS and HOSTED_FW_URL in local secrets.h in the sketch folder.
 //
 // HOSTED_FW_URL should look like:
 //   "http://192.168.178.10:8000/network_adapter.bin"
@@ -22,7 +22,7 @@
 #include "secrets.h"
 
 #ifndef HOSTED_FW_URL
-#error "Define HOSTED_FW_URL in local src/secrets.h"
+#error "Define HOSTED_FW_URL in local secrets.h in the sketch folder"
 #endif
 
 static constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 30000;

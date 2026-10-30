@@ -61,7 +61,6 @@ AudioConnection masterToRight(masterMixer, 0, audioOut, 1);
 // same mix as mono WAV to avoid doubling the file size without gaining stereo.
 AudioConnection masterToRecorder(masterMixer, recorder);
 
-namespace {
 
 constexpr uint32_t BPM = 107;
 constexpr uint32_t STEP_MS = 60000UL / (BPM * 4U); // sixteenth notes
@@ -235,7 +234,6 @@ void playStep(uint32_t now)
     }
 }
 
-} // namespace
 
 void setup()
 {
@@ -252,12 +250,12 @@ void setup()
     AudioMemory(40);
     AudioNoInterrupts();
 
-    kick.setInstrument(RockDrumTables::kickInstrument);
-    snare.setInstrument(RockDrumTables::snareInstrument);
-    highTom.setInstrument(RockDrumTables::highTomInstrument);
-    lowTom.setInstrument(RockDrumTables::lowTomInstrument);
-    closedHat.setInstrument(RockDrumTables::closedHatInstrument);
-    openHat.setInstrument(RockDrumTables::openHatInstrument);
+    kick.setInstrument(kickInstrument);
+    snare.setInstrument(snareInstrument);
+    highTom.setInstrument(highTomInstrument);
+    lowTom.setInstrument(lowTomInstrument);
+    closedHat.setInstrument(closedHatInstrument);
+    openHat.setInstrument(openHatInstrument);
 
     drumMixer.gain(0, 0.72f); // kick
     drumMixer.gain(1, 0.64f); // snare
