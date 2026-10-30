@@ -70,9 +70,9 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
       <input id="wavFile" type="file" accept=".wav,audio/wav,audio/x-wav">
       <label for="sampleRate">Output sample rate</label>
       <select id="sampleRate">
-        <option value="auto">Keep source rate when supported (otherwise 44100 Hz)</option>
+        <option value="44100" selected>44100 Hz (default)</option>
+        <option value="auto">Keep source rate when supported</option>
         <option value="48000">48000 Hz</option>
-        <option value="44100">44100 Hz</option>
         <option value="22050">22050 Hz</option>
         <option value="11025">11025 Hz</option>
       </select>
