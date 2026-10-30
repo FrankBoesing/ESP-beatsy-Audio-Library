@@ -242,8 +242,8 @@ if (hasUsbAudio) {
 		+ " * event callback are needed in this managed mode.\n"
 		+ " * Audio.h redirects Serial to managed CDC when the matching node macro\n"
 		+ " * is defined for the sketch; use Serial0 for physical UART0.\n"
-		+ (hasUsbInput ? 		+ " *   -D AUDIO_INPUT_USB\n" : "")
-		+ (hasUsbOutput ? 		+ " *   -D AUDIO_OUTPUT_USB\n" : "")
+		+ (hasUsbInput ? " *   -D AUDIO_INPUT_USB\n" : "")
+		+ (hasUsbOutput ? " *   -D AUDIO_OUTPUT_USB\n" : "")
 		+ " * Put these optional Serial-routing defines in PlatformIO build_src_flags.\n"
 		+ " * Runtime ESP-IDF logs are routed to CDC while the host terminal is connected.\n"
 		+ " * Set AUDIO_SAMPLE_RATE_EXACT to the intended USB rate in build_flags.\n"
