@@ -87,7 +87,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:4px 0 12px}
     <h2>Analysis settings</h2>
     <div class="controls">
       <div><label for="fftSize">FFT analyzer</label><select id="fftSize"><option value="256">AudioAnalyzeFFT256</option><option value="1024" selected>AudioAnalyzeFFT1024</option></select><div class="help">The 256 analyzer averages 8 frames by default.</div></div>
-      <div><label for="sampleRate">Sample rate</label><select id="sampleRate"><option value="22050">22,050 Hz</option><option value="44100">44,100 Hz</option><option value="48000" selected>48,000 Hz</option></select><div class="help">Used for frequency-axis and timing calculations.</div></div>
+      <div><label for="sampleRate">Sample rate</label><select id="sampleRate"><option value="44100" selected>44,100 Hz</option><option value="48000">48,000 Hz</option><option value="22050">22,050 Hz</option></select><div class="help">Used for frequency-axis and timing calculations.</div></div>
       <div><label for="window">Library window</label><select id="window"><option value="None">None (nullptr / rectangular)</option></select><div class="help">Selects the exact Q15 coefficients embedded from data_windows.c.</div></div>
       <div><label for="xScale">Spectrum frequency axis</label><select id="xScale"><option value="log" selected>Logarithmic</option><option value="linear">Linear</option></select><div class="help">Logarithmic display starts at the first non-zero bin.</div></div>
     </div>
@@ -338,7 +338,7 @@ function render(){
   $("frequency2").disabled=s.signalType!=="two";
 }
 function resetDefaults(){
-  $("fftSize").value="1024";$("sampleRate").value="48000";$("window").value="Hanning";$("xScale").value="log";
+  $("fftSize").value="1024";$("sampleRate").value="44100";$("window").value="Hanning";$("xScale").value="log";
   $("signalType").value="sine";$("frequency").value="1000";$("frequency2").value="1180";
   $("correctAmplitude").checked=false;$("showRaw").checked=true;
   render();
