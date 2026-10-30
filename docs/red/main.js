@@ -44,20 +44,187 @@ var RED = (function() {
 		RED.view.importNodes(data);
 		event.preventDefault();
 	});
-	function make_name(n) {
-		var name = (n.name ? n.name : n.id);
-		name = name.replace(" ", "_").replace("+", "_").replace("-", "_");
-		return name
+	function cpp_base_name(n) {
+		return (n._def && n._def.shortName) ? n._def.shortName : n.type.replace(/^Analog/, "");
+	}
+
+	function normalize_cpp_name(name) {
+		return name.replace(" ", "_").replace("+", "_").replace("-", "_");
+	}
+
+	function is_auto_cpp_name(n) {
+		var base = cpp_base_name(n);
+		var name = n.name ? n.name : n.id;
+		if (name !== n.id || name.substring(0, base.length) !== base) return false;
+		var suffix = name.substring(base.length);
+		if (/[0-9]$/.test(base)) {
+			return suffix === "" || (suffix.charAt(0) === "_" && /^\d+$/.test(suffix.substring(1)));
+		}
+		return /^\d+$/.test(suffix);
+	}
+
+	function create_cpp_names(nns) {
+		var names = Object.create(null);
+		var used = Object.create(null);
+
+		// Reserve names that were explicitly set by the user.
+		for (var i = 0; i < nns.length; i++) {
+			var n = RED.nodes.node(nns[i].id);
+			if (n && !is_auto_cpp_name(n)) {
+				var name = normalize_cpp_name(n.name ? n.name : n.id);
+				names[n.id] = name;
+				used[name] = true;
+			}
+		}
+
+		// Rebuild default names from the node type, removing legacy suffixes
+		// such as i2s2_1 when only one node uses the i2s2 basename.
+		for (var i = 0; i < nns.length; i++) {
+			var n = RED.nodes.node(nns[i].id);
+			if (!n || Object.prototype.hasOwnProperty.call(names, n.id)) continue;
+
+			var base = cpp_base_name(n);
+			var hasNumericSuffix = /[0-9]$/.test(base);
+			var count = hasNumericSuffix ? 0 : 1;
+			var name = hasNumericSuffix ? base : base + count;
+			while (used[name]) {
+				count++;
+				name = base + (hasNumericSuffix ? "_" : "") + count;
+			}
+			names[n.id] = name;
+			used[name] = true;
+		}
+		return names;
+	}
+
+	function make_name(n, cppNames) {
+		var name;
+		if (cppNames && Object.prototype.hasOwnProperty.call(cppNames, n.id)) {
+			name = cppNames[n.id];
+		} else {
+			name = normalize_cpp_name(n.name ? n.name : n.id);
+		}
+		return name;
+	}
+
+	// Preserve the original geometric order where it is still needed,
+	// especially for stable automatic C++ names.
+	function sort_nodes_by_position(nns) {
+		var ordered = nns.slice();
+		ordered.sort(function(a, b) {
+			return (a.x + a.y / 250) - (b.x + b.y / 250);
+		});
+		return ordered;
+	}
+
+	// Return a stable topological ordering of the audio graph.
+	// Nodes that are simultaneously ready retain the old geometric order.
+	function sort_nodes_topologically(nns) {
+		var orderedByPosition = sort_nodes_by_position(nns);
+
+		var nodesById = Object.create(null);
+		var indegree = Object.create(null);
+		var outgoing = Object.create(null);
+		var positionIndex = Object.create(null);
+
+		for (var i = 0; i < orderedByPosition.length; i++) {
+			var node = orderedByPosition[i];
+			nodesById[node.id] = node;
+			indegree[node.id] = 0;
+			outgoing[node.id] = [];
+			positionIndex[node.id] = i;
+		}
+
+		// Build the directed graph from source-node wires. Count every wire,
+		// including parallel connections, so every edge is removed exactly once.
+		for (var i = 0; i < orderedByPosition.length; i++) {
+			var node = orderedByPosition[i];
+			if (!node.wires) continue;
+
+			for (var j = 0; j < node.wires.length; j++) {
+				var wires = node.wires[j];
+				if (!wires) continue;
+
+				for (var k = 0; k < wires.length; k++) {
+					var wire = wires[k];
+					if (!wire) continue;
+
+					var parts = wire.split(":");
+					if (parts.length != 2 ||
+						!Object.prototype.hasOwnProperty.call(nodesById, parts[0])) {
+						continue;
+					}
+
+					outgoing[node.id].push(parts[0]);
+					indegree[parts[0]]++;
+				}
+			}
+		}
+
+		// Kahn's algorithm. Keep the ready queue ordered by the previous
+		// geometric order to make exports deterministic and minimize diffs.
+		var ready = [];
+		for (var i = 0; i < orderedByPosition.length; i++) {
+			var id = orderedByPosition[i].id;
+			if (indegree[id] === 0) ready.push(id);
+		}
+
+		var sorted = [];
+		while (ready.length > 0) {
+			var id = ready.shift();
+			sorted.push(nodesById[id]);
+
+			var targets = outgoing[id];
+			for (var j = 0; j < targets.length; j++) {
+				var targetId = targets[j];
+				indegree[targetId]--;
+				if (indegree[targetId] === 0) {
+					ready.push(targetId);
+					ready.sort(function(a, b) {
+						return positionIndex[a] - positionIndex[b];
+					});
+				}
+			}
+		}
+
+		// Feedback paths can contain cycles, for which a complete topological
+		// ordering does not exist. Preserve export functionality by appending
+		// the remaining nodes in their old geometric order and report the issue.
+		if (sorted.length != orderedByPosition.length) {
+			var sortedIds = Object.create(null);
+			for (var i = 0; i < sorted.length; i++) {
+				sortedIds[sorted[i].id] = true;
+			}
+
+			var remaining = [];
+			for (var i = 0; i < orderedByPosition.length; i++) {
+				var node = orderedByPosition[i];
+				if (!Object.prototype.hasOwnProperty.call(sortedIds, node.id)) {
+					remaining.push(node);
+				}
+			}
+
+			if (typeof console !== "undefined" && console.warn) {
+				console.warn(
+					"Audio graph contains a feedback cycle. A complete topological " +
+					"export order is not possible; remaining nodes use geometric order.",
+					remaining.map(function(node) { return node.name || node.id; })
+				);
+			}
+
+			sorted = sorted.concat(remaining);
+		}
+
+		return sorted;
 	}
 
 	function save(force) {
 		RED.storage.update();
 
 		if (RED.nodes.hasIO()) {
-			var nns = RED.nodes.createCompleteNodeSet();
-			// sort by horizontal position, plus slight vertical position,
-			// for well defined update order that follows signal flow
-			nns.sort(function(a,b){ return (a.x + a.y/250) - (b.x + b.y/250); });
+			var nodeSet = RED.nodes.createCompleteNodeSet();
+			var cppNames = create_cpp_names(sort_nodes_by_position(nodeSet));
+			var nns = sort_nodes_topologically(nodeSet);
 			//console.log(JSON.stringify(nns));
 
 			var usbInputNodes = nns.filter(function(n) { return n.type === "AudioInputUSB"; });
@@ -93,8 +260,16 @@ cpp += "// GUItool: begin automatically generated code\n";
 				if (node && (node.outputs > 0 || node._def.inputs > 0)) {
 					cpp += n.type + " ";
 					for (var j=n.type.length; j<24; j++) cpp += " ";
-					var name = make_name(n);
-					cpp += name + "; ";
+					var name = make_name(n, cppNames);
+					// AudioMixerN's constructor must match the input count shown by this node.
+					var constructorArgs = "";
+					if (n.type === "AudioMixerN") {
+						var mixerChannels = parseInt(n.channels, 10);
+						if (isNaN(mixerChannels)) mixerChannels = 32;
+						mixerChannels = Math.max(4, Math.min(32, mixerChannels));
+						constructorArgs = "(" + mixerChannels + ")";
+					}
+					cpp += name + constructorArgs + "; ";
 					for (var j=n.id.length; j<14; j++) cpp += " ";
 					cpp += "//xy=" + n.x + "," + n.y + "\n";
 				}
@@ -117,8 +292,8 @@ cpp += "// GUItool: begin automatically generated code\n";
 									cpp += "AudioConnection          patchCord" + cordcount + "(";
 									var src = RED.nodes.node(n.id);
 									var dst = RED.nodes.node(parts[0]);
-									var src_name = make_name(src);
-									var dst_name = make_name(dst);
+									var src_name = make_name(src, cppNames);
+									var dst_name = make_name(dst, cppNames);
 									if (j == 0 && parts[1] == 0 && src && src.outputs == 1 && dst && dst._def.inputs == 1) {
 										cpp += src_name + ", " + dst_name;
 									} else {
@@ -141,7 +316,7 @@ cpp += "// GUItool: begin automatically generated code\n";
 				if (node && node.outputs == 0 && node._def.inputs == 0) {
 					cpp += n.type + " ";
 					for (var j=n.type.length; j<24; j++) cpp += " ";
-					cpp += make_name(n) + "; ";
+					cpp += make_name(n, cppNames) + "; ";
 					for (var j=n.id.length; j<14; j++) cpp += " ";
 					cpp += "//xy=" + n.x + "," + n.y + "\n";
 				}

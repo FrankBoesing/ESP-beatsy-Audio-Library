@@ -56,13 +56,12 @@ RED.nodes = (function() {
 		console.log("getUniqueCppName, n.type=" + n.type + ", n._def.shortName=" + n._def.shortName);
 		var basename = (n._def.shortName) ? n._def.shortName : n.type.replace(/^Analog/, "");
 		console.log("getUniqueCppName, using basename=" + basename);
-		var count = 1;
-		var sep = /[0-9]$/.test(basename) ? "_" : "";
-		var name;
-		while (1) {
-			name = basename + sep + count;
-			if (!checkID(name)) break;
+		var hasNumericSuffix = /[0-9]$/.test(basename);
+		var count = hasNumericSuffix ? 0 : 1;
+		var name = hasNumericSuffix ? basename : basename + count;
+		while (checkID(name)) {
 			count++;
+			name = basename + (hasNumericSuffix ? "_" : "") + count;
 		}
 		console.log("getUniqueCppName, unique name=" + name);
 		return name;
@@ -282,8 +281,8 @@ RED.nodes = (function() {
 			}
 		}
 		if (n._def.category != "config") {
-			node.x = n.x;
-			node.y = n.y;
+			node.x = Math.round(n.x);
+			node.y = Math.round(n.y);
 			node.z = n.z;
 			node.wires = [];
 			for(var i=0;i<n.outputs;i++) {
@@ -407,9 +406,20 @@ RED.nodes = (function() {
 				var names = [];
 				var yPos = [];
 				
-				// may have imported a definition whose initializer has 
-				// commas in it; don't confuse this with a definition of
-				// more than one object!
+				// Preserve AudioMixerN's constructor argument before removing
+				// initializer expressions from the declaration.
+				var mixerChannelsByName = {};
+				if (type === "AudioMixerN") {
+					var mixerMatch;
+					var mixerPattern = /([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*(\d+)\s*\)/g;
+					while ((mixerMatch = mixerPattern.exec(name)) !== null) {
+						var parsedChannels = parseInt(mixerMatch[2], 10);
+						mixerChannelsByName[mixerMatch[1]] = Math.max(4, Math.min(32, parsedChannels));
+					}
+				}
+
+				// An initializer may contain commas; remove parenthesized
+				// expressions before splitting multiple object declarations.
 				while (name.match(/\([^)]*\)/)) // find stuff in matching brackets
 				  name = name.replace(/\([^()]*\)/,'') // and remove it, including the brackets
 				
@@ -429,6 +439,9 @@ RED.nodes = (function() {
 					//newY = newY == 0 ? lastY + (dH * n) + gap : newY;
 					//lastY = Math.max(lastY, newY);
 					var node = new Object({"order": n, "id": name, "name": name, "type": type, "x": newX, "y": newY, "z": 0, "wires": []});
+					if (type === "AudioMixerN") {
+						node.channels = mixerChannelsByName[name] || 32;
+					}
 					// netter solution: create new id
 					if (RED.nodes.node(node.id) !== null) {
 						node.z = RED.view.getWorkspace();
@@ -648,12 +661,22 @@ RED.nodes = (function() {
 								outputs: n.outputs||n.wires.length
 							}
 						}
+						// MixerN's input count is per instance, so its definition must not be shared.
+						if (node.type === "AudioMixerN") {
+							node._def = $.extend({}, node._def);
+						}
 						node.outputs = n.outputs||node._def.outputs;
 
 						for (var d2 in node._def.defaults) {
 							if (node._def.defaults.hasOwnProperty(d2)) {
 								node[d2] = n[d2];
 							}
+						}
+						if (node.type === "AudioMixerN") {
+							var mixerChannels = parseInt(node.channels, 10);
+							if (isNaN(mixerChannels)) mixerChannels = 32;
+							node.channels = Math.max(4, Math.min(32, mixerChannels));
+							node._def.inputs = node.channels;
 						}
 
 						node.name = getUniqueName(n);

@@ -99,17 +99,30 @@ RED.editor = (function() {
 				node.ports.pop();
 			}
 			RED.nodes.eachLink(function(l) {
-					if (l.source === node && l.sourcePort >= node.outputs) {
-						removedLinks.push(l);
-					}
+				if (l.source === node && l.sourcePort >= node.outputs) {
+					removedLinks.push(l);
+				}
 			});
-			for (var l=0;l<removedLinks.length;l++) {
-				RED.nodes.removeLink(removedLinks[l]);
-			}
 		} else if (node.outputs > node.ports.length) {
 			while (node.outputs > node.ports.length) {
 				node.ports.push(node.ports.length);
 			}
+		}
+
+		if (node.type === "AudioMixerN") {
+			var mixerChannels = parseInt(node.channels, 10);
+			if (isNaN(mixerChannels)) mixerChannels = 32;
+			node.channels = Math.max(4, Math.min(32, mixerChannels));
+			node._def.inputs = node.channels;
+			RED.nodes.eachLink(function(l) {
+				if (l.target === node && l.targetPort >= node.channels) {
+					removedLinks.push(l);
+				}
+			});
+		}
+
+		for (var l = 0; l < removedLinks.length; l++) {
+			RED.nodes.removeLink(removedLinks[l]);
 		}
 		return removedLinks;
 	}

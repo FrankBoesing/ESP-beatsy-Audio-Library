@@ -416,7 +416,39 @@ span.mainfunction {color: #993300; font-weight: bolder}
 		{"type":"AudioOutputTDM2",       "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
 		{"type":"AudioOutputADAT",       "resource":"I2S Device",    "shareable":true,  "setting":"ADAT Protocol"},
 		{"type":"AudioOutputADAT",       "resource":"Sample Rate",   "shareable":true,  "setting":"Audio Sample Rate"},
-		{"type":"AudioOutputUSB",        "resource":"USB Tx Endpoint","shareable":false}
+		{"type":"AudioOutputUSB",        "resource":"USB Tx Endpoint","shareable":false},
+		{"type":"AudioInputI2S3",  "resource":"I2S3 Device",  "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioInputI2S3",  "resource":"Sample Rate",  "shareable":true,  "setting":"Audio Sample Rate"},
+		{"type":"AudioOutputI2S3",  "resource":"I2S3 Device",  "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioOutputI2S3",  "resource":"Sample Rate",  "shareable":true,  "setting":"Audio Sample Rate"},
+		{"type":"AudioInputI2S3",  "resource":"I2S3 RX",  "shareable":false},
+		{"type":"AudioOutputI2S3",  "resource":"I2S3 TX",  "shareable":false},
+		{"type":"AudioOutputPDM",  "resource":"I2S Device",  "shareable":false,  "setting":"PDM DAC"},
+		{"type":"AudioOutputPDM",  "resource":"I2S TX",  "shareable":false},
+		{"type":"AudioOutputPDM",  "resource":"Sample Rate",  "shareable":true,  "setting":"Audio Sample Rate"},
+		{"type":"AudioInputI2S",  "resource":"I2S RX",  "shareable":false},
+		{"type":"AudioInputI2SQuad",  "resource":"I2S RX",  "shareable":false},
+		{"type":"AudioInputI2SHex",  "resource":"I2S RX",  "shareable":false},
+		{"type":"AudioInputI2SOct",  "resource":"I2S RX",  "shareable":false},
+		{"type":"AudioInputI2Sslave",  "resource":"I2S RX",  "shareable":false},
+		{"type":"AudioInputPDM",  "resource":"I2S RX",  "shareable":false},
+		{"type":"AudioInputTDM",  "resource":"I2S RX",  "shareable":false},
+		{"type":"AudioOutputI2S",  "resource":"I2S TX",  "shareable":false},
+		{"type":"AudioOutputI2SQuad",  "resource":"I2S TX",  "shareable":false},
+		{"type":"AudioOutputI2SHex",  "resource":"I2S TX",  "shareable":false},
+		{"type":"AudioOutputI2SOct",  "resource":"I2S TX",  "shareable":false},
+		{"type":"AudioOutputI2Sslave",  "resource":"I2S TX",  "shareable":false},
+		{"type":"AudioOutputSPDIF",  "resource":"I2S TX",  "shareable":false},
+		{"type":"AudioOutputPT8211",  "resource":"I2S TX",  "shareable":false},
+		{"type":"AudioOutputTDM",  "resource":"I2S TX",  "shareable":false},
+		{"type":"AudioOutputADAT",  "resource":"I2S TX",  "shareable":false},
+		{"type":"AudioInputI2S2",  "resource":"I2S2 RX",  "shareable":false},
+		{"type":"AudioInputPDM2",  "resource":"I2S2 RX",  "shareable":false},
+		{"type":"AudioInputTDM2",  "resource":"I2S2 RX",  "shareable":false},
+		{"type":"AudioOutputI2S2",  "resource":"I2S2 TX",  "shareable":false},
+		{"type":"AudioOutputSPDIF2",  "resource":"I2S2 TX",  "shareable":false},
+		{"type":"AudioOutputPT8211_2",  "resource":"I2S2 TX",  "shareable":false},
+		{"type":"AudioOutputTDM2",  "resource":"I2S2 TX",  "shareable":false}
 	]}
 </script>
 
@@ -681,6 +713,22 @@ span.mainfunction {color: #993300; font-weight: bolder}
 			}
 		},
 		{
+			"type": "AudioSynthHandpan",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "handpan",
+				"inputs": 0,
+				"outputs": 1,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
 			"type": "AudioSynthKarplusStrong",
 			"data": {
 				"defaults": {
@@ -723,6 +771,22 @@ span.mainfunction {color: #993300; font-weight: bolder}
 				"shortName": "sine_hires",
 				"inputs": 0,
 				"outputs": 2,
+				"category": "synth-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioSynthWaveformSineModulated",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "sineMod",
+				"inputs": 1,
+				"outputs": 1,
 				"category": "synth-function",
 				"color": "#E6E0F8",
 				"icon": "arrow-in.png"
@@ -930,6 +994,22 @@ span.mainfunction {color: #993300; font-weight: bolder}
 				},
 				"shortName": "freeverbs",
 				"inputs": 1,
+				"outputs": 2,
+				"category": "effect-function",
+				"color": "#E6E0F8",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioEffectVintageReverb",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "vintageReverb",
+				"inputs": 2,
 				"outputs": 2,
 				"category": "effect-function",
 				"color": "#E6E0F8",
@@ -1216,22 +1296,6 @@ span.mainfunction {color: #993300; font-weight: bolder}
 			}
 		},
 		{
-			"type": "AudioAnalyzePrint",
-			"data": {
-				"defaults": {
-					"name": {
-						"value": "new"
-					}
-				},
-				"shortName": "print",
-				"inputs": 1,
-				"outputs": 0,
-				"category": "analyze-function",
-				"color": "#E6E0F8",
-				"icon": "arrow-in.png"
-			}
-		},
-		{
 			"type": "AudioInputI2S3",
 			"data": {
 				"defaults": {
@@ -1239,11 +1303,27 @@ span.mainfunction {color: #993300; font-weight: bolder}
 						"value": "new"
 					}
 				},
-				"shortName": "i2s3_in",
+				"shortName": "i2s3",
 				"inputs": 0,
 				"outputs": 2,
 				"category": "input-function",
 				"color": "#D9EAF7",
+				"icon": "arrow-in.png"
+			}
+		},
+		{
+			"type": "AudioInputUSB",
+			"data": {
+				"defaults": {
+					"name": {
+						"value": "new"
+					}
+				},
+				"shortName": "usb",
+				"inputs": 0,
+				"outputs": 2,
+				"category": "input-function",
+				"color": "#E6E0F8",
 				"icon": "arrow-in.png"
 			}
 		},
@@ -1255,7 +1335,7 @@ span.mainfunction {color: #993300; font-weight: bolder}
 						"value": "new"
 					}
 				},
-				"shortName": "i2s3_out",
+				"shortName": "i2s3",
 				"inputs": 2,
 				"outputs": 0,
 				"category": "output-function",
@@ -1349,6 +1429,9 @@ span.mainfunction {color: #993300; font-weight: bolder}
 				"defaults": {
 					"name": {
 						"value": "new"
+					},
+					"channels": {
+						"value": 32
 					}
 				},
 				"shortName": "mixerN",
@@ -1444,125 +1527,34 @@ span.mainfunction {color: #993300; font-weight: bolder}
 	</div>
 </script>
 
-<script type="text/x-red" data-help-name="AudioInputI2SQuad">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive 16 bit quad (4) channel audio from two I2S devices, using I2S master mode.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Channel #1</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Channel #2</td></tr>
-		<tr class=odd><td align=center>Out 2</td><td>Channel #3</td></tr>
-		<tr class=odd><td align=center>Out 3</td><td>Channel #4</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from the I2S hardware to its 4 output ports.</p>
-	<h3>Hardware</h3>
-	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughQuad
-	</p>
-	<h3>Notes</h3>
-</script>
-<script type="text/x-red" data-template-name="AudioInputI2SQuad">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioInputI2SHex">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive 6 channel audio from three I2S devices, using I2S master mode.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Channel #1</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Channel #2</td></tr>
-		<tr class=odd><td align=center>Out 2</td><td>Channel #3</td></tr>
-		<tr class=odd><td align=center>Out 3</td><td>Channel #4</td></tr>
-		<tr class=odd><td align=center>Out 4</td><td>Channel #5</td></tr>
-		<tr class=odd><td align=center>Out 5</td><td>Channel #6</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from the I2S hardware to its 6 output ports.</p>
-	<h3>Hardware</h3>
-	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
-	
-	<h3>Examples</h3>
-	<!--<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughQuad
-	</p>-->
-	<h3>Notes</h3>
-	<p>Concurrent I²S streams can share peripheral and pin-multiplexing resources. Check the target MCU's available I²S data lanes and routing before combining multiple I²S nodes.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioInputI2SHex">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioInputI2SOct">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive 8 channel audio from three I2S devices, using I2S master mode.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Channel #1</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Channel #2</td></tr>
-		<tr class=odd><td align=center>Out 2</td><td>Channel #3</td></tr>
-		<tr class=odd><td align=center>Out 3</td><td>Channel #4</td></tr>
-		<tr class=odd><td align=center>Out 4</td><td>Channel #5</td></tr>
-		<tr class=odd><td align=center>Out 5</td><td>Channel #6</td></tr>
-		<tr class=odd><td align=center>Out 6</td><td>Channel #7</td></tr>
-		<tr class=odd><td align=center>Out 7</td><td>Channel #8</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from the I2S hardware to its 8 output ports.</p>
-	<h3>Hardware</h3>
-	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
-	
-	<h3>Examples</h3>
-	<!--<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughQuad
-	</p>-->
-	<h3>Notes</h3>
-	<p>Concurrent I²S streams can share peripheral and pin-multiplexing resources. Check the target MCU's available I²S data lanes and routing before combining multiple I²S nodes.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioInputI2SOct">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
 <script type="text/x-red" data-help-name="AudioInputI2S2">
 	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive 16-bit stereo audio from a second I²S peripheral, where the target platform supports one.</p>
+	<div class="tooltipinfo">
+	<p>Receive 16-bit stereo PCM audio from an I²S device using the second hardware I²S controller (ESP-IDF controller index 1) in master mode.</p>
+	<p><strong>Availability:</strong> The classic ESP32 and ESP32-S3 provide two I²S controllers; the ESP32-P4 provides three.</p>
 	</div>
 	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Right Channel</td></tr>
+	<table class="doc" align="center" cellpadding="3">
+		<tr class="top"><th>Port</th><th>Purpose</th></tr>
+		<tr class="odd"><td align="center">Out 0</td><td>Left Channel</td></tr>
+		<tr class="odd"><td align="center">Out 1</td><td>Right Channel</td></tr>
 	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from the I2S hardware to its 2 output ports.</p>
 	<h3>Hardware</h3>
-	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
-	
-	</p>
+	<p>The interface uses Philips I²S standard, stereo, with 16-bit slots. In master mode, the ESP32 generates BCLK and WS/LRCLK. MCLK is generated when routed; the configured MCLK is 256 times the audio sample rate.</p>
+	<p>Board-specific pin assignments are required: BCLK, WS/LRCLK, DIN and optional MCLK.</p>
+	<h3>Setup</h3>
+	<p>Supply the pins through the <code>AudioInputI2S2::Pins</code> constructor or <code>begin(const Pins&amp;)</code>. The pin order is BCLK, WS, DIN, MCLK. The class selects controller index 1 automatically.</p>
+	<pre><code>AudioInputI2S2 i2s2({BCLK_PIN, WS_PIN, DIN_PIN, MCLK_PIN});
+AudioMemory(12);</code></pre>
+	<h3>Functions</h3>
+	<p class="func"><span class="keyword">begin</span>(); / <span class="keyword">begin</span>(const Pins&amp; pins);</p>
+	<p class="desc">Starts the receiver using its stored or supplied board-specific pin assignment.</p>
+	<p class="func"><span class="keyword">end</span>(); / <span class="keyword">isRunning</span>();</p>
+	<p class="desc">Stops the receiver and reports whether it is running.</p>
+	<p class="func"><span class="keyword">rxBlockCount</span>(); / <span class="keyword">rxErrorCount</span>(); / <span class="keyword">droppedBlockCount</span>();</p>
+	<p class="desc">Return the number of received DMA blocks, RX errors and dropped audio blocks since the last start.</p>
 	<h3>Notes</h3>
+	<p>All active I²S controllers use the library's global AudioStream sample rate. Input and output may share this controller for full-duplex operation when their clock and pin configuration matches. Do not create two inputs or two outputs on the same controller.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioInputI2S2">
 	<div class="form-row">
@@ -1572,448 +1564,36 @@ span.mainfunction {color: #993300; font-weight: bolder}
 </script>
 
 
-<script type="text/x-red" data-help-name="AudioInputSPDIF3">
+<script type="text/x-red" data-help-name="AudioInputI2S3">
 	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive S/PDIF digital audio at the external source's sample rate.</p>
-	<p><span style="color:red">This input is incompatible with most other inputs and outputs</span>
-		which run at the audio graph's configured sample rate.</p>
+	<div class="tooltipinfo">
+	<p>Receive 16-bit stereo PCM audio from an I²S device using the third hardware I²S controller (ESP-IDF controller index 2) in master mode.</p>
+	<p><strong>Availability:</strong> This controller exists only on SoCs with at least three I²S peripherals. The ESP32-P4 provides three; the classic ESP32 and ESP32-S3 provide two.</p>
 	</div>
 	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Right Channel</td></tr>
+	<table class="doc" align="center" cellpadding="3">
+		<tr class="top"><th>Port</th><th>Purpose</th></tr>
+		<tr class="odd"><td align="center">Out 0</td><td>Left Channel</td></tr>
+		<tr class="odd"><td align="center">Out 1</td><td>Right Channel</td></tr>
 	</table>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>pllLocked</span>();</p>
-	<p class=desc>Returns true if the S/PDIF phase locked loop is tracking
-		the sample rate of incoming digital audio data.
-	</p>
-	<p class=func><span class=keyword>sampleRate</span>();</p>
-	<p class=desc>Returns the sample rate of incoming data, if the PLL has locked,
-		or returns 0 if the audio sample rate is unknown.
-	</p>
 	<h3>Hardware</h3>
-	
-	<h3>Examples</h3>
-	<!--<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughAsyncSpdif
-	</p>-->
-	<h3>Notes</h3>
-	<p>This input follows the incoming signal's sample rate. It may not be compatible with nodes that require a fixed audio-graph sample rate unless asynchronous resampling is used.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioInputSPDIF3">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AsyncAudioInputSPDIF3">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive S/PDIF digital audio and resample it to the audio graph's configured sample rate.</p>
-	<p>Asynchronous resampling contributed by <a href="https://github.com/alex6679">Alex Walch</a>.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Right Channel</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>getBufferedTime</span>();</p>
-	<p class=desc>Returns the buffered time in seconds. The buffered time is the duration of the incoming samples which are not resampled yet. The step width of the resampling algorithm is constantly slightly adjusted to keep the buffered time closely to the target latency. The difference between the target latency and the buffered time is typically smaller than 1 microsecond.
-	</p>
-	
-	<p class=func><span class=keyword>isLocked</span>();</p>
-	<p class=desc>Returns true if the S/PDIF phase locked loop is tracking
-		the sample rate of incoming digital audio data.
-	</p>
-	<p class=func><span class=keyword>getInputFrequency</span>();</p>
-	<p class=desc>Returns the sample rate of incoming data, if the PLL has locked, or returns 0 if the audio sample rate is unknown.
-	</p>
-	<p class=func><span class=keyword>getTargetLantency</span>();</p>
-	<p class=desc>Returns the target latency in seconds. The latency is the time from the moment a sample is received by the input is accepted by the resampler. Target latency includes the resampler's input chunk plus additional buffering to absorb timing variations; the exact value depends on the input rate and configuration.
-	</p>
-	<p class=func><span class=keyword>getAttenuation</span>();</p>
-	<p class=desc>
-Returns the actual achieved attenuation of the anti-aliasing filter. If the input sampling rate is smaller or equal to 44.1kHz, no low pass filtering is needed and zero is returned.
-	</p>
-	<p class=func><span class=keyword>getHalfFilterLength</span>();</p>
-	<p class=desc>Returns the half length of the resampling filter. Its complete length is 2*(the returned value)+1.
-	</p>
-	<h3>Hardware</h3>
-	
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughAsyncSpdif
-	</p>
-	<h3>Notes</h3>
-	<p>AsyncAudioInputSPDIF3 is not able to clock the audio pipline (never has the 'update_responsibility'). At least 1 other input or output must be used to cause the entire Audio library to update.
-	</p>
-
-	<p>AsyncAudioInputSPDIF3 can optionally take parameters to alter its resampling behavior.
-	</p>
-	<p><span class=keyword>AsyncAudioInputSPDIF3</span>  spdif_async1(<i>dither</i>, <i>noiseshaping</i>, <i>attenuation</i>, <i>minHalfFilterLength</i>, <i>maxHalfFilterLength</i>);
-	</p>
-	<p class=desc><i>dither</i>: triangular shaped dither is added at the transition from 32bit float to 16bit integer if true (default: true)
-	</p>
-	<p class=desc><i>noiseshaping</i>: noise shaping is applied at the aforementioned transition if true (default: true)
-	</p>
-	<p class=desc><i>attenuation</i>: target attenuation of the anti-aliasing filter (default: 100dB). The attenuation is not reached if a filter longer than 161 is needed.
-	</p>
-	<p class=desc><i>minHalfFilterLength</i>: half of the guaranteed resampling filter (internally restricted to 80, default: 20). The filter might be longer if needed to achieve the requested attenuation.
-	</p>
-	<p class=desc><i>maxHalfFilterLength</i>: Restricts the maximum length of the resampling filter. The maximum half filter length is 80. This parameter can be used to further restrict the length in order to limit the processor usage.
-	</p>
-	<p>The windowed (Kaiser window) sinc-function is used as resample filter (i.e. to interpolate the incoming signal). The longer the filter, the better the quality of the resampled signal. However, a longer filter has a higher group delay and increases the processor usage. The sinc- filter also serves as anti-aliasing filter if the input sample rate is larger than 44.1kHz. The filter length is automatically increased at high input sample rates to reach the specified attenuation. However its half length is restricted to 80. 32bit floating point arithmetic is used at the resampling stage and the resampled signal is transformed to 16 bit integers afterwards. Here it is possible to apply triangular shaped dither and noise shaping to increase the perceived signal-to-noise-ratio.</p>
-</script>
-<script type="text/x-red" data-template-name="AsyncAudioInputSPDIF3">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioInputAnalog">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive audio using the built-in analog to digital converter.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Audio Channel</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from the ADC to its output port.</p>
-	<h3>Hardware</h3>
-	<p>ADC pin availability, voltage limits, biasing and input circuitry depend on the target MCU and board. Condition the signal to the board's ADC range, do not apply voltages outside those limits, and do not leave the input floating.</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughMono
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; PeakMeterMono
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; DialTone_7segment
-	</p>
-	<p class=exam>File &gt; Examples &gt; OctoWS2811 &gt; SpectrumAnalyzer
-	</p>
-	<h3>Notes</h3>
-	<p>Access to the ADC from application code while this node is running is target-specific. Avoid concurrent access to an ADC unit used by the audio backend unless the target's ADC driver explicitly supports it.</p>
-
-
-	<p>High source impedance can couple fast-switching digital noise into the ADC. Keep source impedance low and use suitable analog filtering.</p>
-	<p>Supply noise can affect a simple DC-bias network; provide adequate decoupling and filter the bias as needed.</p>
-	<p>Baseline drift and DC bias should be handled so the signal remains inside the usable ADC range.</p>
-	<p>Noise coupling from digital circuitry inside the chip is always a problem when using
-		ADC input pins. Strong low-impedance drive to the analog input pin is critical
-		to minimizing noise coupling.  If an opamp is used, connect a low value resistor
-		(eg, 100 to 1000 ohms)
-		between the opamp output and ADC input pin, and a 1nF capacitor from the ADC pin
-		to GND or AGND.  The capacitor lowers the impedance for high frequency noise,
-		and most opamps require a resistor to avoid oscillation when driving a
-		capacitive load.  Strong drive from an opamp, 100 ohm resistor and 1nF
-		capacitor can greatly reduce the digital noise coupling.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioInputAnalog">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioInputAnalogStereo">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive stereo audio using the built-in analog to digital converters.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Audio Channel (Left)</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Audio Channel (Right)</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from both ADCs to its output ports.</p>
-	<h3>Hardware</h3>
-	<p>Both input channels must be routed to ADC-capable pins supported by the target board. Pin mapping, voltage range and required bias/filter circuitry are platform-specific; keep both inputs within the ADC limits.</p>
-	<h3>Examples</h3>
-	<!--
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughMono
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; PeakMeterMono
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; DialTone_7segment
-	</p>
-	<p class=exam>File &gt; Examples &gt; OctoWS2811 &gt; SpectrumAnalyzer
-	</p>
-	-->
-	<h3>Notes</h3>
-	<p>Do not access ADC channels used by this node concurrently from application code unless the target's ADC driver explicitly supports it. Channel availability and routing must be checked against the target board's documentation.</p>
-
-	<p>High source impedance can couple fast-switching digital noise into the ADC. Keep source impedance low and use suitable analog filtering.</p>
-	<p>Supply noise can affect a simple DC-bias network; provide adequate decoupling and filter the bias as needed.</p>
-	<p>Baseline drift and DC bias should be handled so the signal remains inside the usable ADC range.</p>
-	<p>Noise performance depends on source impedance, bias circuitry, grounding and supply filtering. This help page contains no comparative measurements; validate the complete input circuit under real operating conditions.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioInputAnalogStereo">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioInputI2Sslave">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive 16 bit stereo audio from an I2S device using I2S slave mode
-		(where the external ADC or codec controls audio timing).</p>
-	<p><span style="color:red">This input is incompatible with most other inputs and outputs</span>
-		which run at the audio graph's configured sample rate.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Right Channel</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from the I2S hardware to its 2 output ports.</p>
-	<h3>Hardware</h3>
-	<p>The I2S signals are used in "slave" mode, where the I2S device controls
-		data timing.</p>
-	
-	<!--
-<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt;
-	</p>
--->
-	<h3>Notes</h3>
-	<p>In slave mode, the external device supplies the audio clocks. Combining externally clocked and internally clocked nodes may require asynchronous resampling; verify that the target backend supports the combination.</p>
-	<p>Only one I2S input and one I2S output object may be used.  Master
-		and slave modes may not be mixed (both must be of the same type).
-	</p>
-</script>
-<script type="text/x-red" data-template-name="AudioInputI2Sslave">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioInputTDM">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive a 256 bit Time Division Multiplexed frame containing
-		many audio channels.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Bits 0 to 15</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Bits 16 to 31</td></tr>
-		<tr class=odd><td align=center>Out 2</td><td>Bits 32 to 47</td></tr>
-		<tr class=odd><td align=center>Out 3</td><td>Bits 48 to 63</td></tr>
-		<tr class=odd><td align=center>Out 4</td><td>Bits 64 to 79</td></tr>
-		<tr class=odd><td align=center>Out 5</td><td>Bits 80 to 95</td></tr>
-		<tr class=odd><td align=center>Out 6</td><td>Bits 96 to 111</td></tr>
-		<tr class=odd><td align=center>Out 7</td><td>Bits 112 to 127</td></tr>
-		<tr class=odd><td align=center>Out 8</td><td>Bits 128 to 143</td></tr>
-		<tr class=odd><td align=center>Out 9</td><td>Bits 144 to 159</td></tr>
-		<tr class=odd><td align=center>Out 10</td><td>Bits 160 to 175</td></tr>
-		<tr class=odd><td align=center>Out 11</td><td>Bits 176 to 191</td></tr>
-		<tr class=odd><td align=center>Out 12</td><td>Bits 192 to 207</td></tr>
-		<tr class=odd><td align=center>Out 13</td><td>Bits 208 to 223</td></tr>
-		<tr class=odd><td align=center>Out 14</td><td>Bits 224 to 239</td></tr>
-		<tr class=odd><td align=center>Out 15</td><td>Bits 240 to 255</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from the TDM hardware to its 16 output ports.</p>
-	<h3>Hardware</h3>
-	<p>TDM requires a compatible codec and a target peripheral that supports the required data slots and clocks. Pin routing and channel limits depend on the MCU and codec.</p>
-<h3>Notes</h3>
-	<p>Only one TDM input and one TDM output object may be used.  The
-		I2S hardware is used by TDM, so TDM objects may not be used
-		together with I2S, SPDIF or PT8211.</p>
-	<p>When used with TDM devices which transmit 32 bit audio, the
-		even numbered channels will contain the useful upper 16
-		bits of audio data.</p>
-	<p>AudioMemory should be at least 16.  Even if most channels are
-		unused, this TDM object will need to allocate 16 blocks of
-		memory.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioInputTDM">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioInputTDM2">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive a 256 bit Time Division Multiplexed frame containing
-		many audio channels, using the I2S2 port.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Bits 0 to 15</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Bits 16 to 31</td></tr>
-		<tr class=odd><td align=center>Out 2</td><td>Bits 32 to 47</td></tr>
-		<tr class=odd><td align=center>Out 3</td><td>Bits 48 to 63</td></tr>
-		<tr class=odd><td align=center>Out 4</td><td>Bits 64 to 79</td></tr>
-		<tr class=odd><td align=center>Out 5</td><td>Bits 80 to 95</td></tr>
-		<tr class=odd><td align=center>Out 6</td><td>Bits 96 to 111</td></tr>
-		<tr class=odd><td align=center>Out 7</td><td>Bits 112 to 127</td></tr>
-		<tr class=odd><td align=center>Out 8</td><td>Bits 128 to 143</td></tr>
-		<tr class=odd><td align=center>Out 9</td><td>Bits 144 to 159</td></tr>
-		<tr class=odd><td align=center>Out 10</td><td>Bits 160 to 175</td></tr>
-		<tr class=odd><td align=center>Out 11</td><td>Bits 176 to 191</td></tr>
-		<tr class=odd><td align=center>Out 12</td><td>Bits 192 to 207</td></tr>
-		<tr class=odd><td align=center>Out 13</td><td>Bits 208 to 223</td></tr>
-		<tr class=odd><td align=center>Out 14</td><td>Bits 224 to 239</td></tr>
-		<tr class=odd><td align=center>Out 15</td><td>Bits 240 to 255</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from the TDM hardware to its 16 output ports.</p>
-	<h3>Hardware</h3>
-	
-	<!--<h3>Examples</h3>-->
-	<h3>Notes</h3>
-	<p>When used with TDM devices which transmit 32 bit audio, the
-		even numbered channels will contain the useful upper 16
-		bits of audio data.</p>
-	<p>AudioMemory should be at least 16.  Even if most channels are
-		unused, this TDM object will need to allocate 16 blocks of
-		memory.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioInputTDM2">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioInputPDM">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive (and filter) a Pulse Density Modulated bitstream.
-		</p>
-	<p align=center><img src="img/pdmmic.jpg"><br><small>PDM MEMS Mic</small></p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Filtered Audio Output</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from the PDM data, filters out the high frequency
-		noise and gives you the audio signal.</p>
-	<h3>Hardware</h3>
-	<p>PDM has been tested with this <a href="https://www.adafruit.com/product/3492">
-		Adafruit MP34DT01-M Microphone Board</a>.
-	</p>
-	
-
-	<p>Data is input on the rising edge.  The SEL pin on MP34DT01-M should be
-		connected LOW for proper data capture.</p>
-	<!--<h3>Examples</h3>-->
-	<h3>Notes</h3>
-	<p>On the T3 filtering consumes approximately 39% of the CPU when running at
-		96 MHz.  The code currently consumes this time inside a high
-		priority interrupt, blocking other libraries.  Perhaps future
-	  versions will perform filtering at lower priority.  The CPU usage is less
-	  burdensome for the T4.
-		</p>
-	<p>The filter used is a 512 tap FIR with approx &plusmn;1.1 dB gain
-		flatness to 10 kHz.  While far from audiophile grade, this should
-		perform far better than the rapid rolloff of Cascaded Integrator
-		Comb (CIC) or simple moving average filters commonly used on
-		other microcontrollers.  The filter also consumes 2104 bytes of
-		RAM for buffering and 32K of Flash for a lookup table to optimized
-		the filter computation.
-		</p>
-</script>
-<script type="text/x-red" data-template-name="AudioInputPDM">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-
-<script type="text/x-red" data-help-name="AudioInputPDM2">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive (and filter) a Pulse Density Modulated bitstream from I2S2 unit.
-		</p>
-	<p align=center><img src="img/pdmmic.jpg"><br><small>PDM MEMS Mic, using I2S2</small></p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Filtered Audio Output</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from the PDM data, filters out the high frequency
-		noise and gives you the audio signal.</p>
-	<h3>Hardware</h3>
-	<p>PDM2 has been tested with this <a href="https://www.adafruit.com/product/3492">
-		Adafruit MP34DT01-M Microphone Board</a>.
-	</p>
-	
-
-	<p>Data is input on the rising edge.  The SEL pin on MP34DT01-M should be
-		connected LOW for proper data capture.</p>
-	<!--<h3>Examples</h3>-->
-	<h3>Notes</h3>
-        <p>This node uses a secondary I²S/PDM peripheral where supported; exact clock and data routing 
-	   allowing AudioInputI2S to be run alongside.</p>
-	<p>The filter used is a 512 tap FIR with approx &plusmn;1.1 dB gain
-		flatness to 10 kHz.  While far from audiophile grade, this should
-		perform far better than the rapid rolloff of Cascaded Integrator
-		Comb (CIC) or simple moving average filters commonly used on
-		other microcontrollers.  The filter also consumes 2104 bytes of
-		RAM for buffering and 32K of Flash for a lookup table to optimized
-		the filter computation.
-		</p>
-</script>
-<script type="text/x-red" data-template-name="AudioInputPDM2">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioInputUSB">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Receive stereo 16-bit PCM playback from the host through the UAC speaker endpoint of <code>USBAudioCard</code>.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Left channel</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Right channel</td></tr>
-	</table>
+	<p>The interface uses Philips I²S standard, stereo, with 16-bit slots. In master mode, the ESP32 generates BCLK and WS/LRCLK. MCLK is generated when routed; the configured MCLK is 256 times the audio sample rate.</p>
+	<p>Board-specific pin assignments are required: BCLK, WS/LRCLK, DIN and optional MCLK.</p>
 	<h3>Setup</h3>
-	<p>The default <code>AudioInputUSB</code> constructor uses the library-managed USB device. The library configures <code>UAC_SPK_STEREO</code> and the rate from <code>AUDIO_SAMPLE_RATE_EXACT</code>, starts USB audio and CDC during <code>AudioMemory()</code>, and routes speaker interface-enable events automatically. No <code>USBAudioCard</code> object or manual <code>USB.begin()</code> call is needed in this mode.</p>
-	<p>The USB build enables <code>AUDIO_USB_REDIRECT_SERIAL</code>, so ordinary <code>Serial.print()</code> calls use managed CDC; use <code>Serial0</code> for physical UART0. Runtime <code>ESP_LOGE</code>/<code>ESP_LOGW</code>/<code>ESP_LOGI</code> output is also redirected while a terminal is connected. The explicit <code>AudioInputUSB(usbAudio)</code> constructor remains available for manual setup.</p>
-	<p>This node uses <code>USBAudioCard::onData()</code> and therefore owns the speaker-data callback; do not install another speaker-data callback at the same time. A small two-block queue bridges the framework receive task and <code>AudioTask</code>; no additional task or <code>loop()</code> polling is required.</p>
-	<h3>Example</h3>
-	<p>See <code>examples/HardwareTesting/USBHostPlayback/USBHostPlayback.cpp</code> for a complete ESP32-S3 setup that routes PC playback to the I2S codec output. It uses the PlatformIO environment <code>freenove_esp32_s3_display_USBAUDIO</code>.</p>
+	<p>Supply the pins through the <code>AudioInputI2S3::Pins</code> constructor or <code>begin(const Pins&amp;)</code>. The pin order is BCLK, WS, DIN, MCLK. The class selects controller index 2 automatically.</p>
+	<pre><code>AudioInputI2S3 i2s3({BCLK_PIN, WS_PIN, DIN_PIN, MCLK_PIN});
+AudioMemory(12);</code></pre>
+	<h3>Functions</h3>
+	<p class="func"><span class="keyword">begin</span>(); / <span class="keyword">begin</span>(const Pins&amp; pins);</p>
+	<p class="desc">Starts the receiver using its stored or supplied board-specific pin assignment.</p>
+	<p class="func"><span class="keyword">end</span>(); / <span class="keyword">isRunning</span>();</p>
+	<p class="desc">Stops the receiver and reports whether it is running.</p>
+	<p class="func"><span class="keyword">rxBlockCount</span>(); / <span class="keyword">rxErrorCount</span>(); / <span class="keyword">droppedBlockCount</span>();</p>
+	<p class="desc">Return the number of received DMA blocks, RX errors and dropped audio blocks since the last start.</p>
 	<h3>Notes</h3>
-	<p>The host and audio graph must use the same compile-time sample rate. No sample-rate conversion is performed. Availability depends on the selected board and Arduino-ESP32 USB Audio configuration.</p>
+	<p>All active I²S controllers use the library's global AudioStream sample rate. Input and output may share this controller for full-duplex operation when their clock and pin configuration matches. Do not create two inputs or two outputs on the same controller.</p>
 </script>
-<script type="text/x-red" data-template-name="AudioInputUSB">
+<script type="text/x-red" data-template-name="AudioInputI2S3">
 	<div class="form-row">
 		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
 		<input type="text" id="node-input-name" placeholder="Name">
@@ -2076,121 +1656,36 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	</div>
 </script>
 
-<script type="text/x-red" data-help-name="AudioOutputI2SQuad">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit quad (4) channel 16 bit audio, using I2S master mode.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Channel #1</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Channel #2</td></tr>
-		<tr class=odd><td align=center>In 2</td><td>Channel #3</td></tr>
-		<tr class=odd><td align=center>In 3</td><td>Channel #4</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 4 input ports to the I2S hardware.</p>
-	<h3>Hardware</h3>
-	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughQuad
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; SGTL5000 &gt; QuadChannelOutput
-	</p>
-	<h3>Notes</h3>
-</script>
-<script type="text/x-red" data-template-name="AudioOutputI2SQuad">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioOutputI2SHex">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit 6 channel 16 bit audio, using I2S master mode.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Channel #1</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Channel #2</td></tr>
-		<tr class=odd><td align=center>In 2</td><td>Channel #3</td></tr>
-		<tr class=odd><td align=center>In 3</td><td>Channel #4</td></tr>
-		<tr class=odd><td align=center>In 4</td><td>Channel #5</td></tr>
-		<tr class=odd><td align=center>In 5</td><td>Channel #6</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 6 input ports to the I2S hardware.</p>
-	<h3>Hardware</h3>
-	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
-	
-	<h3>Notes</h3>
-	<p>Concurrent I²S streams can share peripheral and pin-multiplexing resources. Check the target MCU's available I²S data lanes and routing before combining multiple I²S nodes.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioOutputI2SHex">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioOutputI2SOct">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit 8 channel 16 bit audio, using I2S master mode.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Channel #1</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Channel #2</td></tr>
-		<tr class=odd><td align=center>In 2</td><td>Channel #3</td></tr>
-		<tr class=odd><td align=center>In 3</td><td>Channel #4</td></tr>
-		<tr class=odd><td align=center>In 4</td><td>Channel #5</td></tr>
-		<tr class=odd><td align=center>In 5</td><td>Channel #6</td></tr>
-		<tr class=odd><td align=center>In 6</td><td>Channel #7</td></tr>
-		<tr class=odd><td align=center>In 7</td><td>Channel #8</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 8 input ports to the I2S hardware.</p>
-	<h3>Hardware</h3>
-	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
-	
-	<h3>Notes</h3>
-	<p>Concurrent I²S streams can share peripheral and pin-multiplexing resources. Check the target MCU's available I²S data lanes and routing before combining multiple I²S nodes.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioOutputI2SOct">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-
 <script type="text/x-red" data-help-name="AudioOutputI2S2">
 	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit 16 bit stereo audio to an I2S device, using I2S master mode, on the I2S2 port.</p>
+	<div class="tooltipinfo">
+	<p>Transmit 16-bit stereo PCM audio to an I²S device using the second hardware I²S controller (ESP-IDF controller index 1) in master mode.</p>
+	<p><strong>Availability:</strong> The classic ESP32 and ESP32-S3 provide two I²S controllers; the ESP32-P4 provides three.</p>
 	</div>
 	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Right Channel</td></tr>
+	<table class="doc" align="center" cellpadding="3">
+		<tr class="top"><th>Port</th><th>Purpose</th></tr>
+		<tr class="odd"><td align="center">In 0</td><td>Left Channel</td></tr>
+		<tr class="odd"><td align="center">In 1</td><td>Right Channel</td></tr>
 	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 2 input ports to the I2S hardware.</p>
 	<h3>Hardware</h3>
-	<p>In I²S master mode, the host generates BCLK and LRCLK and, where required, MCLK.</p>
-	
+	<p>The interface uses Philips I²S standard, stereo, with 16-bit slots. In master mode, the ESP32 generates BCLK and WS/LRCLK. MCLK is generated when routed; the configured MCLK is 256 times the audio sample rate.</p>
+	<p>Board-specific pin assignments are required: BCLK, WS/LRCLK, DOUT and optional MCLK.</p>
+	<h3>Setup</h3>
+	<p>Supply the pins through the <code>AudioOutputI2S2::Pins</code> constructor or <code>begin(const Pins&amp;)</code>. The pin order is BCLK, WS, DOUT, MCLK. The class selects controller index 1 automatically.</p>
+	<pre><code>AudioOutputI2S2 i2s2({BCLK_PIN, WS_PIN, DOUT_PIN, MCLK_PIN});
+AudioMemory(12);</code></pre>
+	<h3>Functions</h3>
+	<p class="func"><span class="keyword">begin</span>(); / <span class="keyword">begin</span>(const Pins&amp; pins);</p>
+	<p class="desc">Starts the transmitter using its stored or supplied board-specific pin assignment.</p>
+	<p class="func"><span class="keyword">end</span>(); / <span class="keyword">isRunning</span>();</p>
+	<p class="desc">Stops the transmitter and reports whether it is running.</p>
+	<p class="func"><span class="keyword">setChannelCount</span>(1 or 2);</p>
+	<p class="desc">Selects mono or stereo output. Configure the channel count before starting the interface.</p>
+	<p class="func"><span class="keyword">setSampleRate</span>(sampleRate);</p>
+	<p class="desc">Changes the global AudioStream sample rate used by active I²S controllers.</p>
 	<h3>Notes</h3>
+	<p>All active I²S controllers use the library's global AudioStream sample rate. Input and output may share this controller for full-duplex operation when their clock and pin configuration matches. Do not create two inputs or two outputs on the same controller.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputI2S2">
 	<div class="form-row">
@@ -2199,46 +1694,109 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	</div>
 </script>
 
-<script type="text/x-red" data-help-name="AudioOutputSPDIF">
+<script type="text/x-red" data-help-name="AudioOutputI2S3">
 	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit 16 bit stereo audio as Digital S/PDIF by use of the I2S port.</p>
+	<div class="tooltipinfo">
+	<p>Transmit 16-bit stereo PCM audio to an I²S device using the third hardware I²S controller (ESP-IDF controller index 2) in master mode.</p>
+	<p><strong>Availability:</strong> This controller exists only on SoCs with at least three I²S peripherals. The ESP32-P4 provides three; the classic ESP32 and ESP32-S3 provide two.</p>
 	</div>
 	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Right Channel</td></tr>
+	<table class="doc" align="center" cellpadding="3">
+		<tr class="top"><th>Port</th><th>Purpose</th></tr>
+		<tr class="odd"><td align="center">In 0</td><td>Left Channel</td></tr>
+		<tr class="odd"><td align="center">In 1</td><td>Right Channel</td></tr>
 	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply sends its input audio to the S/PDIF encoder using the output pin configured by the target backend.</p>
 	<h3>Hardware</h3>
-	<p>The S/PDIF output signal can be used to drive an optical TOSLINK
-		cable, or a standard (usually orange) RCA jack.</p>
-	
-	<p>For optical TOSLINK output, this
-		<a href="https://www.oshpark.com/shared_projects/KcDBKHta" target="_blank">OSH Park board</a>
-		can be used with the inexpensive Everlight PLT133/T6A connector, available
-		at Digikey, 1080-1434-ND.
-		</p>
-	<h3>Examples</h3>
-	<p>The AudioOutputSPDIF object can be used in place of the AudioOutputI2S object,
-	<p>used in nearly all the examples.  The WavFilePlayer shows how to substitute
-		output objects for different hardware types.
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; WavFilePlayer
-	</p>
-	<h3>Credits</h3>
-	<p><a href="https://github.com/FrankBoesing" target="_blank">Frank Boesing</a>
-		developed the AudioOutputSPDIF code.  The original
-		forum disussion
-		included valuable input and code from "kpc".
+	<p>The interface uses Philips I²S standard, stereo, with 16-bit slots. In master mode, the ESP32 generates BCLK and WS/LRCLK. MCLK is generated when routed; the configured MCLK is 256 times the audio sample rate.</p>
+	<p>Board-specific pin assignments are required: BCLK, WS/LRCLK, DOUT and optional MCLK.</p>
+	<h3>Setup</h3>
+	<p>Supply the pins through the <code>AudioOutputI2S3::Pins</code> constructor or <code>begin(const Pins&amp;)</code>. The pin order is BCLK, WS, DOUT, MCLK. The class selects controller index 2 automatically.</p>
+	<pre><code>AudioOutputI2S3 i2s3({BCLK_PIN, WS_PIN, DOUT_PIN, MCLK_PIN});
+AudioMemory(12);</code></pre>
+	<h3>Functions</h3>
+	<p class="func"><span class="keyword">begin</span>(); / <span class="keyword">begin</span>(const Pins&amp; pins);</p>
+	<p class="desc">Starts the transmitter using its stored or supplied board-specific pin assignment.</p>
+	<p class="func"><span class="keyword">end</span>(); / <span class="keyword">isRunning</span>();</p>
+	<p class="desc">Stops the transmitter and reports whether it is running.</p>
+	<p class="func"><span class="keyword">setChannelCount</span>(1 or 2);</p>
+	<p class="desc">Selects mono or stereo output. Configure the channel count before starting the interface.</p>
+	<p class="func"><span class="keyword">setSampleRate</span>(sampleRate);</p>
+	<p class="desc">Changes the global AudioStream sample rate used by active I²S controllers.</p>
 	<h3>Notes</h3>
-	<p>S/PDIF output uses the I2S hardware.  This object can not be used
-		together with any of the I2S objects, because it requires the I2S
-		hardware with different internal settings.</p>
-	</p>
+	<p>All active I²S controllers use the library's global AudioStream sample rate. Input and output may share this controller for full-duplex operation when their clock and pin configuration matches. Do not create two inputs or two outputs on the same controller.</p>
+</script>
+<script type="text/x-red" data-template-name="AudioOutputI2S3">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
+
+<script type="text/x-red" data-help-name="AudioOutputPDM">
+	<h3>Summary</h3>
+	<div class="tooltipinfo">
+	<p>Output 16-bit PCM audio through the SoC's hardware PCM-to-PDM converter on I²S0. The hardware generates a high-frequency 1-bit PDM stream; the audio graph continues to process normal PCM blocks.</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class="doc" align="center" cellpadding="3">
+		<tr class="top"><th>Port</th><th>Purpose</th></tr>
+		<tr class="odd"><td align="center">In 0</td><td>Left / mono input</td></tr>
+		<tr class="odd"><td align="center">In 1</td><td>Right input</td></tr>
+	</table>
+	<h3>Hardware</h3>
+	<p>Mono mode averages inputs 0 and 1 to the single DATA pin. Stereo mode sends the two channels to separate DATA pins and requires a target that supports the two-line PDM DAC mode. The public stereo pin order is left, then right.</p>
+	<p>No PDM clock pin is required at the external connector. PDM is not an analog voltage: use a suitable low-pass filter and amplifier, and never connect a speaker directly to an ESP32 GPIO.</p>
+	<p>PDM mode uses I²S0 and is mutually exclusive with normal I²S0 TX, including <code>AudioOutputI2S</code> and <code>AudioOutputSPDIF</code>. The implementation accepts PCM sample rates from 16 kHz through 48 kHz. Hardware support depends on the SoC and ESP-IDF version; stereo requires the two-line DAC capability. The current implementation has been validated on ESP32-S3; other targets must be checked against their peripheral capabilities.</p>
+	<h3>Setup</h3>
+	<p>The GUI export creates the default constructor, so assign the DATA pin(s) in the sketch. For mono, call <code>begin(dataPin)</code>; for stereo, call <code>begin(leftDataPin, rightDataPin)</code>. You can also supply <code>AudioOutputPDM::Pins</code> to the constructor.</p>
+	<pre><code>AudioOutputPDM pdm;
+AudioMemory(12);
+pdm.begin(PDM_DATA_PIN);</code></pre>
+	<h3>Functions</h3>
+	<p class="func"><span class="keyword">begin</span>(); / <span class="keyword">begin</span>(data); / <span class="keyword">begin</span>(left, right); / <span class="keyword">begin</span>(const Pins&amp; pins);</p>
+	<p class="desc">Starts mono or stereo output using the stored or supplied DATA pin assignment.</p>
+	<p class="func"><span class="keyword">end</span>(); / <span class="keyword">isRunning</span>();</p>
+	<p class="desc">Stops the PDM output and reports whether it is running.</p>
+	<p class="func"><span class="keyword">setChannelCount</span>(1 or 2); / <span class="keyword">channels</span>();</p>
+	<p class="desc">Selects or reports mono/stereo mode. Stereo requires a valid right DATA pin; set the channel count before starting the interface.</p>
+	<p class="func"><span class="keyword">setSampleRate</span>(sampleRate);</p>
+	<p class="desc">Sets the PCM sample rate. The supported range is 16000–48000 Hz; changing it reconfigures the shared I²S clock and can briefly disturb active I²S streams.</p>
+	<h3>Notes</h3>
+	<p>Use separate low-pass filters for the left and right DATA lines in stereo mode. See <a href="../lib/AudioLibrary/I2S.md">the I²S/PDM implementation notes</a> for clocking details and target limitations.</p>
+</script>
+
+<script type="text/x-red" data-template-name="AudioOutputPDM">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
+<script type="text/x-red" data-help-name="AudioOutputSPDIF">
+	<h3>Summary</h3>
+	<div class="tooltipinfo">
+	<p>Transmit 16-bit stereo audio as consumer S/PDIF using software BMC encoding over the first I²S controller (ESP-IDF controller index 0).</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class="doc" align="center" cellpadding="3">
+		<tr class="top"><th>Port</th><th>Purpose</th></tr>
+		<tr class="odd"><td align="center">In 0</td><td>Left Channel</td></tr>
+		<tr class="odd"><td align="center">In 1</td><td>Right Channel</td></tr>
+	</table>
+	<h3>Hardware</h3>
+	<p>Only the encoded DATA output pin is routed to a GPIO; BCLK and WS are generated internally. The signal can drive a compatible optical TOSLINK transmitter or a suitable coaxial line driver. Do not connect an ESP32 GPIO directly to a coaxial RCA socket.</p>
+	<h3>Setup</h3>
+	<p>Supply the DATA pin through the constructor or <code>begin(dataPin)</code>. The GUI export uses the default constructor, so add a <code>begin()</code> call with your board pin in the sketch.</p>
+	<pre><code>AudioOutputSPDIF spdif(SPDIF_DATA_PIN);
+AudioMemory(12);</code></pre>
+	<h3>Functions</h3>
+	<p class="func"><span class="keyword">begin</span>(); / <span class="keyword">begin</span>(dataPin); / <span class="keyword">begin</span>(const Pins&amp; pins);</p>
+	<p class="desc">Starts the S/PDIF transmitter using the stored or supplied DATA pin.</p>
+	<p class="func"><span class="keyword">end</span>(); / <span class="keyword">isRunning</span>();</p>
+	<p class="desc">Stops the transmitter and reports whether it is running.</p>
+	<p class="func"><span class="keyword">setSampleRate</span>(sampleRate);</p>
+	<p class="desc">Changes the global AudioStream sample rate and reconfigures active I²S controllers.</p>
+	<h3>Notes</h3>
+	<p>The BMC encoder sends four I²S serializer frames per PCM sample frame. This S/PDIF path uses I²S0 with special framing and cannot run at the same time as normal I²S0 TX users such as <code>AudioOutputI2S</code> or <code>AudioOutputPDM</code>.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputSPDIF">
 	<div class="form-row">
@@ -2249,39 +1807,31 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 
 <script type="text/x-red" data-help-name="AudioOutputSPDIF2">
 	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit 16 bit stereo audio as Digital S/PDIF by use of the I2S2 port.</p>
+	<div class="tooltipinfo">
+	<p>Transmit 16-bit stereo audio as consumer S/PDIF using software BMC encoding over the second I²S controller (ESP-IDF controller index 1).</p>
+	<p>The second I²S controller must be available on the selected SoC.</p>
 	</div>
 	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Right Channel</td></tr>
+	<table class="doc" align="center" cellpadding="3">
+		<tr class="top"><th>Port</th><th>Purpose</th></tr>
+		<tr class="odd"><td align="center">In 0</td><td>Left Channel</td></tr>
+		<tr class="odd"><td align="center">In 1</td><td>Right Channel</td></tr>
 	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply sends its input audio to the S/PDIF encoder using the output pin configured by the target backend.</p>
 	<h3>Hardware</h3>
-	<p>The S/PDIF output signal can be used to drive an optical TOSLINK
-		cable, or a standard (usually orange) RCA jack.</p>
-	
-	<h3>Examples</h3>
-	<p>The AudioOutputSPDIF object can be used in place of the AudioOutputI2S object,
-	<p>used in nearly all the examples.  The WavFilePlayer shows how to substitute
-		output objects for different hardware types.
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; WavFilePlayer
-	</p>
-	<h3>Credits</h3>
-	<p><a href="https://github.com/FrankBoesing" target="_blank">Frank Boesing</a>
-		developed the AudioOutputSPDIF code.  The original
-		forum disussion
-		included valuable input and code from "kpc".
+	<p>Only the encoded DATA output pin is routed to a GPIO; BCLK and WS are generated internally. The signal can drive a compatible optical TOSLINK transmitter or a suitable coaxial line driver. Do not connect an ESP32 GPIO directly to a coaxial RCA socket.</p>
+	<h3>Setup</h3>
+	<p>Supply the DATA pin through the constructor or <code>begin(dataPin)</code>. The GUI export uses the default constructor, so add a <code>begin()</code> call with your board pin in the sketch.</p>
+	<pre><code>AudioOutputSPDIF2 spdif2(SPDIF_DATA_PIN);
+AudioMemory(12);</code></pre>
+	<h3>Functions</h3>
+	<p class="func"><span class="keyword">begin</span>(); / <span class="keyword">begin</span>(dataPin); / <span class="keyword">begin</span>(const Pins&amp; pins);</p>
+	<p class="desc">Starts the S/PDIF transmitter using the stored or supplied DATA pin.</p>
+	<p class="func"><span class="keyword">end</span>(); / <span class="keyword">isRunning</span>();</p>
+	<p class="desc">Stops the transmitter and reports whether it is running.</p>
+	<p class="func"><span class="keyword">setSampleRate</span>(sampleRate);</p>
+	<p class="desc">Changes the global AudioStream sample rate and reconfigures active I²S controllers.</p>
 	<h3>Notes</h3>
-	<p>S/PDIF output uses the I2S2 hardware.  This object can not be used
-		together with any of the I2S2 objects, because it requires the I2S2
-		hardware with different internal settings.</p>
-	</p>
+	<p>The BMC encoder sends four I²S serializer frames per PCM sample frame. This S/PDIF path uses I²S2 with special framing and cannot run at the same time as normal I²S2 users such as <code>AudioInputI2S2</code> or <code>AudioOutputI2S2</code>.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputSPDIF2">
 	<div class="form-row">
@@ -2292,35 +1842,31 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 
 <script type="text/x-red" data-help-name="AudioOutputSPDIF3">
 	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit 16 bit stereo audio as Digital S/PDIF by use of the native S/PDIF port.</p>
+	<div class="tooltipinfo">
+	<p>Transmit 16-bit stereo audio as consumer S/PDIF using software BMC encoding over the third I²S controller (ESP-IDF controller index 2).</p>
+	<p><strong>Availability:</strong> This controller exists only on SoCs with at least three I²S peripherals. The ESP32-P4 provides three; the classic ESP32 and ESP32-S3 provide two.</p>
 	</div>
 	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Right Channel</td></tr>
+	<table class="doc" align="center" cellpadding="3">
+		<tr class="top"><th>Port</th><th>Purpose</th></tr>
+		<tr class="odd"><td align="center">In 0</td><td>Left Channel</td></tr>
+		<tr class="odd"><td align="center">In 1</td><td>Right Channel</td></tr>
 	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply sends its input audio to the S/PDIF encoder using the output pin configured by the target backend.</p>
 	<h3>Hardware</h3>
-	<p>The S/PDIF output signal can be used to drive an optical TOSLINK
-		cable, or a standard (usually orange) RCA jack.</p>
-	
-	<h3>Examples</h3>
-	<p>The AudioOutputSPDIF object can be used in place of the AudioOutputI2S object,
-	<p>used in nearly all the examples.  The WavFilePlayer shows how to substitute
-		output objects for different hardware types.
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; WavFilePlayer
-	</p>
-	<h3>Credits</h3>
-	<p><a href="https://github.com/FrankBoesing" target="_blank">Frank Boesing</a>
-		developed the AudioOutputSPDIF3 code.
+	<p>Only the encoded DATA output pin is routed to a GPIO; BCLK and WS are generated internally. The signal can drive a compatible optical TOSLINK transmitter or a suitable coaxial line driver. Do not connect an ESP32 GPIO directly to a coaxial RCA socket.</p>
+	<h3>Setup</h3>
+	<p>Supply the DATA pin through the constructor or <code>begin(dataPin)</code>. The GUI export uses the default constructor, so add a <code>begin()</code> call with your board pin in the sketch.</p>
+	<pre><code>AudioOutputSPDIF3 spdif3(SPDIF_DATA_PIN);
+AudioMemory(12);</code></pre>
+	<h3>Functions</h3>
+	<p class="func"><span class="keyword">begin</span>(); / <span class="keyword">begin</span>(dataPin); / <span class="keyword">begin</span>(const Pins&amp; pins);</p>
+	<p class="desc">Starts the S/PDIF transmitter using the stored or supplied DATA pin.</p>
+	<p class="func"><span class="keyword">end</span>(); / <span class="keyword">isRunning</span>();</p>
+	<p class="desc">Stops the transmitter and reports whether it is running.</p>
+	<p class="func"><span class="keyword">setSampleRate</span>(sampleRate);</p>
+	<p class="desc">Changes the global AudioStream sample rate and reconfigures active I²S controllers.</p>
 	<h3>Notes</h3>
-	<p>Native S/PDIF hardware is used, which is more efficient that use of I2S ports.</p>
-	</p>
+	<p>The BMC encoder sends four I²S serializer frames per PCM sample frame. This S/PDIF path uses I²S3 hardware controller index 2 with special framing. It cannot run at the same time as normal I²S3 users such as <code>AudioInputI2S3</code> or <code>AudioOutputI2S3</code>.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioOutputSPDIF3">
 	<div class="form-row">
@@ -2329,376 +1875,27 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	</div>
 </script>
 
-<script type="text/x-red" data-help-name="AudioOutputPT8211">
+<script type="text/x-red" data-help-name="AudioInputUSB">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
-	<p>Transmit 16 bit stereo audio to a low-cost PT8211 DAC chip.  4X oversampling
-		and filtering are automatically used to improve output quality.</p>
-	<p align=center><img src="img/pt8211.jpg"></p>
+	<p>Receive stereo 16-bit PCM playback from the host through the UAC speaker endpoint of <code>USBAudioCard</code>.</p>
 	</div>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Right Channel</td></tr>
+		<tr class=odd><td align=center>Out 0</td><td>Left channel</td></tr>
+		<tr class=odd><td align=center>Out 1</td><td>Right channel</td></tr>
 	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 2 input ports to a PT8211 chip.  4X
-		oversampling and filtering is automatically used to improve quality.</p>
-	<h3>Hardware</h3>
-	
-	<p>More information can be found in the PT8211 datasheet.
-		</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PT8211Sine
-	</p>
-	<h3>Credits</h3>
-	<p>Frank Boesing and Benjamin developed this PT8211 object.  Details can be
-		found on this
-		forum disussion.
+	<h3>Setup</h3>
+	<p>The default <code>AudioInputUSB</code> constructor uses the library-managed USB device. The library configures <code>UAC_SPK_STEREO</code> and the rate from <code>AUDIO_SAMPLE_RATE_EXACT</code>, starts USB audio and CDC during <code>AudioMemory()</code>, and routes speaker interface-enable events automatically. No <code>USBAudioCard</code> object or manual <code>USB.begin()</code> call is needed in this mode.</p>
+	<p>The USB build enables <code>AUDIO_USB_REDIRECT_SERIAL</code>, so ordinary <code>Serial.print()</code> calls use managed CDC; use <code>Serial0</code> for physical UART0. Runtime <code>ESP_LOGE</code>/<code>ESP_LOGW</code>/<code>ESP_LOGI</code> output is also redirected while a terminal is connected. The explicit <code>AudioInputUSB(usbAudio)</code> constructor remains available for manual setup.</p>
+	<p>This node uses <code>USBAudioCard::onData()</code> and therefore owns the speaker-data callback; do not install another speaker-data callback at the same time. A small two-block queue bridges the framework receive task and <code>AudioTask</code>; no additional task or <code>loop()</code> polling is required.</p>
+	<h3>Example</h3>
+	<p>See <code>examples/HardwareTesting/USBHostPlayback/USBHostPlayback.cpp</code> for a complete setup that routes PC playback to an I2S output.</p>
 	<h3>Notes</h3>
-	
+	<p>The host and audio graph must use the same compile-time sample rate. No sample-rate conversion is performed. Availability depends on the selected board and Arduino-ESP32 USB Audio configuration.</p>
 </script>
-<script type="text/x-red" data-template-name="AudioOutputPT8211">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioOutputPT8211_2">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit 16 bit stereo audio to a low-cost PT8211 DAC chip, using the I2S2 port.  4X oversampling
-		and filtering are automatically used to improve output quality.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Right Channel</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 2 input ports to a PT8211 chip.  4X
-		oversampling and filtering is automatically used to improve quality.</p>
-	<h3>Hardware</h3>
-	
-	<p>More information can be found in the PT8211 datasheet.
-		</p>
-	<h3>Credits</h3>
-	<p>Frank Boesing and Benjamin developed this PT8211 object.  Details can be
-		found on this
-		forum disussion.
-	<h3>Notes</h3>
-	
-</script>
-<script type="text/x-red" data-template-name="AudioOutputPT8211_2">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioOutputAnalog">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit audio using the target MCU's built-in DAC, where available.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Audio Channel</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>analogReference</span>(ref);</p>
-	<p class=desc>Configure output voltage range:<br>
-	<span class=literal>INTERNAL</span> selects 1.2 volt peak-to-peak output.<br>
-	<span class=literal>EXTERNAL</span> selects 3.3 volt peak-to-peak output.
-	</p>
-	<h3>Hardware</h3>
-	<p>DAC availability, resolution, reference voltage, output range and pin assignment depend on the target MCU. A DAC output may include a DC offset; use coupling and filtering appropriate to the load, and keep the output within hardware limits.</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughMono
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; SamplePlayer
-	</p>
-	<p class=exam><a href="https://github.com/PaulStoffregen/TouchGuitar" target="_blank">TouchGuitar</a>
-	</p>
-	<p class=exam><a href="https://community.arm.com/groups/embedded/blog/2014/05/23/led-video-panel-at-maker-faire-2014" target="_blank">LED Video Board</a>
-	</p>
-	<p class=exam>File &gt; Examples &gt; OctoWS2811 &gt; VideoSDcard
-	</p>
-	<p class=exam>File &gt; Examples &gt; SerialFlash &gt; MP3Player
-	</p>
-	<h3>Notes</h3>
-	<p>Output sample rate and reconstruction filtering depend on the selected DAC backend. The output may contain ultrasonic images or supply noise, so filtering may be needed before driving an amplifier.</p>
-	<p>When using 3.3V output, the power supply is used for the analog reference.  Noise
-		present on the 3.3V power can couple to the DAC output signal.
-	</p>
-</script>
-<script type="text/x-red" data-template-name="AudioOutputAnalog">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioOutputAnalogStereo">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit stereo audio using two built-in DAC channels, where the target MCU provides them.</p>
-	
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Audio Channel (Left)</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Audio Channel (Right)</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>analogReference</span>(ref);</p>
-	<p class=desc>Configure output voltage range:<br>
-	<span class=literal>INTERNAL</span> selects 1.2 volt peak-to-peak output.<br>
-	<span class=literal>EXTERNAL</span> selects 3.3 volt peak-to-peak output.
-	</p>
-	<h3>Hardware</h3>
-	<p>This node requires two usable DAC channels. DAC support, output range and pin assignment are target-specific; check that the MCU and board support stereo analog output.</p>
-	<h3>Examples</h3>
-	<!--<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughMono
-	</p>
-	<p class=exam>File &gt; Examples &gt; SerialFlash &gt; MP3Player
-	</p>-->
-	<h3>Notes</h3>
-	<p>Output sample rate and reconstruction filtering depend on the selected DAC backend. The output may contain ultrasonic images or supply noise, so filtering may be needed before driving an amplifier.</p>
-	<p>When using 3.3V output, the power supply is used for the analog reference.  Noise
-		present on the 3.3V power can couple to the DAC output signal.
-	</p>
-</script>
-<script type="text/x-red" data-template-name="AudioOutputAnalogStereo">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioOutputPWM">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit audio by pulse-width modulation (PWM). Hardware timer support, output pins and the required reconstruction filter depend on the target MCU.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Audio Channel</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from the its input port to the PWM pins.</p>
-	<h3>Hardware</h3>
-	<p>PWM audio requires an output filter and may need buffering before driving a load. Choose filter components for the target's carrier frequency, output impedance and permitted GPIO current.</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughMono
-	</p>
-	<h3>Notes</h3>
-	<p>PWM audio quality depends on timer configuration, carrier frequency, sample rate and filter design. Verify those values on the target and test for residual carrier before connecting high-power audio equipment.</p>
-	<p>Analog signals created by filtering PWM waveforms use the digital
-		power supply as their reference voltage.  Any noise on the digital
-		power line can directly couple to the output signal.  the built-in DAC should be used when higher quality signals are needed.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioOutputPWM">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioOutputMQS">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p><p>Transmit stereo audio through an MQS-style hardware output where the target MCU provides one.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Right Channel</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 2 input ports to generate output pulses.</p>
-	<h3>Notes</h3>
-	<p>Compatibility with other audio nodes depends on the target backend and hardware resource conflicts. Verify peripheral ownership and clocking before combining nodes.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioOutputMQS">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioOutputI2Sslave">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit 16 bit stereo audio to an I2S device using I2S slave mode
-		(where the external ADC or codec controls audio timing).</p>
-	<p><span style="color:red">This input is incompatible with most other inputs and outputs</span>
-		which run at the audio graph's configured sample rate.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Left Channel</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Right Channel</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 2 input ports to the I2S hardware.</p>
-	<h3>Hardware</h3>
-	<p>The I2S signals are used in "slave" mode, where the I2S device controls
-		data timing.</p>
-	
-	<h3>Examples</h3>
-	<h3>Notes</h3>
-	<p>In slave mode, the external device supplies the audio clocks. Combining externally clocked and internally clocked nodes may require asynchronous resampling; verify that the target backend supports the combination.</p>
-	<p>Only one I2S input and one I2S output object may be used.  Master
-		and slave modes may not be mixed (both must be of the same type).
-	</p>
-</script>
-<script type="text/x-red" data-template-name="AudioOutputI2Sslave">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioOutputTDM">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit a 256 bit Time Division Multiplexed frame containing
-		many audio channels.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Bits 0 to 15</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Bits 16 to 31</td></tr>
-		<tr class=odd><td align=center>In 2</td><td>Bits 32 to 47</td></tr>
-		<tr class=odd><td align=center>In 3</td><td>Bits 48 to 63</td></tr>
-		<tr class=odd><td align=center>In 4</td><td>Bits 64 to 79</td></tr>
-		<tr class=odd><td align=center>In 5</td><td>Bits 80 to 95</td></tr>
-		<tr class=odd><td align=center>In 6</td><td>Bits 96 to 111</td></tr>
-		<tr class=odd><td align=center>In 7</td><td>Bits 112 to 127</td></tr>
-		<tr class=odd><td align=center>In 8</td><td>Bits 128 to 143</td></tr>
-		<tr class=odd><td align=center>In 9</td><td>Bits 144 to 159</td></tr>
-		<tr class=odd><td align=center>In 10</td><td>Bits 160 to 175</td></tr>
-		<tr class=odd><td align=center>In 11</td><td>Bits 176 to 191</td></tr>
-		<tr class=odd><td align=center>In 12</td><td>Bits 192 to 207</td></tr>
-		<tr class=odd><td align=center>In 13</td><td>Bits 208 to 223</td></tr>
-		<tr class=odd><td align=center>In 14</td><td>Bits 224 to 239</td></tr>
-		<tr class=odd><td align=center>In 15</td><td>Bits 240 to 255</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 16 input ports to the TDM hardware.</p>
-	<h3>Hardware</h3>
-	<p>TDM requires a compatible codec and a target peripheral that supports the required data slots and clocks. Pin routing and channel limits depend on the MCU and codec.</p>
-<h3>Notes</h3>
-	<p>Only one TDM input and one TDM output object may be used.  The
-		I2S hardware is used by TDM, so TDM objects may not be used
-		together with I2S, SPDIF or PT8211.</p>
-	<p>When used with TDM devices which receive 32 bit audio, the
-		even numbered channels are used for the top 16 bits.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioOutputTDM">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioOutputTDM2">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit a 256 bit Time Division Multiplexed frame containing
-		many audio channels, using the I2S2 port.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Bits 0 to 15</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Bits 16 to 31</td></tr>
-		<tr class=odd><td align=center>In 2</td><td>Bits 32 to 47</td></tr>
-		<tr class=odd><td align=center>In 3</td><td>Bits 48 to 63</td></tr>
-		<tr class=odd><td align=center>In 4</td><td>Bits 64 to 79</td></tr>
-		<tr class=odd><td align=center>In 5</td><td>Bits 80 to 95</td></tr>
-		<tr class=odd><td align=center>In 6</td><td>Bits 96 to 111</td></tr>
-		<tr class=odd><td align=center>In 7</td><td>Bits 112 to 127</td></tr>
-		<tr class=odd><td align=center>In 8</td><td>Bits 128 to 143</td></tr>
-		<tr class=odd><td align=center>In 9</td><td>Bits 144 to 159</td></tr>
-		<tr class=odd><td align=center>In 10</td><td>Bits 160 to 175</td></tr>
-		<tr class=odd><td align=center>In 11</td><td>Bits 176 to 191</td></tr>
-		<tr class=odd><td align=center>In 12</td><td>Bits 192 to 207</td></tr>
-		<tr class=odd><td align=center>In 13</td><td>Bits 208 to 223</td></tr>
-		<tr class=odd><td align=center>In 14</td><td>Bits 224 to 239</td></tr>
-		<tr class=odd><td align=center>In 15</td><td>Bits 240 to 255</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 16 input ports to the TDM hardware.</p>
-	<h3>Hardware</h3>
-	
-	<!--<h3>Examples</h3>-->
-	<h3>Notes</h3>
-	<p>When used with TDM devices which receive 32 bit audio, the
-		even numbered channels are used for the top 16 bits.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioOutputTDM2">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioOutputADAT">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Transmit ADAT TOSLINK Optical Output</p>
-	<p align=center><img src="img/adat.jpg"></p>
-	</div>
-	<p>ADAT output requires suitable serializer/timer hardware and an optical transmitter. Exact pin routing depends on the target backend.</p>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Channel 1</td></tr>
-		<tr class=odd><td align=center>In 1</td><td>Channel 2</td></tr>
-		<tr class=odd><td align=center>In 2</td><td>Channel 3</td></tr>
-		<tr class=odd><td align=center>In 3</td><td>Channel 4</td></tr>
-		<tr class=odd><td align=center>In 4</td><td>Channel 5</td></tr>
-		<tr class=odd><td align=center>In 5</td><td>Channel 6</td></tr>
-		<tr class=odd><td align=center>In 6</td><td>Channel 7</td></tr>
-		<tr class=odd><td align=center>In 7</td><td>Channel 8</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p>This object has no functions to call from the Arduino sketch.  It
-		simply streams data from its 8 input ports to the TOSLINK output.</p>
-	<h3>Hardware</h3>
-	
-	<p>For optical TOSLINK output, this
-		<a href="https://www.oshpark.com/shared_projects/KcDBKHta" target="_blank">OSH Park board</a>
-		can be used with the inexpensive Everlight PLT133/T6A connector, available
-		at Digikey, 1080-1434-ND.
-		</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; ADAT_DrumSamplePlayer
-	</p>
-	<h3>Notes</h3>
-	<p>ADAT output was contributed by Ernstjan Freriks.  See this forum thread for details.</p>
-	<p>A <a href="https://www.youtube.com/watch?v=e5ov3q02zxo">Youtube video</a>
-		also demonstrates how it works.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioOutputADAT">
+<script type="text/x-red" data-template-name="AudioInputUSB">
 	<div class="form-row">
 		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
 		<input type="text" id="node-input-name" placeholder="Name">
@@ -2812,6 +2009,41 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 		mixers, where the fifth mixer combines the outputs of the first 4.
 	</p>
 </script>
+
+<script type="text/x-red" data-help-name="AudioMixerN">
+	<h3>Summary</h3>
+	<div class="tooltipinfo">
+	<p>Mix up to 32 audio inputs into one output. Each input has an independent floating-point gain. Accumulation is performed in float and the result is saturated to signed 16-bit PCM once at the output.</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class="doc" align="center" cellpadding="3">
+		<tr class="top"><th>Port</th><th>Purpose</th></tr>
+		<tr class="odd"><td align="center">In 0–(channels−1)</td><td>Input signals, one per channel</td></tr>
+		<tr class="odd"><td align="center">Out 0</td><td>Mixed output</td></tr>
+	</table>
+	<h3>Functions</h3>
+	<p class="func"><span class="keyword">AudioMixerN</span>(channels);</p>
+	<p class="desc">Constructs a mixer with 4 to 32 inputs. Values below 4 are raised to 4 and values above 32 are limited to 32.</p>
+	<p class="func"><span class="keyword">gain</span>(channel, value);</p>
+	<p class="desc">Sets the gain for an input. Channel indices are zero-based. Gain 1.0 passes the signal unchanged, 0.0 mutes it, values between 0 and 1 attenuate it, values above 1 amplify it, and negative values invert polarity. The accepted range is −32767.0 to +32767.0.</p>
+	<p class="func"><span class="keyword">channels</span>();</p>
+	<p class="desc">Returns the number of inputs selected by the constructor.</p>
+	<h3>Notes</h3>
+	<p>Set the number of input connectors in the node's edit dialog. The allowed range is 4 to 32. Changing the value affects this mixer instance only; when the count is reduced, connections to removed input ports are deleted.</p>
+	<p>The generated C++ constructor uses the same channel count, for example <code>AudioMixerN mixerN(8)</code>. The default is 32 inputs.</p>
+</script>
+
+<script type="text/x-red" data-template-name="AudioMixerN">
+	<div class="form-row">
+		<label for="node-input-channels"><i class="fa fa-sign-in"></i> Inputs</label>
+		<input type="number" id="node-input-channels" min="4" max="32" step="1" style="width: 80px;">
+		<span class="form-tips">4 to 32 input ports</span>
+	</div>
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
 <script type="text/x-red" data-template-name="AudioMixer4">
 	<div class="form-row">
 		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
@@ -2893,116 +2125,85 @@ Returns the actual achieved attenuation of the anti-aliasing filter. If the inpu
 	<p>This implementation targets ESP32. It reads the file during playback and therefore needs a seekable source; a non-seekable network stream such as AudioSourceStream is not supported.</p>
 	<p>Preloading with loadToMemory() requires enough available PSRAM for the complete decoded sample while preserving the requested reserve. The preload helper supports 11025, 22050 and 44100 Hz.</p>
 </script>
+
+<script type="text/x-red" data-help-name="AudioPlayMp3">
+	<h3>Summary</h3>
+	<div class="tooltipinfo">
+	<p>Decode an MP3 file or an open <code>AudioSource</code> in a background decoder task and provide stereo 16-bit PCM audio to the graph.</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class="doc" align="center" cellpadding="3">
+		<tr class="top"><th>Port</th><th>Purpose</th></tr>
+		<tr class="odd"><td align="center">Out 0</td><td>Left channel</td></tr>
+		<tr class="odd"><td align="center">Out 1</td><td>Right channel</td></tr>
+	</table>
+	<h3>Functions</h3>
+	<p class="func"><span class="keyword">play</span>(filename);</p>
+	<p class="desc">Play a file from the default <code>SD_MMC</code> filesystem. Mount the filesystem before calling this function.</p>
+	<p class="func"><span class="keyword">play</span>(fs, filename);</p>
+	<p class="desc">Play a file from the specified Arduino-ESP32 filesystem, such as <code>SD_MMC</code>, <code>LittleFS</code> or <code>FFat</code>.</p>
+	<p class="func"><span class="keyword">play</span>(source);</p>
+	<p class="desc">Play from an already-open <code>AudioSource</code>. The caller retains ownership and must keep the source open and alive until playback stops.</p>
+	<p class="func"><span class="keyword">stop</span>(); / <span class="keyword">isPlaying</span>();</p>
+	<p class="desc">Stop playback or query whether the player is active.</p>
+	<p class="func"><span class="keyword">positionMillis</span>(); / <span class="keyword">lengthMillis</span>();</p>
+	<p class="desc">Return the current playback position and estimated total duration in milliseconds. The duration can be zero when the source bitrate is not known.</p>
+	<p class="func"><span class="keyword">channels</span>(); / <span class="keyword">bitRate</span>();</p>
+	<p class="desc">Return the decoded channel count and detected MP3 bitrate.</p>
+	<p class="func"><span class="keyword">hasLastError</span>(); / <span class="keyword">lastError</span>();</p>
+	<p class="desc">Query the decoder error state. Error constants are <code>ERR_NONE</code>, <code>ERR_FILE_NOT_FOUND</code>, <code>ERR_OUT_OF_MEMORY</code>, <code>ERR_FORMAT</code>, <code>ERR_DECODER</code> and <code>ERR_SOURCE</code>.</p>
+	<h3>Examples</h3>
+	<p><a href="../examples/MP3_Player/MP3_Player.cpp">MP3_Player example</a> demonstrates playback from SD_MMC using an <code>AudioSourceFile</code>.</p>
+	<h3>Notes</h3>
+	<p>The <code>play(fs, filename)</code> overload opens and owns its internal file source. With <code>play(AudioSource&amp;)</code>, the application must keep the source object open and valid. There is no separate pause/resume method in this class.</p>
+</script>
+
+<script type="text/x-red" data-template-name="AudioPlayMp3">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
+
+<script type="text/x-red" data-help-name="AudioPlayAac">
+	<h3>Summary</h3>
+	<div class="tooltipinfo">
+	<p>Decode an AAC file or an open <code>AudioSource</code> in a background decoder task and provide stereo 16-bit PCM audio to the graph.</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class="doc" align="center" cellpadding="3">
+		<tr class="top"><th>Port</th><th>Purpose</th></tr>
+		<tr class="odd"><td align="center">Out 0</td><td>Left channel</td></tr>
+		<tr class="odd"><td align="center">Out 1</td><td>Right channel</td></tr>
+	</table>
+	<h3>Functions</h3>
+	<p class="func"><span class="keyword">play</span>(filename);</p>
+	<p class="desc">Play a file from the default <code>SD_MMC</code> filesystem. Mount the filesystem before calling this function.</p>
+	<p class="func"><span class="keyword">play</span>(fs, filename);</p>
+	<p class="desc">Play a file from the specified Arduino-ESP32 filesystem, such as <code>SD_MMC</code>, <code>LittleFS</code> or <code>FFat</code>.</p>
+	<p class="func"><span class="keyword">play</span>(source);</p>
+	<p class="desc">Play from an already-open <code>AudioSource</code>. The caller retains ownership and must keep the source open and alive until playback stops.</p>
+	<p class="func"><span class="keyword">stop</span>(); / <span class="keyword">isPlaying</span>();</p>
+	<p class="desc">Stop playback or query whether the player is active.</p>
+	<p class="func"><span class="keyword">positionMillis</span>(); / <span class="keyword">lengthMillis</span>();</p>
+	<p class="desc">Return the current playback position and estimated total duration in milliseconds. The duration can be zero when the source bitrate is not known.</p>
+	<p class="func"><span class="keyword">channels</span>(); / <span class="keyword">bitRate</span>();</p>
+	<p class="desc">Return the decoded channel count and detected AAC bitrate.</p>
+	<p class="func"><span class="keyword">hasLastError</span>(); / <span class="keyword">lastError</span>();</p>
+	<p class="desc">Query the decoder error state. Error constants are <code>ERR_NONE</code>, <code>ERR_FILE_NOT_FOUND</code>, <code>ERR_OUT_OF_MEMORY</code>, <code>ERR_FORMAT</code> and <code>ERR_DECODER</code>.</p>
+	<h3>Examples</h3>
+	<p><a href="../examples/AAC_Player/AAC_Player.cpp">AAC_Player example</a> demonstrates playback from SD_MMC using an <code>AudioSourceFile</code>.</p>
+	<h3>Notes</h3>
+	<p>The <code>play(fs, filename)</code> overload opens and owns its internal file source. With <code>play(AudioSource&amp;)</code>, the application must keep the source object open and valid. There is no separate pause/resume method in this class.</p>
+</script>
+
+<script type="text/x-red" data-template-name="AudioPlayAac">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
 <script type="text/x-red" data-template-name="AudioPlaySdWav">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioPlaySdRaw">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Play a RAW data file, stored on a SD card.  RAW format is simpler
-		than WAV and begins playing immediately, without parsing WAV file
-		header info.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Sound Output</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>play</span>(filename);</p>
-	<p class=desc>Begin playing a RAW data file.  If a file is already playing,
-		it is stopped and this file starts playing from the beginning.
-	</p>
-	<p class=func><span class=keyword>stop</span>();</p>
-	<p class=desc>Stop playing.  If not playing, this function has no effect.
-	</p>
-	<p class=func><span class=keyword>isPlaying</span>();</p>
-	<p class=desc>Return true (non-zero) if playing, or false (zero)
-		when not playing.
-	</p>
-	<p class=func><span class=keyword>positionMillis</span>();</p>
-	<p class=desc>While playing, return the current time offset, in
-		milliseconds.  When not playing, the return from this function
-		is undefined.
-	</p>
-	<p class=func><span class=keyword>lengthMillis</span>();</p>
-	<p class=desc>Return the total length of the current sound clip,
-		in milliseconds.  When not playing, the return from this function
-		is undefined.
-	</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; Recorder
-	</p>
-	<h3>Notes</h3>
-	<p>The data file must be RAW 16 bit signed integers in LSB-first format.
-	</p>
-	<p>Coordinate storage access with the audio backend. Long blocking operations can starve audio processing and cause dropouts or glitches.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioPlaySdRaw">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioPlaySerialflashRaw">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Play a RAW data file, stored on a Serial Flash chip.  These chips
-		are far more efficient than SD cards, allowing many files to be
-		played simultaneously by copies of this object.
-		</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Sound Output</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>play</span>(filename);</p>
-	<p class=desc>Begin playing a RAW data file.  If a file is already playing,
-		it is stopped and this file starts playing from the beginning.
-	</p>
-	<p class=func><span class=keyword>stop</span>();</p>
-	<p class=desc>Stop playing.  If not playing, this function has no effect.
-	</p>
-	<p class=func><span class=keyword>isPlaying</span>();</p>
-	<p class=desc>Return true (non-zero) if playing, or false (zero)
-		when not playing.
-	</p>
-	<p class=func><span class=keyword>positionMillis</span>();</p>
-	<p class=desc>While playing, return the current time offset, in
-		milliseconds.  When not playing, the return from this function
-		is undefined.
-	</p>
-	<p class=func><span class=keyword>lengthMillis</span>();</p>
-	<p class=desc>Return the total length of the current sound clip,
-		in milliseconds.  When not playing, the return from this function
-		is undefined.
-	</p>
-	<h3>Examples</h3>
-	<!--
-<p class=exam>File &gt; Examples &gt; Audio &gt; Recorder
--->
-	<p class=exam>No dedicated playback example is listed here. <code>CopyFromSD</code> demonstrates file transfer to SerialFlash; use <code>ListFiles</code> to verify stored file names.</p>
-	<p class=exam>File &gt; Examples &gt; SerialFlash &gt; CopyFromSD
-	</p>
-	<h3>Notes</h3>
-	<p>The data file must be RAW 16 bit signed integers in LSB-first format.
-	</p>
-	<p>The <a href="https://github.com/PaulStoffregen/SerialFlash" target="_blank">SerialFlash library</a>
-		is used to access the flash chip.  You can also use SerialFlash's functions
-		to access the stored files, or add data to the flash chip.
-	</p>
-	<p>File names are case sensitive with SerialFlash.  If your sound does
-		not play, use <b>File &gt; Examples &gt; SerialFlash &gt; ListFiles</b> to
-		check the exact file names stored in the flash memory chip.
-</script>
-<script type="text/x-red" data-template-name="AudioPlaySerialflashRaw">
 	<div class="form-row">
 		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
 		<input type="text" id="node-input-name" placeholder="Name">
@@ -3141,6 +2342,44 @@ The actual packets are taken
 		from the pool created by AudioMemory().
 	</p>
 </script>
+
+<script type="text/x-red" data-help-name="AudioRecordFile">
+	<h3>Summary</h3>
+	<div class="tooltipinfo">
+	<p>Record the graph input as a 16-bit PCM WAV file. Audio capture uses a ring buffer in PSRAM; a separate writer task performs filesystem writes so the audio update does not block on storage latency.</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class="doc" align="center" cellpadding="3">
+		<tr class="top"><th>Port</th><th>Purpose</th></tr>
+		<tr class="odd"><td align="center">In 0</td><td>Left / mono input</td></tr>
+		<tr class="odd"><td align="center">In 1</td><td>Right input</td></tr>
+	</table>
+	<h3>Functions</h3>
+	<p class="func"><span class="keyword">begin</span>(fs, basePath, sampleRate, channels = 2, writerCore = CORE_UNPINNED);</p>
+	<p class="desc">Start recording to the specified filesystem. <code>basePath</code> is supplied without an extension; the recorder creates <code>basePath.tmp</code> and renames it to <code>basePath.wav</code> after successful finalization. Set channels to 1 (mono) or 2 (stereo).</p>
+	<p class="func"><span class="keyword">stop</span>();</p>
+	<p class="desc">Stop accepting audio, drain the buffer, finalize the WAV header and rename the temporary file. Returns true only when finalization succeeds.</p>
+	<p class="func"><span class="keyword">isRecording</span>(); / <span class="keyword">hasError</span>();</p>
+	<p class="desc">Query the recording state and whether a recording error occurred.</p>
+	<p class="func"><span class="keyword">setBufferSize</span>(bytes); / <span class="keyword">bufferSize</span>();</p>
+	<p class="desc">Set or query the PSRAM ring-buffer size. Change it only while stopped and before the recorder has allocated its buffer. The size must be 4-byte aligned and large enough for one stereo audio block.</p>
+	<h3>Setup</h3>
+	<pre><code>AudioRecordFile recorder;
+AudioMemory(12);
+recorder.begin(SD_MMC, "/recording", AUDIO_SAMPLE_RATE_EXACT, 2);</code></pre>
+	<h3>Examples</h3>
+	<p><a href="../examples/RecordSD/RecordSD.cpp">RecordSD example</a> records to SD_MMC. <a href="../examples/RecordLittleFS/RecordLittleFS.cpp">RecordLittleFS example</a> records to LittleFS.</p>
+	<h3>Notes</h3>
+	<p>PSRAM is required; the default ring buffer is 512 KiB. The target filesystem must already be mounted. Existing <code>.tmp</code> or <code>.wav</code> files are not overwritten. In mono mode input 0 is recorded; in stereo mode inputs 0 and 1 are interleaved. Call <code>stop()</code> from application/task context, never from the audio <code>update()</code> callback.</p>
+	<p>If the writer cannot keep up or the buffer fills, recording stops and <code>hasError()</code> reports the failure. An unfinished <code>.tmp</code> file may be recoverable with the offline repair tool.</p>
+</script>
+
+<script type="text/x-red" data-template-name="AudioRecordFile">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
 <script type="text/x-red" data-template-name="AudioRecordQueue">
 	<div class="form-row">
 		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
@@ -3214,8 +2453,6 @@ The actual packets are taken
 	</p>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Synthesis &gt; Wavetable &gt; Zelda
 	</p>
-	<h3>Notes</h3>
-	
 </script>
 <script type="text/x-red" data-template-name="AudioSynthWavetable">
 	<div class="form-row">
@@ -3259,8 +2496,6 @@ The actual packets are taken
 	<h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Synthesis &gt; SimpleDrum
 	</p>
-	<h3>Notes</h3>
-	
 </script>
 <script type="text/x-red" data-template-name="AudioSynthSimpleDrum">
 	<div class="form-row">
@@ -3305,10 +2540,77 @@ The actual packets are taken
 	</p>
 	<p class=exam><a href="https://github.com/PaulStoffregen/TouchGuitar" target="_blank">TouchGuitar</a>
 	</p>
-	<h3>Notes</h3>
-	
 </script>
 <script type="text/x-red" data-template-name="AudioSynthKarplusStrong">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
+
+<script type="text/x-red" data-help-name="AudioSynthHandpan">
+	<h3>Summary</h3>
+	<div class=tooltipinfo>
+	<p>Hybrid mono handpan synthesizer. Each configured pad combines a short finger-contact transient with up to six damped resonator modes for the sustained tone.</p>
+	<p>Up to 16 note slots can be configured. A strike is triggered with <code>noteOn(slot, velocity)</code>; velocity is MIDI-like (1–127).</p>
+	<p>The built-in soft attack is generated by the library, so no sample data is required. A caller-owned PCM16 attack sample can optionally override it; its memory must remain valid during playback.</p>
+	<p><b>Configuration is required:</b> select the audio sample rate and call <code>configureNote()</code> for each pad before starting audio updates (normally before <code>AudioMemory()</code>). The GUI export creates the object and connections, but does not generate pad configuration or note events.</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class=doc align=center cellpadding=3>
+		<tr class=top><th>Port</th><th>Purpose</th></tr>
+		<tr class=odd><td align=center>Out 0</td><td>Mono handpan signal</td></tr>
+	</table>
+	<h3>Example</h3>
+	<pre>AudioSynthHandpan handpan;
+AudioSynthHandpan::ModeConfig modes[3] = {
+    // frequency Hz, gain, T60 seconds, phase radians
+    {261.626f, 0.21f, 3.0f, 0.0f},
+    {525.250f, 0.06f, 3.0f, 0.0f},
+    {780.900f, 0.16f, 4.0f, 0.0f}
+};
+
+// Configure after selecting the sample rate and before AudioMemory().
+handpan.configureNote(0, modes, 3);
+handpan.noteOn(0, 90);</pre>
+	<h3>Functions</h3>
+	<p class=func><span class=keyword>configureNote</span>(slot, modes, modeCount);</p>
+	<p class=desc>Configure a pad using up to <code>MAX_MODES</code> resonator modes and the built-in soft attack. Each mode specifies frequency, normalized gain, T60 decay time and initial phase. Slots range from 0 to 15.</p>
+	<p class=func><span class=keyword>configureNote</span>(slot, modes, modeCount, attackSample, attackSampleCount, attackSampleRate, attackGain);</p>
+	<p class=desc>Configure a pad with an optional caller-owned signed mono PCM16 attack sample. The sample buffer is retained, not copied, and must remain valid during playback. Use a null pointer and zero sample count for resonator-only playback.</p>
+	<p class=func><span class=keyword>noteOn</span>(slot, velocity);</p>
+	<p class=desc>Queue a strike for a configured slot. Velocity is 1–127; the function returns <code>false</code> if the slot is not configured or the pending-event queue is full.</p>
+	<p class=func><span class=keyword>setSaturation</span>(amount);</p>
+	<p class=desc>Set optional soft saturation from 0 (off) to 1 (maximum). Configure before playback to avoid concurrent changes to the audio update loop.</p>
+</script>
+<script type="text/x-red" data-template-name="AudioSynthHandpan">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
+
+<script type="text/x-red" data-help-name="AudioSynthWaveformSineModulated">
+	<h3>Summary</h3>
+	<div class=tooltipinfo>
+	<p>Mono sine oscillator with linear frequency modulation (FM) from an audio-rate control signal at input 0.</p>
+	<p>The carrier frequency is set with <code>frequency()</code>. A modulation input of 0 keeps the carrier frequency, -32768 stops phase progression, and +32767 approaches twice the carrier frequency. The carrier is limited to one quarter of the active sample rate so the positive modulation range remains below Nyquist.</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class=doc align=center cellpadding=3>
+		<tr class=top><th>Port</th><th>Purpose</th></tr>
+		<tr class=odd><td align=center>In 0</td><td>Linear frequency modulation signal</td></tr>
+		<tr class=odd><td align=center>Out 0</td><td>Modulated sine signal</td></tr>
+	</table>
+	<h3>Functions</h3>
+	<p class=func><span class=keyword>frequency</span>(hz);</p>
+	<p class=desc>Set the unmodulated carrier frequency. Values are limited to 0 through one quarter of the active sample rate.</p>
+	<p class=func><span class=keyword>amplitude</span>(level);</p>
+	<p class=desc>Set output amplitude from 0.0 (silence) to 1.0 (maximum).</p>
+	<p class=func><span class=keyword>phase</span>(angle);</p>
+	<p class=desc>Set the oscillator phase in degrees, from 0 up to but not including 360.</p>
+</script>
+<script type="text/x-red" data-template-name="AudioSynthWaveformSineModulated">
 	<div class="form-row">
 		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
 		<input type="text" id="node-input-name" placeholder="Name">
@@ -3349,8 +2651,6 @@ The actual packets are taken
 	</p>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; FFT
 	</p>
-	<h3>Notes</h3>
-	
 </script>
 <script type="text/x-red" data-template-name="AudioSynthWaveformSine">
 	<div class="form-row">
@@ -3394,61 +2694,6 @@ The actual packets are taken
 		to be perfect.  This is mainly intended for testing 24 bit codec chips!</p>
 </script>
 <script type="text/x-red" data-template-name="AudioSynthWaveformSineHires">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioSynthWaveformSineModulated">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Create a sine oscillator whose phase increment is changed linearly by an audio
-		input. Zero input gives the carrier frequency, negative full-scale input
-		stops phase progression, and positive full-scale input approaches twice
-		the carrier frequency. For wide-range or exponential FM, use
-		AudioSynthWaveformModulated instead.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Modulation Signal</td></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Sine Wave Output</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>amplitude</span>(level);</p>
-	<p class=desc>Set the amplitude, from 0 to 1.0.
-	</p>
-	<p class=func><span class=keyword>frequency</span>(freq);</p>
-	<p class=desc>Set the unmodulated carrier frequency from 0 to one quarter of the
-		currently configured audio sample rate (Fs/4; 11025 Hz at 44.1 kHz).
-		The output frequency equals this setting when the modulation input is
-		zero. Negative full-scale input stops phase progression (0 Hz/DC);
-		positive full-scale input approaches twice the carrier frequency.
-		Attenuate the modulation signal with a mixer if a smaller range is needed.
-	</p>
-	<p class=func><span class=keyword>phase</span>(angle);</p>
-	<p class=desc>
-		Cause the generated waveform to jump to a specific point within
-		its cycle.  Angle is from 0 to 360 degrees.  When multiple objects
-		are configured,
-		AudioNoInterrupts()
-		should be used to guarantee all new settings take effect together.
-	</p>
-	<!--
-<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt;
-	</p>
--->
-	<h3>Notes</h3>
-	<p>This is the simple, linear-FM sine oscillator retained for Teensy API
-		compatibility. The configured carrier is limited to Fs/4 so full-scale
-		positive modulation cannot exceed the Nyquist frequency. The implementation
-		uses the Teensy-compatible 257-entry sine table and fixed-point phase
-		interpolation. For modulation mapped in octaves, use
-		AudioSynthWaveformModulated instead.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioSynthWaveformSineModulated">
 	<div class="form-row">
 		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
 		<input type="text" id="node-input-name" placeholder="Name">
@@ -3780,8 +3025,7 @@ The actual packets are taken
 		to a non-zero level.
 	</p>
 	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt;
-	</p>
+	<p><a href="../examples/Effects/Filter_FIR/Filter_FIR.cpp">Filter_FIR example</a> and <a href="../examples/Synthesis/DeepHouse/DeepHouse.cpp">DeepHouse example</a> use white-noise generation.</p>
 	<h3>Notes</h3>
 	<p>Setting the amplitude to zero causes this object to stop using
 		CPU time to generate random numbers.
@@ -3948,7 +3192,7 @@ The actual packets are taken
 	so the result of depth*(sin(Fe)) is always a number from -depth to +depth.
 	Thus, the delayed sample will be selected from the range (dt-depth) to
 	(dt+depth). This selection will vary at whatever rate is specified as the
-	frequency of the effect, Fe. Typically a low frequency (a few Hertz) is used.
+	frequency of the effect, Fe. Typically a low frequency (a few Hertz) is used.</p>
 	<h3>Audio Connections</h3>
 	<table class=doc align=center cellpadding=3>
 		<tr class="top"><th>Port</th><th>Purpose</th></tr>
@@ -4103,6 +3347,60 @@ double s_freq = .0625;</p>
 	</div>
 </script>
 
+<script type="text/x-red" data-help-name="AudioEffectVintageReverb">
+	<h3>Summary</h3>
+	<div class=tooltipinfo>
+	<p>Stereo reverb based on a modulated eight-line feedback delay network. It provides several room types and presets, frequency-dependent decay, input diffusion, modulation, pre-delay and freeze.</p>
+	<p>There are two independent input channels and two output channels. Connect left and right separately. For a mono source, connect it to both inputs.</p>
+	<p><b>Initialization is required:</b> call <code>begin()</code> from <code>setup()</code> after configuring the runtime audio sample rate. The effect allocates approximately 268 KB of floating-point delay memory at 44.1 kHz. It tries internal RAM first and falls back to PSRAM. Check the return value of <code>begin()</code>; when initialization fails, the effect passes the input through without reverb.</p>
+	<p>The GUI export creates the object and audio connections only. It does not generate the required <code>begin()</code> call or parameter settings.</p>
+	</div>
+	<h3>Audio Connections</h3>
+	<table class=doc align=center cellpadding=3>
+		<tr class=top><th>Port</th><th>Purpose</th></tr>
+		<tr class=odd><td align=center>In 0</td><td>Left input</td></tr>
+		<tr class=odd><td align=center>In 1</td><td>Right input</td></tr>
+		<tr class=odd><td align=center>Out 0</td><td>Left output</td></tr>
+		<tr class=odd><td align=center>Out 1</td><td>Right output</td></tr>
+	</table>
+	<h3>Initialization</h3>
+	<pre>AudioEffectVintageReverb reverb;
+
+// In setup(), after setting up the audio sample rate:
+if (!reverb.begin()) {
+    // Handle insufficient memory.
+}
+reverb.preset(AudioEffectVintageReverb::CONCERT_HALL);
+reverb.mix(0.30f);</pre>
+	<h3>Functions</h3>
+	<p class=func><span class=keyword>begin</span>();</p>
+	<p class=desc>Allocate and initialize the delay memory for the current runtime sample rate. Call again after changing the sample rate. Returns <code>true</code> when initialization succeeds.</p>
+	<p class=func><span class=keyword>ready</span>(); / <span class=keyword>usingPSRAM</span>();</p>
+	<p class=desc>Check whether the effect is initialized and whether its delay memory is using PSRAM.</p>
+	<p class=func><span class=keyword>type</span>(type); / <span class=keyword>preset</span>(preset);</p>
+	<p class=desc>Load the default settings for a reverb type or a named preset. Types include <code>AMBIENCE</code>, <code>ROOM</code>, <code>CHAMBER</code>, <code>PLATE</code>, <code>HALL</code>, <code>CATHEDRAL</code>, <code>ARENA</code> and <code>CHORUS_SPACE</code>. Presets include <code>SMALL_ROOM</code>, <code>CONCERT_HALL</code>, <code>BRIGHT_PLATE</code> and <code>CHURCH</code>.</p>
+	<p class=func><span class=keyword>mix</span>(amount);</p>
+	<p class=desc>Dry/wet balance: 0.0 is dry and 1.0 is wet only.</p>
+	<p class=func><span class=keyword>predelay</span>(milliseconds); / <span class=keyword>decay</span>(seconds); / <span class=keyword>size</span>(amount);</p>
+	<p class=desc>Set pre-delay (0–250 ms), mid-band RT60 decay (0.1–120 s) and room size (0.2–1.5).</p>
+	<p class=func><span class=keyword>diffusion</span>(amount); / <span class=keyword>modRate</span>(hz); / <span class=keyword>modDepth</span>(amount);</p>
+	<p class=desc>Control echo diffusion and delay modulation. Modulation rate is 0–5 Hz; modulation depth is 0–1.</p>
+	<p class=func><span class=keyword>bassMult</span>(amount); / <span class=keyword>bassXover</span>(hz); / <span class=keyword>highMult</span>(amount); / <span class=keyword>highXover</span>(hz);</p>
+	<p class=desc>Adjust the low- and high-frequency decay relative to the mid band and set their crossover frequencies.</p>
+	<p class=func><span class=keyword>lowCut</span>(hz); / <span class=keyword>highCut</span>(hz);</p>
+	<p class=desc>Set the input low- and high-frequency cutoffs.</p>
+	<p class=func><span class=keyword>freeze</span>(on); / <span class=keyword>wetGain</span>(gain); / <span class=keyword>bypass</span>(on); / <span class=keyword>reset</span>();</p>
+	<p class=desc>Freeze the reverb tail, set wet output gain (0–4), bypass processing or clear the tail immediately.</p>
+	<p class=func><span class=keyword>apply</span>(settings); / <span class=keyword>settings</span>();</p>
+	<p class=desc>Apply or retrieve a complete <code>Settings</code> structure. <code>memoryFloats()</code> reports the required delay-buffer size for the current sample rate.</p>
+</script>
+<script type="text/x-red" data-template-name="AudioEffectVintageReverb">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
+
 <script type="text/x-red" data-help-name="AudioEffectEnvelope">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
@@ -4208,8 +3506,6 @@ double s_freq = .0625;</p>
 	<p class=exam>File &gt; Examples &gt; Audio &gt;
 	</p>
 -->
-	<h3>Notes</h3>
-	
 </script>
 <script type="text/x-red" data-template-name="AudioEffectMultiply">
 	<div class="form-row">
@@ -4240,7 +3536,6 @@ double s_freq = .0625;</p>
 	<p class=desc>When <code>enable</code> is true, input 0 is forwarded unchanged and the modulation input is ignored. When false, wavefolding resumes. The setting is sampled once per audio block.</p>
 <h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; WaveFolder</p>
-	<h3>Notes</h3>
 </script>
 <script type="text/x-red" data-template-name="AudioEffectWaveFolder">
 	<div class="form-row">
@@ -4268,10 +3563,8 @@ double s_freq = .0625;</p>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Effects &gt; Vocoder19Band
 	</p>
 	<h3>Notes</h3>
-	<p>To create a half wave rectifier effect, use the waveshape effect.  See
-		this forum message for a half-wave rectifier example.
-	</p>
-    </p>
+	<p>To create a half wave rectifier effect, use the waveshape effect. See
+		this forum message for a half-wave rectifier example.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioEffectRectifier">
 	<div class="form-row">
@@ -4323,70 +3616,6 @@ double s_freq = .0625;</p>
 	<p>Maximum delay depends on the available audio-memory pool, configured sample rate and selected delay taps. Allocate sufficient audio blocks for the longest delay.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioEffectDelay">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioEffectDelayExternal">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Delay a signal, using external memory for longer delay times!  Up to 8 separate delay taps can be used.</p>
-	<p align=center><img src="img/delay.png"><br><small>1 kHz burst, delayed 5.2 ms.</small></p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Signal Input</td></tr>
-		<tr class=odd><td align=center>Out 0</td><td>Delay Tap #1</td></tr>
-		<tr class=odd><td align=center>Out 1</td><td>Delay Tap #2</td></tr>
-		<tr class=odd><td align=center>Out 2</td><td>Delay Tap #3</td></tr>
-		<tr class=odd><td align=center>Out 3</td><td>Delay Tap #4</td></tr>
-		<tr class=odd><td align=center>Out 4</td><td>Delay Tap #5</td></tr>
-		<tr class=odd><td align=center>Out 5</td><td>Delay Tap #6</td></tr>
-		<tr class=odd><td align=center>Out 6</td><td>Delay Tap #7</td></tr>
-		<tr class=odd><td align=center>Out 7</td><td>Delay Tap #8</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>delay</span>(channel, milliseconds);</p>
-	<p class=desc>Set output channel (0 to 7) to delay the signals by
-		milliseconds.  The maximum delay is approx 1.5 seconds for each 23LC1024 chip.
-		The actual delay
-		is rounded to the nearest sample.  Each channel can be configured for
-		any delay.  There is no requirement to configure the "taps" in increasing
-		delay order.
-	</p>
-	<p class=func><span class=keyword>disable</span>(channel);</p>
-	<p class=desc>Disable a channel.  The output of this channel becomes silent.
-	</p>
-	<h3>Hardware</h3>
-	<p>External-delay memory devices connect over SPI. The selected memory type, chip-select routing and supported device count are backend-specific; follow the active driver and target board's SPI wiring. For multiple chips, verify that every chip-select signal is unique and correctly decoded.</p>
-<h3>Notes</h3>
-	<p>External RAM allows for longer delays without consuming
-		limited internal RAM.  However, SPI communication is required,
-		which consumes much more CPU time.  The
-		AudioProcessorUsageMax
-		function may be used to monitor how much CPU time is consumed.
-	</p>
-	<p>You may specify the type of hardware to be used by editing the code.  AUDIO_MEMORY_23LC1024
-		specifies a single 23LC1024 chip.  AUDIO_MEMORY_MEMORYBOARD allows using up to 6 of these
-		chips.
-	</p>
-	<p class=desc><span class=keyword>AudioEffectDelayExternal</span>  delayExt1(<span class=literal>AUDIO_MEMORY_23LC1024</span>);
-	</p>
-	<p>You may also create more than one delay using the same hardware, where the memory is partitioned
-		by specifying a maximum delay in milliseconds.  This can be useful if you wish to delay both
-		channels of a stereo signal.
-
-	<p class=desc><span class=keyword>AudioEffectDelayExternal</span>  delayExt1(<span class=literal>AUDIO_MEMORY_23LC1024</span>, 700);<br><span class=keyword>AudioEffectDelayExternal</span>  delayExt2(<span class=literal>AUDIO_MEMORY_23LC1024</span>, 700);
-	</p>
-	<p>When using CY15B104, you
-		may need to add a capacitor between 3.3V & GND
-		to make the chip work.
-	</p>
-</script>
-<script type="text/x-red" data-template-name="AudioEffectDelayExternal">
 	<div class="form-row">
 		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
 		<input type="text" id="node-input-name" placeholder="Name">
@@ -4929,8 +4158,6 @@ double s_freq = .0625;</p>
 	</p>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; PeakMeterStereo
 	</p>
-	<h3>Notes</h3>
-	
 </script>
 <script type="text/x-red" data-template-name="AudioAnalyzePeak">
 	<div class="form-row">
@@ -4960,9 +4187,6 @@ double s_freq = .0625;</p>
 	</p>
 	<h3>Examples</h3>
 	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; PeakAndRMSMeterStereo</p>
-	</p>
-	<h3>Notes</h3>
-	
 </script>
 <script type="text/x-red" data-template-name="AudioAnalyzeRMS">
 	<div class="form-row">
@@ -5106,594 +4330,6 @@ double s_freq = .0625;</p>
 	</div>
 </script>
 
-<script type="text/x-red" data-help-name="AudioAnalyzeToneDetect">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Detect the level of a single tone.</p>
-	<p>Uses the
-	<a href="https://en.wikipedia.org/wiki/Goertzel_algorithm" target="_blank">Goertzel algorithm</a>
-	.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Signal to analyze</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>frequency</span>(freq);</p>
-	<p class=desc>Set the frequency to detect.  The default detection time
-		will be 10 cycles of this frequency.
-	</p>
-	<p class=func><span class=keyword>frequency</span>(freq, cycles);</p>
-	<p class=desc>Set the frequency to detect, and the number of cycles.
-		Longer detection time (more cycles) will give higher precision,
-		but of course slower response.
-	</p>
-	<p class=func><span class=keyword>available</span>();</p>
-	<p class=desc>Returns true (non-zero) each time a detection interval
-		(number of cycles) completed and a new level is detected.
-	</p>
-	<p class=func><span class=keyword>read</span>();</p>
-	<p class=desc>Read the detected signal level.  Range is 0 to 1.0.
-	</p>
-	<p class=func><span class=keyword>threshold</span>(level);</p>
-	<p class=desc>Set a detection threshold, where the bool test operation
-		will return true if at or above this level, or false when below.
-	</p>
-	<p class=func>(bool)</p>
-	<p class=desc>By testing the object as a boolean value, you can respond
-		to detection of a tone.
-	</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; DialTone_Serial
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; DialTone_7segment
-	</p>
-	<h3>Notes</h3>
-	<p>Low frequency detection has trouble with numerical precision.
-		Works really well for all 8 DTMF frequencies, but fails for
-		detecting "sub audible tones" used in some control applications.</p>
-	<p>The (bool) test continues to return true until the next detection
-		interval (the configured number of cycles).  This behavior may
-		change in future versions, for a single true each time the signal
-		is detected, and then false for the remainder of that interval.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioAnalyzeToneDetect">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioAnalyzeNoteFrequency">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Detect with fairly good accuracy the fundamental frequency f<sub>o</sub>
-		of musical notes, such as electric guitar and bass.</p>
-	</div>
-    <p>Written By Collin Duffy</p>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Signal to analyze</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>begin</span>(threshold);</p>
-	<p class=desc>Initialize and start detecting frequencies,
-		with an initial threshold (the amount of allowed uncertainty).
-	</p>
-	<p class=func><span class=keyword>available</span>();</p>
-	<p class=desc>Returns true (non-zero) when a valid
-		frequency is detected.
-	</p>
-	<p class=func><span class=keyword>read</span>();</p>
-	<p class=desc>Read the detected frequency.
-	</p>
-	<p class=func><span class=keyword>probability</span>();</p>
-	<p class=desc>Return the level of certainty, betweeo 0 to 1.0.
-	</p>
-	<p class=func><span class=keyword>threshold</span>(level);</p>
-	<p class=desc>Set the detection threshold, the amount of allowed uncertainty.
-	</p>
-	<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; Analysis &gt; NoteFrequency
-	</p>
-	<h3>Notes</h3>
-	<p>The <a href="http://recherche.ircam.fr/equipes/pcm/cheveign/pss/2002_JASA_YIN.pdf">YIN algorithm</a> (PDF)
-		is used to detect frequencies, with many optimizations for
-		frequencies between 29-400Hz.  This algorithm can be somewhat
-		memory and processor hungry but will allow you to detect with
-		fairly good accuracy the fundamental frequencies from
-		electric guitars and basses.</p>
-	<p>Within the code, AUDIO_GUITARTUNER_BLOCKS
-		may be edited to control low frequency range.  The default
-		(24) allows measurement down to 29.14 Hz, or B(flat)0.</p>
-	<p>The reliable upper limit depends on signal, harmonics and noise. Original implementation notes suggest useful results up to about 1 kHz but possible reduced reliability near 4 kHz; validate against known tones in the intended application.</p>
-	<p>This object was contributed by Collin Duffy from his
-		<a href="https://github.com/duff2013/AudioTuner">AudioTuner project</a>.
-		Additional details and documentation may be found there.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioAnalyzeNoteFrequency">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioAnalyzePrint">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Print raw audio data to the Arduino Serial Monitor.  This
-		object creates massive output quickly, and should not normally be used.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<table class=doc align=center cellpadding=3>
-		<tr class=top><th>Port</th><th>Purpose</th></tr>
-		<tr class=odd><td align=center>In 0</td><td>Signal to print</td></tr>
-	</table>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>name</span>(string);</p>
-	<p class=desc>blah blah blah blah
-	</p>
-	<p class=func><span class=keyword>trigger</span>();</p>
-	<p class=desc>blah blah blah blah
-	</p>
-	<p class=func><span class=keyword>trigger</span>(level, edge);</p>
-	<p class=desc>blah blah blah blah
-	</p>
-	<p class=func><span class=keyword>delay</span>(samples);</p>
-	<p class=desc>blah blah blah blah
-	</p>
-	<p class=func><span class=keyword>length</span>(samples);</p>
-	<p class=desc>blah blah blah blah
-	</p>
-	<!--
-<h3>Examples</h3>
-	<p class=exam>File &gt; Examples &gt; Audio &gt;
-	</p>
--->
-	<h3>Notes</h3>
-	<p>This object doesn't work very well and probably should not be used.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioAnalyzePrint">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioControlSGTL5000">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Control the SGTL5000 audio codec. It operates in slave mode, where the host controls all I2S timing.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<p>This object has no audio inputs or outputs.  Separate i2s objects
-		are used to send and receive audio data.  I2S master mode objects
-		must be used, because this object configures the SGTL5000 in slave
-		mode, where it receives all I²S clocks from the external master.
-		This object controls
-		how the SGTL5000 will use those I2S audio streams.</p>
-
-	<h3>Functions</h3>
-	<p>These are the most commonly used SGTL5000 functions.</p>
-	<p class=func><span class=keyword>enable</span>();</p>
-	<p class=desc>Start the SGTL5000.  This function should be called first.
-	</p>
-	<p class=func><span class=keyword>volume</span>(level);</p>
-	<p class=desc>Set the headphone volume level.  Range is 0 to 1.0, but
-		0.8 corresponds to the maximum undistorted output for a full scale
-		signal.  Usually 0.5 is a comfortable listening level.  The line
-		level outputs are <em>not</em> changed by this function.
-	</p>
-	<p class=func><span class=keyword>inputSelect</span>(input);</p>
-	<p class=desc>Select which input to use: AUDIO_INPUT_LINEIN or AUDIO_INPUT_MIC.
-	</p>
-	<p class=func><span class=keyword>micGain</span>(dB);</p>
-	<p class=desc>When using the microphone input, set the amplifier gain.
-		The input number is in decibels, from 0 to 63.
-	</p>
-
-	<h3>Signal Levels</h3>
-
-	<p>The default signal levels should be used for most applications,
-		but these functions allow you to customize the analog signals.</p>
-
-	<p class=func><span class=keyword>muteHeadphone</span>();</p>
-	<p class=desc>Silence the headphone output.
-	</p>
-	<p class=func><span class=keyword>unmuteHeadphone</span>();</p>
-	<p class=desc>Turn the headphone output on.
-	</p>
-	<p class=func><span class=keyword>muteLineout</span>();</p>
-	<p class=desc>Silence the line level outputs.
-	</p>
-	<p class=func><span class=keyword>unmuteLineout</span>();</p>
-	<p class=desc>Turn the line level outputs on.
-	</p>
-	<p class=func><span class=keyword>lineInLevel</span>(both);</p>
-	<p class=desc style="padding-bottom:0.2em;">Adjust the sensitivity of the line-level inputs.
-		Fifteen settings are possible:
-	</p>
-<pre class="desc">
- 0: 3.12 Volts p-p
- 1: 2.63 Volts p-p
- 2: 2.22 Volts p-p
- 3: 1.87 Volts p-p
- 4: 1.58 Volts p-p
- 5: 1.33 Volts p-p  (default)
- 6: 1.11 Volts p-p
- 7: 0.94 Volts p-p
- 8: 0.79 Volts p-p
- 9: 0.67 Volts p-p
-10: 0.56 Volts p-p
-11: 0.48 Volts p-p
-12: 0.40 Volts p-p
-13: 0.34 Volts p-p
-14: 0.29 Volts p-p
-15: 0.24 Volts p-p
-</pre>
-	<p class=func><span class=keyword>lineInLevel</span>(right, left);</p>
-	<p class=desc>Adjust the sensitivity of the line-level inputs, with different
-		settings for left and right.  The same 15 settings are available.
-	</p>
-	<p class=func><span class=keyword>lineOutLevel</span>(both);</p>
-	<p class=desc style="padding-bottom:0.2em;">Adjust the line level output
-		voltage range.  The following settings are possible:
-	</p>
-<pre class="desc">
-13: 3.16 Volts p-p
-14: 2.98 Volts p-p
-15: 2.83 Volts p-p
-16: 2.67 Volts p-p
-17: 2.53 Volts p-p
-18: 2.39 Volts p-p
-19: 2.26 Volts p-p
-20: 2.14 Volts p-p
-21: 2.02 Volts p-p
-22: 1.91 Volts p-p
-23: 1.80 Volts p-p
-24: 1.71 Volts p-p
-25: 1.62 Volts p-p
-26: 1.53 Volts p-p
-27: 1.44 Volts p-p
-28: 1.37 Volts p-p
-29: 1.29 Volts p-p  (default)
-30: 1.22 Volts p-p
-31: 1.16 Volts p-p
-</pre>
-	<p class=func><span class=keyword>lineOutLevel</span>(left, right);</p>
-	<p class=desc>Adjust the line level outout voltage range, with separate
-		settings for left and right.  The same settings (13 to 31) are available.
-	</p>
-
-
-	<h3>Signal Conditioning</h3>
-
-	<p>Usually these digital signal conditioning features should be left at their
-		default settings.
-	</p>
-
-	<p class=func><span class=keyword>adcHighPassFilterFreeze</span>();</p>
-	<p class=desc>By default, the analog input (either line-level inputs or mic)
-		is high-pass filtered, to remove any DC component.  This function
-		freezes the filter, so the current DC component is still substracted, but
-		the filter stops tracking any DC or low frequency changes.
-	</p>
-	<p class=func><span class=keyword>adcHighPassFilterDisable</span>();</p>
-	<p class=desc>Completely disable the analog input filter.  DC and sub-audible
-		low frequencies are allowed to enter the digital signal.  This
-		may reduce noise in some cases.
-	</p>
-	<p class=func><span class=keyword>adcHighPassFilterEnable</span>();</p>
-	<p class=desc>Turn the DC-blocking filter back on, if disabled, or
-		allows it to resume tracking DC and low frequency changes, if
-		previously frozen. This is the default setting.
-	</p>
-	<p class=func><span class=keyword>dacVolume</span>(both);</p>
-	<p class=desc>Normally output volume should be used with volume(), which
-		changes the analog gain in the headphone amplifier.  This function
-		on the other hand controls digital attenuation before conversion to analog, which
-		reduces resolution, but allows another fine control of output
-		signal level.  The ranges is 0 to 1.0, with the default (no digital attenuation)
-		at 1.0.
-	</p>
-	<p  class=desc>dacVolume uses zero-crossing detect to avoid clicks, and graceful
-		ramping is handled by the chip so that a new volume may be set directly in
-		a single call.
-	</p>
-	<p class=func><span class=keyword>dacVolume</span>(left, right);</p>
-	<p class=desc>Adjust the digital output volume separately on left and
-		right channels.
-	</p>
-	<p class=func><span class=keyword>dacVolumeRamp</span>();</p>
-	<p class=desc>Enable graceful volume ramping.  The dacVolume adjusts gradually using
-		an exponential curve.  Pops or loud clicks are avoided when making large
-		changes in volume level.
-	</p>
-	<p class=func><span class=keyword>dacVolumeRampLinear</span>();</p>
-	<p class=desc>Enable faster volume ramping.  A slight click may be heard during a
-		large volume change.
-	</p>
-	<p class=func><span class=keyword>dacVolumeRampDisable</span>();</p>
-	<p class=desc>Do not use any gradual ramping.  The zero cross feature still helps
-		for small changes, but large volume changes may produce a pop or click.
-	</p>
-
-	<h3>Audio Processor</h3>
-
-	<p>The optional digital audio processor is capable of implementing
-		one or more of: automatic volume control, surround sound control,
-		bass enhancement, and tonal adjustments (either a
-		simple tone control, or a parametric equalizer, or a graphic equalizer),
-		in that order.
-	</p>
-	<p>These signal-processing features are implemented inside the SGTL5000, so they do not consume host-processor cycles. The processing order is fixed in the codec hardware.
-	</p>
-	<p>It is good practice to mute the outputs before enabling or disabling
-	the Audio Processor, to avoid clicks or thumps.
-	</p>
-
-	<p class=func><span class=keyword>audioPreProcessorEnable</span>();</p>
-	<p class=desc>Enable the audio processor to pre-process the input
-		(from either line-level inputs or microphone) before it's sent
-		to the host over I²S.
-	</p>
-	<p class=func><span class=keyword>audioPostProcessorEnable</span>();</p>
-	<p class=desc>Enable the audio processor to post-process the host's I²S output before it's turned into analog signals for the
-		headphones and/or line level outputs.
-	</p>
-	<p class=func><span class=keyword>audioProcessorDisable</span>();</p>
-	<p class=desc>Disable the audio processor.
-	</p>
-	<p class=func><span class=keyword>autoVolumeControl</span>(maxGain, response, hardLimit, threshold, attack, decay);</p>
-	<p class=desc>Configures the auto volume control, which is implemented as a compressor/expander
-	or hard limiter. 	<em>maxGain</em> is the maximum gain that can be applied for expanding, and
-	can take one of three values: 0 (0dB), 1 (6.0dB) and 2 (12dB). Values greater than 2 are treated
-	as 2. <em>response</em> controls the integration time for the compressor and can take
-	four values: 0 (0ms), 1 (25ms), 2 (50ms) or 3 (100ms). Larger values average the volume
-	over a longer time, allowing short-term peaks through.
-	</p>
-	<p class=desc>If <em>hardLimit</em> is 0, a 'soft
-	knee' compressor is used to progressively compress louder values which are near to or above the
-	threashold (the louder they are, the greater the compression). If it is 1, a hard compressor
-	is used (all values above the threashold are the same loudness). The <em>threashold</em> is specified
-	as a float in the range 0dBFS to -96dBFS, where -18dBFS is a typical value.
-	<em>attack</em> is a float controlling the rate of decrease in gain when the signal is over
-	threashold, in dB/s. <em>decay</em> controls how fast gain is restored once the level
-	drops below threashold, again in dB/s. It is typically set to a longer value than attack.
-	</p>
-	<p class=func><span class=keyword>autoVolumeEnable</span>();</p>
-	<p class=desc>Enables auto volume control, using the previously specified settings.
-	</p>
-	<p class=func><span class=keyword>autoVolumeDisable</span>();</p>
-	<p class=desc>Disables auto volume control.
-	</p>
-
-	<p class=func><span class=keyword>surroundSoundEnable</span>();</p>
-	<p class=desc>Enable virtual surround processing, to give a broader and
-	deeper stereo image (even with mono input).
-	</p>
-	<p class=func><span class=keyword>surroundSoundDisable</span>();</p>
-	<p class=desc>Disable virtual surround processing. Before disabling, ramp up
-	the width to maximum to avoid pops.
-	</p>
-	<p class=func><span class=keyword>surroundSound</span>(width);</p>
-	<p class=desc>Configures virtual surround width from 0 (mono) to 7 (widest).
-	</p>
-	<p class=func><span class=keyword>surroundSound</span>(width, select);</p>
-	<p class=desc>Configures virtual surround width from 0 (mono) to 7 (widest).
-	<em>select</em> may be set to 1 (disable), 2 (mono input) or 3 (stereo input).
-	</p>
-
-	<p class=func><span class=keyword>enhanceBassEnable</span>();</p>
-	<p class=desc>Enable bass enhancement. A mono, low-pass filtered copy of
-	the original stereo signal has bass levels boosted and is then mixed back into
-	the stereo signal, which is then optionally high pass filtered (to remove
-	inaudible subsonic frequencies).
-	</p>
-	<p class=func><span class=keyword>enhanceBassDisable</span>();</p>
-	<p class=desc>Disable bass enhancement. Before disabling, ramp down the bass
-	enhancement level to zero.
-	</p>
-	<p class=func><span class=keyword>enhanceBass</span>(lr_lev, bass_lev);</p>
-	<p class=desc>Configures the bass enhancement by setting the levels of the
-	original stereo signal and the bass-enhanced mono level which will be mixed together.
-	There is no high-pass filter.
-	</p>
-	<p  class=desc>When changing bass level, call this function repeatedly to ramp up or down the bass in
-	steps of 0.5dB, to avoid pops.
-	</p>
-	<p class=func><span class=keyword>enhanceBass</span>(lr_lev, bass_lev, hpf_bypass, cutoff);</p>
-	<p class=desc>Configures the bass enhancement by setting the levels of the
-	original stereo signal and the bass-enhanced mono level which will be mixed together.
-	The high-pass filter may be enabled (0) or bypassed (1). The cutoff frequency is specified
-	as follows:
-	</p>
-	<pre class="desc">
-value  frequency
- 0      80Hz
- 1     100Hz
- 2     125Hz
- 3     150Hz
- 4     175Hz
- 5     200Hz
- 6     225Hz
-</pre>
-	<p  class=desc>When changing bass level, call this function repeatedly to ramp up or down the bass in
-	steps of 0.5dB, to avoid pops.
-	</p>
-
-	<p class=func><span class=keyword>eqSelect</span>(n);</p>
-	<p class=desc>Selects the type of frequency control, where <em>n</em> is
-	one of</p>
-	<p class=desc><b>FLAT_FREQUENCY (0)</b><br>
-    Equalizers and tone controls disabled, flat frequency response.</p>
-    <p class=desc><b>PARAMETRIC_EQUALIZER (1)</b><br>
-    Enables the 7-band parametric equalizer, thus disabling the
-	tone controls and graphic equalizer.</p>
-    <p class=desc><b>TONE_CONTROLS (2)</b><br>
-    Enables bass and treble tone controls, disabling the parametric
-	equalization and graphic equalizer.</p>
-    <p class=desc><b>GRAPHIC_EQUALIZER (3)</b><br>
-    Enables the five-band graphic equalizer, disabling the parametric
-	equalization and tone controls.</p>
-
-
-	<p class=func><span class=keyword>eqBands</span>(bass, treble);</p>
-	<p class=desc>Configures bass and treble tone controls, which are
-	implemented as one second order low pass filter (bass) in parallel with
-	one second order high pass filter (treble).
-	</p>
-	<p class=desc>When changing bass or treble level, call this function repeatedly to ramp
-	up or down the level in steps of 0.04 (=0.5dB) or so, to avoid pops.
-	</p>
-	<p class=func><span class=keyword>eqBands</span>(bass, mid_bass, midrange, mid_treble, treble);</p>
-	<p class=desc>Configures the graphic equalizer. It is implemented by five parallel,
-	second order biquad filters with fixed frequencies of 115Hz, 330Hz, 990Hz, 3kHz,
-	and 9.9kHz. Each band has a range of adjustment from 1.00 (+12dB) to -1.00 (-11.75dB).
-	</p>
-	<p class=func><span class=keyword>eqBand</span>(bandNum, n);</p>
-	<p class=desc>Configures the gain or cut on one band in the graphic equalizer.
-	<em>bandnum</em> can range from 1 to 5; <em>n</em> is a float in the range 1.00 to -1.00.
-	</p>
-	<p  class=desc>When changing a band, call this function repeatedly to ramp up the gain in steps of 0.5dB,
-	to avoid pops.
-	</p>
-
-	<p class=func><span class=keyword>eqFilter</span>(filterNum, filterParameters);</p>
-	<p class=desc>Configurs the parametric equalizer. The number of filters (1 to 7)
-	is specified along with  a pointer to an array of filter coefficients.
-	The parametric equalizer is implemented using 7 cascaded, second order bi-quad
-	filters whose frequencies, gain, and Q may be freely configured, but each filter
-	can only be specified as a set of filter coefficients.
-	</p>
-	<p class=func><span class=keyword>eqFilterCount</span>(n);</p>
-	<p class=desc>Enables zero or more of the already enabled parametric filters.
-	</p>
-
-	<h3>Examples</h3>
-	<p>Nearly all of the library's examples use this object.  These
-		examples demonstrate its special features.
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; PassThroughStereo
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; SGTL5000 &gt; dap_bass_enhance
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; SGTL5000 &gt; dap_avc_agc
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; SGTL5000 &gt; balanceDAC
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; SGTL5000 &gt; balanceHP
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; SGTL5000 &gt; CalcBiquadToneControlDAP
-	</p>
-	<p class=exam>File &gt; Examples &gt; Audio &gt; HardwareTesting &gt; SGTL5000 &gt; VolumeRamp
-	</p>
-	<h3>Notes</h3>
-	<p>The examples listed above cover bass enhancement, automatic volume control, channel balance, tone control and volume ramping. Potentiometer-based control requires application-specific ADC wiring and code.</p>
-</script>
-<script type="text/x-red" data-template-name="AudioControlSGTL5000">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioControlCS4272">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Control the CS4272 audio codec. Separate I²S nodes send and receive audio data.</p>
-	<p>Ensure the codec's configured I²S clock role matches the connected I²S nodes: one side must generate the clocks and the other must receive them.</p>
-	</div>
-	<h3>Audio Connections</h3>
-	<p>This object has no audio inputs or outputs.  Separate I2S objects
-		are used to send and receive audio data.
-	</p>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>enable</span>();</p>
-	<p class=desc>Enables the CODEC to work with 44.1 KHz - 16 bit data. This function does not enable the ADC/DAC modules.
-	</p>
-	<p class=func><span class=keyword>volume</span>(vol);</p>
-	<p class=desc>Set the volume level. Range is 0 to 1.0.
-	</p>
-	<p class=func><span class=keyword>volume</span>(left, right);</p>
-	<p class=desc>Set the volume level. Range is 0 to 1.0.
-	</p>
-	<p class=func><span class=keyword>dacVolume</span>(vol);</p>
-	<p class=desc>Set the DAC volume control. Range is 0 to 1.0. The codec's general volume control and DAC-specific volume control are distinct APIs; check the active driver for how their gains are combined.
-	</p>
-	<p class=func><span class=keyword>dacVolume</span>(left, right);</p>
-	<p class=desc>Set the volume level. Range is 0 to 1.0.
-	</p>
-
-	<p class=func><span class=keyword>muteOutput</span>();</p>
-	@@CS4272_DESC@@
-	<p class=func><span class=keyword>unmuteOutput</span>();</p>
-	@@CS4272_DESC@@
-	<p class=func><span class=keyword>muteInput</span>();</p>
-	@@CS4272_DESC@@
-	<p class=func><span class=keyword>unmuteInput</span>();</p>
-	@@CS4272_DESC@@
-	<p class=func><span class=keyword>enableDither</span>();</p>
-	@@CS4272_DESC@@
-	<p class=func><span class=keyword>disableDither</span>();</p>
-	@@CS4272_DESC@@
-
-	<h3>Hardware</h3>
-	<p>Pin 2 must be connected to the CS4272 reset.  SDA &amp; SCL are used for all control.
-	</p>
-
-	<h3>Notes</h3>
-</script>
-<script type="text/x-red" data-template-name="AudioControlCS4272">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-<script type="text/x-red" data-help-name="AudioControlCS42448">
-	<h3>Summary</h3>
-	<div class=tooltipinfo>
-	<p>Control the CS42448 chip in TDM mode, for 6 inputs and 8 outputs.
-	</p>
-	</div>
-	</div>
-	<h3>Audio Connections</h3>
-	<p>This object has no audio inputs or outputs.  Separate TDM objects
-		are used to send and receive audio data.
-	</p>
-	<h3>Functions</h3>
-	<p class=func><span class=keyword>enable</span>();</p>
-	<p class=desc>Enables the CS42448 to work in TDM mode.
-	</p>
-	<p class=func><span class=keyword>volume</span>(level);</p>
-	<p class=desc>Set the volume level for all output channels. Range is 0 to 1.0.
-	</p>
-	<p class=func><span class=keyword>volume</span>(channel, level);</p>
-	<p class=desc>Set the volume level for a single output. Channel is 1 to 8.  Range is 0 to 1.0.
-	</p>
-	<p class=func><span class=keyword>inputLevel</span>(level);</p>
-	<p class=desc>Set the input gain level for all input channels. Range is 0 to 15.85.
-	</p>
-	<p class=func><span class=keyword>inputLevel</span>(channel, level);</p>
-	<p class=desc>Set the input gain level for a single input. Channel is 1 to 6. Range is 0 to 15.85.
-	</p>
-	<h3>Hardware</h3>
-	<p>Use a compatible CS42448 board with six input and eight output channels. Confirm its TDM wiring, clock configuration and pin routing against the target MCU and board.</p>
-	</div>
-	<h3>Notes</h3>
-</script>
-<script type="text/x-red" data-template-name="AudioControlCS42448">
-	<div class="form-row">
-		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-		<input type="text" id="node-input-name" placeholder="Name">
-	</div>
-</script>
-
-
-
 
 <script type="text/x-red" data-help-name="AudioControlES8388">
 	<h3>Summary</h3>
@@ -5723,6 +4359,13 @@ value  frequency
 	<h3>Notes</h3>
 	<p>ALC, limiter and noise gate operate on the codec ADC input path, not on the I²S playback stream. They require a supported board wiring and an enabled ADC. The parameters above are chip register codes rather than physical units except where stated.</p>
 </script>
+
+<script type="text/x-red" data-template-name="AudioControlES8388">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
+</script>
 <script type="text/x-red" data-help-name="AudioControlES8311">
 	<h3>Summary</h3>
 	<div class=tooltipinfo>
@@ -5750,6 +4393,13 @@ value  frequency
 	<p class=desc>Enable or disable the ADC's dynamic high-pass/DC-offset tracking function. This API does not change the HPF coefficients or enable the ADC equalizer.</p>
 	<h3>Notes</h3>
 	<p>The ES8311 has a fixed analog input path, so <code>inputSelect()</code> is not supported by this class. ALC, noise gate and high-pass filtering affect the ADC input path, not the I²S playback stream. The ADC equalizer remains bypassed by default; DAC dynamic-range control and direct ADC-to-DAC routing are not exposed by this API.</p>
+</script>
+
+<script type="text/x-red" data-template-name="AudioControlES8311">
+	<div class="form-row">
+		<label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+		<input type="text" id="node-input-name" placeholder="Name">
+	</div>
 </script>
 
 </body>

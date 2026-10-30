@@ -53,6 +53,46 @@ RED.view = (function() {
 
 	var clipboard = "";
 
+	// Rebuild a node's input connectors using its instance-specific definition.
+	function renderInputPorts(node, d) {
+		var numInputs = d._def.inputs || 0;
+		node.selectAll(".port_input").remove();
+		var inputlist = [];
+		for (var n = 0; n < numInputs; n++) {
+			var link = RED.nodes.links.filter(function(l) {
+				return (l.target == d && l.targetPort == n);
+			});
+			var y = (d.h / 2) - ((numInputs - 1) / 2) * 13;
+			y = (y + 13 * n) - 5;
+			var rect = node.append("rect");
+			inputlist[n] = rect;
+			rect.attr("class", "port port_input").attr("rx", 3).attr("ry", 3)
+				.attr("y", y).attr("x", -5).attr("width", 10).attr("height", 10).attr("index", n);
+			if (link && link.length > 0) {
+				rect.on("mousedown", null)
+					.on("touchstart", null)
+					.on("mouseup", null)
+					.on("touchend", null)
+					.on("mouseover", null)
+					.on("mouseout", null)
+					.classed("port_hovered", false);
+			} else {
+				rect.on("mousedown", (function(nn) { return function(d) { portMouseDown(d, 1, nn); }; })(n))
+					.on("touchstart", (function(nn) { return function(d) { portMouseDown(d, 1, nn); }; })(n))
+					.on("mouseup", (function(nn) { return function(d) { portMouseUp(d, 1, nn); }; })(n))
+					.on("touchend", (function(nn) { return function(d) { portMouseUp(d, 1, nn); }; })(n))
+					.on("mouseover", function() {
+						d3.select(this).classed("port_hovered", (mouse_mode != RED.state.JOINING || mousedown_port_type != 1));
+					})
+					.on("mouseout", function() {
+						d3.select(this).classed("port_hovered", false);
+					});
+			}
+		}
+		d.inputlist = inputlist;
+		d._renderedInputCount = numInputs;
+	}
+
 	var status_colours = {
 		"red":    "#c00",
 		"green":  "#5a8",
@@ -567,6 +607,10 @@ RED.view = (function() {
 				var nn = {x: mousePos[0],y:mousePos[1],w:node_width,z:activeWorkspace};
 				nn.type = selected_tool;
 				nn._def = RED.nodes.getType(nn.type);
+				if (nn.type === "AudioMixerN") {
+					nn._def = $.extend({}, nn._def);
+					nn._def.defaults = $.extend({}, nn._def.defaults);
+				}
 				nn.id = RED.nodes.cppName(nn);
 
 				nn._def.defaults = nn._def.defaults ? nn._def.defaults  : {};
@@ -991,43 +1035,62 @@ RED.view = (function() {
 	}
 
 	
-	function checkRequirements(d) {
-		//Add requirements
-		d.requirementError = false;
-		d.conflicts = new Array();
-		d.requirements = new Array();
-		requirements.forEach(function(r) {
-			if (r.type == d.type) d.requirements.push(r);
-		});
+	var requirementsByType = Object.create(null);
 
-		//check for conflicts with other nodes:
-		d.requirements.forEach(function(r) {
-			RED.nodes.eachNode(function (n2) {
-				if (n2 != d && n2.requirements != null ) {
-					n2.requirements.forEach(function(r2) {
-						if (r["resource"] == r2["resource"]) {
-							if (r["shareable"] == false ) {
-								var msg = "Conflict: shareable '"+r["resource"]+"'  "+d.name+" and "+n2.name;
-								console.log(msg);
-								msg = n2.name + " uses " + r["resource"] + ", too";
-								d.conflicts.push(msg);
-								d.requirementError = true;
-							}
-							//else
-							if (r["setting"] != r2["setting"]) {
-								var msg = "Conflict: "+ d.name + " setting['"+r["setting"]+"'] and "+n2.name+" setting['"+r2["setting"]+"']";
-								console.log(msg);
-								msg = n2.name + " has different settings: " + r["setting"] + " ./. " + r2["setting"];
-								d.conflicts.push(msg);
-								d.requirementError = true;
-							}
-						}
-					});
-				}
+	function getRequirementsForType(type) {
+		if (!Object.prototype.hasOwnProperty.call(requirementsByType, type)) {
+			var result = [];
+			requirements.forEach(function(r) {
+				if (r.type == type) result.push(r);
 			});
-		});		
+			requirementsByType[type] = result;
+		}
+		return requirementsByType[type];
 	}
-	
+
+	function checkRequirements(d) {
+		d.requirementError = false;
+		d.conflicts = [];
+		d.requirements = getRequirementsForType(d.type);
+
+		// Do not depend on n2.requirements having been initialized by a
+		// previous render. Derive every node's requirements from its type.
+		var reported = Object.create(null);
+		d.requirements.forEach(function(r) {
+			RED.nodes.eachNode(function(n2) {
+				if (n2 == d) return;
+
+				var otherRequirements = getRequirementsForType(n2.type);
+				otherRequirements.forEach(function(r2) {
+					if (r.resource != r2.resource) return;
+
+					// A resource cannot be shared if either declaration marks it
+					// exclusive. Different modes on the same peripheral conflict.
+					var exclusive = (r.shareable === false || r2.shareable === false);
+					var differentSetting = (r.setting != r2.setting);
+					if (!exclusive && !differentSetting) return;
+
+					// Report one concise conflict per other node, even when
+					// several resource declarations overlap.
+					var key = n2.id;
+					if (reported[key]) return;
+					reported[key] = true;
+
+					var otherName = n2.name ? n2.name : n2.id;
+					var message = otherName + " conflicts on " + r.resource;
+					if (differentSetting) {
+						message += " (" + (r.setting || "no mode") +
+							" / " + (r2.setting || "no mode") + ")";
+					}
+					d.conflicts.push(message);
+					d.requirementError = true;
+					console.log("Resource conflict: " +
+						(d.name ? d.name : d.id) + " and " + otherName +
+						" require " + r.resource);
+				});
+			});
+		});
+	}
 
 	function redraw() {
 		vis.attr("transform","scale("+scaleFactor+")");
@@ -1224,37 +1287,8 @@ RED.view = (function() {
 
 					//node.append("circle").attr({"class":"centerDot","cx":0,"cy":0,"r":5});
 
-					var numInputs = d._def.inputs;
-					var inputlist = [];
-					for (var n=0; n < numInputs; n++) {
-						var link = RED.nodes.links.filter(function(l){return (l.target == d && l.targetPort == n);});
-						var y = (d.h/2)-((numInputs-1)/2)*13;
-						y = (y+13*n)-5;
-						text.attr("x",38);
-						var rect = node.append("rect");
-						inputlist[n] = rect;
-						rect.attr("class","port port_input").attr("rx",3).attr("ry",3)
-							.attr("y",y).attr("x",-5).attr("width",10).attr("height",10).attr("index",n);
-						if (link && link.length > 0) {
-							// this input already has a link connected, so disallow new links
-							rect.on("mousedown",null)
-								.on("touchstart", null)
-								.on("mouseup", null)
-								.on("touchend", null)
-								.on("mouseover", null)
-								.on("mouseout", null)
-								.classed("port_hovered",false);
-						} else {
-							// allow new link on inputs without any link connected
-							rect.on("mousedown", (function(nn){return function(d){portMouseDown(d,1,nn);}})(n))
-								.on("touchstart", (function(nn){return function(d){portMouseDown(d,1,nn);}})(n))
-								.on("mouseup", (function(nn){return function(d){portMouseUp(d,1,nn);}})(n))
-								.on("touchend", (function(nn){return function(d){portMouseUp(d,1,nn);}})(n))
-								.on("mouseover",function(d) { var port = d3.select(this); port.classed("port_hovered",(mouse_mode!=RED.state.JOINING || mousedown_port_type != 1 ));})
-								.on("mouseout",function(d) { var port = d3.select(this); port.classed("port_hovered",false);})
-						}
-					}
-					d.inputlist = inputlist;
+					if (d._def.inputs > 0) text.attr("x", 38);
+					renderInputPorts(node, d);
 
 					// never show these little status icons
 					// people try clicking on them, thinking they're buttons
@@ -1267,6 +1301,16 @@ RED.view = (function() {
 
 			node.each(function(d,i) {
 
+					if (d.type === "AudioMixerN") {
+						var mixerChannels = parseInt(d.channels, 10);
+						if (isNaN(mixerChannels)) mixerChannels = 32;
+						d.channels = Math.max(4, Math.min(32, mixerChannels));
+						d._def.inputs = d.channels;
+						if (d._renderedInputCount !== d._def.inputs) {
+							d.dirty = true;
+							d.resize = true;
+						}
+					}
 					checkRequirements(d);
 
 					if (d.dirty || d.requirementError != undefined) {
@@ -1279,6 +1323,9 @@ RED.view = (function() {
 							d.h = Math.max(node_height,(Math.max(d.outputs,d._def.inputs)||0) * 15);
 						}
 						var thisNode = d3.select(this);
+						if (d._renderedInputCount !== (d._def.inputs || 0)) {
+							renderInputPorts(thisNode, d);
+						}
 						//thisNode.selectAll(".centerDot").attr({"cx":function(d) { return d.w/2;},"cy":function(d){return d.h/2}});
 						thisNode.attr("transform", function(d) { return "translate(" + (d.x-d.w/2) + "," + (d.y-d.h/2) + ")"; });
 						thisNode.selectAll(".node")
