@@ -307,6 +307,7 @@ void AudioPlayMemory::update() {
     if (playback_generation != generation) {
         portEXIT_CRITICAL(&playback_state_mux);
         release(block);
+        if (rightBlock != nullptr) release(rightBlock);
         return;
     }
 
