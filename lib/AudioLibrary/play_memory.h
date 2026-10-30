@@ -36,10 +36,14 @@ class AudioPlayMemory : public AudioStream
 public:
     AudioPlayMemory() : AudioStream(0, nullptr) {}
 
+    // Plays a packed PCM table. Mono tables use output 0; stereo tables
+    // use output 0 (left) and output 1 (right). Supported rates: 11025,
+    // 22050, 44100 and 48000 Hz.
     void play(const unsigned int *data);
     void play(const unsigned int *data, bool loop);
     // Plays mono PCM samples owned by AudioSampleBuffer without copying them.
-    // The buffer must outlive playback. Supported sample rates: 11025, 22050, 44100 Hz.
+    // The buffer must outlive playback. Supported sample rates: 11025, 22050,
+    // 44100 and 48000 Hz.
     bool play(const AudioSampleBuffer &buffer);
     bool play(const AudioSampleBuffer &buffer, bool loop);
     void stop();
