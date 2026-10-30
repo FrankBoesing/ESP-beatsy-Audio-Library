@@ -526,7 +526,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
     output += "// Source: " + sourceName.replace(/[\r\n]/g, " ").replace(/\*\//g, "* /") + "\n";
     output += "// " + (stereo ? "Stereo" : "Mono") + " signed 16-bit PCM, " + rate +
       " Hz, " + sampleCount + " sample frames (" + duration.toFixed(3) + " s).\n";
-    output += "// Storage: " + storageBytes.toLocaleString("en-US") + " bytes (" +
+    output += "// Storage: " + storageBytes.toLocaleString() + " bytes (" +
       storageKiB.toFixed(2) + " KiB).\n";
     if (stereo) {
       output += "// Stereo word layout: left sample in bits 0..15, right sample in bits 16..31.\n";
