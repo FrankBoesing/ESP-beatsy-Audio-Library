@@ -21,3 +21,4 @@ compile_commands.json
 copilot-instructions.md
 build_all_examples.bat
 /_example-build-logs
+/pio-test
