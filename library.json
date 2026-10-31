@@ -29,5 +29,25 @@
   "build": {
     "srcDir": "src",
     "includeDir": "src"
+  },
+  "export": {
+    "exclude": [
+      ".clang-format",
+      ".gitattributes",
+      ".gitignore",
+      "platformio.ini",
+      "pio-test",
+      "pio-test/*",
+      "pio-test/**/*",
+      "src/secrets.h",
+      "secrets.h",
+      "partitions_esp32_p4_wifi6_32MB.csv",
+      "sdkconfig.defaults.esp32-p4-wifi6",
+      "scripts",
+      "scripts/*",
+      "scripts/**/*",
+      ".vscode",
+      ".vscode/*"
+    ]
   }
 }
