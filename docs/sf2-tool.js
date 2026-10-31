@@ -468,7 +468,8 @@
       instrumentCount: instruments.length,
       modulatorCount: pmodCount + imodCount,
       pcmCache: Object.create(null),
-      audioBufferCache: Object.create(null)
+      audioBufferCache: Object.create(null),
+      audioBufferFrameCount: 0
     };
   }
 
@@ -752,6 +753,8 @@
   var BLACK_KEY_OFFSETS = [1, 3, 6, 8, 10];
   var MAX_PREVIEW_VOICES = 16;
   var MAX_PREVIEW_LAYERS_PER_NOTE = 8;
+  var MAX_PREVIEW_SAMPLE_FRAMES = 4000000;
+  var MAX_PREVIEW_CACHE_FRAMES = 10000000;
 
   function currentPreset() {
     if (!font) return null;
@@ -814,6 +817,7 @@
       whiteKey.className = "sf2-key sf2-white-key";
       whiteKey.dataset.note = String(whiteNote);
       whiteKey.setAttribute("aria-label", midiName(whiteNote) + ", MIDI " + whiteNote);
+      whiteKey.disabled = !font;
       var whiteLabel = document.createElement("span");
       whiteLabel.className = "sf2-key-note";
       whiteLabel.textContent = midiName(whiteNote);
@@ -839,6 +843,7 @@
       blackKey.dataset.note = String(blackNote);
       blackKey.style.left = "calc(" + (whiteBefore / 14 * 100).toFixed(4) + "% - 2.25%)";
       blackKey.setAttribute("aria-label", midiName(blackNote) + ", MIDI " + blackNote);
+      blackKey.disabled = !font;
       var blackLabel = document.createElement("span");
       blackLabel.className = "sf2-key-pc";
       blackLabel.textContent = KEYBOARD_PC_LABELS[b];
@@ -879,11 +884,22 @@
       ":" + layout.loopStart + ":" + layout.loopEnd;
     if (soundFont.audioBufferCache[cacheKey]) return soundFont.audioBufferCache[cacheKey];
 
+    if (layout.frames > MAX_PREVIEW_SAMPLE_FRAMES) {
+      throw new Error("This sample has " + layout.frames.toLocaleString() +
+        " frames; the browser preview limit is " +
+        MAX_PREVIEW_SAMPLE_FRAMES.toLocaleString() + " frames per zone.");
+    }
+    if (soundFont.audioBufferFrameCount + layout.frames > MAX_PREVIEW_CACHE_FRAMES) {
+      throw new Error("The preview sample cache reached its " +
+        MAX_PREVIEW_CACHE_FRAMES.toLocaleString() +
+        "-frame memory limit. Load the SoundFont again to clear the preview cache.");
+    }
     var pcm = getPcm(soundFont, region);
     var buffer = audioContext.createBuffer(1, pcm.length - 1, layout.sampleRate);
     var output = buffer.getChannelData(0);
     for (var i = 0; i < output.length; i++) output[i] = pcm[i] / 32768;
     soundFont.audioBufferCache[cacheKey] = buffer;
+    soundFont.audioBufferFrameCount += layout.frames;
     return buffer;
   }
 
@@ -1061,9 +1077,13 @@
     }
 
     var requestToken = wavetableMode ? ++legacyStartToken : 0;
-    if (wavetableMode) hardStopAllVoices();
-    else if (activeVoices.filter(function (voice) { return !voice.released; }).length >= MAX_PREVIEW_VOICES) {
-      releaseVoice(activeVoices[0]);
+    if (wavetableMode) {
+      hardStopAllVoices();
+    } else {
+      var unReleasedVoices = activeVoices.filter(function (voice) { return !voice.released; });
+      if (unReleasedVoices.length >= MAX_PREVIEW_VOICES && unReleasedVoices.length) {
+        releaseVoice(unReleasedVoices[0]);
+      }
     }
 
     try {
@@ -1402,6 +1422,7 @@
     presetInfo.textContent = "";
     metadata.innerHTML = "";
     summary.textContent = "";
+    renderKeyboard();
     exportButton.disabled = true;
     playButton.disabled = true;
     stopButton.disabled = true;
@@ -1429,6 +1450,7 @@
       if (!parsedFont.presets.length) throw new Error("No playable presets were found.");
 
       font = parsedFont;
+      renderKeyboard();
       populatePresets();
       renderMetadata(font.info);
       var zoneCount = font.presets.reduce(function (sum, preset) {
@@ -1455,6 +1477,7 @@
       presetSelect.disabled = true;
       metadata.innerHTML = "";
       summary.textContent = "";
+      renderKeyboard();
       exportButton.disabled = true;
       playButton.disabled = true;
       setStatus("Could not load SoundFont: " + error.message, "bad");
