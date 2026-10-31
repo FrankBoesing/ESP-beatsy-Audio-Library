@@ -23,12 +23,12 @@
 
   var font = null;
   var currentFileName = "";
+  var loadGeneration = 0;
   var audioContext = null;
   var activeSources = [];
   var generatedCode = "";
   var generatedFileName = "";
-  var pcmCache = Object.create(null);
-
+  
   var GEN = {
     startOffset: 0, endOffset: 1, startLoopOffset: 2, endLoopOffset: 3,
     startCoarse: 4, delayModLfo: 21, delayVibLfo: 23, freqVibLfo: 24,
@@ -1025,14 +1025,22 @@
   }
 
   fileInput.addEventListener("change", async function () {
+    // A new selection invalidates every older asynchronous file read.
+    // Large SF2 files can finish reading out of order.
+    var thisLoad = ++loadGeneration;
+
     stopPreview();
     resetOutput();
     font = null;
-    pcmCache = Object.create(null);
+    currentFileName = "";
     presetSelect.innerHTML = "";
+    presetSelect.disabled = true;
     presetInfo.textContent = "";
     metadata.innerHTML = "";
     summary.textContent = "";
+    exportButton.disabled = true;
+    playButton.disabled = true;
+    stopButton.disabled = true;
 
     var file = fileInput.files && fileInput.files[0];
     if (!file) {
@@ -1048,27 +1056,41 @@
     setStatus("Reading and indexing " + file.name + "…", "");
     try {
       var buffer = await file.arrayBuffer();
-      font = parseSoundFont(buffer);
-      if (!font.presets.length) throw new Error("No playable presets were found.");
 
+      // Do not let a previous selection overwrite the latest one.
+      if (thisLoad !== loadGeneration) return;
+
+      var parsedFont = parseSoundFont(buffer);
+      if (thisLoad !== loadGeneration) return;
+      if (!parsedFont.presets.length) throw new Error("No playable presets were found.");
+
+      font = parsedFont;
       populatePresets();
       renderMetadata(font.info);
       var zoneCount = font.presets.reduce(function (sum, preset) {
         return sum + preset.zones.length;
       }, 0);
-      summary.textContent = file.name + " · " + font.presets.length +
-        " presets · " + font.instrumentCount + " instruments · " +
-        (font.samples.length - 1) + " samples · " +
+      summary.textContent = "Loaded file: " + file.name + " · " +
+        (font.info.INAM ? "SoundFont: " + font.info.INAM + " · " : "") +
+        font.presets.length + " presets · " + font.instrumentCount +
+        " instruments · " + (font.samples.length - 1) + " samples · " +
         font.sampleCount.toLocaleString() + " sample points · " +
         zoneCount + " resolved zones.";
       if (font.sample24Chunk) summary.textContent += " 24-bit sample data found.";
+
       presetSelect.selectedIndex = 0;
       updatePresetInfo();
-      setStatus("SoundFont loaded locally. Select a preset, audition it and generate a C++ header.", "good");
+      setStatus("Loaded " + file.name + ". The first preset is selected; choose another preset in the list to audition it.", "good");
       exportButton.disabled = false;
       playButton.disabled = false;
     } catch (error) {
+      if (thisLoad !== loadGeneration) return;
       font = null;
+      currentFileName = "";
+      presetSelect.innerHTML = "";
+      presetSelect.disabled = true;
+      metadata.innerHTML = "";
+      summary.textContent = "";
       exportButton.disabled = true;
       playButton.disabled = true;
       setStatus("Could not load SoundFont: " + error.message, "bad");
