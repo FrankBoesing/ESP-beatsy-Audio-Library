@@ -12,10 +12,32 @@
 #include "PlaySynthMusic.h"
 
 static const unsigned int NUM_VOICES = 18;
-#define AMPLITUDE (0.2)
+#define AMPLITUDE (0.2f)
 
 const unsigned char *sp = score;
 
+
+// ============================================================================
+// Audio output
+// ============================================================================
+
+AudioOutputI2S audioOut({
+    27, // BCLK
+    25, // WS / LRCLK
+    26, // DOUT
+    0   // MCLK
+});
+
+// ============================================================================
+// Codec
+// ============================================================================
+
+AudioControlES8388 codec({
+    PIN_I2C_SDA,
+    PIN_I2C_SCL,
+    PIN_AMPLIFIER,
+    PIN_AMPLIFIER_ACTIVE
+});
 
 // ============================================================================
 // Voice generators and envelopes
@@ -50,36 +72,11 @@ AudioConnection voiceToLeft[NUM_VOICES];
 AudioConnection voiceToRight[NUM_VOICES];
 
 // ============================================================================
-// Audio output
-// ============================================================================
-
-AudioOutputI2S audioOut({
-    27, // BCLK
-    25, // WS / LRCLK
-    26, // DOUT
-    0   // MCLK
-});
-
-
-// ============================================================================
 // Mixer -> Audio output
 // ============================================================================
 
 AudioConnection mixerLeftToOutput(mixerLeft, 0, audioOut, 0);
 AudioConnection mixerRightToOutput(mixerRight, 0, audioOut, 1);
-
-
-// ============================================================================
-// Codec
-// ============================================================================
-
-AudioControlES8388 codec({
-    PIN_I2C_SDA,
-    PIN_I2C_SCL,
-    PIN_AMPLIFIER,
-    PIN_AMPLIFIER_ACTIVE
-});
-
 
 // ============================================================================
 // Initial volume
@@ -225,7 +222,7 @@ void loop()
     // ------------------------------------------------------------------------
     // Volume control
     //
-    // Uncomment if you have a volume pot soldered to your audio shield.
+    // Uncomment if you have a volume pot soldered.
     // ------------------------------------------------------------------------
 
     /*
