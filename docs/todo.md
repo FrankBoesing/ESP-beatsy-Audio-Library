@@ -82,6 +82,16 @@ presets.
   of producing incomplete instrument data. This does not complete the target
   feature below; the converter must be upgraded after the `AudioSynthWavetable`
   zone/layer API exists.
+- [x] **Add an interactive SF2 keyboard player.** The browser tool now provides
+  a two-octave keyboard for mouse/touch input and a German QWERTZ PC-key map,
+  including held-note Note On/Off and volume-envelope release. Its default
+  compatibility mode is monophonic, requires exactly one matching sample zone
+  per note at the selected velocity, applies the current default wavetable
+  amplitude and enforces the legacy 65,535-frame sample limit. An optional
+  browser mode allows up to 16 simultaneous notes and eight layers per note.
+  Browser sample buffers are bounded to avoid unbounded memory growth. This is
+  preview functionality only; it does not implement missing SF2 modulators,
+  filters, pan or effects in the ESP32 synth.
 - [ ] **Upgrade the SF2 browser tool to the extended instrument model.** Keep
   local/offline file processing, but export a compile-ready C++ header for a
   selected SF2 preset with deduplicated PCM arrays, key/velocity rectangles,
