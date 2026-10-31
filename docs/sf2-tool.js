@@ -778,7 +778,10 @@
     } else {
       modeInfo.textContent =
         "Browser-Vorschau: polyphon (bis zu " + MAX_PREVIEW_VOICES +
-        " gleichzeitig gehaltene Noten) und mit mehreren übereinanderliegenden Sample-Zonen. Die Velocity bleibt der eingestellte Wert. Nicht implementierte SF2-Filter, Modulatoren, Pan und Effektsends werden weiterhin nicht gerendert.";
+        " gleichzeitig gehaltene Noten), bis zu " + MAX_PREVIEW_LAYERS_PER_NOTE +
+        " Zonen pro Note. Feste Velocity; maximal " + MAX_PREVIEW_SAMPLE_FRAMES.toLocaleString() +
+        " Frames pro Sample und " + MAX_PREVIEW_CACHE_FRAMES.toLocaleString() +
+        " Frames im Sample-Cache. Nicht implementierte SF2-Filter, Modulatoren, Pan und Effektsends werden weiterhin nicht gerendert.";
     }
   }
 
@@ -1043,6 +1046,10 @@
     note = Math.max(0, Math.min(127, Math.round(note)));
     velocity = Math.max(1, Math.min(127, Math.round(velocity)));
     var wavetableMode = isWavetableMode();
+    var requestToken = wavetableMode ? ++legacyStartToken : 0;
+    // AudioSynthWavetable is a single-voice node: a new playNote() replaces
+    // the previous note even if this note later turns out to have no zone.
+    if (wavetableMode) hardStopAllVoices();
     var matches = regionsForNote(preset, note, velocity);
 
     if (!matches.length) {
@@ -1079,10 +1086,7 @@
       }
     }
 
-    var requestToken = wavetableMode ? ++legacyStartToken : 0;
-    if (wavetableMode) {
-      hardStopAllVoices();
-    } else {
+    if (!wavetableMode) {
       var unReleasedVoices = activeVoices.filter(function (voice) { return !voice.released; });
       if (unReleasedVoices.length >= MAX_PREVIEW_VOICES && unReleasedVoices.length) {
         releaseVoice(unReleasedVoices[0]);
