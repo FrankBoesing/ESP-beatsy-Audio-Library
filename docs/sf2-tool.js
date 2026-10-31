@@ -543,7 +543,7 @@
     var loop = (mode === 1 || mode === 3) && loopValid;
 
     if (pair.right) {
-      var rightLoopStart = (pair.right.start + offsets.loopStart) - rightStart;
+      var rightLoopStart = (pair.right.loopStart + offsets.loopStart) - rightStart;
       var rightLoopEnd = (pair.right.loopEnd + offsets.loopEnd) - rightStart;
       if (rightLoopStart !== loopStart || rightLoopEnd !== loopEnd) {
         loopValid = false;
@@ -610,8 +610,13 @@
     return Math.pow(2, timecents / 1200);
   }
 
+  function effectiveKey(values, note) {
+    var key = values[GEN.keynum];
+    return key >= 0 && key <= 127 ? key : note;
+  }
+
   function envelopeForNote(values, note) {
-    var trackingKey = values[GEN.keynum] >= 0 ? values[GEN.keynum] : note;
+    var trackingKey = effectiveKey(values, note);
     var holdTc = values[GEN.holdVolEnv] - (trackingKey - 60) * values[GEN.keyToVolHold];
     var decayTc = values[GEN.decayVolEnv] - (trackingKey - 60) * values[GEN.keyToVolDecay];
     return {
@@ -635,7 +640,7 @@
     var sample = soundFont.samples[region.sampleIndex];
     var values = region.values;
     var rootKey = rootKeyForRegion(soundFont, region);
-    var pitchKey = values[GEN.keynum] >= 0 ? values[GEN.keynum] : note;
+    var pitchKey = effectiveKey(values, note);
     var scaleTuning = values[GEN.scaleTuning];
     var cents = (pitchKey - rootKey) * scaleTuning +
       sample.pitchCorrection + values[GEN.coarseTune] * 100 + values[GEN.fineTune];
