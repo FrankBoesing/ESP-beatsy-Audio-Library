@@ -39,6 +39,16 @@ textarea{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.8
 .note{border-left:3px solid #8ba3ba;padding:8px 12px;background:#f7f9fb;color:var(--muted);font-size:.9rem;margin-top:14px}
 footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:.88rem}
 @media(max-width:560px){header{padding:22px 17px}.card{padding:17px}main{padding:18px 12px 40px}}
+
+.miditones-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px}
+.miditones-options label{margin-top:10px}
+.miditones-checks{display:flex;flex-wrap:wrap;gap:5px 18px;margin-top:12px}
+.miditones-check{display:flex;align-items:center;gap:7px;font-weight:500;margin:0}
+.miditones-check input{width:auto;margin:0}
+.miditones-advanced{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}
+.miditones-advanced summary{cursor:pointer;font-weight:650;color:var(--accent)}
+@media(max-width:560px){.miditones-options{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -47,7 +57,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
     <div class="eyebrow">ESP-beatsy · Offline utilities</div>
     <h1>Audio Tools</h1>
     <p>Small browser-based utilities for audio files created or used by ESP-beatsy. The files are processed locally; this page does not upload them.</p>
-    <nav><a href="index.html">← Audio System Design Tool</a><a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/work/docs/README.md">Tool notes</a></nav>
+    <nav><a href="index.html">← Audio System Design Tool</a><a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/docs/README.md">Tool notes</a></nav>
   </div>
 </header>
 <main>
@@ -98,6 +108,76 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
       </div>
       <div class="note">To keep browser memory usage reasonable and match the table format, output is limited to 100 seconds and the 24-bit sample-count limit of <code>AudioPlayMemory</code>.</div>
     </section>
+
+    <section class="card" aria-labelledby="miditones-heading">
+      <h2 id="miditones-heading">3. MIDI to ESP-beatsy player (MIDITONES V2.0)</h2>
+      <p class="lede">Convert a MIDI file into the ESP-beatsy MIDITONES V2.0 byte stream, supporting up to 32 voices.</p>
+      <label for="miditonesFile">Input MIDI file</label>
+      <input id="miditonesFile" type="file" accept=".mid,.midi,audio/midi,audio/x-midi">
+      <div class="miditones-options">
+        <div>
+          <label for="mtTonegens">Tone generators</label>
+          <select id="mtTonegens">
+            <option value="6" selected>6 (MIDITONES default)</option>
+            <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+            <option value="4">4</option><option value="5">5</option><option value="7">7</option>
+            <option value="8">8</option><option value="9">9</option><option value="10">10</option>
+            <option value="11">11</option><option value="12">12</option><option value="13">13</option>
+            <option value="14">14</option><option value="15">15</option><option value="16">16</option>
+            <option value="17">17</option><option value="18">18</option><option value="19">19</option>
+            <option value="20">20</option><option value="21">21</option><option value="22">22</option>
+            <option value="23">23</option><option value="24">24</option><option value="25">25</option>
+            <option value="26">26</option><option value="27">27</option><option value="28">28</option>
+            <option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option>
+          </select>
+        </div>
+        <div>
+          <label for="mtStrategy">Generator assignment</label>
+          <select id="mtStrategy">
+            <option value="0" selected>Balanced across tracks (default)</option>
+            <option value="1">Favor track 1 (-s1)</option>
+            <option value="2">Keep tracks on their generator (-s2)</option>
+          </select>
+        </div>
+      </div>
+      <details class="miditones-advanced">
+        <summary>Advanced MIDITONES options</summary>
+        <div class="miditones-options">
+          <div>
+            <label for="mtChannelMask">Channel mask (decimal, default 65535 = all)</label>
+            <input id="mtChannelMask" type="text" inputmode="numeric" value="65535" spellcheck="false">
+          </div>
+          <div>
+            <label for="mtKeyshift">Key shift in semitones (-100 to +100)</label>
+            <input id="mtKeyshift" type="number" min="-100" max="100" step="1" value="0">
+          </div>
+        </div>
+        <div class="miditones-checks">
+          <label class="miditones-check"><input id="mtVelocity" type="checkbox"> Include velocity (-v)</label>
+          <label class="miditones-check"><input id="mtBinary" type="checkbox"> Binary output (-b)</label>
+          <label class="miditones-check"><input id="mtParseOnly" type="checkbox"> Parse only (-p)</label>
+          <label class="miditones-check"><input id="mtLogParse" type="checkbox"> Log MIDI parsing (-lp)</label>
+          <label class="miditones-check"><input id="mtLogGenerate" type="checkbox"> Log byte stream generation (-lg)</label>
+        </div>
+        <p class="help">The channel mask uses bit 0 for MIDI channel 1, bit 1 for channel 2, and so on. For example, 3 selects channels 1 and 2. Binary and parse-only modes do not produce a C source file.</p>
+      </details>
+      <button id="miditonesButton" type="button" disabled>Convert MIDI</button>
+      <div id="miditonesStatus" class="status" role="status" aria-live="polite"></div>
+      <div id="miditonesVoiceInfo" class="note hidden" role="status" aria-live="polite"></div>
+      <div id="miditonesOutputPanel" class="result hidden">
+        <div id="miditonesCodeWrap">
+          <label for="miditonesCode">Generated MIDITONES C source</label>
+          <textarea id="miditonesCode" readonly spellcheck="false"></textarea>
+        </div>
+        <div id="miditonesBinaryInfo" class="help hidden">Binary Playtune byte stream. Download the generated <code>.bin</code> file below.</div>
+        <div id="miditonesParseInfo" class="help hidden">Parse-only mode completed. No score output was generated.</div>
+        <button id="miditonesDownload" type="button" disabled>Download score.c</button>
+        <button id="miditonesCopy" type="button" class="secondary">Copy C source</button>
+        <button id="miditonesDownloadLog" type="button" class="secondary hidden">Download .log</button>
+        <p class="help">The C output uses the ESP-beatsy MIDITONES V2.0 format: <code>score[]</code>, <code>PROGMEM</code>, 5-bit voice IDs (up to 32 voices) and end-of-score command <code>0xC1</code>. It is not byte-compatible with upstream MIDITONES V1.9.</p>
+      </div>
+      <div class="note">Defaults: six tone generators, all 16 MIDI channels, balanced track scheduling, no velocity bytes, zero key shift and C source output. Select 1–32 voices. MIDI parsing and conversion run locally in the browser; the file is not uploaded.</div>
+    </section>
   </div>
   <footer>ESP-beatsy Audio Tools · File handling runs locally in your browser. No network upload is performed by these utilities.</footer>
 </main>
@@ -120,6 +200,728 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
   var copyHeader = document.getElementById("copyHeader");
   var playPreview = document.getElementById("playPreview");
   var previewAudio = document.getElementById("previewAudio");
+
+  // ESP-beatsy MIDITONES V2.0 browser implementation. Scheduling follows
+  // extras/miditones/miditones.c; the score format has 5-bit voice indices.
+  var miditonesFile = document.getElementById("miditonesFile");
+  var miditonesButton = document.getElementById("miditonesButton");
+  var miditonesStatus = document.getElementById("miditonesStatus");
+  var miditonesVoiceInfo = document.getElementById("miditonesVoiceInfo");
+  var miditonesOutputPanel = document.getElementById("miditonesOutputPanel");
+  var miditonesCodeWrap = document.getElementById("miditonesCodeWrap");
+  var miditonesCode = document.getElementById("miditonesCode");
+  var miditonesBinaryInfo = document.getElementById("miditonesBinaryInfo");
+  var miditonesParseInfo = document.getElementById("miditonesParseInfo");
+  var miditonesDownload = document.getElementById("miditonesDownload");
+  var miditonesCopy = document.getElementById("miditonesCopy");
+  var miditonesDownloadLog = document.getElementById("miditonesDownloadLog");
+  var mtTonegens = document.getElementById("mtTonegens");
+  var mtStrategy = document.getElementById("mtStrategy");
+  var mtChannelMask = document.getElementById("mtChannelMask");
+  var mtKeyshift = document.getElementById("mtKeyshift");
+  var mtVelocity = document.getElementById("mtVelocity");
+  var mtBinary = document.getElementById("mtBinary");
+  var mtParseOnly = document.getElementById("mtParseOnly");
+  var mtLogParse = document.getElementById("mtLogParse");
+  var mtLogGenerate = document.getElementById("mtLogGenerate");
+  var miditonesGeneratedText = "";
+  var miditonesGeneratedBytes = null;
+  var miditonesGeneratedName = "";
+  var miditonesLogText = "";
+
+  function mtReadAscii(data, offset, length) {
+    var value = "";
+    for (var i = 0; i < length; i++) value += String.fromCharCode(data[offset + i]);
+    return value;
+  }
+
+  function mtHex(value, width) {
+    return (value >>> 0).toString(16).toUpperCase().padStart(width, "0");
+  }
+
+  function mtByte(data, position, end, context) {
+    if (position < 0 || position >= end) {
+      throw new Error("Unexpected end of MIDI data while reading " + context + " at byte " + position + ".");
+    }
+    return data[position];
+  }
+
+  function mtReadVarlen(data, state, end) {
+    var value = 0;
+    for (var i = 0; i < 4; i++) {
+      var byte = mtByte(data, state.pos, end, "a variable-length quantity");
+      state.pos++;
+      value = (value << 7) | (byte & 0x7F);
+      if (!(byte & 0x80)) return value >>> 0;
+    }
+    return value >>> 0;
+  }
+
+  function mtParseMidi(buffer, settings, logLines, appendComment) {
+    var data = new Uint8Array(buffer);
+    var view = new DataView(buffer);
+    if (data.length < 14 || mtReadAscii(data, 0, 4) !== "MThd") {
+      throw new Error("Missing or incomplete MIDI MThd header.");
+    }
+    var headerLength = view.getUint32(4, false);
+    if (headerLength < 6 || 8 + headerLength > data.length) {
+      throw new Error("Invalid MIDI header length.");
+    }
+
+    var format = view.getUint16(8, false);
+    var trackCount = view.getUint16(10, false);
+    var division = view.getUint16(12, false);
+    if (trackCount > 24) throw new Error("MIDITONES supports at most 24 tracks.");
+    var ticksPerBeat = division < 0x8000 ?
+      division : (((division >> 8) & 0x7F) * (division & 0xFF));
+    if (!ticksPerBeat) throw new Error("The MIDI time division is zero.");
+
+    var offset = 8 + headerLength;
+    var tracks = [];
+    for (var trackIndex = 0; trackIndex < trackCount; trackIndex++) {
+      if (offset + 8 > data.length || mtReadAscii(data, offset, 4) !== "MTrk") {
+        throw new Error("Missing MTrk header for track " + trackIndex + " at byte " + offset + ".");
+      }
+      var trackLength = view.getUint32(offset + 4, false);
+      offset += 8;
+      if (offset + trackLength > data.length) {
+        throw new Error("Track " + trackIndex + " extends beyond the end of the MIDI file.");
+      }
+      tracks.push({
+        pos: offset,
+        end: offset + trackLength,
+        time: 0,
+        preferredTonegen: 0,
+        cmd: 0xFF,
+        note: 0,
+        velocity: 0,
+        lastEvent: 0,
+        tempo: 0,
+        tonegens: new Array(settings.numTonegens).fill(false)
+      });
+      if (settings.logParse) logLines.push("Track " + trackIndex + " length " + trackLength);
+      offset += trackLength;
+    }
+
+    return {
+      data: data,
+      format: format,
+      trackCount: trackCount,
+      division: division,
+      ticksPerBeat: ticksPerBeat,
+      tracks: tracks,
+      tempo: 0,
+      tracksDone: 0,
+      tonegens: Array.from({ length: settings.numTonegens }, function () {
+        return { playing: false, track: -1, note: -1 };
+      }),
+      timeNow: 0,
+      numTonegensUsed: 0,
+      notesSkipped: 0,
+      byteCount: 0,
+      cBody: "",
+      cItemCount: 0,
+      outputBytes: [],
+      settings: settings,
+      logLines: logLines,
+      appendComment: appendComment
+    };
+  }
+
+  function mtFindNote(state, trackNumber) {
+    var track = state.tracks[trackNumber];
+    var data = state.data;
+    while (track.pos < track.end) {
+      var deltaTime = mtReadVarlen(data, track, track.end);
+      track.time += deltaTime;
+      if (state.settings.logParse) {
+        state.logLines.push("trk " + trackNumber + " " +
+          (deltaTime ? "delta time " + deltaTime + ", " : "                "));
+      }
+
+      var eventByte = mtByte(data, track.pos, track.end, "a MIDI event");
+      var event;
+      if (eventByte < 0x80) {
+        event = track.lastEvent;
+      } else {
+        event = eventByte;
+        track.pos++;
+        track.lastEvent = event;
+      }
+
+      if (event === 0xFF) {
+        var metaCommand = mtByte(data, track.pos++, track.end, "a meta-event type");
+        // miditones.c reads the meta length as one byte; keep this behavior
+        // for compatibility with the original V1.9 tool.
+        var metaLength = mtByte(data, track.pos++, track.end, "a meta-event length");
+
+        if (metaCommand === 0x2F) {
+          if (state.settings.logParse) state.logLines.push("end of track");
+        } else if (metaCommand === 0x00) {
+          if (state.settings.logParse && metaLength >= 2) {
+            state.logLines.push("sequence number " +
+              ((data[track.pos] << 8) | data[track.pos + 1]));
+          }
+        } else if (metaCommand === 0x20) {
+          if (state.settings.logParse && metaLength) {
+            state.logLines.push("channel prefix " + data[track.pos]);
+          }
+        } else if (metaCommand === 0x51) {
+          if (metaLength < 3 || track.pos + metaLength > track.end) {
+            throw new Error("Invalid tempo meta-event in track " + trackNumber + ".");
+          }
+          track.cmd = 0xFE;
+          track.tempo = (data[track.pos] << 16) |
+            (data[track.pos + 1] << 8) | data[track.pos + 2];
+          if (state.settings.logParse) {
+            state.logLines.push("set tempo " + track.tempo + " usec/qnote");
+          }
+          track.pos += metaLength;
+          return;
+        } else {
+          if (state.settings.logParse) {
+            var metaText = "";
+            for (var mi = 0; mi < metaLength && track.pos + mi < track.end; mi++) {
+              var metaChar = data[track.pos + mi];
+              metaText += metaChar >= 32 && metaChar <= 126 ? String.fromCharCode(metaChar) : "?";
+            }
+            state.logLines.push("meta cmd " + mtHex(metaCommand, 2) +
+              ", length " + metaLength + ', "' + metaText + '"');
+          }
+          if (trackNumber === 0 && metaCommand === 0x03 &&
+              !state.settings.parseOnly && !state.settings.binaryOutput) {
+            var title = "";
+            for (var ti = 0; ti < metaLength && track.pos + ti < track.end; ti++) {
+              var titleByte = data[track.pos + ti];
+              title += titleByte >= 32 && titleByte <= 126 ? String.fromCharCode(titleByte) : "?";
+            }
+            state.appendComment("// " + title + "\n");
+          }
+        }
+
+        if (track.pos + metaLength > track.end) {
+          throw new Error("Meta-event exceeds the end of track " + trackNumber + ".");
+        }
+        track.pos += metaLength;
+      } else if (event < 0x80) {
+        throw new Error("Unknown MIDI event type in track " + trackNumber + ".");
+      } else {
+        var channel = event & 0x0F;
+        var note;
+        var velocity;
+        switch (event >> 4) {
+        case 0x8:
+          note = mtByte(data, track.pos++, track.end, "note-off pitch");
+          velocity = mtByte(data, track.pos++, track.end, "note-off velocity");
+          if (state.settings.logParse) {
+            state.logLines.push("note " + mtHex(note, 2) + " off, chan " + channel +
+              ", velocity " + velocity);
+          }
+          if ((1 << channel) & state.settings.channelMask) {
+            track.note = note;
+            track.cmd = 0x80;
+            return;
+          }
+          break;
+        case 0x9:
+          note = mtByte(data, track.pos++, track.end, "note-on pitch");
+          velocity = mtByte(data, track.pos++, track.end, "note-on velocity");
+          if (velocity === 0) {
+            if (state.settings.logParse) {
+              state.logLines.push("note " + mtHex(note, 2) + " off, chan " + channel +
+                ", velocity " + velocity);
+            }
+            if ((1 << channel) & state.settings.channelMask) {
+              track.note = note;
+              track.cmd = 0x80;
+              return;
+            }
+            break;
+          }
+          if (state.settings.logParse) {
+            state.logLines.push("note " + mtHex(note, 2) + " on, chan " + channel +
+              ", velocity " + velocity);
+          }
+          if ((1 << channel) & state.settings.channelMask) {
+            track.note = note;
+            track.velocity = velocity;
+            track.cmd = 0xA0;
+            return;
+          }
+          break;
+        case 0xA:
+          note = mtByte(data, track.pos++, track.end, "after-touch pitch");
+          velocity = mtByte(data, track.pos++, track.end, "after-touch value");
+          if (state.settings.logParse) state.logLines.push("after-touch " +
+            mtHex(note, 2) + ", " + mtHex(velocity, 2));
+          break;
+        case 0xB:
+          note = mtByte(data, track.pos++, track.end, "control-change number");
+          velocity = mtByte(data, track.pos++, track.end, "control-change value");
+          if (state.settings.logParse) state.logLines.push("control change " +
+            mtHex(note, 2) + ", " + mtHex(velocity, 2));
+          break;
+        case 0xC:
+          note = mtByte(data, track.pos++, track.end, "program number");
+          if (state.settings.logParse) state.logLines.push("program patch " + mtHex(note, 2));
+          break;
+        case 0xD:
+          channel = mtByte(data, track.pos++, track.end, "channel after-touch value");
+          if (state.settings.logParse) {
+            state.logLines.push("channel after-touch " + mtHex(channel, 2));
+          }
+          break;
+        case 0xE:
+          note = mtByte(data, track.pos++, track.end, "pitch-wheel LSB");
+          velocity = mtByte(data, track.pos++, track.end, "pitch-wheel MSB");
+          if (state.settings.logParse) state.logLines.push("pitch wheel change " +
+            mtHex(note, 2) + ", " + mtHex(velocity, 2));
+          break;
+        case 0xF:
+          var sysexLength = mtReadVarlen(data, track, track.end);
+          if (state.settings.logParse) state.logLines.push("SysEx event " +
+            mtHex(event, 2) + ", " + sysexLength + " bytes");
+          if (track.pos + sysexLength > track.end) {
+            throw new Error("SysEx event exceeds the end of track " + trackNumber + ".");
+          }
+          track.pos += sysexLength;
+          break;
+        default:
+          throw new Error("Unknown MIDI command in track " + trackNumber + ".");
+        }
+      }
+    }
+
+    track.cmd = 0xFF;
+    state.tracksDone++;
+  }
+
+  function mtAppendOutput(state, bytes, text) {
+    for (var i = 0; i < bytes.length; i++) state.outputBytes.push(bytes[i]);
+    state.byteCount += bytes.length;
+    if (!state.settings.binaryOutput) {
+      state.cBody += text;
+      state.cItemCount += bytes.length;
+      if (state.cItemCount > 20) {
+        state.cBody += "\n";
+        state.cItemCount = 0;
+      }
+    }
+  }
+
+  function mtAsctime(date) {
+    var days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    var day = date.getDate();
+    var hh = String(date.getHours()).padStart(2, "0");
+    var mm = String(date.getMinutes()).padStart(2, "0");
+    var ss = String(date.getSeconds()).padStart(2, "0");
+    return days[date.getDay()] + " " + months[date.getMonth()] + " " +
+      (day < 10 ? " " : "") + day + " " + hh + ":" + mm + ":" + ss + " " +
+      date.getFullYear() + "\n";
+  }
+
+  // Measure the peak number of simultaneously active notes without
+  // applying the selected tone-generator limit. This reports the actual
+  // polyphony required by the selected MIDI channels.
+  function mtMeasurePolyphony(buffer, settings) {
+    var analysisSettings = {
+      numTonegens: settings.numTonegens,
+      strategy: settings.strategy,
+      channelMask: settings.channelMask,
+      keyshift: 0,
+      velocityOutput: false,
+      binaryOutput: false,
+      parseOnly: false,
+      logParse: false,
+      logGenerate: false
+    };
+    var state = mtParseMidi(buffer, analysisSettings, [], function () {});
+    var activeNotes = [];
+    var maximumVoices = 0;
+    var trackNumber = 0;
+
+    for (var trackIndex = 0; trackIndex < state.trackCount; trackIndex++) {
+      mtFindNote(state, trackIndex);
+    }
+
+    while (state.tracksDone < state.trackCount) {
+      var earliestTime = 0x7FFFFFFF;
+      var earliestTrack = -1;
+
+      if (settings.strategy === 1) trackNumber = state.trackCount;
+      for (var countTracks = state.trackCount; countTracks > 0; countTracks--) {
+        if (++trackNumber >= state.trackCount) trackNumber = 0;
+        var candidate = state.tracks[trackNumber];
+        if (candidate.cmd !== 0xFF && candidate.time < earliestTime) {
+          earliestTime = candidate.time;
+          earliestTrack = trackNumber;
+        }
+      }
+
+      if (earliestTrack < 0) break;
+      trackNumber = earliestTrack;
+      var currentTrack = state.tracks[trackNumber];
+
+      if (currentTrack.cmd === 0xFE) {
+        mtFindNote(state, trackNumber);
+      } else if (currentTrack.cmd === 0x80) {
+        // MIDITONES releases every active generator matching this track/note.
+        do {
+          activeNotes = activeNotes.filter(function (active) {
+            return active.track !== trackNumber || active.note !== currentTrack.note;
+          });
+          mtFindNote(state, trackNumber);
+        } while (currentTrack.cmd === 0x80 && currentTrack.time === earliestTime);
+      } else if (currentTrack.cmd === 0xA0) {
+        activeNotes.push({ track: trackNumber, note: currentTrack.note });
+        if (activeNotes.length > maximumVoices) {
+          maximumVoices = activeNotes.length;
+        }
+        mtFindNote(state, trackNumber);
+      }
+    }
+
+    return maximumVoices;
+  }
+
+  function mtGenerate(buffer, fileName, settings) {
+    var logLines = [];
+    var maximumVoicesRequired = mtMeasurePolyphony(buffer, settings);
+    var baseName = fileName.replace(/\.[^.]+$/, "");
+    var cleanBaseName = baseName.replace(/[\r\n]/g, " ");
+    var commandOptions = [];
+    if (settings.strategy === 1) commandOptions.push("-s1");
+    if (settings.strategy === 2) commandOptions.push("-s2");
+    if (settings.numTonegens !== 6) commandOptions.push("-t" + settings.numTonegens);
+    if (settings.binaryOutput) commandOptions.push("-b");
+    if (settings.channelMask !== 0xFFFF) commandOptions.push("-c" + settings.channelMask);
+    if (settings.keyshift !== 0) commandOptions.push("-k" + settings.keyshift);
+    if (settings.parseOnly) commandOptions.push("-p");
+    if (settings.logParse) commandOptions.push("-lp");
+    if (settings.logGenerate) commandOptions.push("-lg");
+    if (settings.velocityOutput) commandOptions.push("-v");
+    var commandLine = "miditones " +
+      (commandOptions.length ? commandOptions.join(" ") + " " : "") + cleanBaseName;
+
+    var cBody = "";
+    var state = mtParseMidi(buffer, settings, logLines, function (comment) {
+      cBody += comment;
+    });
+    state.cBody = cBody;
+    state.appendComment = function (comment) { state.cBody += comment; };
+    if (settings.logParse) {
+      logLines.unshift("Processing " + fileName + ", " + buffer.byteLength + " bytes");
+    }
+
+    // Match miditones.c: track 0..N are first advanced to their first
+    // note-on, note-off or tempo event before the global time merge starts.
+    for (var trackIndex = 0; trackIndex < state.trackCount; trackIndex++) {
+      mtFindNote(state, trackIndex);
+      if (settings.parseOnly) {
+        while (state.tracks[trackIndex].cmd !== 0xFF) mtFindNote(state, trackIndex);
+      }
+    }
+
+    if (!settings.parseOnly) {
+      var trackNumber = 0;
+      while (state.tracksDone < state.trackCount) {
+        var earliestTime = 0x7FFFFFFF;
+        var earliestTrack = -1;
+        if (settings.strategy === 1) trackNumber = state.trackCount;
+        for (var countTracks = state.trackCount; countTracks > 0; countTracks--) {
+          if (++trackNumber >= state.trackCount) trackNumber = 0;
+          var candidate = state.tracks[trackNumber];
+          if (candidate.cmd !== 0xFF && candidate.time < earliestTime) {
+            earliestTime = candidate.time;
+            earliestTrack = trackNumber;
+          }
+        }
+        if (earliestTrack < 0) break;
+        trackNumber = earliestTrack;
+        var currentTrack = state.tracks[trackNumber];
+        if (settings.logGenerate) {
+          logLines.push("Earliest time is trk " + trackNumber + ", time " + earliestTime);
+        }
+        if (earliestTime < state.timeNow) {
+          throw new Error("Internal MIDITONES error: event time went backwards.");
+        }
+
+        var deltaTime = earliestTime - state.timeNow;
+        if (deltaTime) {
+          var deltaMs = Math.floor(Math.floor(deltaTime * state.tempo / state.ticksPerBeat) / 1000);
+          if (settings.logGenerate) {
+            logLines.push("->Delay " + deltaMs + " msec (" + deltaTime + " ticks)");
+          }
+          if (deltaMs > 0x7FFF) {
+            throw new Error("Time delta is " + deltaMs +
+              " ms; MIDITONES delay commands are limited to 32767 ms.");
+          }
+          var delayHigh = (deltaMs >> 8) & 0x7F;
+          var delayLow = deltaMs & 0xFF;
+          mtAppendOutput(state, [delayHigh, delayLow], delayHigh + "," + delayLow + ", ");
+        }
+        state.timeNow = earliestTime;
+
+        if (currentTrack.cmd === 0xFE) {
+          state.tempo = currentTrack.tempo;
+          if (settings.logGenerate) {
+            logLines.push("Tempo changed to " + state.tempo + " usec/qnote");
+          }
+          mtFindNote(state, trackNumber);
+        } else if (currentTrack.cmd === 0x80) {
+          do {
+            for (var generator = 0; generator < settings.numTonegens; generator++) {
+              var tonegen = state.tonegens[generator];
+              if (tonegen.playing && tonegen.track === trackNumber &&
+                  tonegen.note === currentTrack.note) {
+                if (settings.logGenerate) {
+                  logLines.push("->Stop note " + mtHex(tonegen.note, 2) +
+                    ", generator " + generator + ", track " + trackNumber);
+                }
+                mtAppendOutput(state, [0x80 | generator],
+                  "0x" + mtHex(0x80 | generator, 2) + ", ");
+                tonegen.playing = false;
+                currentTrack.tonegens[generator] = false;
+              }
+            }
+            mtFindNote(state, trackNumber);
+          } while (currentTrack.cmd === 0x80 && currentTrack.time === state.timeNow);
+        } else if (currentTrack.cmd === 0xA0) {
+          var foundGenerator = false;
+          var selectedGenerator = -1;
+          if (settings.strategy === 2) {
+            var preferred = currentTrack.preferredTonegen;
+            if (!state.tonegens[preferred].playing) {
+              selectedGenerator = preferred;
+              foundGenerator = true;
+            }
+          }
+          if (!foundGenerator) {
+            for (var generatorIndex = 0; generatorIndex < settings.numTonegens; generatorIndex++) {
+              if (!state.tonegens[generatorIndex].playing) {
+                selectedGenerator = generatorIndex;
+                foundGenerator = true;
+                break;
+              }
+            }
+          }
+
+          if (foundGenerator) {
+            var selectedTonegen = state.tonegens[selectedGenerator];
+            if (selectedGenerator + 1 > state.numTonegensUsed) {
+              state.numTonegensUsed = selectedGenerator + 1;
+            }
+            selectedTonegen.playing = true;
+            selectedTonegen.track = trackNumber;
+            selectedTonegen.note = currentTrack.note;
+            currentTrack.tonegens[selectedGenerator] = true;
+            currentTrack.preferredTonegen = selectedGenerator;
+
+            var shiftedNote = currentTrack.note + settings.keyshift;
+            if (shiftedNote < 0) shiftedNote = 0;
+            if (shiftedNote > 127) shiftedNote = 127;
+            var noteBytes = [0xA0 | selectedGenerator, shiftedNote];
+            var noteText = "0x" + mtHex(0xA0 | selectedGenerator, 2) + "," + shiftedNote + ", ";
+            if (settings.velocityOutput) {
+              noteBytes.push(currentTrack.velocity);
+              noteText = "0x" + mtHex(0xA0 | selectedGenerator, 2) + "," +
+                shiftedNote + "," + currentTrack.velocity + ", ";
+            }
+            if (settings.logGenerate) {
+              logLines.push("->Start note " + mtHex(currentTrack.note, 2) +
+                ", generator " + selectedGenerator + ", track " + trackNumber);
+            }
+            mtAppendOutput(state, noteBytes, noteText);
+          } else {
+            if (settings.logGenerate) {
+              logLines.push("----> No free generator, skipping note " +
+                mtHex(currentTrack.note, 2) + ", track " + trackNumber);
+            }
+            state.notesSkipped++;
+          }
+          mtFindNote(state, trackNumber);
+        }
+      }
+    }
+
+    var outputText = "";
+    var outputBytes = null;
+    var outputName = cleanBaseName + (settings.binaryOutput ? ".bin" : ".c");
+    if (!settings.parseOnly && settings.binaryOutput) {
+      outputBytes = new Uint8Array(state.outputBytes.length + 1);
+      outputBytes.set(state.outputBytes);
+      outputBytes[outputBytes.length - 1] = 0xC1;
+    } else if (!settings.parseOnly) {
+      outputText = '// ESP-beatsy MIDITONES bytestream for file "' + cleanBaseName +
+        '.mid" created by ESP-beatsy MIDITONES V2.0 on ' + mtAsctime(new Date());
+      outputText += "// command line: ";
+      var commandArgs = ["miditones"].concat(commandOptions, [cleanBaseName]);
+      for (var argIndex = 0; argIndex < commandArgs.length; argIndex++) {
+        outputText += commandArgs[argIndex] + " ";
+      }
+      outputText += "\n";
+      if (settings.channelMask !== 0xFFFF) {
+        outputText += "//   Only the masked channels were processed: " +
+          mtHex(settings.channelMask, 4) + "\n";
+      }
+      if (settings.keyshift !== 0) {
+        outputText += "//   Keyshift was " + settings.keyshift + " chromatic notes\n";
+      }
+      outputText += "#ifdef __AVR__\n#include <avr/pgmspace.h>\n#else\n#define PROGMEM\n#endif\n";
+      outputText += "const unsigned char PROGMEM score [] = {\n";
+      outputText += state.cBody;
+      outputText += "0xc1};\n// This score contains " + state.byteCount +
+        " bytes, and " + state.numTonegensUsed + " tone generator" +
+        (state.numTonegensUsed === 1 ? " is" : "s are") + " used.\n";
+      outputText += "// Maximum simultaneous voices required: " + maximumVoicesRequired + ".\n";
+      if (state.notesSkipped) {
+        outputText += "// " + state.notesSkipped + " notes had to be skipped.\n";
+      }
+    }
+
+    return {
+      text: outputText,
+      bytes: outputBytes,
+      outputName: outputName,
+      logText: logLines.join("\n"),
+      state: state,
+      maximumVoicesRequired: maximumVoicesRequired,
+      commandLine: commandLine
+    };
+  }
+
+  miditonesFile.addEventListener("change", function () {
+    miditonesButton.disabled = !(miditonesFile.files && miditonesFile.files.length);
+    miditonesOutputPanel.classList.add("hidden");
+    miditonesGeneratedText = "";
+    miditonesGeneratedBytes = null;
+    miditonesLogText = "";
+    miditonesVoiceInfo.classList.add("hidden");
+    miditonesVoiceInfo.textContent = "";
+    setStatus(miditonesStatus, "", "");
+  });
+
+  miditonesButton.addEventListener("click", async function () {
+    var file = miditonesFile.files && miditonesFile.files[0];
+    if (!file) return;
+    miditonesButton.disabled = true;
+    miditonesOutputPanel.classList.add("hidden");
+    miditonesVoiceInfo.classList.add("hidden");
+    setStatus(miditonesStatus, "Reading MIDI file and measuring polyphony…", "");
+    try {
+      var channelText = mtChannelMask.value.trim();
+      if (!/^\d+$/.test(channelText)) {
+        throw new Error("Channel mask must be a decimal integer from 0 to 65535.");
+      }
+      var channelMask = parseInt(channelText, 10);
+      if (!Number.isSafeInteger(channelMask) || channelMask < 0 || channelMask > 65535) {
+        throw new Error("Channel mask must be between 0 and 65535.");
+      }
+      var keyshift = parseInt(mtKeyshift.value, 10);
+      if (!Number.isFinite(keyshift) || keyshift < -100 || keyshift > 100) {
+        throw new Error("Key shift must be an integer from -100 to +100.");
+      }
+      var settings = {
+        numTonegens: parseInt(mtTonegens.value, 10),
+        strategy: parseInt(mtStrategy.value, 10),
+        channelMask: channelMask,
+        keyshift: keyshift,
+        velocityOutput: mtVelocity.checked,
+        binaryOutput: mtBinary.checked,
+        parseOnly: mtParseOnly.checked,
+        logParse: mtLogParse.checked,
+        logGenerate: mtLogGenerate.checked
+      };
+      var result = mtGenerate(await file.arrayBuffer(), file.name, settings);
+      miditonesGeneratedText = result.text;
+      miditonesGeneratedBytes = result.bytes;
+      miditonesGeneratedName = result.outputName;
+      miditonesLogText = result.logText;
+
+      miditonesCodeWrap.classList.toggle("hidden", settings.binaryOutput || settings.parseOnly);
+      miditonesBinaryInfo.classList.toggle("hidden", !settings.binaryOutput || settings.parseOnly);
+      miditonesParseInfo.classList.toggle("hidden", !settings.parseOnly);
+      miditonesDownload.disabled = settings.parseOnly;
+      miditonesDownload.classList.toggle("hidden", settings.parseOnly);
+      miditonesCopy.classList.toggle("hidden", settings.binaryOutput || settings.parseOnly);
+      miditonesDownload.textContent = "Download " + result.outputName;
+      miditonesCode.value = result.text;
+      miditonesDownloadLog.classList.toggle("hidden", !miditonesLogText);
+      miditonesOutputPanel.classList.remove("hidden");
+      miditonesVoiceInfo.textContent = "Peak polyphony: " +
+        result.maximumVoicesRequired + " simultaneous voices required; " +
+        settings.numTonegens + " tone generator(s) selected.";
+      if (result.maximumVoicesRequired > settings.numTonegens) {
+        miditonesVoiceInfo.textContent += " The selected limit is short by at least " +
+          (result.maximumVoicesRequired - settings.numTonegens) +
+          " simultaneous voice(s).";
+      }
+      miditonesVoiceInfo.classList.remove("hidden");
+
+      if (settings.parseOnly) {
+        setStatus(miditonesStatus, "Parsed " + result.state.trackCount +
+          " track(s) in " + file.name + ". Parse-only mode produced no score output. " +
+          "Maximum simultaneous voices required: " + result.maximumVoicesRequired + "." +
+          (miditonesLogText ? " A log file is available below." : ""), "good");
+      } else {
+        var summary = "Converted " + file.name + ": " + result.state.trackCount +
+          " track(s), " + result.state.byteCount + " score bytes, " +
+          result.state.numTonegensUsed + " tone generator(s) used. Peak polyphony: " +
+          result.maximumVoicesRequired + " simultaneous voices required.";
+        if (result.state.notesSkipped) {
+          summary += " " + result.state.notesSkipped + " note(s) skipped because no generator was free.";
+        }
+        setStatus(miditonesStatus, summary, "good");
+      }
+    } catch (error) {
+      miditonesGeneratedText = "";
+      miditonesGeneratedBytes = null;
+      miditonesLogText = "";
+      setStatus(miditonesStatus, "MIDITONES conversion failed: " + error.message, "bad");
+    } finally {
+      miditonesButton.disabled = false;
+    }
+  });
+
+  miditonesDownload.addEventListener("click", function () {
+    if (miditonesGeneratedBytes) {
+      downloadBlob(new Blob([miditonesGeneratedBytes], { type: "application/octet-stream" }),
+        miditonesGeneratedName);
+    } else if (miditonesGeneratedText) {
+      downloadBlob(new Blob([miditonesGeneratedText], { type: "text/plain;charset=utf-8" }),
+        miditonesGeneratedName);
+    }
+  });
+
+  miditonesCopy.addEventListener("click", async function () {
+    if (!miditonesGeneratedText) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(miditonesGeneratedText);
+      } else {
+        miditonesCode.focus();
+        miditonesCode.select();
+        if (!document.execCommand("copy")) {
+          throw new Error("The browser did not allow clipboard access.");
+        }
+      }
+      setStatus(miditonesStatus, "MIDITONES C source copied to the clipboard.", "good");
+    } catch (error) {
+      miditonesCode.focus();
+      miditonesCode.select();
+      setStatus(miditonesStatus,
+        "Clipboard access was blocked. The C source is selected; use Ctrl+C to copy it.", "");
+    }
+  });
+
+  miditonesDownloadLog.addEventListener("click", function () {
+    if (!miditonesLogText) return;
+    downloadBlob(new Blob([miditonesLogText], { type: "text/plain;charset=utf-8" }),
+      miditonesFile.files[0].name.replace(/\.[^.]+$/, "") + ".log");
+  });
+
   var previewUrl = "";
   var generatedName = "";
   var generatedCode = "";

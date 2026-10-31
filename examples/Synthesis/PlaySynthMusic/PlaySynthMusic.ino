@@ -1,7 +1,8 @@
-// Implement a 16 note polyphonic midi player  :-)
+// Implement an 18-voice polyphonic MIDI player. Scores for this example must
+// be generated with velocity output enabled (-v).
 //
-// Music data is read from memory.  The "Miditones" program is used to
-// convert from a MIDI file to this compact format.
+// Music data is read from memory. ESP-beatsy MIDITONES V2.0 converts a MIDI
+// file into this compact byte-stream format (5-bit voice IDs, velocity enabled).
 //
 // This example code is in the public domain.
 
@@ -10,9 +11,43 @@
 
 #include "PlaySynthMusic.h"
 
-unsigned char *sp = score;
+static const unsigned int NUM_VOICES = 18;
+#define AMPLITUDE (0.2)
 
-#define AMPLITUDE (0.2f)
+const unsigned char *sp = score;
+
+
+// ============================================================================
+// Voice generators and envelopes
+// ============================================================================
+
+AudioSynthWaveform waves[NUM_VOICES];
+AudioEffectEnvelope envs[NUM_VOICES];
+
+short wave_type[NUM_VOICES] = {
+    WAVEFORM_SINE, WAVEFORM_SQUARE, WAVEFORM_SAWTOOTH, WAVEFORM_TRIANGLE,
+    WAVEFORM_SINE, WAVEFORM_SQUARE, WAVEFORM_SAWTOOTH, WAVEFORM_TRIANGLE,
+    WAVEFORM_SINE, WAVEFORM_SQUARE, WAVEFORM_SAWTOOTH, WAVEFORM_TRIANGLE,
+    WAVEFORM_SINE, WAVEFORM_SQUARE, WAVEFORM_SAWTOOTH, WAVEFORM_TRIANGLE,
+    WAVEFORM_SINE, WAVEFORM_SQUARE
+};
+
+
+// ============================================================================
+// AudioMixerN: one 18-input mixer per output channel
+//
+// AudioMixerN accumulates the voices in float and saturates once at the final
+// 16-bit output. The V2.0 MIDI format carries a 5-bit voice index (0..31);
+// this example instantiates 18 voices. The fixed AudioConnection arrays are
+// wired in setup().
+// ============================================================================
+
+AudioMixerN mixerLeft(NUM_VOICES);
+AudioMixerN mixerRight(NUM_VOICES);
+
+AudioConnection voiceToEnvelope[NUM_VOICES];
+AudioConnection voiceToLeft[NUM_VOICES];
+AudioConnection voiceToRight[NUM_VOICES];
 
 // ============================================================================
 // Audio output
@@ -25,6 +60,15 @@ AudioOutputI2S audioOut({
     0   // MCLK
 });
 
+
+// ============================================================================
+// Mixer -> Audio output
+// ============================================================================
+
+AudioConnection mixerLeftToOutput(mixerLeft, 0, audioOut, 0);
+AudioConnection mixerRightToOutput(mixerRight, 0, audioOut, 1);
+
+
 // ============================================================================
 // Codec
 // ============================================================================
@@ -36,162 +80,6 @@ AudioControlES8388 codec({
     PIN_AMPLIFIER_ACTIVE
 });
 
-// ============================================================================
-// 16 waveforms, one for each MIDI channel
-// ============================================================================
-
-AudioSynthWaveform sine0, sine1, sine2, sine3;
-AudioSynthWaveform sine4, sine5, sine6, sine7;
-AudioSynthWaveform sine8, sine9, sine10, sine11;
-AudioSynthWaveform sine12, sine13, sine14, sine15;
-
-AudioSynthWaveform *waves[16] = {
-    &sine0,  &sine1,  &sine2,  &sine3,
-    &sine4,  &sine5,  &sine6,  &sine7,
-    &sine8,  &sine9,  &sine10, &sine11,
-    &sine12, &sine13, &sine14, &sine15
-};
-
-
-// ============================================================================
-// Waveform type for each MIDI channel
-// ============================================================================
-
-short wave_type[16] = {
-    WAVEFORM_SINE,
-    WAVEFORM_SQUARE,
-    WAVEFORM_SAWTOOTH,
-    WAVEFORM_TRIANGLE,
-
-    WAVEFORM_SINE,
-    WAVEFORM_SQUARE,
-    WAVEFORM_SAWTOOTH,
-    WAVEFORM_TRIANGLE,
-
-    WAVEFORM_SINE,
-    WAVEFORM_SQUARE,
-    WAVEFORM_SAWTOOTH,
-    WAVEFORM_TRIANGLE,
-
-    WAVEFORM_SINE,
-    WAVEFORM_SQUARE,
-    WAVEFORM_SAWTOOTH,
-    WAVEFORM_TRIANGLE
-};
-
-
-// ============================================================================
-// Envelope for each waveform
-// ============================================================================
-
-AudioEffectEnvelope env0, env1, env2, env3;
-AudioEffectEnvelope env4, env5, env6, env7;
-AudioEffectEnvelope env8, env9, env10, env11;
-AudioEffectEnvelope env12, env13, env14, env15;
-
-AudioEffectEnvelope *envs[16] = {
-    &env0,  &env1,  &env2,  &env3,
-    &env4,  &env5,  &env6,  &env7,
-    &env8,  &env9,  &env10, &env11,
-    &env12, &env13, &env14, &env15
-};
-
-
-// ============================================================================
-// Waveform -> Envelope
-// ============================================================================
-
-AudioConnection patchCord01(sine0,  env0);
-AudioConnection patchCord02(sine1,  env1);
-AudioConnection patchCord03(sine2,  env2);
-AudioConnection patchCord04(sine3,  env3);
-
-AudioConnection patchCord05(sine4,  env4);
-AudioConnection patchCord06(sine5,  env5);
-AudioConnection patchCord07(sine6,  env6);
-AudioConnection patchCord08(sine7,  env7);
-
-AudioConnection patchCord09(sine8,  env8);
-AudioConnection patchCord10(sine9,  env9);
-AudioConnection patchCord11(sine10, env10);
-AudioConnection patchCord12(sine11, env11);
-
-AudioConnection patchCord13(sine12, env12);
-AudioConnection patchCord14(sine13, env13);
-AudioConnection patchCord15(sine14, env14);
-AudioConnection patchCord16(sine15, env15);
-
-
-// ============================================================================
-// 16-channel floating-point mixers
-//
-// AudioMixerN performs:
-//   - float gain
-//   - float accumulation
-//   - one final saturation to int16 PCM
-//
-// One mixer is used for each output channel.
-// ============================================================================
-
-AudioMixerN mixerLeft(16);
-AudioMixerN mixerRight(16);
-
-
-// ============================================================================
-// Mix all 16 voices to LEFT
-// ============================================================================
-
-AudioConnection patchCord17(env0,  0, mixerLeft,  0);
-AudioConnection patchCord18(env1,  0, mixerLeft,  1);
-AudioConnection patchCord19(env2,  0, mixerLeft,  2);
-AudioConnection patchCord20(env3,  0, mixerLeft,  3);
-
-AudioConnection patchCord21(env4,  0, mixerLeft,  4);
-AudioConnection patchCord22(env5,  0, mixerLeft,  5);
-AudioConnection patchCord23(env6,  0, mixerLeft,  6);
-AudioConnection patchCord24(env7,  0, mixerLeft,  7);
-
-AudioConnection patchCord25(env8,  0, mixerLeft,  8);
-AudioConnection patchCord26(env9,  0, mixerLeft,  9);
-AudioConnection patchCord27(env10, 0, mixerLeft, 10);
-AudioConnection patchCord28(env11, 0, mixerLeft, 11);
-
-AudioConnection patchCord29(env12, 0, mixerLeft, 12);
-AudioConnection patchCord30(env13, 0, mixerLeft, 13);
-AudioConnection patchCord31(env14, 0, mixerLeft, 14);
-AudioConnection patchCord32(env15, 0, mixerLeft, 15);
-
-
-// ============================================================================
-// Mix all 16 voices to RIGHT
-// ============================================================================
-
-AudioConnection patchCord33(env0,  0, mixerRight,  0);
-AudioConnection patchCord34(env1,  0, mixerRight,  1);
-AudioConnection patchCord35(env2,  0, mixerRight,  2);
-AudioConnection patchCord36(env3,  0, mixerRight,  3);
-
-AudioConnection patchCord37(env4,  0, mixerRight,  4);
-AudioConnection patchCord38(env5,  0, mixerRight,  5);
-AudioConnection patchCord39(env6,  0, mixerRight,  6);
-AudioConnection patchCord40(env7,  0, mixerRight,  7);
-
-AudioConnection patchCord41(env8,  0, mixerRight,  8);
-AudioConnection patchCord42(env9,  0, mixerRight,  9);
-AudioConnection patchCord43(env10, 0, mixerRight, 10);
-AudioConnection patchCord44(env11, 0, mixerRight, 11);
-
-AudioConnection patchCord45(env12, 0, mixerRight, 12);
-AudioConnection patchCord46(env13, 0, mixerRight, 13);
-AudioConnection patchCord47(env14, 0, mixerRight, 14);
-AudioConnection patchCord48(env15, 0, mixerRight, 15);
-
-// ============================================================================
-// Mixer -> Audio output
-// ============================================================================
-
-AudioConnection patchCord49(mixerLeft,  0, audioOut, 0);
-AudioConnection patchCord50(mixerRight, 0, audioOut, 1);
 
 // ============================================================================
 // Initial volume
@@ -219,7 +107,14 @@ void setup()
     // Audio memory
     // ------------------------------------------------------------------------
 
-    AudioMemory(22);
+    AudioMemory(26);
+
+    // Connect every voice to its envelope and to both stereo mixers.
+    for (unsigned int i = 0; i < NUM_VOICES; ++i) {
+        voiceToEnvelope[i].connect(waves[i], envs[i]);
+        voiceToLeft[i].connect(envs[i], 0, mixerLeft, i);
+        voiceToRight[i].connect(envs[i], 0, mixerRight, i);
+    }
 
 
     // ------------------------------------------------------------------------
@@ -255,20 +150,20 @@ void setup()
     // Envelope parameters
     // ------------------------------------------------------------------------
 
-    for (int i = 0; i < 16; i++) {
+    for (unsigned int i = 0; i < NUM_VOICES; ++i) {
 
-        envs[i]->attack(9.2);
-        envs[i]->hold(2.1);
-        envs[i]->decay(31.4);
-        envs[i]->sustain(0.6);
-        envs[i]->release(84.5);
+        envs[i].attack(9.2);
+        envs[i].hold(2.1);
+        envs[i].decay(31.4);
+        envs[i].sustain(0.6);
+        envs[i].release(84.5);
 
         // Uncomment these to hear without envelope effects.
 
-        // envs[i]->attack(0.0);
-        // envs[i]->hold(0.0);
-        // envs[i]->decay(0.0);
-        // envs[i]->release(0.0);
+        // envs[i].attack(0.0);
+        // envs[i].hold(0.0);
+        // envs[i].decay(0.0);
+        // envs[i].release(0.0);
     }
 
 
@@ -350,8 +245,8 @@ void loop()
 
     c = *sp++;
 
-    opcode = c & 0xF0;
-    chan   = c & 0x0F;
+    opcode = c & CMD_CLASS_MASK;
+    chan   = c & CMD_VOICE_MASK;
 
 
     // ------------------------------------------------------------------------
@@ -372,12 +267,12 @@ void loop()
     // End of song
     // ------------------------------------------------------------------------
 
-    if (*sp == CMD_STOP) {
+    if (c == CMD_STOP) {
 
-        for (chan = 0; chan < 10; chan++) {
+        for (chan = 0; chan < NUM_VOICES; chan++) {
 
-            envs[chan]->noteOff();
-            waves[chan]->amplitude(0);
+            envs[chan].noteOff();
+            waves[chan].amplitude(0);
         }
 
         Serial.println("DONE");
@@ -392,7 +287,7 @@ void loop()
 
     if (opcode == CMD_STOPNOTE) {
 
-        envs[chan]->noteOff();
+        envs[chan].noteOff();
 
         return;
     }
@@ -409,13 +304,13 @@ void loop()
 
         AudioNoInterrupts();
 
-        waves[chan]->begin(
+        waves[chan].begin(
             AMPLITUDE * velocity2amplitude[velocity - 1],
             tune_frequencies2_PGM[note],
             wave_type[chan]
         );
 
-        envs[chan]->noteOn();
+        envs[chan].noteOn();
 
         AudioInterrupts();
 
@@ -427,7 +322,7 @@ void loop()
     // Restart tune
     // ------------------------------------------------------------------------
 
-    if (opcode == CMD_RESTART) {
+    if (c == CMD_RESTART) {
 
         sp = score;
 

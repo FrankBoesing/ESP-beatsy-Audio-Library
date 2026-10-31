@@ -1,8 +1,8 @@
 
 // Table of midi note frequencies * 2
-//   They are times 2 for greater accuracyf, yet still fits in a word.
+//   They are times 2 for greater accuracy, yet still fits in a word.
 //   Generated from Excel by =ROUND(2*440/32*(2^((x-9)/12)),0) for 0<x<128
-// The lowest notes might not workf, depending on the Arduino clock frequency
+// The lowest notes might not work, depending on the Arduino clock frequency
 
 // This is for the Teensy Audio library which specifies
 // frequencies as floating point. See make_notetab.xlsx
@@ -26,11 +26,12 @@ const float tune_frequencies2_PGM[128] =
     8372.0181f, 8869.8442f, 9397.2726f, 9956.0635f, 10548.0818f, 11175.3034f, 11839.8215f, 12543.8540
 };
 
-#define CMD_PLAYNOTE	0x90	/* play a note: low nibble is generator #f, note is next byte */
-#define CMD_STOPNOTE	0x80	/* stop a note: low nibble is generator # */
-#define CMD_RESTART	0xe0	/* restart the score from the beginning */
-#define CMD_STOP	0xf0	/* stop playing */
-
+#define CMD_STOPNOTE    0x80    /* 100vvvvv: stop voice v (0..31) */
+#define CMD_PLAYNOTE    0xA0    /* 101vvvvv: play voice v (0..31) */
+#define CMD_RESTART     0xC0    /* 11000000: restart the score */
+#define CMD_STOP        0xC1    /* 11000001: end of score */
+#define CMD_CLASS_MASK  0xE0
+#define CMD_VOICE_MASK  0x1F
 const float velocity2amplitude[127] = {
 0.01778f, 0.01966f, 0.02164f, 0.02371f, 0.02588f, 0.02814f, 0.03049f, 0.03294f, 0.03549f, 0.03812,
 0.04086f, 0.04369f, 0.04661f, 0.04963f, 0.05274f, 0.05594f, 0.05924f, 0.06264f, 0.06613f, 0.06972,
@@ -66,5 +67,6 @@ print "\n};\n";
 */
 
 
-// User must supply this score array
-extern unsigned char score[];
+// User must supply an ESP-beatsy MIDITONES V2.0 score array.
+// The player expects velocity data after every note-on command (-v).
+extern const unsigned char score[];
