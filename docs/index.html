@@ -1810,7 +1810,7 @@ pdm.begin(PDM_DATA_PIN);</code></pre>
 	<p class="func"><span class="keyword">setSampleRate</span>(sampleRate);</p>
 	<p class="desc">Sets the PCM sample rate. The supported range is 16000–48000 Hz; changing it reconfigures the shared I²S clock and can briefly disturb active I²S streams.</p>
 	<h3>Notes</h3>
-	<p>Use separate low-pass filters for the left and right DATA lines in stereo mode. See <a href="../lib/AudioLibrary/I2S.md">the I²S/PDM implementation notes</a> for clocking details and target limitations.</p>
+	<p>Use separate low-pass filters for the left and right DATA lines in stereo mode. See <a href="I2S.md">the I²S/PDM implementation notes</a> for clocking details and target limitations.</p>
 </script>
 
 <script type="text/x-red" data-template-name="AudioOutputPDM">
@@ -1939,7 +1939,7 @@ AudioMemory(12);</code></pre>
 	<p>To redirect ordinary <code>Serial</code> output to the managed CDC port, add <code>-D AUDIO_INPUT_USB</code> to the sketch's PlatformIO <code>build_src_flags</code>. If the graph also contains <code>AudioOutputUSB</code>, add <code>-D AUDIO_OUTPUT_USB</code> as well. These defines activate the <code>Audio.h</code> Serial alias; they are not needed for the USB endpoint manager itself. Use <code>Serial0</code> for physical UART0. Runtime <code>ESP_LOGE</code>/<code>ESP_LOGW</code>/<code>ESP_LOGI</code> output is redirected while a terminal is connected. The explicit <code>AudioInputUSB(usbAudio)</code> constructor remains available for manual setup.</p>
 	<p>This node uses <code>USBAudioCard::onData()</code> and therefore owns the speaker-data callback; do not install another speaker-data callback at the same time. A small two-block queue bridges the framework receive task and <code>AudioTask</code>; no additional task or <code>loop()</code> polling is required.</p>
 	<h3>Example</h3>
-	<p>See <code>examples/HardwareTesting/USBHostPlayback/USBHostPlayback.cpp</code> for a complete setup that routes PC playback to an I2S output.</p>
+	<p>See <code>examples/HardwareTesting/USBHostPlayback/USBHostPlayback.ino</code> for a complete setup that routes PC playback to an I2S output.</p>
 	<h3>Notes</h3>
 	<p>The host and audio graph must use the same compile-time sample rate. No sample-rate conversion is performed. Availability depends on the selected board and Arduino-ESP32 USB Audio configuration.</p>
 </script>
@@ -2202,7 +2202,7 @@ AudioMemory(12);</code></pre>
 	<p class="func"><span class="keyword">hasLastError</span>(); / <span class="keyword">lastError</span>();</p>
 	<p class="desc">Query the decoder error state. Error constants are <code>ERR_NONE</code>, <code>ERR_FILE_NOT_FOUND</code>, <code>ERR_OUT_OF_MEMORY</code>, <code>ERR_FORMAT</code>, <code>ERR_DECODER</code> and <code>ERR_SOURCE</code>.</p>
 	<h3>Examples</h3>
-	<p><a href="../examples/MP3_Player/MP3_Player.cpp">MP3_Player example</a> demonstrates playback from SD_MMC using an <code>AudioSourceFile</code>.</p>
+	<p><a href="../examples/MP3_Player/MP3_Player.ino">MP3_Player example</a> demonstrates playback from SD_MMC using an <code>AudioSourceFile</code>.</p>
 	<h3>Notes</h3>
 	<p>The <code>play(fs, filename)</code> overload opens and owns its internal file source. With <code>play(AudioSource&amp;)</code>, the application must keep the source object open and valid. There is no separate pause/resume method in this class.</p>
 </script>
@@ -2241,7 +2241,7 @@ AudioMemory(12);</code></pre>
 	<p class="func"><span class="keyword">hasLastError</span>(); / <span class="keyword">lastError</span>();</p>
 	<p class="desc">Query the decoder error state. Error constants are <code>ERR_NONE</code>, <code>ERR_FILE_NOT_FOUND</code>, <code>ERR_OUT_OF_MEMORY</code>, <code>ERR_FORMAT</code> and <code>ERR_DECODER</code>.</p>
 	<h3>Examples</h3>
-	<p><a href="../examples/AAC_Player/AAC_Player.cpp">AAC_Player example</a> demonstrates playback from SD_MMC using an <code>AudioSourceFile</code>.</p>
+	<p><a href="../examples/AAC_Player/AAC_Player.ino">AAC_Player example</a> demonstrates playback from SD_MMC using an <code>AudioSourceFile</code>.</p>
 	<h3>Notes</h3>
 	<p>The <code>play(fs, filename)</code> overload opens and owns its internal file source. With <code>play(AudioSource&amp;)</code>, the application must keep the source object open and valid. There is no separate pause/resume method in this class.</p>
 </script>
@@ -2417,7 +2417,7 @@ The actual packets are taken
 AudioMemory(12);
 recorder.begin(SD_MMC, "/recording", AUDIO_SAMPLE_RATE_EXACT, 2);</code></pre>
 	<h3>Examples</h3>
-	<p><a href="../examples/RecordSD/RecordSD.cpp">RecordSD example</a> records to SD_MMC. <a href="../examples/RecordLittleFS/RecordLittleFS.cpp">RecordLittleFS example</a> records to LittleFS.</p>
+	<p><a href="../examples/RecordSD/RecordSD.ino">RecordSD example</a> records to SD_MMC. <a href="../examples/RecordLittleFS/RecordLittleFS.ino">RecordLittleFS example</a> records to LittleFS.</p>
 	<h3>Notes</h3>
 	<p>PSRAM is required; the default ring buffer is 512 KiB. The target filesystem must already be mounted. Existing <code>.tmp</code> or <code>.wav</code> files are not overwritten. In mono mode input 0 is recorded; in stereo mode inputs 0 and 1 are interleaved. Call <code>stop()</code> from application/task context, never from the audio <code>update()</code> callback.</p>
 	<p>If the writer cannot keep up or the buffer fills, recording stops and <code>hasError()</code> reports the failure. An unfinished <code>.tmp</code> file may be recoverable with the offline repair tool.</p>
@@ -3168,7 +3168,7 @@ handpan.noteOn(0, 90);</pre>
 		to a non-zero level.
 	</p>
 	<h3>Examples</h3>
-	<p><a href="../examples/Effects/Filter_FIR/Filter_FIR.cpp">Filter_FIR example</a> and <a href="../examples/Synthesis/DeepHouse/DeepHouse.cpp">DeepHouse example</a> use white-noise generation.</p>
+	<p><a href="../examples/Effects/Filter_FIR/Filter_FIR.ino">Filter_FIR example</a> and <a href="../examples/Synthesis/DeepHouse/DeepHouse.ino">DeepHouse example</a> use white-noise generation.</p>
 	<h3>Notes</h3>
 	<p>Setting the amplitude to zero causes this object to stop using
 		CPU time to generate random numbers.
@@ -4050,7 +4050,7 @@ reverb.mix(0.30f);</pre>
 		match the sample rate used by the application (including AUDIO_SAMPLE_RATE_EXACT
 		when compiling the library).</p>
 	<h3>Example</h3>
-	<p><a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/examples/Effects/Effect-VintageRadio/Effect_VintageRadio.cpp" target="_blank">Effect_VintageRadio.cpp</a> uses cascaded biquad filters.</p>
+	<p><a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/examples/Effects/Filter_FIR/Filter_FIR.ino" target="_blank">Filter_FIR.ino</a> demonstrates the biquad low-pass path alongside FIR filtering.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioFilterBiquad">
 	<div class="form-row">
@@ -4122,7 +4122,7 @@ reverb.mix(0.30f);</pre>
 	<p>Coefficients use signed 16-bit Q15 values. Recalculate the coefficients whenever
 		the application's audio sample rate changes.</p>
 	<h3>Example</h3>
-	<p><a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/examples/Effects/Filter_FIR/Filter_FIR.cpp" target="_blank">Filter_FIR.cpp</a> demonstrates FIR filtering.</p>
+	<p><a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/examples/Effects/Filter_FIR/Filter_FIR.ino" target="_blank">Filter_FIR.ino</a> demonstrates FIR filtering.</p>
 </script>
 <script type="text/x-red" data-template-name="AudioFilterFIR">
 	<div class="form-row">
@@ -4250,8 +4250,8 @@ reverb.mix(0.30f);</pre>
 
 <h3>Implementation</h3>
 	<p>No dedicated Ladder Filter example is currently included in this repository.
-		See <a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/lib/AudioLibrary/filter_ladder.h" target="_blank">filter_ladder.h</a>
-		for the API and <a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/lib/AudioLibrary/filter_ladder.cpp" target="_blank">filter_ladder.cpp</a>
+		See <a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/src/filter_ladder.h" target="_blank">filter_ladder.h</a>
+		for the API and <a href="https://github.com/FrankBoesing/ESP-beatsy-Audio-Library/blob/main/src/filter_ladder.cpp" target="_blank">filter_ladder.cpp</a>
 		for the implementation.</p>
 	<h3>Notes</h3>
 	<p>This port uses floating-point math and internally oversamples by 4x. Processing

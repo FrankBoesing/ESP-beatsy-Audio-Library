@@ -21,7 +21,6 @@ AudioSynthWaveformSine sine;
 AudioConnection patchCordLeft(sine, 0, output, 0);
 AudioConnection patchCordRight(sine, 0, output, 1);
 
-namespace {
 constexpr uint32_t SAMPLE_RATES[] = {32000, 44100, 48000};
 constexpr size_t SAMPLE_RATE_COUNT = sizeof(SAMPLE_RATES) / sizeof(SAMPLE_RATES[0]);
 constexpr float TEST_FREQUENCY_HZ = 1000.0f;
@@ -99,7 +98,6 @@ bool changeSampleRate(uint32_t rate) {
     sine.frequency(TEST_FREQUENCY_HZ);
     return true;
 }
-} // namespace
 
 void setup() {
     Serial.begin(115200);

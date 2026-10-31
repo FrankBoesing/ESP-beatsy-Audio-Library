@@ -6,9 +6,9 @@ The effect starts with the `LARGE_CATHEDRAL` preset, a long decay and a predomin
 
 ## SD recording
 
-Recording is enabled by default. It records 60 seconds of stereo, 16-bit PCM at `AUDIO_SAMPLE_RATE_EXACT`, then finalizes the file as `/cathedral_bells.wav` on the SD card. The recording duration can be changed at the top of `CathedralBells.cpp` with `CATHEDRAL_RECORD_DURATION_MS`.
+Recording is enabled by default. It records 60 seconds of stereo, 16-bit PCM at `AUDIO_SAMPLE_RATE_EXACT`, then finalizes the file as `/cathedral_bells.wav` on the SD card. The recording duration can be changed at the top of `CathedralBells.ino` with `CATHEDRAL_RECORD_DURATION_MS`.
 
-To compile without SD-card support, change this macro at the top of `CathedralBells.cpp`:
+To compile without SD-card support, change this macro at the top of `CathedralBells.ino`:
 
 ```cpp
 #define CATHEDRAL_RECORD_TO_SD 0

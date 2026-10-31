@@ -1,5 +1,5 @@
 // Wi-Fi bring-up test for the Waveshare ESP32-P4-WIFI6.
-// Copy to the local PlatformIO src/main.cpp and create src/secrets.h
+// Copy to the the PlatformIO test project or open this sketch in the Arduino IDE; create a local secrets.h in the sketch folder
 // with WIFI_SSID and WIFI_PASS for a 2.4 GHz Wi-Fi network.
 
 #include <Arduino.h>

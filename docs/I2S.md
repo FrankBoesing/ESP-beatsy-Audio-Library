@@ -1,6 +1,6 @@
 # I²S and S/PDIF audio output
 
-This document covers the I²S transport in `lib/AudioLibrary` and the software
+This document covers the I²S transport in `src` and the software
 S/PDIF output built on its TX serializer.
 
 ## I²S architecture

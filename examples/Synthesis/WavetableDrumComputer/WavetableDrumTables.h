@@ -24,8 +24,6 @@
 #include <Audio.h>
 #include <stdint.h>
 
-namespace RockDrumTables {
-
 static const uint8_t oneSampleRange[1] = {127};
 
 static const int16_t kickPcm[16385] = {
@@ -5948,4 +5946,3 @@ static const AudioSynthWavetable::instrument_data lowTomInstrument = {
     1U, oneSampleRange, lowTomSampleData
 };
 
-} // namespace RockDrumTables

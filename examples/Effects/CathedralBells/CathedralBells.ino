@@ -67,7 +67,6 @@ AudioConnection reverbToRecordLeft(cathedral, 0, recorder, 0);
 AudioConnection reverbToRecordRight(cathedral, 1, recorder, 1);
 #endif
 
-namespace {
 
 constexpr uint8_t BELL_COUNT = 8;
 constexpr uint8_t BELL_MODE_COUNT = 6;
@@ -223,7 +222,6 @@ void playBellEvents(uint32_t now)
     }
 }
 
-} // namespace
 
 void setup()
 {

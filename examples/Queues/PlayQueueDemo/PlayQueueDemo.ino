@@ -30,14 +30,9 @@ AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER
 #error "AUDIO_CODEC not defined"
 #endif
 
-
-// GUItool: begin automatically generated code
-AudioPlayQueue           queue1;         //xy=917,329
-AudioOutputI2S           output;           //xy=1121,330
+AudioPlayQueue           queue1;
 AudioConnection          patchCord1(queue1, 0, output, 0);
 AudioConnection          patchCord2(queue1, 0, output, 1);
-
-// GUItool: end automatically generated code
 
 #define COUNT_OF(a) (sizeof a / sizeof a[0])
 
