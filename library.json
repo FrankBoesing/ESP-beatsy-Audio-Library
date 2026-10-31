@@ -1,6 +1,6 @@
 {
   "name": "esp-beatsy-audio-library",
-  "version": "1.0.0",
+  "version": "0.9.0",
   "description": "ESP32-oriented audio library based on the Teensy Audio Library API.",
   "keywords": [
     "audio",
@@ -13,6 +13,7 @@
     "url": "https://github.com/FrankBoesing/ESP-beatsy-Audio-Library.git"
   },
   "homepage": "https://github.com/FrankBoesing/ESP-beatsy-Audio-Library",
+  "license": "MIT",
   "authors": [
     {
       "name": "Frank Boesing",
