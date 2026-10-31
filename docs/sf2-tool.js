@@ -1261,9 +1261,13 @@
 
   function isTypingTarget(target) {
     if (!target || !target.closest) return false;
-    // Select fields must not block note input: Firefox leaves the preset or
-    // octave selector focused after the user changes its value.
-    return !!target.closest("input, textarea, [contenteditable='true']");
+    // Ignore only actual text-entry controls. File inputs, checkboxes and
+    // selectors often retain focus after use and must not block note keys.
+    return !!target.closest(
+      "textarea, input[type='text'], input[type='number'], input[type='search'], " +
+      "input[type='email'], input[type='url'], input[type='tel'], input[type='password'], " +
+      "[contenteditable='true']"
+    );
   }
 
   function numberArray(values, perLine) {
