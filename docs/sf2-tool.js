@@ -755,6 +755,7 @@
   var MAX_PREVIEW_LAYERS_PER_NOTE = 8;
   var MAX_PREVIEW_SAMPLE_FRAMES = 4000000;
   var MAX_PREVIEW_CACHE_FRAMES = 10000000;
+  var WAVETABLE_DEFAULT_AMPLITUDE = 90 / 127;
 
   function currentPreset() {
     if (!font) return null;
@@ -773,7 +774,7 @@
     if (!modeInfo) return;
     if (isWavetableMode()) {
       modeInfo.textContent =
-        "Wavetable-kompatibel: monophon, genau eine Sample-Zone pro Note, feste Velocity, Mono-Downmix und maximal 65.535 Sampleframes. Note-Off startet Release; Loop-until-release bleibt wie im aktuellen Synthesizer auch während Release aktiv. SF2-Filter, Modulatoren, Pan und Effektsends werden nicht gerendert.";
+        "Wavetable-kompatibel: monophon, genau eine Sample-Zone pro Note, feste Velocity, Mono-Downmix, Standard-Amplitude 90/127 und maximal 65.535 Sampleframes. Note-Off startet Release; Loop-until-release bleibt wie im aktuellen Synthesizer auch während Release aktiv. SF2-Filter, Modulatoren, Pan und Effektsends werden nicht gerendert.";
     } else {
       modeInfo.textContent =
         "Browser-Vorschau: polyphon (bis zu " + MAX_PREVIEW_VOICES +
@@ -903,7 +904,7 @@
     return buffer;
   }
 
-  function envelopeLevelAt(region, note, startTime, time) {
+  function envelopeLevelAt(region, note, startTime, time, gainScale) {
     var env = envelopeForNote(region.values, note);
     var attenuation = Math.pow(10, -Math.max(0, region.values[GEN.attenuation]) / 200);
     var sustain = attenuation * Math.pow(10, -env.sustainCb / 200);
@@ -912,16 +913,17 @@
     var holdEnd = attackEnd + env.hold;
     var decayEnd = holdEnd + env.decay;
 
+    gainScale = gainScale === undefined ? 1 : gainScale;
     if (time <= delayEnd) return 0;
     if (time < attackEnd && env.attack > 0) {
-      return attenuation * ((time - delayEnd) / env.attack);
+      return attenuation * gainScale * ((time - delayEnd) / env.attack);
     }
-    if (time <= holdEnd) return attenuation;
+    if (time <= holdEnd) return attenuation * gainScale;
     if (time < decayEnd && env.decay > 0) {
       var fraction = (time - holdEnd) / env.decay;
-      return attenuation + (sustain - attenuation) * fraction;
+      return (attenuation + (sustain - attenuation) * fraction) * gainScale;
     }
-    return sustain;
+    return sustain * gainScale;
   }
 
   function removeVoice(voice) {
@@ -961,17 +963,18 @@
     updateStopButton();
   }
 
-  function scheduleGain(gain, region, note, startTime) {
+  function scheduleGain(gain, region, note, startTime, gainScale) {
     var env = envelopeForNote(region.values, note);
     var sustainGain = Math.pow(10, -env.sustainCb / 200);
     var attenuation = Math.pow(10, -Math.max(0, region.values[GEN.attenuation]) / 200);
+    gainScale = gainScale === undefined ? 1 : gainScale;
     var p = gain.gain;
     var t0 = startTime;
     p.setValueAtTime(0, t0);
     var peak = t0 + env.delay + env.attack;
-    p.linearRampToValueAtTime(attenuation, peak);
-    p.setValueAtTime(attenuation, peak + env.hold);
-    p.linearRampToValueAtTime(attenuation * sustainGain, peak + env.hold + env.decay);
+    p.linearRampToValueAtTime(attenuation * gainScale, peak);
+    p.setValueAtTime(attenuation * gainScale, peak + env.hold);
+    p.linearRampToValueAtTime(attenuation * sustainGain * gainScale, peak + env.hold + env.decay);
   }
 
   function releaseVoice(voice) {
@@ -983,7 +986,7 @@
       var layer = voice.layers[i];
       var env = envelopeForNote(layer.region.values, voice.note);
       var param = layer.gain.gain;
-      var level = envelopeLevelAt(layer.region, voice.note, voice.startTime, now);
+      var level = envelopeLevelAt(layer.region, voice.note, voice.startTime, now, layer.gainScale);
       var endTime = now + Math.max(0, env.release);
 
       param.cancelScheduledValues(now);
@@ -1121,7 +1124,8 @@
             source.loopEnd = layout.loopEnd / layout.sampleRate;
           }
 
-          scheduleGain(gain, region, note, startTime);
+          var gainScale = wavetableMode ? WAVETABLE_DEFAULT_AMPLITUDE : 1;
+          scheduleGain(gain, region, note, startTime, gainScale);
           source.connect(gain);
           gain.connect(masterGain);
 
@@ -1130,6 +1134,7 @@
             gain: gain,
             region: region,
             layout: layout,
+            gainScale: gainScale,
             ended: false
           };
           voice.layers.push(layer);
