@@ -55,7 +55,29 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
 .sf2-metadata{margin-top:10px;color:var(--muted);font-size:.88rem;overflow-wrap:anywhere}
 .sf2-metadata div{margin:3px 0}
 .sf2-zone-info{white-space:pre-wrap;overflow-wrap:anywhere;background:#f7f9fb;border:1px solid var(--line);border-radius:8px;padding:12px;font-size:.86rem;line-height:1.45;margin:14px 0 4px}
-@media(max-width:560px){.sf2-controls{grid-template-columns:1fr}}
+.sf2-player{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:10px;background:#f9fbfd}
+.sf2-player-options{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(180px,1fr);gap:12px;align-items:end}
+.sf2-check{display:flex;align-items:center;gap:9px;font-weight:600;margin:0 0 7px}
+.sf2-check input{width:18px;height:18px;margin:0;flex:0 0 auto}
+.sf2-mode-info{margin:10px 0 12px}
+.sf2-volume-row{display:grid;grid-template-columns:auto minmax(100px,1fr);gap:14px;align-items:center;margin:10px 0}
+.sf2-volume-row label{margin:0}
+.sf2-volume-row input{width:100%}
+.sf2-keyboard{position:relative;display:flex;width:100%;height:160px;touch-action:none;user-select:none;overflow:hidden;border-radius:0 0 7px 7px;background:#17283c}
+.sf2-key{position:relative;display:flex;align-items:flex-end;justify-content:center;min-width:0;margin:0;padding:0 0 7px;border-radius:0 0 5px 5px;box-shadow:none;touch-action:none;user-select:none}
+.sf2-key:focus-visible{outline:3px solid #f0a62b;outline-offset:-3px}
+.sf2-white-key{z-index:1;flex:1 1 0;height:100%;border:1px solid #9aa8b6;border-top:0;background:#fff;color:#253448}
+.sf2-white-key:hover{background:#eef5fb}
+.sf2-white-key.is-active{background:#cfe5fa;border-color:#397eb5}
+.sf2-black-key{position:absolute;top:0;z-index:2;width:4.5%;height:62%;border:1px solid #050a10;border-top:0;border-radius:0 0 4px 4px;background:#17283c;color:#fff;padding-bottom:5px;box-shadow:0 3px 5px rgba(0,0,0,.28)}
+.sf2-black-key:hover{background:#294968}
+.sf2-black-key.is-active{background:#2878b8;border-color:#174d7c}
+.sf2-key-note{font-size:.72rem;line-height:1.1;pointer-events:none}
+.sf2-key-pc{font-size:.62rem;line-height:1;opacity:.65;position:absolute;bottom:2px;pointer-events:none}
+.sf2-black-key .sf2-key-pc{bottom:4px;opacity:.8}
+.sf2-key:disabled{opacity:1;cursor:not-allowed}
+@media(max-width:700px){.sf2-player-options{grid-template-columns:1fr}.sf2-keyboard{height:132px}}
+@media(max-width:560px){.sf2-controls{grid-template-columns:1fr}.sf2-key-note{font-size:.57rem}.sf2-key-pc{font-size:.52rem}.sf2-keyboard{height:118px}}
 </style>
 </head>
 <body>
@@ -200,7 +222,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
           <select id="sf2Preset" disabled></select>
         </div>
         <div>
-          <label for="sf2Velocity">Export velocity (1–127)</label>
+          <label for="sf2Velocity">Preview / export velocity (1–127)</label>
           <input id="sf2Velocity" type="number" min="1" max="127" step="1" value="100">
         </div>
         <div>
@@ -213,7 +235,31 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
         </div>
       </div>
       <pre id="sf2PresetInfo" class="sf2-zone-info" aria-live="polite"></pre>
-      <button id="sf2Play" type="button" disabled>Preview note</button>
+      <div class="sf2-player">
+        <div class="sf2-player-options">
+          <label class="sf2-check" for="sf2WavetableMode">
+            <input id="sf2WavetableMode" type="checkbox" checked>
+            Wavetable-kompatible Vorschau (aktuelle Synth-Grenzen)
+          </label>
+          <div>
+            <label for="sf2KeyboardStart">Tastaturbereich</label>
+            <select id="sf2KeyboardStart">
+              <option value="36">C2–B3</option>
+              <option value="48" selected>C3–B4</option>
+              <option value="60">C4–B5</option>
+              <option value="72">C5–B6</option>
+            </select>
+          </div>
+        </div>
+        <div id="sf2ModeInfo" class="help sf2-mode-info" aria-live="polite"></div>
+        <div class="sf2-volume-row">
+          <label for="sf2PreviewVolume">Abhörlautstärke</label>
+          <input id="sf2PreviewVolume" type="range" min="0" max="100" value="70">
+        </div>
+        <div id="sf2Keyboard" class="sf2-keyboard" role="group" aria-label="Zwei Oktaven Klaviatur"></div>
+        <p class="help">Mit Maus, Touch oder PC-Tastatur spielen. QWERTZ-Belegung: Z S X D C V G B H N J M (untere Oktave), Q 2 W 3 E R 5 T 6 Y 7 U (obere Oktave). Taste halten = Note On, loslassen = Note Off. Bei Fokus in einem Eingabe- oder Auswahlfeld ist die PC-Tastatur deaktiviert.</p>
+      </div>
+      <button id="sf2Play" type="button" disabled>Preview selected note</button>
       <button id="sf2Stop" type="button" class="secondary" disabled>Stop preview</button>
       <button id="sf2Export" type="button" disabled>Generate instrument header</button>
       <div id="sf2CodePanel" class="result hidden">
