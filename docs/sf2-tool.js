@@ -281,7 +281,7 @@
     if (localZone) all = all.concat(localZone);
     for (var i = 0; i < all.length; i++) {
       var op = all[i].op;
-      if (PRESET_IGNORED_OPERATORS.indexOf(op) >= 0) continue;
+      if (PRESET_IGNORED_OPERATORS.indexOf(op) >= 0 || RANGE_OPERATORS.indexOf(op) >= 0) continue;
       result[op] = (result[op] || 0) + all[i].amount;
     }
     return result;
@@ -544,7 +544,7 @@
 
     if (pair.right) {
       var rightLoopStart = (pair.right.start + offsets.loopStart) - rightStart;
-      var rightLoopEnd = (pair.right.end + offsets.loopEnd) - rightStart;
+      var rightLoopEnd = (pair.right.loopEnd + offsets.loopEnd) - rightStart;
       if (rightLoopStart !== loopStart || rightLoopEnd !== loopEnd) {
         loopValid = false;
         loop = false;
@@ -961,7 +961,7 @@
         continue;
       }
       lines.push("    { " + item.samplePointer + ", " + (item.loop ? "true" : "false") +
-        ", 16, " + item.phaseIncrement.toFixed(9) + "f, " +
+        ", 16, " + item.phaseIncrement.toFixed(9) + "f / AUDIO_SAMPLE_RATE_EXACT, " +
         item.maxPhase + "U, " + item.loopEnd + "U, " + item.loopLength + "U, " +
         item.initialScalar + "U,");
       lines.push("      " + countExpression(item.delay) + ", " +
