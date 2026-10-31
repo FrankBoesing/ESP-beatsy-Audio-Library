@@ -83,8 +83,10 @@ presets.
   feature below; the converter must be upgraded after the `AudioSynthWavetable`
   zone/layer API exists.
 - [x] **Add an interactive SF2 keyboard player.** The browser tool now provides
-  a two-octave keyboard for mouse/touch input and a German QWERTZ PC-key map,
-  including held-note Note On/Off and volume-envelope release. Its default
+  a two-octave keyboard for mouse/touch input and the PC keyboard, including
+  held-note Note On/Off and volume-envelope release. QWERTZ/QWERTY labels are
+  read from the browser keyboard map when available, or detected from the
+  actual Y/Z key event (also suitable for Firefox). Its default
   compatibility mode is monophonic, requires exactly one matching sample zone
   per note at the selected velocity, applies the current default wavetable
   amplitude and enforces the legacy 65,535-frame sample limit. An optional
