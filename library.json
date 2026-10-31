@@ -35,19 +35,19 @@
       ".clang-format",
       ".gitattributes",
       ".gitignore",
-      "platformio.ini",
+      ".vscode",
+      ".vscode/*",
+      "examples/HardwareTesting/P4WifiHostedOTA/secrets.h",
+      "examples/HardwareTesting/P4WifiStation/secrets.h",
+      "examples/Radio/secrets.h",
+      "partitions_esp32_p4_wifi6_32MB.csv",
       "pio-test",
       "pio-test/*",
       "pio-test/**/*",
-      "src/secrets.h",
-      "secrets.h",
-      "partitions_esp32_p4_wifi6_32MB.csv",
+      "platformio.ini",
       "sdkconfig.defaults.esp32-p4-wifi6",
-      "scripts",
-      "scripts/*",
-      "scripts/**/*",
-      ".vscode",
-      ".vscode/*"
+      "secrets.h",
+      "src/secrets.h"
     ]
   }
 }
