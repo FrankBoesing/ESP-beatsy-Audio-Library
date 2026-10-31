@@ -37,6 +37,7 @@
   var pcHolds = Object.create(null);
   var pcNoteByCode = Object.create(null);
   var legacyStartToken = 0;
+  var playbackGeneration = 0;
   var generatedCode = "";
   var generatedFileName = "";
   
@@ -955,6 +956,7 @@
 
   function stopPreview() {
     legacyStartToken++;
+    playbackGeneration++;
     hardStopAllVoices();
     keyboardHolds = Object.create(null);
     pointerHolds = Object.create(null);
@@ -1040,8 +1042,10 @@
   async function startSoundNote(note, velocity, options) {
     if (!font) return;
     options = options || {};
+    var soundFont = font;
     var preset = currentPreset();
     if (!preset) return;
+    var startGeneration = playbackGeneration;
 
     note = Math.max(0, Math.min(127, Math.round(note)));
     velocity = Math.max(1, Math.min(127, Math.round(velocity)));
@@ -1095,6 +1099,7 @@
 
     try {
       await ensureAudioContext();
+      if (startGeneration !== playbackGeneration || soundFont !== font) return;
       if (wavetableMode && requestToken !== legacyStartToken) return;
       if (options.keyboard && !keyboardHolds[note]) return;
 
@@ -1120,7 +1125,7 @@
 
           var source = audioContext.createBufferSource();
           var gain = audioContext.createGain();
-          source.buffer = getAudioBuffer(font, region);
+          source.buffer = getAudioBuffer(soundFont, region);
           source.playbackRate.value = playbackRatio(font, region, note);
           source.loop = layout.loop;
           if (source.loop) {
