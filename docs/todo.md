@@ -73,17 +73,24 @@ presets.
   generators, arbitrary modulators, stereo placement and effects instead of
   silently implying that they are reproduced. Keep those features as possible
   later extensions, not prerequisites for the first usable converter.
-- [ ] **Adapt the planned SF2 browser tool to the new instrument model.** Keep
-  local/offline file processing, but change its main output from raw sample WAV
-  export to a compile-ready C++ header for a selected SF2 preset. The header
-  must contain deduplicated PCM sample arrays, zone descriptors with key and
-  velocity ranges, per-zone `sample_data` parameters and the instrument
-  descriptor expected by the extended API. Preserve linked stereo samples by
-  the documented mono-downmix policy and convert `sm24` data to 16-bit PCM.
-  Correctly combine preset and instrument global/local generators before
-  calculating each zone. Preview should use the same note/velocity zone
-  selection and layer-mixing rules as the exported instrument. Keep optional
-  per-sample WAV export only as a diagnostic feature, not as the primary result.
+- [x] **Create V1 of the offline SF2 converter for the legacy wavetable API.**
+  Implemented in `docs/tools.html` and `docs/sf2-tool.js`: local SF2 parsing,
+  preset/instrument global-local zone resolution, fixed-velocity export,
+  single-sample-per-key header generation, note audition with browser-side
+  layering, linked-stereo downmix and 24-to-16-bit conversion. V1 deliberately
+  rejects overlapping key layers and samples longer than 65,535 frames instead
+  of producing incomplete instrument data. This does not complete the target
+  feature below; the converter must be upgraded after the `AudioSynthWavetable`
+  zone/layer API exists.
+- [ ] **Upgrade the SF2 browser tool to the extended instrument model.** Keep
+  local/offline file processing, but export a compile-ready C++ header for a
+  selected SF2 preset with deduplicated PCM arrays, key/velocity rectangles,
+  per-zone `sample_data` parameters and the extended instrument descriptor.
+  Preserve linked stereo samples by the documented mono-downmix policy and
+  convert `sm24` data to 16-bit PCM. Correctly combine preset and instrument
+  global/local generators. Preview and export must share the same velocity-zone
+  selection and layered-sample rules. Keep optional per-sample WAV export only
+  as a diagnostic feature, not as the primary result.
 - [ ] **Validate SF2 conversion and playback end-to-end.** Check preset/bank
   selection, key/velocity boundaries, overlapping layers, root-key tuning,
   loops including note-off, envelope timing, sample-rate adaptation, memory
