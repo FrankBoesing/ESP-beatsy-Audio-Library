@@ -17,6 +17,7 @@ nav a{color:#fff;margin-right:16px;font-size:.9rem}
 main{padding:24px 18px 56px}
 .intro{color:var(--muted);margin:0 0 22px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:18px}
+.grid > section[aria-labelledby="sf2-heading"]{grid-column:1/-1}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 4px 16px rgba(24,48,72,.05);min-width:0}
 .card h2{margin:0 0 6px;font-size:1.3rem}
 .card .lede{margin:0 0 18px;color:var(--muted)}
@@ -60,9 +61,6 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
 .sf2-check{display:flex;align-items:center;gap:9px;font-weight:600;margin:0 0 7px}
 .sf2-check input{width:18px;height:18px;margin:0;flex:0 0 auto}
 .sf2-mode-info{margin:10px 0 12px}
-.sf2-volume-row{display:grid;grid-template-columns:auto minmax(100px,1fr);gap:14px;align-items:center;margin:10px 0}
-.sf2-volume-row label{margin:0}
-.sf2-volume-row input{width:100%}
 .sf2-keyboard{position:relative;display:flex;width:100%;height:160px;touch-action:none;user-select:none;overflow:hidden;border-radius:0 0 7px 7px;background:#17283c}
 .sf2-key{position:relative;display:flex;align-items:flex-end;justify-content:center;min-width:0;margin:0;padding:0 0 7px;border-radius:0 0 5px 5px;box-shadow:none;touch-action:none;user-select:none}
 .sf2-key:focus-visible{outline:3px solid #f0a62b;outline-offset:-3px}
@@ -239,10 +237,10 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
         <div class="sf2-player-options">
           <label class="sf2-check" for="sf2WavetableMode">
             <input id="sf2WavetableMode" type="checkbox" checked>
-            Wavetable-kompatible Vorschau (aktuelle Synth-Grenzen)
+            Wavetable-compatible preview (current synth limits)
           </label>
           <div>
-            <label for="sf2KeyboardStart">Tastaturbereich</label>
+            <label for="sf2KeyboardStart">Keyboard range</label>
             <select id="sf2KeyboardStart">
               <option value="36">C2–B3</option>
               <option value="48" selected>C3–B4</option>
@@ -252,12 +250,9 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
           </div>
         </div>
         <div id="sf2ModeInfo" class="help sf2-mode-info" aria-live="polite"></div>
-        <div class="sf2-volume-row">
-          <label for="sf2PreviewVolume">Abhörlautstärke</label>
-          <input id="sf2PreviewVolume" type="range" min="0" max="100" value="70">
-        </div>
-        <div id="sf2Keyboard" class="sf2-keyboard" role="group" aria-label="Zwei Oktaven Klaviatur"></div>
-        <p class="help">Mit Maus, Touch oder PC-Tastatur spielen. QWERTZ-Belegung: Z S X D C V G B H N J M (untere Oktave), Q 2 W 3 E R 5 T 6 Y 7 U (obere Oktave). Taste halten = Note On, loslassen = Note Off. Bei Fokus in einem Eingabe- oder Auswahlfeld ist die PC-Tastatur deaktiviert.</p>
+        <div id="sf2Keyboard" class="sf2-keyboard" role="group" aria-label="Two-octave piano keyboard"></div>
+        <p id="sf2KeyboardLayout" class="help" aria-live="polite">Keyboard layout: press the Z/Y key once to detect it automatically.</p>
+        <p class="help">Play with the mouse, touch screen or PC keyboard. Hold a key for Note On; release it for Note Off. The PC keyboard works while focus is on the selectors, but is disabled while typing in text or number fields.</p>
       </div>
       <button id="sf2Play" type="button" disabled>Preview selected note</button>
       <button id="sf2Stop" type="button" class="secondary" disabled>Stop preview</button>
