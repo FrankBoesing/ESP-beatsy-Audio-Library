@@ -54,9 +54,12 @@
 *     -Fix warnings and errors building on Mac OS X via "gcc miditones.c"
 * 25 January 2016, D. Blackketter, Paul Stoffregen, V1.9
       -Merge in velocity output option from Arduino/Teensy Audio Library
+* 31 October 2026, ESP-beatsy V2.0
+      -Extend the generator range to 32 voices with a 3-bit command class
+       and a 5-bit voice index. The score byte-stream format is changed.
 */
 
-#define VERSION "1.9"
+#define VERSION "2.0"
 
 
 /*--------------------------------------------------------------------------------
@@ -131,7 +134,7 @@
 *          2: try to keep each track to its own tone generator
 *
 *  -tn  Generate the bytestream so that at most n tone generators are used.
-*       The default is 6 tone generators, and the maximum is 16.
+*       The default is 6 tone generators, and the maximum is 32.
 *       The program will report how many notes had to be discarded because there
 *       weren't enough tone generators.  Note that for the Arduino Playtunes
 *       library, it's ok to have the bytestream use more tone genreators than
@@ -157,29 +160,23 @@
 *  start delays until the next note change.  Here are the details, with numbers
 *  shown in hexadecimal.
 *
-*  If the high-order bit of the byte is 1, then it is one of the following commands:
+*  Bytes with bit 7 set are commands. Bits 7..5 select the command class:
 *
-*    9t nn [vv] Start playing note nn on tone generator t.  Generators are numbered
-*           starting with 0.  The notes numbers are the MIDI numbers for the chromatic
-*           scale, with decimal 60 being Middle C, and decimal 69 being Middle A (440 Hz).
-*           if the -v option is enabled, a second byte is added to indicate velocity
+*    100vvvvv       Stop voice v (0..31).
 *
-*    8t     Stop playing the note on tone generator t.
+*    101vvvvv nn    Start note nn on voice v (0..31). The note number is a MIDI
+*                   note number (60 = middle C, 69 = A440). If -v is enabled,
+*                   one additional velocity byte follows nn.
 *
-*    F0     End of score: stop playing.
+*    11000000       Restart the score from the beginning.
 *
-*    E0     End of score: start playing again from the beginning.
-*           (Shown for completeness; MIDITONES won't generate this.)
+*    11000001       End of score: stop playing.
 *
-*  If the high-order bit of the byte is 0, it is a command to delay for a while until
-*  the next note change..  The other 7 bits and the 8 bits of the following byte are
-*  interpreted as a 15-bit big-endian integer that is the number of milliseconds to
-*  wait before processing the next command.  For example,
+*    111xxxxx       Reserved for future command classes.
 *
-*     07 D0
-*
-*  would cause a delay of 0x07d0 = 2000 decimal millisconds, or 2 seconds.  Any tones
-*  that were playing before the delay command will continue to play.
+*  Bytes with bit 7 clear encode a delay. The lower 7 bits of the first byte and
+*  all 8 bits of the following byte form a 15-bit big-endian millisecond value.
+*  For example, 07 D0 waits 2000 ms. Voices already playing continue during delays.
 *
 *
 *  Len Shustek, 4 Feb 2011
@@ -214,7 +211,7 @@ struct track_header {
 
 /***********  Global variables  ******************/
 
-#define MAX_TONEGENS 16		/* max tone generators: tones we can play simultaneously */
+#define MAX_TONEGENS 32		/* max tone generators: tones we can play simultaneously */
 #define DEFAULT_TONEGENS 6	/* default number of tone generators */
 #define MAX_TRACKS 24		/* max number of MIDI tracks we will process */
 
@@ -260,10 +257,10 @@ track[MAX_TRACKS] = {
 
 /* output bytestream commands, which are also stored in track_status.cmd */
 
-#define CMD_PLAYNOTE	0x90	/* play a note: low nibble is generator #, note is next byte */
-#define CMD_STOPNOTE	0x80	/* stop a note: low nibble is generator # */
-#define CMD_RESTART	0xe0	/* restart the score from the beginning */
-#define CMD_STOP		0xf0	/* stop playing */
+#define CMD_STOPNOTE	0x80	/* 100vvvvv: stop voice v (0..31) */
+#define CMD_PLAYNOTE	0xA0	/* 101vvvvv: play voice v; note and optional velocity follow */
+#define CMD_RESTART	0xC0	/* 11000000: restart the score from the beginning */
+#define CMD_STOP		0xC1	/* 11000001: stop playing */
 /* if CMD < 0x80, then the other 7 bits and the next byte are a 15-bit number of msec to delay */
 
 /* these other commands stored in the track_status.com */
@@ -276,14 +273,14 @@ track[MAX_TRACKS] = {
 
 void SayUsage(char *programName){
     static char *usage[] = {
-        "Convert MIDI files to an Arduino PLAYTUNE bytestream",
+        "Convert MIDI files to an ESP-beatsy polyphonic audio bytestream",
         "miditones [-p] [-lg] [-lp] [-s1] [-tn] [-v] <basefilename>",
         "  -p   parse only, don't generate bytestream",
         "  -lp  log input parsing",
         "  -lg  log output generation",
         "  -s1  strategy 1: favor track 1",
         "  -s2  strategy 2: try to assign tracks to specific tone generators",
-        "  -tn  use at most n tone generators (default is 6, max is 16)",
+        "  -tn  use at most n tone generators (default is 6, max is 32)",
         "  -b   binary file output instead of C source text",
         "  -cn  mask for which tracks to process, e.g. -c3 for only 0 and 1",
         "  -kn  key shift in chromatic notes, positive or negative",
@@ -708,7 +705,7 @@ int main(int argc,char *argv[]) {
     unsigned long earliest_time;
     int notes_skipped = 0;
 
-    printf("MIDITONES V%s, (C) 2011,2015,2016 Len Shustek\n", VERSION);
+    printf("ESP-beatsy MIDITONES V%s (based on MIDITONES by Len Shustek)\n", VERSION);
     printf("See the source code for license information.\n\n");
     if (argc == 1) { /* no arguments */
         SayUsage(argv[0]);
@@ -777,8 +774,8 @@ int main(int argc,char *argv[]) {
         if (!binaryoutput) {  /* create header of C file that initializes score data */
             time_t rawtime;
             time (&rawtime);
-            fprintf(outfile, "// Playtune bytestream for file \"%s.mid\" ", filebasename);
-            fprintf(outfile, "created by MIDITONES V%s on %s", VERSION, asctime(localtime(&rawtime)));
+            fprintf(outfile, "// ESP-beatsy MIDITONES bytestream for file \"%s.mid\" ", filebasename);
+            fprintf(outfile, "created by ESP-beatsy MIDITONES V%s on %s", VERSION, asctime(localtime(&rawtime)));
             print_command_line(argc,argv);
             if (channel_mask != 0xffff)
                 fprintf(outfile, "//   Only the masked channels were processed: %04X\n", channel_mask);
