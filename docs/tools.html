@@ -17,6 +17,7 @@ nav a{color:#fff;margin-right:16px;font-size:.9rem}
 main{padding:24px 18px 56px}
 .intro{color:var(--muted);margin:0 0 22px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:18px}
+.grid > section[aria-labelledby="sf2-heading"]{grid-column:1/-1}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 4px 16px rgba(24,48,72,.05);min-width:0}
 .card h2{margin:0 0 6px;font-size:1.3rem}
 .card .lede{margin:0 0 18px;color:var(--muted)}
@@ -49,6 +50,32 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
 .miditones-advanced summary{cursor:pointer;font-weight:650;color:var(--accent)}
 @media(max-width:560px){.miditones-options{grid-template-columns:1fr}}
 
+
+.sf2-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px}
+.sf2-controls label{margin-top:10px}
+.sf2-metadata{margin-top:10px;color:var(--muted);font-size:.88rem;overflow-wrap:anywhere}
+.sf2-metadata div{margin:3px 0}
+.sf2-zone-info{white-space:pre-wrap;overflow-wrap:anywhere;background:#f7f9fb;border:1px solid var(--line);border-radius:8px;padding:12px;font-size:.86rem;line-height:1.45;margin:14px 0 4px}
+.sf2-player{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:10px;background:#f9fbfd}
+.sf2-player-options{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(180px,1fr);gap:12px;align-items:end}
+.sf2-check{display:flex;align-items:center;gap:9px;font-weight:600;margin:0 0 7px}
+.sf2-check input{width:18px;height:18px;margin:0;flex:0 0 auto}
+.sf2-mode-info{margin:10px 0 12px}
+.sf2-keyboard{position:relative;display:flex;width:100%;height:160px;touch-action:none;user-select:none;overflow:hidden;border-radius:0 0 7px 7px;background:#17283c}
+.sf2-key{position:relative;display:flex;align-items:flex-end;justify-content:center;min-width:0;margin:0;padding:0 0 7px;border-radius:0 0 5px 5px;box-shadow:none;touch-action:none;user-select:none}
+.sf2-key:focus-visible{outline:3px solid #f0a62b;outline-offset:-3px}
+.sf2-white-key{z-index:1;flex:1 1 0;height:100%;border:1px solid #9aa8b6;border-top:0;background:#fff;color:#253448}
+.sf2-white-key:hover{background:#eef5fb}
+.sf2-white-key.is-active{background:#cfe5fa;border-color:#397eb5}
+.sf2-black-key{position:absolute;top:0;z-index:2;width:4.5%;height:62%;border:1px solid #050a10;border-top:0;border-radius:0 0 4px 4px;background:#17283c;color:#fff;padding-bottom:5px;box-shadow:0 3px 5px rgba(0,0,0,.28)}
+.sf2-black-key:hover{background:#294968}
+.sf2-black-key.is-active{background:#2878b8;border-color:#174d7c}
+.sf2-key-note{font-size:.72rem;line-height:1.1;pointer-events:none}
+.sf2-key-pc{font-size:.62rem;line-height:1;opacity:.65;position:absolute;bottom:2px;pointer-events:none}
+.sf2-black-key .sf2-key-pc{bottom:4px;opacity:.8}
+.sf2-key:disabled{opacity:1;cursor:not-allowed}
+@media(max-width:700px){.sf2-player-options{grid-template-columns:1fr}.sf2-keyboard{height:132px}}
+@media(max-width:560px){.sf2-controls{grid-template-columns:1fr}.sf2-key-note{font-size:.57rem}.sf2-key-pc{font-size:.52rem}.sf2-keyboard{height:118px}}
 </style>
 </head>
 <body>
@@ -177,6 +204,67 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
         <p class="help">The C output uses the ESP-beatsy MIDITONES V2.0 format: <code>score[]</code>, <code>PROGMEM</code>, 5-bit voice IDs (up to 32 voices) and end-of-score command <code>0xC1</code>. It is not byte-compatible with upstream MIDITONES V1.9.</p>
       </div>
       <div class="note">Defaults: six tone generators, all 16 MIDI channels, balanced track scheduling, no velocity bytes, zero key shift and C source output. Select 1–32 voices. MIDI parsing and conversion run locally in the browser; the file is not uploaded.</div>
+    </section>
+    <section class="card" aria-labelledby="sf2-heading">
+      <h2 id="sf2-heading">4. SF2 SoundFont to AudioSynthWavetable</h2>
+      <p class="lede">Load a SoundFont, audition its presets and generate an instrument header for the current AudioSynthWavetable API.</p>
+      <label for="sf2File">SoundFont 2 file (.sf2)</label>
+      <input id="sf2File" type="file" accept=".sf2,application/octet-stream">
+      <p class="help">The file is parsed locally in your browser. It is not uploaded.</p>
+      <div id="sf2Status" class="status" role="status" aria-live="polite"></div>
+      <div id="sf2Summary" class="help"></div>
+      <div id="sf2Metadata" class="sf2-metadata"></div>
+      <div class="sf2-controls">
+        <div>
+          <label for="sf2Preset">Preset / bank</label>
+          <select id="sf2Preset" disabled></select>
+        </div>
+        <div>
+          <label for="sf2Velocity">Preview / export velocity (1–127)</label>
+          <input id="sf2Velocity" type="number" min="1" max="127" step="1" value="100">
+        </div>
+        <div>
+          <label for="sf2PreviewNote">Preview note (0–127)</label>
+          <input id="sf2PreviewNote" type="number" min="0" max="127" step="1" value="60">
+        </div>
+        <div>
+          <label for="sf2Name">C++ instrument name</label>
+          <input id="sf2Name" type="text" value="SoundFontInstrument" spellcheck="false" autocomplete="off">
+        </div>
+      </div>
+      <pre id="sf2PresetInfo" class="sf2-zone-info" aria-live="polite"></pre>
+      <div class="sf2-player">
+        <div class="sf2-player-options">
+          <label class="sf2-check" for="sf2WavetableMode">
+            <input id="sf2WavetableMode" type="checkbox" checked>
+            Wavetable-compatible preview (current synth limits)
+          </label>
+          <div>
+            <label for="sf2KeyboardStart">Keyboard range</label>
+            <select id="sf2KeyboardStart">
+              <option value="36">C2–B3</option>
+              <option value="48" selected>C3–B4</option>
+              <option value="60">C4–B5</option>
+              <option value="72">C5–B6</option>
+            </select>
+          </div>
+        </div>
+        <div id="sf2ModeInfo" class="help sf2-mode-info" aria-live="polite"></div>
+        <div id="sf2Keyboard" class="sf2-keyboard" role="group" aria-label="Two-octave piano keyboard"></div>
+        <p id="sf2KeyboardLayout" class="help" aria-live="polite">Keyboard layout: press the Z/Y key once to detect it automatically.</p>
+        <p class="help">Play with the mouse, touch screen or PC keyboard. Hold a key for Note On; release it for Note Off. The PC keyboard works while focus is on the selectors, but is disabled while typing in text or number fields.</p>
+      </div>
+      <button id="sf2Play" type="button" disabled>Preview selected note</button>
+      <button id="sf2Stop" type="button" class="secondary" disabled>Stop preview</button>
+      <button id="sf2Export" type="button" disabled>Generate instrument header</button>
+      <div id="sf2CodePanel" class="result hidden">
+        <p id="sf2OutputInfo" class="help"></p>
+        <label for="sf2Code">Generated C++ header</label>
+        <textarea id="sf2Code" readonly spellcheck="false"></textarea>
+        <button id="sf2Download" type="button" disabled>Download .h</button>
+        <button id="sf2Copy" type="button" class="secondary" disabled>Copy code</button>
+      </div>
+      <div class="note"><strong>V1 export limits:</strong> one sample per MIDI note; the selected velocity is baked into the exported header. Overlapping zones are auditionable in browser polyphonic mode but are refused for export. The checked wavetable-compatible preview also refuses overlapping zones and samples longer than 65,535 frames, and behaves monophonically. Uncheck it to audition multiple notes/layers in the browser. Linked stereo pairs are downmixed to mono and SF2 24-bit data is rounded to 16-bit PCM. SF2 modulators, filters, pan and effects sends are not rendered. The current wavetable engine continues loop-until-release samples looping during release. See the SF2 entry in <code>docs/todo.md</code> for the planned engine extension.</div>
     </section>
   </div>
   <footer>ESP-beatsy Audio Tools · File handling runs locally in your browser. No network upload is performed by these utilities.</footer>
@@ -1413,5 +1501,6 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
   });
 })();
 </script>
+<script src="sf2-tool.js"></script>
 </body>
 </html>
