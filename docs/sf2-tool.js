@@ -18,6 +18,11 @@
   var metadata = document.getElementById("sf2Metadata");
   var presetInfo = document.getElementById("sf2PresetInfo");
   var outputInfo = document.getElementById("sf2OutputInfo");
+  var wavetableModeInput = document.getElementById("sf2WavetableMode");
+  var keyboardStartSelect = document.getElementById("sf2KeyboardStart");
+  var previewVolumeInput = document.getElementById("sf2PreviewVolume");
+  var keyboardElement = document.getElementById("sf2Keyboard");
+  var modeInfo = document.getElementById("sf2ModeInfo");
 
   if (!fileInput || !presetSelect || !velocityInput || !exportButton) return;
 
@@ -25,7 +30,13 @@
   var currentFileName = "";
   var loadGeneration = 0;
   var audioContext = null;
-  var activeSources = [];
+  var masterGain = null;
+  var activeVoices = [];
+  var keyboardHolds = Object.create(null);
+  var pointerHolds = Object.create(null);
+  var pcHolds = Object.create(null);
+  var pcNoteByCode = Object.create(null);
+  var legacyStartToken = 0;
   var generatedCode = "";
   var generatedFileName = "";
   
@@ -456,7 +467,8 @@
       info: info,
       instrumentCount: instruments.length,
       modulatorCount: pmodCount + imodCount,
-      pcmCache: Object.create(null)
+      pcmCache: Object.create(null),
+      audioBufferCache: Object.create(null)
     };
   }
 
@@ -727,13 +739,210 @@
     presetSelect.disabled = font.presets.length === 0;
   }
 
-  function stopPreview() {
-    for (var i = 0; i < activeSources.length; i++) {
-      try { activeSources[i].stop(); } catch (ignore) {}
-      try { activeSources[i].disconnect(); } catch (ignoreDisconnect) {}
+  var KEYBOARD_PC_CODES = [
+    "KeyY", "KeyS", "KeyX", "KeyD", "KeyC", "KeyV",
+    "KeyG", "KeyB", "KeyH", "KeyN", "KeyJ", "KeyM",
+    "KeyQ", "Digit2", "KeyW", "Digit3", "KeyE", "KeyR",
+    "Digit5", "KeyT", "Digit6", "KeyZ", "Digit7", "KeyU"
+  ];
+  var KEYBOARD_PC_LABELS = [
+    "Z", "S", "X", "D", "C", "V", "G", "B", "H", "N", "J", "M",
+    "Q", "2", "W", "3", "E", "R", "5", "T", "6", "Y", "7", "U"
+  ];
+  var BLACK_KEY_OFFSETS = [1, 3, 6, 8, 10];
+  var MAX_PREVIEW_VOICES = 16;
+  var MAX_PREVIEW_LAYERS_PER_NOTE = 8;
+
+  function currentPreset() {
+    if (!font) return null;
+    return font.presets[parseInt(presetSelect.value, 10)] || null;
+  }
+
+  function currentVelocity() {
+    return Math.max(1, Math.min(127, parseInt(velocityInput.value, 10) || 100));
+  }
+
+  function isWavetableMode() {
+    return !!(wavetableModeInput && wavetableModeInput.checked);
+  }
+
+  function updateModeInfo() {
+    if (!modeInfo) return;
+    if (isWavetableMode()) {
+      modeInfo.textContent =
+        "Wavetable-kompatibel: monophon, genau eine Sample-Zone pro Note, feste Velocity, Mono-Downmix und maximal 65.535 Sampleframes. Note-Off startet Release; Loop-until-release bleibt wie im aktuellen Synthesizer auch während Release aktiv. SF2-Filter, Modulatoren, Pan und Effektsends werden nicht gerendert.";
+    } else {
+      modeInfo.textContent =
+        "Browser-Vorschau: polyphon (bis zu " + MAX_PREVIEW_VOICES +
+        " gleichzeitig gehaltene Noten) und mit mehreren übereinanderliegenden Sample-Zonen. Die Velocity bleibt der eingestellte Wert. Nicht implementierte SF2-Filter, Modulatoren, Pan und Effektsends werden weiterhin nicht gerendert.";
     }
-    activeSources = [];
-    stopButton.disabled = true;
+  }
+
+  function updateStopButton() {
+    stopButton.disabled = activeVoices.length === 0;
+  }
+
+  function updateKeyboardVisual(note, pressed) {
+    if (!keyboardElement) return;
+    var key = keyboardElement.querySelector('[data-note="' + note + '"]');
+    if (key) {
+      if (pressed) key.classList.add("is-active");
+      else key.classList.remove("is-active");
+    }
+  }
+
+  function renderKeyboard() {
+    if (!keyboardElement || !keyboardStartSelect) return;
+    keyboardElement.innerHTML = "";
+    pcNoteByCode = Object.create(null);
+
+    var startNote = parseInt(keyboardStartSelect.value, 10);
+    if (!Number.isFinite(startNote)) startNote = 48;
+
+    for (var i = 0; i < 24; i++) {
+      var note = startNote + i;
+      pcNoteByCode[KEYBOARD_PC_CODES[i]] = note;
+    }
+
+    // White keys are laid out first; black keys are overlaid at semitone positions.
+    for (var w = 0; w < 24; w++) {
+      var whitePitch = w % 12;
+      if (BLACK_KEY_OFFSETS.indexOf(whitePitch) >= 0) continue;
+      var whiteNote = startNote + w;
+      var whiteKey = document.createElement("button");
+      whiteKey.type = "button";
+      whiteKey.className = "sf2-key sf2-white-key";
+      whiteKey.dataset.note = String(whiteNote);
+      whiteKey.setAttribute("aria-label", midiName(whiteNote) + ", MIDI " + whiteNote);
+      var whiteLabel = document.createElement("span");
+      whiteLabel.className = "sf2-key-note";
+      whiteLabel.textContent = midiName(whiteNote);
+      whiteKey.appendChild(whiteLabel);
+      var pcWhite = document.createElement("span");
+      pcWhite.className = "sf2-key-pc";
+      pcWhite.textContent = KEYBOARD_PC_LABELS[w];
+      whiteKey.appendChild(pcWhite);
+      keyboardElement.appendChild(whiteKey);
+    }
+
+    for (var b = 0; b < 24; b++) {
+      var pitchClass = b % 12;
+      if (BLACK_KEY_OFFSETS.indexOf(pitchClass) < 0) continue;
+      var blackNote = startNote + b;
+      var whiteBefore = 0;
+      for (var p = 0; p < b; p++) {
+        if (BLACK_KEY_OFFSETS.indexOf(p % 12) < 0) whiteBefore++;
+      }
+      var blackKey = document.createElement("button");
+      blackKey.type = "button";
+      blackKey.className = "sf2-key sf2-black-key";
+      blackKey.dataset.note = String(blackNote);
+      blackKey.style.left = "calc(" + (whiteBefore / 14 * 100).toFixed(4) + "% - 2.25%)";
+      blackKey.setAttribute("aria-label", midiName(blackNote) + ", MIDI " + blackNote);
+      var blackLabel = document.createElement("span");
+      blackLabel.className = "sf2-key-pc";
+      blackLabel.textContent = KEYBOARD_PC_LABELS[b];
+      blackKey.appendChild(blackLabel);
+      keyboardElement.appendChild(blackKey);
+    }
+  }
+
+  function ensureAudioContext() {
+    var AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextConstructor) {
+      throw new Error("Web Audio is not available in this browser.");
+    }
+    if (!audioContext) {
+      audioContext = new AudioContextConstructor();
+      masterGain = audioContext.createGain();
+      masterGain.gain.value = previewVolumeInput ?
+        Number(previewVolumeInput.value) / 100 : 0.7;
+      masterGain.connect(audioContext.destination);
+    }
+    if (audioContext.state === "suspended") {
+      return audioContext.resume().then(function () { return audioContext; });
+    }
+    return Promise.resolve(audioContext);
+  }
+
+  function updatePreviewVolume() {
+    if (masterGain && audioContext) {
+      var value = previewVolumeInput ? Number(previewVolumeInput.value) / 100 : 0.7;
+      masterGain.gain.setTargetAtTime(value, audioContext.currentTime, 0.015);
+    }
+  }
+
+  function getAudioBuffer(soundFont, region) {
+    var layout = makeRegionLayout(soundFont, region);
+    if (layout.error) throw new Error(layout.error);
+    var cacheKey = region.sampleIndex + ":" + layout.start + ":" + layout.frames +
+      ":" + layout.loopStart + ":" + layout.loopEnd;
+    if (soundFont.audioBufferCache[cacheKey]) return soundFont.audioBufferCache[cacheKey];
+
+    var pcm = getPcm(soundFont, region);
+    var buffer = audioContext.createBuffer(1, pcm.length - 1, layout.sampleRate);
+    var output = buffer.getChannelData(0);
+    for (var i = 0; i < output.length; i++) output[i] = pcm[i] / 32768;
+    soundFont.audioBufferCache[cacheKey] = buffer;
+    return buffer;
+  }
+
+  function envelopeLevelAt(region, note, startTime, time) {
+    var env = envelopeForNote(region.values, note);
+    var attenuation = Math.pow(10, -Math.max(0, region.values[GEN.attenuation]) / 200);
+    var sustain = attenuation * Math.pow(10, -env.sustainCb / 200);
+    var delayEnd = startTime + env.delay;
+    var attackEnd = delayEnd + env.attack;
+    var holdEnd = attackEnd + env.hold;
+    var decayEnd = holdEnd + env.decay;
+
+    if (time <= delayEnd) return 0;
+    if (time < attackEnd && env.attack > 0) {
+      return attenuation * ((time - delayEnd) / env.attack);
+    }
+    if (time <= holdEnd) return attenuation;
+    if (time < decayEnd && env.decay > 0) {
+      var fraction = (time - holdEnd) / env.decay;
+      return attenuation + (sustain - attenuation) * fraction;
+    }
+    return sustain;
+  }
+
+  function removeVoice(voice) {
+    var index = activeVoices.indexOf(voice);
+    if (index >= 0) activeVoices.splice(index, 1);
+    updateStopButton();
+  }
+
+  function hardStopVoice(voice) {
+    if (!voice || voice.finished) return;
+    voice.finished = true;
+    for (var i = 0; i < voice.layers.length; i++) {
+      var layer = voice.layers[i];
+      try { layer.source.stop(); } catch (ignoreStop) {}
+      try { layer.source.disconnect(); } catch (ignoreSourceDisconnect) {}
+      try { layer.gain.disconnect(); } catch (ignoreGainDisconnect) {}
+      layer.ended = true;
+    }
+    removeVoice(voice);
+  }
+
+  function hardStopAllVoices() {
+    var voices = activeVoices.slice();
+    for (var i = 0; i < voices.length; i++) hardStopVoice(voices[i]);
+  }
+
+  function stopPreview() {
+    legacyStartToken++;
+    hardStopAllVoices();
+    keyboardHolds = Object.create(null);
+    pointerHolds = Object.create(null);
+    pcHolds = Object.create(null);
+    if (keyboardElement) {
+      var pressed = keyboardElement.querySelectorAll(".sf2-key.is-active");
+      for (var i = 0; i < pressed.length; i++) pressed[i].classList.remove("is-active");
+    }
+    updateStopButton();
   }
 
   function scheduleGain(gain, region, note, startTime) {
@@ -749,60 +958,215 @@
     p.linearRampToValueAtTime(attenuation * sustainGain, peak + env.hold + env.decay);
   }
 
-  async function playPreview() {
+  function releaseVoice(voice) {
+    if (!voice || voice.released || voice.finished) return;
+    voice.released = true;
+    var now = audioContext.currentTime;
+
+    for (var i = 0; i < voice.layers.length; i++) {
+      var layer = voice.layers[i];
+      var env = envelopeForNote(layer.region.values, voice.note);
+      var param = layer.gain.gain;
+      var level = envelopeLevelAt(layer.region, voice.note, voice.startTime, now);
+      var endTime = now + Math.max(0, env.release);
+
+      param.cancelScheduledValues(now);
+      param.setValueAtTime(level, now);
+      if (env.release > 0) param.linearRampToValueAtTime(0, endTime);
+      else param.setValueAtTime(0, now);
+
+      // SF2 mode 3 is loop-until-release. The current wavetable engine does
+      // not leave such loops during release; the general browser mode does.
+      if (!voice.wavetableMode && layer.layout.loopMode === 3) {
+        layer.source.loop = false;
+      }
+
+      try { layer.source.stop(Math.max(now + 0.005, endTime + 0.025)); }
+      catch (ignoreStop) {}
+    }
+  }
+
+  function releaseKeyboardNote(note, sourceId) {
+    var holds = keyboardHolds[note];
+    if (!holds || !holds[sourceId]) return;
+    delete holds[sourceId];
+    var remaining = Object.keys(holds).length;
+    if (remaining === 0) {
+      delete keyboardHolds[note];
+      updateKeyboardVisual(note, false);
+      for (var i = 0; i < activeVoices.length; i++) {
+        if (activeVoices[i].note === note && !activeVoices[i].manual) {
+          releaseVoice(activeVoices[i]);
+        }
+      }
+    }
+  }
+
+  function holdKeyboardNote(note, sourceId) {
     if (!font) return;
-    stopPreview();
-    var preset = font.presets[parseInt(presetSelect.value, 10)];
-    var note = Math.max(0, Math.min(127, parseInt(noteInput.value, 10) || 60));
-    var velocity = Math.max(1, Math.min(127, parseInt(velocityInput.value, 10) || 100));
+    var holds = keyboardHolds[note];
+    if (!holds) holds = keyboardHolds[note] = Object.create(null);
+    if (holds[sourceId]) return;
+    holds[sourceId] = true;
+    updateKeyboardVisual(note, true);
+
+    if (Object.keys(holds).length === 1) {
+      startSoundNote(note, currentVelocity(), { manual: false, keyboard: true });
+    }
+  }
+
+  async function startSoundNote(note, velocity, options) {
+    if (!font) return;
+    options = options || {};
+    var preset = currentPreset();
+    if (!preset) return;
+
+    note = Math.max(0, Math.min(127, Math.round(note)));
+    velocity = Math.max(1, Math.min(127, Math.round(velocity)));
+    var wavetableMode = isWavetableMode();
     var matches = regionsForNote(preset, note, velocity);
+
     if (!matches.length) {
-      setStatus("No SF2 zone matches " + midiName(note) + " at velocity " + velocity + ".", "");
+      setStatus("No SF2 zone matches " + midiName(note) +
+        " at velocity " + velocity + ".", "");
       return;
     }
 
+    if (matches.length > MAX_PREVIEW_LAYERS_PER_NOTE) {
+      setStatus("Preview refused: " + matches.length +
+        " zones match this note; the browser preview limit is " +
+        MAX_PREVIEW_LAYERS_PER_NOTE + " layers per note.", "bad");
+      return;
+    }
+
+    if (wavetableMode) {
+      if (matches.length !== 1) {
+        setStatus("Wavetable-compatible preview refused: " + midiName(note) +
+          " has " + matches.length + " overlapping zones at velocity " +
+          velocity + ". The current AudioSynthWavetable API supports one sample per note.", "bad");
+        return;
+      }
+      var compatibleLayout = makeRegionLayout(font, matches[0]);
+      if (compatibleLayout.error) {
+        setStatus("Preview failed: " + compatibleLayout.error, "bad");
+        return;
+      }
+      if (compatibleLayout.frames > MAX_SAMPLE_FRAMES) {
+        setStatus("Wavetable-compatible preview refused: this sample has " +
+          compatibleLayout.frames.toLocaleString() +
+          " frames; the current 16-bit sample index supports at most " +
+          MAX_SAMPLE_FRAMES + ".", "bad");
+        return;
+      }
+    }
+
+    var requestToken = wavetableMode ? ++legacyStartToken : 0;
+    if (wavetableMode) hardStopAllVoices();
+    else if (activeVoices.filter(function (voice) { return !voice.released; }).length >= MAX_PREVIEW_VOICES) {
+      releaseVoice(activeVoices[0]);
+    }
+
     try {
-      var AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContextConstructor) throw new Error("Web Audio is not available in this browser.");
-      if (!audioContext) audioContext = new AudioContextConstructor();
-      if (audioContext.state === "suspended") await audioContext.resume();
+      await ensureAudioContext();
+      if (wavetableMode && requestToken !== legacyStartToken) return;
+      if (options.keyboard && !keyboardHolds[note]) return;
 
-      var startTime = audioContext.currentTime + 0.02;
-      for (var i = 0; i < matches.length; i++) {
-        var region = matches[i];
-        var layout = makeRegionLayout(font, region);
-        if (layout.error) throw new Error(layout.error);
+      var startTime = audioContext.currentTime + 0.015;
+      var voice = {
+        note: note,
+        velocity: velocity,
+        startTime: startTime,
+        wavetableMode: wavetableMode,
+        manual: !!options.manual,
+        keyboard: !!options.keyboard,
+        released: false,
+        finished: false,
+        layers: []
+      };
+      activeVoices.push(voice);
 
-        var pcm = getPcm(font, region);
-        var audioBuffer = audioContext.createBuffer(1, pcm.length - 1, layout.sampleRate);
-        var output = audioBuffer.getChannelData(0);
-        for (var s = 0; s < output.length; s++) output[s] = pcm[s] / 32768;
+      try {
+        for (var i = 0; i < matches.length; i++) {
+          var region = matches[i];
+          var layout = makeRegionLayout(font, region);
+          if (layout.error) throw new Error(layout.error);
 
-        var source = audioContext.createBufferSource();
-        var gain = audioContext.createGain();
-        source.buffer = audioBuffer;
-        source.playbackRate.value = playbackRatio(font, region, note);
-        source.loop = layout.loop;
-        if (source.loop) {
-          source.loopStart = layout.loopStart / layout.sampleRate;
-          source.loopEnd = layout.loopEnd / layout.sampleRate;
+          var source = audioContext.createBufferSource();
+          var gain = audioContext.createGain();
+          source.buffer = getAudioBuffer(font, region);
+          source.playbackRate.value = playbackRatio(font, region, note);
+          source.loop = layout.loop;
+          if (source.loop) {
+            source.loopStart = layout.loopStart / layout.sampleRate;
+            source.loopEnd = layout.loopEnd / layout.sampleRate;
+          }
+
+          scheduleGain(gain, region, note, startTime);
+          source.connect(gain);
+          gain.connect(masterGain);
+
+          var layer = {
+            source: source,
+            gain: gain,
+            region: region,
+            layout: layout,
+            ended: false
+          };
+          voice.layers.push(layer);
+          source.onended = function (currentLayer) {
+            return function () {
+              currentLayer.ended = true;
+              try { currentLayer.source.disconnect(); } catch (ignoreSourceDisconnect) {}
+              try { currentLayer.gain.disconnect(); } catch (ignoreGainDisconnect) {}
+              if (voice.finished) return;
+              var allEnded = voice.layers.every(function (item) { return item.ended; });
+              if (allEnded) {
+                voice.finished = true;
+                removeVoice(voice);
+              }
+            };
+          }(layer);
+          source.start(startTime);
         }
-        scheduleGain(gain, region, note, startTime);
-        source.connect(gain);
-        gain.connect(audioContext.destination);
-        activeSources.push(source, gain);
-        source.start(startTime);
+      } catch (layerError) {
+        hardStopVoice(voice);
+        throw layerError;
       }
-      stopButton.disabled = true;
-      for (var j = 0; j < matches.length; j++) {
-        if (makeRegionLayout(font, matches[j]).loop) stopButton.disabled = false;
-      }
-      setStatus("Previewing " + midiName(note) + " at velocity " + velocity +
-        " using " + matches.length + " zone(s). Stop ends the audition.", "good");
+
+      updateStopButton();
+      setStatus("Playing " + midiName(note) + " at velocity " + velocity +
+        " using " + matches.length + " zone(s)." +
+        (wavetableMode ? " Wavetable-compatible mode." : " Browser polyphonic mode."), "good");
     } catch (error) {
-      stopPreview();
       setStatus("Preview failed: " + error.message, "bad");
     }
+  }
+
+  async function playPreview() {
+    if (!font) return;
+    stopPreview();
+    var note = Math.max(0, Math.min(127, parseInt(noteInput.value, 10) || 60));
+    await startSoundNote(note, currentVelocity(), { manual: true, keyboard: false });
+  }
+
+  function clearHeldNotes() {
+    var notes = Object.keys(keyboardHolds);
+    for (var i = 0; i < notes.length; i++) {
+      var note = Number(notes[i]);
+      var voices = activeVoices.slice();
+      for (var j = 0; j < voices.length; j++) {
+        if (voices[j].note === note && !voices[j].manual) releaseVoice(voices[j]);
+      }
+      updateKeyboardVisual(note, false);
+    }
+    keyboardHolds = Object.create(null);
+    pointerHolds = Object.create(null);
+    pcHolds = Object.create(null);
+  }
+
+  function isTypingTarget(target) {
+    if (!target || !target.closest) return false;
+    return !!target.closest("input, select, textarea, [contenteditable='true']");
   }
 
   function numberArray(values, perLine) {
@@ -1110,6 +1474,75 @@
   playButton.addEventListener("click", playPreview);
   stopButton.addEventListener("click", stopPreview);
 
+  if (keyboardElement) {
+    renderKeyboard();
+
+    keyboardElement.addEventListener("pointerdown", function (event) {
+      var key = event.target.closest(".sf2-key");
+      if (!key || !keyboardElement.contains(key)) return;
+      event.preventDefault();
+      var note = Number(key.dataset.note);
+      var pointerId = String(event.pointerId);
+      if (pointerHolds[pointerId] !== undefined) return;
+      pointerHolds[pointerId] = note;
+      holdKeyboardNote(note, "pointer:" + pointerId);
+    });
+
+    window.addEventListener("pointerup", function (event) {
+      var pointerId = String(event.pointerId);
+      if (pointerHolds[pointerId] === undefined) return;
+      var note = pointerHolds[pointerId];
+      delete pointerHolds[pointerId];
+      releaseKeyboardNote(note, "pointer:" + pointerId);
+    });
+    window.addEventListener("pointercancel", function (event) {
+      var pointerId = String(event.pointerId);
+      if (pointerHolds[pointerId] === undefined) return;
+      var note = pointerHolds[pointerId];
+      delete pointerHolds[pointerId];
+      releaseKeyboardNote(note, "pointer:" + pointerId);
+    });
+  }
+
+  window.addEventListener("keydown", function (event) {
+    if (event.repeat || isTypingTarget(event.target)) return;
+    var note = pcNoteByCode[event.code];
+    if (note === undefined) return;
+    event.preventDefault();
+    var sourceId = "pc:" + event.code;
+    if (pcHolds[event.code]) return;
+    pcHolds[event.code] = true;
+    holdKeyboardNote(note, sourceId);
+  });
+
+  window.addEventListener("keyup", function (event) {
+    if (!pcHolds[event.code]) return;
+    var note = pcNoteByCode[event.code];
+    delete pcHolds[event.code];
+    if (note !== undefined) releaseKeyboardNote(note, "pc:" + event.code);
+  });
+
+  window.addEventListener("blur", clearHeldNotes);
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) clearHeldNotes();
+  });
+
+  if (keyboardStartSelect) {
+    keyboardStartSelect.addEventListener("change", function () {
+      stopPreview();
+      renderKeyboard();
+    });
+  }
+  if (wavetableModeInput) {
+    wavetableModeInput.addEventListener("change", function () {
+      stopPreview();
+      updateModeInfo();
+    });
+  }
+  if (previewVolumeInput) {
+    previewVolumeInput.addEventListener("input", updatePreviewVolume);
+  }
+
   exportButton.addEventListener("click", async function () {
     if (!font) return;
     stopPreview();
@@ -1163,4 +1596,6 @@
   stopButton.disabled = true;
   downloadButton.disabled = true;
   copyButton.disabled = true;
+  updateModeInfo();
+  updateStopButton();
 })();
