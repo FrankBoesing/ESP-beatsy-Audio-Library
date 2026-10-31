@@ -443,11 +443,37 @@
         }
       }
 
+      // Report each unsupported generator once per preset, not once per zone.
+      // Large instruments commonly repeat the same generator in hundreds of zones.
+      var unsupportedOperators = Object.create(null);
       for (var wi = 0; wi < preset.zones.length; wi++) {
-        if (preset.zones[wi].unsupportedGenerators.length) {
-          preset.warnings.push("Unsupported generator(s): " +
-            preset.zones[wi].unsupportedGenerators.join(", ") + ".");
+        var unsupportedForZone = preset.zones[wi].unsupportedGenerators;
+        for (var ui = 0; ui < unsupportedForZone.length; ui++) {
+          unsupportedOperators[unsupportedForZone[ui]] = true;
         }
+      }
+      var unsupportedList = Object.keys(unsupportedOperators).map(Number).sort(function (a, b) {
+        return a - b;
+      });
+      if (unsupportedList.length) {
+        var generatorLabels = {
+          5: "modLfoToPitch",
+          6: "vibLfoToPitch",
+          7: "modEnvToPitch",
+          8: "initialFilterFc",
+          9: "initialFilterQ",
+          10: "modLfoToFilterFc",
+          11: "modEnvToFilterFc",
+          13: "modLfoToVolume",
+          15: "chorusEffectsSend",
+          16: "reverbEffectsSend",
+          17: "pan"
+        };
+        var descriptions = unsupportedList.map(function (op) {
+          return op + (generatorLabels[op] ? " (" + generatorLabels[op] + ")" : "");
+        });
+        preset.warnings.push("Ignored by V1 (not rendered): SF2 generator(s) " +
+          descriptions.join(", ") + ".");
       }
       presets.push(preset);
     }
@@ -681,21 +707,20 @@
     if (!preset) return;
 
     var velocity = Math.max(1, Math.min(127, parseInt(velocityInput.value, 10) || 100));
-    var supported = 0;
-    var errors = [];
+    var coveredNotes = 0;
     var overlappingNotes = 0;
 
     for (var note = 0; note < 128; note++) {
       var matches = regionsForNote(preset, note, velocity);
+      if (matches.length) coveredNotes++;
       if (matches.length > 1) overlappingNotes++;
-      if (matches.length === 1 && !makeRegionLayout(font, matches[0]).error) supported++;
     }
 
     var lines = [
       "Preset: " + preset.name,
       "Bank / program: " + preset.bank + " / " + preset.program,
       "Instrument zones: " + preset.zones.length,
-      "Notes covered at velocity " + velocity + ": " + supported + " / 128",
+      "Notes covered at velocity " + velocity + ": " + coveredNotes + " / 128",
       "Notes with overlapping layers at this velocity: " + overlappingNotes
     ];
     if (font.modulatorCount) {
@@ -704,7 +729,7 @@
     if (font.sample24Chunk) lines.push("24-bit sample data: sm24 found; rounded to 16-bit for this engine.");
     for (var i = 0; i < preset.warnings.length; i++) lines.push("Warning: " + preset.warnings[i]);
     if (overlappingNotes) {
-      lines.push("Layering can be auditioned in the browser, but this legacy instrument format cannot export overlapping layers.");
+      lines.push("These notes use multiple layers. Disable Wavetable-compatible preview to audition them in browser mode; V1 export requires one zone per note.");
     }
     presetInfo.textContent = lines.join("\n");
   }
@@ -742,15 +767,20 @@
     presetSelect.disabled = font.presets.length === 0;
   }
 
+  // Lower octave: white keys on the bottom row (Z/X/C/V/B/N/M),
+  // black keys on the home row (S/D/G/H/J).
+  // Upper octave: white keys on the top row (Q/W/E/R/T/Y/U),
+  // black keys on the number row (2/3/5/6/7).
+  // KeyboardEvent.code keeps these physical positions stable across layouts.
   var KEYBOARD_PC_CODES = [
-    "KeyY", "KeyS", "KeyX", "KeyD", "KeyC", "KeyV",
+    "KeyZ", "KeyS", "KeyX", "KeyD", "KeyC", "KeyV",
     "KeyG", "KeyB", "KeyH", "KeyN", "KeyJ", "KeyM",
     "KeyQ", "Digit2", "KeyW", "Digit3", "KeyE", "KeyR",
-    "Digit5", "KeyT", "Digit6", "KeyZ", "Digit7", "KeyU"
+    "Digit5", "KeyT", "Digit6", "KeyY", "Digit7", "KeyU"
   ];
   var KEYBOARD_PC_LABELS = [
-    "Z", "S", "X", "D", "C", "V", "G", "B", "H", "N", "J", "M",
-    "Q", "2", "W", "3", "E", "R", "5", "T", "6", "Y", "7", "U"
+    "Y", "S", "X", "D", "C", "V", "G", "B", "H", "N", "J", "M",
+    "Q", "2", "W", "3", "E", "R", "5", "T", "6", "Z", "7", "U"
   ];
   var BLACK_KEY_OFFSETS = [1, 3, 6, 8, 10];
   var MAX_PREVIEW_VOICES = 16;
@@ -762,8 +792,8 @@
   function keyboardLabelsForLayout(layout) {
     var labels = KEYBOARD_PC_LABELS.slice();
     if (layout === "qwerty") {
-      labels[0] = "Y";
-      labels[21] = "Z";
+      labels[0] = "Z";
+      labels[21] = "Y";
     }
     return labels;
   }
