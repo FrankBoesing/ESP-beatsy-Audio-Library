@@ -842,14 +842,14 @@
     if (!modeInfo) return;
     if (isWavetableMode()) {
       modeInfo.textContent =
-        "Wavetable-kompatibel: monophon, genau eine Sample-Zone pro Note, feste Velocity, Mono-Downmix, Standard-Amplitude 90/127 und maximal 65.535 Sampleframes. Note-Off startet Release; Loop-until-release bleibt wie im aktuellen Synthesizer auch während Release aktiv. SF2-Filter, Modulatoren, Pan und Effektsends werden nicht gerendert.";
+        "Wavetable-compatible preview: monophonic, exactly one sample zone per note, fixed velocity, mono downmix, default amplitude 90/127 and a maximum of 65,535 sample frames. Note Off starts the release; loop-until-release continues looping during release, matching the current synth. SF2 filters, modulators, pan and effects sends are not rendered.";
     } else {
       modeInfo.textContent =
-        "Browser-Vorschau: polyphon (bis zu " + MAX_PREVIEW_VOICES +
-        " gleichzeitig gehaltene Noten), bis zu " + MAX_PREVIEW_LAYERS_PER_NOTE +
-        " Zonen pro Note. Feste Velocity; maximal " + MAX_PREVIEW_SAMPLE_FRAMES.toLocaleString() +
-        " Frames pro Sample und " + MAX_PREVIEW_CACHE_FRAMES.toLocaleString() +
-        " Frames im Sample-Cache. Nicht implementierte SF2-Filter, Modulatoren, Pan und Effektsends werden weiterhin nicht gerendert.";
+        "Browser preview: polyphonic (up to " + MAX_PREVIEW_VOICES +
+        " held notes) with up to " + MAX_PREVIEW_LAYERS_PER_NOTE +
+        " zones per note. Fixed velocity; limited to " + MAX_PREVIEW_SAMPLE_FRAMES.toLocaleString() +
+        " frames per sample and " + MAX_PREVIEW_CACHE_FRAMES.toLocaleString() +
+        " frames in the sample cache. SF2 filters, modulators, pan and effects sends are not rendered.";
     }
   }
 
