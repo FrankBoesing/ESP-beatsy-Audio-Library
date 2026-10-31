@@ -20,9 +20,9 @@
   var outputInfo = document.getElementById("sf2OutputInfo");
   var wavetableModeInput = document.getElementById("sf2WavetableMode");
   var keyboardStartSelect = document.getElementById("sf2KeyboardStart");
-  var previewVolumeInput = document.getElementById("sf2PreviewVolume");
   var keyboardElement = document.getElementById("sf2Keyboard");
   var modeInfo = document.getElementById("sf2ModeInfo");
+  var keyboardLayoutInfo = document.getElementById("sf2KeyboardLayout");
 
   if (!fileInput || !presetSelect || !velocityInput || !exportButton) return;
 
@@ -36,6 +36,7 @@
   var pointerHolds = Object.create(null);
   var pcHolds = Object.create(null);
   var pcNoteByCode = Object.create(null);
+  var keyboardLayout = "unknown";
   var legacyStartToken = 0;
   var playbackGeneration = 0;
   var generatedCode = "";
@@ -758,6 +759,72 @@
   var MAX_PREVIEW_CACHE_FRAMES = 10000000;
   var WAVETABLE_DEFAULT_AMPLITUDE = 90 / 127;
 
+  function keyboardLabelsForLayout(layout) {
+    var labels = KEYBOARD_PC_LABELS.slice();
+    if (layout === "qwerty") {
+      labels[0] = "Y";
+      labels[21] = "Z";
+    }
+    return labels;
+  }
+
+  function updateKeyboardLabels() {
+    if (!keyboardElement) return;
+    var labels = keyboardLabelsForLayout(keyboardLayout);
+    var keyLabels = keyboardElement.querySelectorAll(".sf2-key-pc");
+    for (var i = 0; i < keyLabels.length; i++) {
+      var index = Number(keyLabels[i].dataset.keyIndex);
+      if (index >= 0 && index < labels.length) keyLabels[i].textContent = labels[index];
+    }
+  }
+
+  function setKeyboardLayout(layout, source) {
+    if (layout !== "qwertz" && layout !== "qwerty") return;
+    keyboardLayout = layout;
+    updateKeyboardLabels();
+    if (keyboardLayoutInfo) {
+      keyboardLayoutInfo.textContent = "Keyboard layout: " +
+        (layout === "qwertz" ? "QWERTZ" : "QWERTY") +
+        (source === "api" ? " (detected by browser)" : " (detected from key press)");
+    }
+  }
+
+  function detectKeyboardLayoutFromEvent(event) {
+    var key = String(event.key || "").toLowerCase();
+    if (event.code === "KeyY") {
+      if (key === "z") setKeyboardLayout("qwertz", "event");
+      else if (key === "y") setKeyboardLayout("qwerty", "event");
+    } else if (event.code === "KeyZ") {
+      if (key === "y") setKeyboardLayout("qwertz", "event");
+      else if (key === "z") setKeyboardLayout("qwerty", "event");
+    }
+  }
+
+  function detectKeyboardLayoutFromBrowser() {
+    if (keyboardLayoutInfo) {
+      keyboardLayoutInfo.textContent =
+        "Keyboard layout: press the Z/Y key once to detect it automatically.";
+    }
+    if (!navigator.keyboard || typeof navigator.keyboard.getLayoutMap !== "function") return;
+
+    try {
+      navigator.keyboard.getLayoutMap().then(function (layoutMap) {
+        var keyY = String(layoutMap.get("KeyY") || "").toLowerCase();
+        var keyZ = String(layoutMap.get("KeyZ") || "").toLowerCase();
+        if (keyY === "z" && keyZ === "y") {
+          setKeyboardLayout("qwertz", "api");
+        } else if (keyY === "y" && keyZ === "z") {
+          setKeyboardLayout("qwerty", "api");
+        }
+      }).catch(function () {
+        // Firefox and non-secure local pages may not expose Keyboard.getLayoutMap().
+        // The layout is then detected from KeyboardEvent.key on the first Z/Y press.
+      });
+    } catch (ignore) {
+      // Fall back to per-key detection.
+    }
+  }
+
   function currentPreset() {
     if (!font) return null;
     return font.presets[parseInt(presetSelect.value, 10)] || null;
@@ -829,7 +896,8 @@
       whiteKey.appendChild(whiteLabel);
       var pcWhite = document.createElement("span");
       pcWhite.className = "sf2-key-pc";
-      pcWhite.textContent = KEYBOARD_PC_LABELS[w];
+      pcWhite.dataset.keyIndex = String(w);
+      pcWhite.textContent = keyboardLabelsForLayout(keyboardLayout)[w];
       whiteKey.appendChild(pcWhite);
       keyboardElement.appendChild(whiteKey);
     }
@@ -851,7 +919,8 @@
       blackKey.disabled = !font;
       var blackLabel = document.createElement("span");
       blackLabel.className = "sf2-key-pc";
-      blackLabel.textContent = KEYBOARD_PC_LABELS[b];
+      blackLabel.dataset.keyIndex = String(b);
+      blackLabel.textContent = keyboardLabelsForLayout(keyboardLayout)[b];
       blackKey.appendChild(blackLabel);
       keyboardElement.appendChild(blackKey);
     }
@@ -865,21 +934,13 @@
     if (!audioContext) {
       audioContext = new AudioContextConstructor();
       masterGain = audioContext.createGain();
-      masterGain.gain.value = previewVolumeInput ?
-        Number(previewVolumeInput.value) / 100 : 0.7;
+      masterGain.gain.value = 0.7;
       masterGain.connect(audioContext.destination);
     }
     if (audioContext.state === "suspended") {
       return audioContext.resume().then(function () { return audioContext; });
     }
     return Promise.resolve(audioContext);
-  }
-
-  function updatePreviewVolume() {
-    if (masterGain && audioContext) {
-      var value = previewVolumeInput ? Number(previewVolumeInput.value) / 100 : 0.7;
-      masterGain.gain.setTargetAtTime(value, audioContext.currentTime, 0.015);
-    }
   }
 
   function getAudioBuffer(soundFont, region) {
@@ -1200,7 +1261,9 @@
 
   function isTypingTarget(target) {
     if (!target || !target.closest) return false;
-    return !!target.closest("input, select, textarea, [contenteditable='true']");
+    // Select fields must not block note input: Firefox leaves the preset or
+    // octave selector focused after the user changes its value.
+    return !!target.closest("input, textarea, [contenteditable='true']");
   }
 
   function numberArray(values, perLine) {
@@ -1541,23 +1604,27 @@
     });
   }
 
-  window.addEventListener("keydown", function (event) {
-    if (event.repeat || isTypingTarget(event.target)) return;
+  document.addEventListener("keydown", function (event) {
+    if (event.repeat || event.isComposing || event.ctrlKey || event.altKey ||
+        event.metaKey || isTypingTarget(event.target)) return;
+
+    detectKeyboardLayoutFromEvent(event);
     var note = pcNoteByCode[event.code];
     if (note === undefined) return;
+
     event.preventDefault();
     var sourceId = "pc:" + event.code;
     if (pcHolds[event.code]) return;
     pcHolds[event.code] = true;
     holdKeyboardNote(note, sourceId);
-  });
+  }, true);
 
-  window.addEventListener("keyup", function (event) {
+  document.addEventListener("keyup", function (event) {
     if (!pcHolds[event.code]) return;
     var note = pcNoteByCode[event.code];
     delete pcHolds[event.code];
     if (note !== undefined) releaseKeyboardNote(note, "pc:" + event.code);
-  });
+  }, true);
 
   window.addEventListener("blur", clearHeldNotes);
   document.addEventListener("visibilitychange", function () {
@@ -1576,10 +1643,6 @@
       updateModeInfo();
     });
   }
-  if (previewVolumeInput) {
-    previewVolumeInput.addEventListener("input", updatePreviewVolume);
-  }
-
   exportButton.addEventListener("click", async function () {
     if (!font) return;
     stopPreview();
@@ -1635,4 +1698,5 @@
   copyButton.disabled = true;
   updateModeInfo();
   updateStopButton();
+  detectKeyboardLayoutFromBrowser();
 })();
