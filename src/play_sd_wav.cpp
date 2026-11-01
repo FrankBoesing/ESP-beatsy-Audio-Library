@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "play_sd_wav.h"
 #include "softcodecs/AudioSourceFile.h"
+#include "utility/byteorder.h"
 #include <string.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -57,7 +58,7 @@ static inline int32_t decodeWavSample(uint16_t bits_per_sample, const uint8_t *d
         memcpy(&raw, p, sizeof(raw));
 #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
     (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-        raw = __builtin_bswap16(raw);
+        raw = (uint16_t)audio_rev16(raw);
 #endif
         return (int32_t)(int16_t)raw * 65536;
     }
@@ -80,7 +81,7 @@ static inline int32_t decodeWavSample(uint16_t bits_per_sample, const uint8_t *d
         memcpy(&raw, p, sizeof(raw));
 #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
     (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-        raw = __builtin_bswap32(raw);
+        raw = audio_rev32(raw);
 #endif
         return (int32_t)raw;
     }
