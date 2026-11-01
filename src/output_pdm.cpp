@@ -192,7 +192,7 @@ void AudioOutputPDM::update() {
     if (pair.left != nullptr || pair.right != nullptr) {
         if (!isRunning()) {
             releasePair(pair);
-        } else if (!enqueuePair(pair)) {
+        } else if (!enqueuePair(pair)) [[unlikely]] {
             BlockPair oldPair;
             if (dequeuePair(oldPair)) releasePair(oldPair);
             if (!enqueuePair(pair)) releasePair(pair);
@@ -218,7 +218,7 @@ void AudioOutputPDM::update() {
     const int16_t *left = ready.left ? ready.left->data : nullptr;
     const int16_t *right = ready.right ? ready.right->data : nullptr;
 
-    if (numChannels == 1) {
+    if (numChannels == 1) [[likely]] {
         GCC_UNROLL
         for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
             int32_t mono;
@@ -285,15 +285,15 @@ bool AudioOutputPDM::dequeuePair(BlockPair &pair) {
 OSPEED
 bool AUDIO_I2S_ISR_ATTR AudioOutputPDM::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
     auto *output = static_cast<AudioOutputPDM *>(userContext);
-    if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) return false;
+    if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) [[unlikely]] return false;
 
     int16_t *dmaBuffer = nullptr;
     const size_t expectedBytes = sizeof(int16_t) * AUDIO_BLOCK_SAMPLES * output->numChannels;
-    if (event != nullptr && event->dma_buf != nullptr && event->size == expectedBytes) {
+    if (event != nullptr && event->dma_buf != nullptr && event->size == expectedBytes) [[likely]] {
         dmaBuffer = static_cast<int16_t *>(event->dma_buf);
     }
     output->pendingDmaBuffer.store(dmaBuffer, std::memory_order_release);
 
-    if (!AudioI2SPort::isClockOwner(CONTROLLER, AudioI2SPort::Direction::Tx)) return false;
+    if (!AudioI2SPort::isClockOwner(CONTROLLER, AudioI2SPort::Direction::Tx)) [[unlikely]] return false;
     return AudioStream::update_all_from_isr();
 }
