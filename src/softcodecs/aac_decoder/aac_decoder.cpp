@@ -26,12 +26,6 @@ static inline int32_t CLZ(int32_t x) {
 static inline int32_t FASTABS(int32_t x) {
     return __builtin_abs(x);
 } //FB
-static inline uint16_t REV16(uint16_t value) {
-    return (uint16_t)audio_rev16((uint32_t)value);
-} //FB
-static inline uint32_t REV32(uint32_t value) {
-    return audio_rev32(value);
-}; //FB
 static inline int64_t MADD64(int64_t sum64, int32_t x, int32_t y) {
     sum64 += (int64_t)x * (int64_t)y;
     return sum64;
@@ -4890,7 +4884,7 @@ inline void AACDecoder::RefillBitstreamCache() {
         // 32-bit aligned load + byte swap:
         // buffer:  12 34 56 78
         // iCache:  0x12345678
-        m_aac_BitStreamInfo.iCache = REV32(*(const uint32_t *)ptr);
+        m_aac_BitStreamInfo.iCache = audio_rev32(*(const uint32_t *)ptr);
         m_aac_BitStreamInfo.bytePtr = ptr + 4;
         m_aac_BitStreamInfo.cachedBits = 32;
         m_aac_BitStreamInfo.nBytes = nBytes - 4;
