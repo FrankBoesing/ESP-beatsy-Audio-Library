@@ -55,6 +55,7 @@
 #define _ASSEMBLY_H
 
 #include <stdint.h>
+#include "../utility/clz.h"
 
 /* toolchain:           MSFT Visual C++
  * target architecture: x86
@@ -482,7 +483,7 @@ static inline int FASTABS(int x) {
 }
 
 static inline int CLZ(unsigned int x) {
-    return x == 0 ? 32 : __builtin_clz(x);
+    return audio_clz32(x);
 }
 
 static inline unsigned int REV16(unsigned int value) {
