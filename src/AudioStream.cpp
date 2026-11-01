@@ -8,7 +8,7 @@
 
 // Immutable all-zero PCM block shared by audio components.
 // Namespace-scope const data is placed in read-only storage (.rodata) on ESP32.
-const int16_t audio_zeroblock[AUDIO_BLOCK_SAMPLES] = {};
+AUDIO_SIMD_ALIGNAS const int16_t audio_zeroblock[AUDIO_BLOCK_SAMPLES] = {};
 
 // =============================================================================
 // Static members
@@ -673,6 +673,17 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num, uint3
     if (data == nullptr || available_mask == nullptr || num == 0 || mask_words == 0) {
         return;
     }
+
+#if AUDIO_SIMD_ENABLED
+    // AudioMemory() creates a correctly aligned audio_block_t array. Also
+    // validate caller-provided pools before accepting them: every block in the
+    // pool must retain 16-byte sample alignment for SIMD loads and stores.
+    if (((uintptr_t)data & (AUDIO_SIMD_ALIGNMENT - 1U)) != 0U) {
+        ESP_LOGE("Audio", "Audio memory pool must be %u-byte aligned on this target",
+                 (unsigned int)AUDIO_SIMD_ALIGNMENT);
+        return;
+    }
+#endif
 
     // Pause graph traversal while the pool and hardware clock source are set up.
     // On first initialization the mutex is created together with the scheduler,

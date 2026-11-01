@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <string.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
@@ -11,6 +12,7 @@
 #include <esp_timer.h>
 #include <esp_attr.h>
 #include "common.h"
+#include "utility/simd.h"
 
 
 // -----------------------------------------------------------------------------
@@ -21,12 +23,22 @@ typedef struct audio_block_struct {
     uint8_t ref_count;
     uint8_t reserved1;
     uint16_t memory_pool_index;
-    int16_t data[AUDIO_BLOCK_SAMPLES];
+    AUDIO_SIMD_ALIGNAS int16_t data[AUDIO_BLOCK_SAMPLES];
 } audio_block_t;
 
-// Shared immutable silence block. Defined once in common.cpp and stored in
-// read-only flash-mapped data on ESP32 targets.
-extern const int16_t audio_zeroblock[AUDIO_BLOCK_SAMPLES];
+#if AUDIO_SIMD_ENABLED
+static_assert(alignof(audio_block_t) >= AUDIO_SIMD_ALIGNMENT,
+              "SIMD audio blocks must be 16-byte aligned");
+static_assert((offsetof(audio_block_t, data) % AUDIO_SIMD_ALIGNMENT) == 0,
+              "SIMD audio sample data must be 16-byte aligned");
+static_assert((sizeof(audio_block_t) % AUDIO_SIMD_ALIGNMENT) == 0,
+              "SIMD audio block stride must preserve 16-byte alignment");
+#endif
+
+// Shared immutable silence block. Defined once in AudioStream.cpp and stored
+// in read-only flash-mapped data on ESP32 targets. Keep it aligned so it can
+// also be used as a SIMD input by effects which substitute silence.
+AUDIO_SIMD_ALIGNAS extern const int16_t audio_zeroblock[AUDIO_BLOCK_SAMPLES];
 
 
 // -----------------------------------------------------------------------------
@@ -128,6 +140,8 @@ class AudioStream {
     // Memory pool
     // -------------------------------------------------------------------------
 
+    // Caller-provided pools must be aligned for audio_block_t. The AudioMemory()
+    // macro satisfies this automatically, including on SIMD-enabled targets.
     static void initialize_memory(audio_block_t *data, unsigned int num,
                                   uint32_t *available_mask,
                                   unsigned int mask_words);
