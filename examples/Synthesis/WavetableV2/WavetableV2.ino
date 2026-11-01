@@ -163,6 +163,15 @@ static void printLoad() {
     consolePrintln(usbOutput.isConfigured() ? "yes" : "no");
 }
 
+static void printPhasePeak(const char *phase) {
+    consolePrint(phase);
+    consolePrint(" peak: graph ");
+    consolePrint(AudioStream::AudioProcessorUsageTotalMax(), 1);
+    consolePrint("%, V2 ");
+    consolePrint(synth.AudioProcessorUsageMax(), 1);
+    consolePrintln("%");
+}
+
 static void monitorFor(uint32_t durationMs) {
     const uint32_t start = millis();
     uint32_t lastReport = start;
@@ -254,12 +263,19 @@ void loop() {
     consolePrintln("Loop counters reset; starting noteOn calls.");
     playStressChord();
 
-    // Keep the 32-note / 128-layer load active while the PC records USB audio.
+    // Measure the sustained workload separately from the release workload.
     monitorFor(3000);
+    printPhasePeak("Sustain");
+
+    // Reset peak trackers immediately before Note-Off so the next maximum
+    // describes the release phase rather than the preceding sustain phase.
+    AudioStream::AudioProcessorUsageTotalMaxReset();
+    synth.AudioProcessorUsageMaxReset();
 
     synth.allNotesOff();
     consolePrintln("Note-Off sent; recording the release tails.");
     monitorFor(1200);
+    printPhasePeak("Release");
 
     // Leave a short gap before the next run. This makes it easy to identify
     // separate measurement cycles in the Audacity recording.
