@@ -3,6 +3,14 @@
 
 #include <stdint.h>
 
+// Make the selected ESP-IDF target visible even when this helper is included
+// before an Arduino/ESP-IDF header.
+#if defined(__riscv) && defined(__has_include)
+#if __has_include("sdkconfig.h")
+#include "sdkconfig.h"
+#endif
+#endif
+
 // Count leading zero bits in a 32-bit value.
 // ESP32-P4 supports Zbb even when the global -march does not enable it.
 // The local assembler option permits CLZ without changing the object's
