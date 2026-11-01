@@ -38,18 +38,48 @@ static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) 
 static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) {
     int32_t out = val >> rshift;
     const int32_t max = (int32_t)1 << (bits - 1);
+
+#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xlen) && (__riscv_xlen == 32)
+    const int32_t min = -max;
+    const int32_t upper = max - 1;
+
+    __asm__ volatile (
+        ".option push\\n"
+        ".option arch, +xespv\\n"
+        "esp.sat %0, %1, %2\\n"
+        ".option pop\\n"
+        : "+&r"(out)
+        : "r"(min), "r"(upper)
+    );
+#else
     if (out >= 0) {
         if (out > max - 1) out = max - 1;
     } else {
         if (out < -max) out = -max;
     }
+#endif
+
     return out;
 }
 
 static inline int16_t saturate16(int32_t val) _INLINE_;
 static inline int16_t saturate16(int32_t val) {
+#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xlen) && (__riscv_xlen == 32)
+    const int32_t min = -32768;
+    const int32_t max = 32767;
+
+    __asm__ volatile (
+        ".option push\\n"
+        ".option arch, +xespv\\n"
+        "esp.sat %0, %1, %2\\n"
+        ".option pop\\n"
+        : "+&r"(val)
+        : "r"(min), "r"(max)
+    );
+#else
     val = (val > 32767) ? 32767 : val;
     val = (val < -32768) ? -32768 : val;
+#endif
     return (int16_t)val;
 }
 
