@@ -35,7 +35,7 @@ OSPEED
 void AudioEffectMidSide::update() {
 
     const bool bypassed = _bypassed.load(std::memory_order_relaxed);
-    if (bypassed) {
+    if (bypassed) [[unlikely]] {
         audio_block_t *blocka = receiveReadOnly(0);
         audio_block_t *blockb = receiveReadOnly(1);
         if (blocka == nullptr || blockb == nullptr) {
