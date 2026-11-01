@@ -141,7 +141,7 @@ void AudioOutputI2S::update() {
     if (pair.left != nullptr || pair.right != nullptr) {
         if (!isRunning()) {
             releasePair(pair);
-        } else if (!enqueuePair(pair)) {
+        } else if (!enqueuePair(pair)) [[unlikely]] {
             BlockPair oldPair;
 
             // Keep the newest audio if the output falls behind.
@@ -155,7 +155,7 @@ void AudioOutputI2S::update() {
     // If multiple callbacks arrive before this update, the latest buffer wins;
     // older buffers remain silent rather than risking writes to a reused buffer.
     uint32_t *dmaBuffer = pendingDmaBuffer.exchange(nullptr, std::memory_order_acq_rel);
-    if (dmaBuffer == nullptr || !isRunning()) {
+    if (dmaBuffer == nullptr || !isRunning()) [[unlikely]] {
         return;
     }
 
@@ -174,7 +174,7 @@ void AudioOutputI2S::update() {
     const int16_t *__restrict left = ready.left ? ready.left->data : nullptr;
     const int16_t *__restrict right = ready.right ? ready.right->data : nullptr;
 
-    if (numChannels == 2) {
+    if (numChannels == 2) [[likely]] {
         copyPlanarToInterleaved(dmaBuffer, left, right);
     } else { //numChannels == 1
         copyPlanarToInterleavedMono(dmaBuffer, left, right);
@@ -226,15 +226,15 @@ bool AudioOutputI2S::dequeuePair(BlockPair &pair) {
 OSPEED
 bool AUDIO_I2S_ISR_ATTR AudioOutputI2S::onI2STransmit(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
     auto *output = static_cast<AudioOutputI2S *>(userContext);
-    if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) return false;
+    if (output == nullptr || output->running.load(std::memory_order_acquire) == 0) [[unlikely]] return false;
 
     uint32_t *dmaBuffer = nullptr;
     if (event != nullptr && event->dma_buf != nullptr &&
-        event->size == sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES) {
+        event->size == sizeof(uint32_t) * AUDIO_BLOCK_SAMPLES) [[likely]] {
         dmaBuffer = static_cast<uint32_t *>(event->dma_buf);
     }
     output->pendingDmaBuffer.store(dmaBuffer, std::memory_order_release);
 
-    if (!AudioI2SPort::isClockOwner(output->i2sPins.controller, AudioI2SPort::Direction::Tx)) return false;
+    if (!AudioI2SPort::isClockOwner(output->i2sPins.controller, AudioI2SPort::Direction::Tx)) [[unlikely]] return false;
     return AudioStream::update_all_from_isr();
 }
