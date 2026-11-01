@@ -326,7 +326,7 @@ void AudioEffectVintageReverb::update(void)
   audio_block_t *inL = receiveReadOnly(0);
   audio_block_t *inR = receiveReadOnly(1);
 
-  if (!core_.ready() || bypass_ || fabsf(sampleRate() - initializedSampleRate_) > 0.1f) {
+  if (!core_.ready() || bypass_ || fabsf(sampleRate() - initializedSampleRate_) > 0.1f) [[unlikely]] {
     // pass through
     if (inL) { transmit(inL, 0); release(inL); }
     if (inR) { transmit(inR, 1); release(inR); }
@@ -337,7 +337,7 @@ void AudioEffectVintageReverb::update(void)
   float bufR[AUDIO_BLOCK_SAMPLES];
   const float toFloat = 1.0f / 32768.0f;
 
-  if (inL && inR) {
+  if (inL && inR) [[likely]] {
     // Common case: convert both channels in one pass.
     const int16_t *srcL = inL->data;
     const int16_t *srcR = inR->data;
@@ -372,7 +372,7 @@ void AudioEffectVintageReverb::update(void)
   audio_block_t *outL = allocate();
   audio_block_t *outR = allocate();
 
-  if (outL && outR) {
+  if (outL && outR) [[likely]] {
     // Common case: convert both channels in one pass.
     int16_t *dstL = outL->data;
     int16_t *dstR = outR->data;
