@@ -428,12 +428,12 @@ static inline int CLZ(int x) {
 
 //Reverse byte order (16 bit) //FB
 static inline unsigned int REV16(unsigned int value) {
-    return (unsigned int)__builtin_bswap16((unsigned short)value);
+    return (unsigned int)audio_rev16((uint32_t)value);
 }
 
 //Reverse byte order (32 bit) //FB
 static inline unsigned int REV32(unsigned int value) {
-    return __builtin_bswap32(value);
+    return (unsigned int)audio_rev32((uint32_t)value);
 }
 
 typedef long long Word64;
