@@ -447,7 +447,6 @@ uint16_t AudioSynthWavetableV2::activeSampleCount() const {
     return count;
 }
 
-OSPEED
 void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const {
     if (!voice.active || voice.sample == nullptr) return;
 
@@ -603,7 +602,6 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
     }
 }
 
-OSPEED
 void AudioSynthWavetableV2::update() {
     bool anyActive = false;
     uint16_t masterGain;
