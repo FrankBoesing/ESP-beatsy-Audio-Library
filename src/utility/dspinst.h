@@ -15,16 +15,16 @@ static inline int CLZ(unsigned int x) { return audio_clz32((uint32_t)x); };
 
 static inline unsigned int REV16(unsigned int value) _INLINE_;
 static inline unsigned int REV16(unsigned int value) {
-#if defined(__riscv) && defined(__riscv_xlen) && (__riscv_xlen == 32) && \\
-    (defined(CONFIG_IDF_TARGET_ESP32S31) || \\
+#if defined(__riscv) && defined(__riscv_xlen) && (__riscv_xlen == 32) && \
+    (defined(CONFIG_IDF_TARGET_ESP32S31) || \
      (defined(CONFIG_IDF_TARGET_ESP32P4) && defined(CONFIG_ESP32P4_REV_MIN_300)))
     uint32_t result;
     __asm__(
-        ".option push\\n"
-        ".option arch, +zbb\\n"
-        "rev8 %0, %1\\n"
-        "srli %0, %0, 16\\n"
-        ".option pop\\n"
+        ".option push\n"
+        ".option arch, +zbb\n"
+        "rev8 %0, %1\n"
+        "srli %0, %0, 16\n"
+        ".option pop\n"
         : "=r"(result)
         : "r"((uint32_t)value)
     );
@@ -35,15 +35,15 @@ static inline unsigned int REV16(unsigned int value) {
 }; //FB
 static inline unsigned int REV32(unsigned int value) _INLINE_;
 static inline unsigned int REV32(unsigned int value) {
-#if defined(__riscv) && defined(__riscv_xlen) && (__riscv_xlen == 32) && \\
-    (defined(CONFIG_IDF_TARGET_ESP32S31) || \\
+#if defined(__riscv) && defined(__riscv_xlen) && (__riscv_xlen == 32) && \
+    (defined(CONFIG_IDF_TARGET_ESP32S31) || \
      (defined(CONFIG_IDF_TARGET_ESP32P4) && defined(CONFIG_ESP32P4_REV_MIN_300)))
     uint32_t result;
     __asm__(
-        ".option push\\n"
-        ".option arch, +zbb\\n"
-        "rev8 %0, %1\\n"
-        ".option pop\\n"
+        ".option push\n"
+        ".option arch, +zbb\n"
+        "rev8 %0, %1\n"
+        ".option pop\n"
         : "=r"(result)
         : "r"((uint32_t)value)
     );
