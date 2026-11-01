@@ -17,7 +17,7 @@ void AudioAnalyzePrint::update(void) {
     // Log only once globally, even if multiple instances exist.
     static bool reported = false;
 
-    if (!reported) {
+    if (!reported) [[unlikely]] {
         reported = true;
         ESP_LOGE("AudioAnalyzePrint", "not implemented");
     }
