@@ -319,7 +319,7 @@ void AudioDecoderStream::decoderTaskLoop() {
         const bool stopRequested = _decoderStopRequested;
         portEXIT_CRITICAL(&_decoderMux);
 
-        if (stopRequested) {
+        if (stopRequested) [[unlikely]] {
             break;
         }
 
@@ -334,7 +334,7 @@ void AudioDecoderStream::decoderTaskLoop() {
 
         const DecodeResult result = decodePcmBuffer(_pcm[bufferIndex], _pcmBufferSamples, produced);
 
-        if (produced > _pcmBufferSamples) {
+        if (produced > _pcmBufferSamples) [[unlikely]] {
             ESP_LOGE(TAG, "codec returned too many PCM samples: %zu > %zu", produced, _pcmBufferSamples);
 
             releaseFilledBuffer(bufferIndex);
@@ -343,7 +343,7 @@ void AudioDecoderStream::decoderTaskLoop() {
         }
 
         // Decoder buffers contain left-channel samples followed by right-channel samples.
-        if ((produced & 1U) != 0) {
+        if ((produced & 1U) != 0) [[unlikely]] {
             ESP_LOGE(TAG, "codec returned odd planar PCM sample count: %zu", produced);
 
             releaseFilledBuffer(bufferIndex);
@@ -412,7 +412,7 @@ void AudioDecoderStream::update() {
      */
 
     portENTER_CRITICAL(&_decoderMux);
-    if (_decoderStopRequested) {
+    if (_decoderStopRequested) [[unlikely]] {
         portEXIT_CRITICAL(&_decoderMux);
         return;
     }
@@ -420,7 +420,7 @@ void AudioDecoderStream::update() {
     portEXIT_CRITICAL(&_decoderMux);
 
     audio_block_t *left = allocate();
-    if (left == nullptr) {
+    if (left == nullptr) [[unlikely]] {
         portENTER_CRITICAL(&_decoderMux);
         _updateRunning = false;
         portEXIT_CRITICAL(&_decoderMux);
@@ -428,7 +428,7 @@ void AudioDecoderStream::update() {
     }
 
     audio_block_t *right = allocate();
-    if (right == nullptr) {
+    if (right == nullptr) [[unlikely]] {
         release(left);
 
         portENTER_CRITICAL(&_decoderMux);
@@ -469,7 +469,7 @@ void AudioDecoderStream::update() {
 
     // Nullen gezielt am Ende auffüllen, falls nicht genug PCM-Daten
     // für einen ganzen Block da waren.
-    if (outputFrames < AUDIO_BLOCK_SAMPLES) {
+    if (outputFrames < AUDIO_BLOCK_SAMPLES) [[unlikely]] {
         const size_t remainingBytes = (AUDIO_BLOCK_SAMPLES - outputFrames) * sizeof(int16_t);
         memset(&left->data[outputFrames], 0, remainingBytes);
         memset(&right->data[outputFrames], 0, remainingBytes);
@@ -492,7 +492,7 @@ void AudioDecoderStream::update() {
             break;
         }
     }
-    if (_decoderFinished && _readBuffer < 0 && !anyReady) {
+    if (_decoderFinished && _readBuffer < 0 && !anyReady) [[unlikely]] {
         finishNow = true;
     }
     _updateRunning = false;
