@@ -14,7 +14,7 @@
 // Count leading zero bits in a 32-bit value.
 // ESP32-P4 supports Zbb even when the global -march does not enable it.
 // The local assembler option permits CLZ without changing the object's
-// global architecture attributes. Keep this path restricted to ESP32-P4.
+// global architecture attributes. Keep this path restricted to ESP32-P4 and ESP32-S31.
 static inline int audio_clz32(uint32_t x) __attribute__((always_inline, unused));
 static inline int audio_clz32(uint32_t x) {
 #if defined(__riscv) && (defined(CONFIG_IDF_TARGET_ESP32P4) || defined(CONFIG_IDF_TARGET_ESP32S31)) && defined(__riscv_xlen) && (__riscv_xlen == 32)
