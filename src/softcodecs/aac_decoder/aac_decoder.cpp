@@ -4875,7 +4875,7 @@ inline void AACDecoder::RefillBitstreamCache() {
     }
 }
 */
-//Optimized for REV16, REV32 (FB)
+// Uses the shared byte-order helper for the 32-bit cache load (FB)
 inline void AACDecoder::RefillBitstreamCache() {
     const int32_t nBytes = m_aac_BitStreamInfo.nBytes;
     uint8_t *ptr = m_aac_BitStreamInfo.bytePtr;
