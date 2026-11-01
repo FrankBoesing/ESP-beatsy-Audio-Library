@@ -922,11 +922,11 @@ bool AudioPlaySdWav::parseWav() {
 
 OSPEED
 bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
-    if (source_frames_read >= data_frames) {
+    if (source_frames_read >= data_frames) [[unlikely]] {
         return false;
     }
 
-    if (source_buffer_offset >= source_buffer_size) {
+    if (source_buffer_offset >= source_buffer_size) [[unlikely]] {
         const uint32_t framesRemaining = data_frames - source_frames_read;
         uint32_t framesToRead = sizeof(source_buffer) / block_align;
         if (framesToRead > framesRemaining) {
@@ -934,7 +934,7 @@ bool AudioPlaySdWav::readSourceFrame(int32_t &left, int32_t &right) {
         }
 
         const uint16_t bytesToRead = (uint16_t)(framesToRead * block_align);
-        if (!readExact(source_buffer, bytesToRead)) {
+        if (!readExact(source_buffer, bytesToRead)) [[unlikely]] {
             source_error = true;
             ESP_LOGE(TAG, "Failed reading audio frames at %lu",
                      (unsigned long)source_frames_read);
@@ -967,7 +967,7 @@ inline OSPEED
 bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
                                      float targetRate, float outputSampleRate,
                                      float sourceStep) {
-    if (source_error) {
+    if (source_error) [[unlikely]] {
         return false;
     }
 
@@ -976,7 +976,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
                             (float)sample_rate == outputSampleRate &&
                             source_phase == 0.0f;
 
-    if (!have_previous) {
+    if (!have_previous) [[unlikely]] {
         if (!readSourceFrame(previous_left, previous_right)) {
             source_ended = true;
             return false;
@@ -988,7 +988,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
         source_phase = 0.0f;
     }
 
-    if (!have_next && !source_ended) {
+    if (!have_next && !source_ended) [[unlikely]] {
         if (readSourceFrame(next_left, next_right)) {
             have_next = true;
         } else {
@@ -1018,7 +1018,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
             source_phase += sourceStep;
         } else {
             const float rateDelta = targetRate - current_playback_rate;
-            if (rateDelta > -0.0001f && rateDelta < 0.0001f) {
+            if (rateDelta > -0.0001f && rateDelta < 0.0001f) [[likely]] {
                 current_playback_rate = targetRate;
             } else {
                 current_playback_rate += rateDelta * 0.0015f;
@@ -1030,7 +1030,7 @@ bool AudioPlaySdWav::getOutputSample(int16_t &left, int16_t &right,
     while (source_phase >= 1.0f) {
         source_phase -= 1.0f;
 
-        if (have_next) {
+        if (have_next) [[likely]] {
             previous_left = next_left;
             previous_right = next_right;
             have_next = readSourceFrame(next_left, next_right);
@@ -1118,7 +1118,7 @@ void AudioPlaySdWav::update() {
     const float sourceStep = source_step;
 
     // If the previous block reached EOF, seek once here, not in the sample path.
-    if (loop && data_frames > 0 && source_ended && !have_previous && !source_error) {
+    if (loop && data_frames > 0 && source_ended && !have_previous && !source_error) [[unlikely]] {
         if (seekAbsolute(data_start)) {
             source_frames_read = 0;
             have_previous = false;
@@ -1132,7 +1132,7 @@ void AudioPlaySdWav::update() {
 
     block_left = allocate();
 
-    if (!block_left) {
+    if (!block_left) [[unlikely]] {
         ESP_LOGE(TAG, "Audio block allocation failed: left");
 
         return;
@@ -1140,7 +1140,7 @@ void AudioPlaySdWav::update() {
 
     block_right = allocate();
 
-    if (!block_right) {
+    if (!block_right) [[unlikely]] {
         ESP_LOGE(TAG, "Audio block allocation failed: right");
 
         release(block_left);
@@ -1155,7 +1155,7 @@ void AudioPlaySdWav::update() {
         int16_t left;
         int16_t right;
 
-        if (!getOutputSample(left, right, targetRate, outputSampleRate, sourceStep)) {
+        if (!getOutputSample(left, right, targetRate, outputSampleRate, sourceStep)) [[unlikely]] {
             const bool restartNextBlock = loop && data_frames > 0 &&
                                           source_ended && !source_error;
             finishPlayback(!restartNextBlock);
