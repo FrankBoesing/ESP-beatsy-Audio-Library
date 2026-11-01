@@ -1,26 +1,34 @@
 /*
- * AudioSynthWavetableV2 stress test and WAV recorder.
+ * AudioSynthWavetableV2 stress test -> USB microphone.
  *
- * Starts 32 notes with four matching sample layers each (128 sample voices),
- * records the mono synthesizer output to /wavetable_v2.wav on SD_MMC and
- * reports both total audio-graph load and the V2 node load.
+ * Starts 32 notes with four matching sample layers each (up to 128 sample
+ * voices) and sends the mono synth signal to both channels of AudioOutputUSB.
+ * Record the ESP32 USB microphone input on the PC, e.g. with Audacity.
  *
- * SD_MMC pin definitions may be supplied by platformio.ini.
+ * PlatformIO: env:freenove_esp32_s3_display_USBAUDIO
+ * The environment must enable AUDIO_OUTPUT_USB and configure 48 kHz UAC1.
  */
 
+#if !defined(ARDUINO_USB_MODE) || ARDUINO_USB_MODE != 0 || \
+    !defined(ARDUINO_USB_CDC_ON_BOOT) || ARDUINO_USB_CDC_ON_BOOT != 0
+#error "WavetableV2 USB output requires TinyUSB mode and ARDUINO_USB_CDC_ON_BOOT=0."
+#endif
+
+#if !defined(AUDIO_OUTPUT_USB)
+#error "Build this example with AUDIO_OUTPUT_USB enabled."
+#endif
+
 #include <Arduino.h>
-#include <FS.h>
-#include <SD_MMC.h>
 #include <Audio.h>
 
-constexpr uint32_t RECORD_SAMPLE_RATE = AUDIO_SAMPLE_RATE_EXACT;
 constexpr uint8_t TEST_NOTE_COUNT = AudioSynthWavetableV2::MAX_NOTES;
 constexpr int TEST_FIRST_NOTE = 48;
 constexpr int TEST_VELOCITY = 112;
 
 AudioSynthWavetableV2 synth;
-AudioRecordFile recorder;
-AudioConnection synthToRecorder(synth, recorder);
+AudioOutputUSB usbOutput;
+AudioConnection synthToUsbLeft(synth, 0, usbOutput, 0);
+AudioConnection synthToUsbRight(synth, 0, usbOutput, 1);
 
 // 32 playable frames plus one interpolation guard frame.
 // Each table is one single-cycle waveform; phase wraps naturally at 32 frames.
@@ -93,28 +101,15 @@ static void haltWithError(const char *message) {
     }
 }
 
-static bool mountSD() {
-#if defined(PIN_SD_MMC_CLK) && defined(PIN_SD_MMC_CMD) && \
-    defined(PIN_SD_MMC_D0) && defined(PIN_SD_MMC_D1) && \
-    defined(PIN_SD_MMC_D2) && defined(PIN_SD_MMC_D3)
-    if (!SD_MMC.setPins(PIN_SD_MMC_CLK, PIN_SD_MMC_CMD,
-                        PIN_SD_MMC_D0, PIN_SD_MMC_D1,
-                        PIN_SD_MMC_D2, PIN_SD_MMC_D3)) {
-        return false;
-    }
-#endif
-    return SD_MMC.begin("/sdcard", false);
-}
-
 static void printLoad() {
     Serial.printf(
         "Audio CPU: graph %5.1f%% (max %5.1f%%), V2 %5.1f%% (max %5.1f%%), "
-        "notes %u, sample voices %u, audio blocks %u/%u, recording %s\n",
+        "notes %u, sample voices %u, audio blocks %u/%u, USB configured %s\n",
         AudioProcessorUsageTotal(), AudioProcessorUsageTotalMax(),
         synth.AudioProcessorUsage(), synth.AudioProcessorUsageMax(),
         (unsigned)synth.activeNoteCount(), (unsigned)synth.activeSampleCount(),
         (unsigned)AudioMemoryUsage(), (unsigned)AudioMemoryUsageMax(),
-        recorder.isRecording() ? "yes" : "no");
+        usbOutput.isConfigured() ? "yes" : "no");
 }
 
 static void monitorFor(uint32_t durationMs) {
@@ -131,45 +126,7 @@ static void monitorFor(uint32_t durationMs) {
     }
 }
 
-void setup() {
-    Serial.begin(115200);
-    delay(500);
-
-    Serial.println();
-    Serial.println("AudioSynthWavetableV2: 32 notes / up to 128 sample voices");
-    Serial.println("The synthesizer output is recorded as mono 16-bit PCM WAV.");
-
-    if (!mountSD()) {
-        haltWithError("SD_MMC mount failed. Check card, DIP switches and pin configuration.");
-    }
-
-    if (!psramFound()) {
-        haltWithError("PSRAM is required by AudioRecordFile.");
-    }
-
-    AudioMemory(24);
-
-    if (!synth.setInstrument(instrument)) {
-        haltWithError("Invalid V2 instrument data.");
-    }
-    synth.amplitude(0.20f);
-
-    // This example overwrites only its own previous completed output file.
-    // An existing .tmp file is deliberately preserved for possible recovery.
-    if (SD_MMC.exists("/wavetable_v2.wav")) {
-        SD_MMC.remove("/wavetable_v2.wav");
-    }
-
-    if (!recorder.begin(SD_MMC, "/wavetable_v2", RECORD_SAMPLE_RATE, 1,
-                        AudioRecordFile::CORE_UNPINNED)) {
-        haltWithError("Could not start WAV recorder. Check PSRAM and /wavetable_v2.tmp.");
-    }
-
-    delay(100);
-    AudioProcessorUsageTotalMaxReset();
-    synth.AudioProcessorUsageMaxReset();
-    AudioMemoryUsageMaxReset();
-
+static void playStressChord() {
     uint8_t startedNotes = 0;
     uint16_t startedSamples = 0;
 
@@ -184,25 +141,52 @@ void setup() {
 
     Serial.printf("Started %u notes and %u sample layers. Expected maximum: 32 / 128.\n",
                   (unsigned)startedNotes, (unsigned)startedSamples);
+}
 
-    // Keep the 32-note / 128-layer load active while recording.
+void setup() {
+    Serial.begin(115200);
+    delay(500);
+
+    Serial.println();
+    Serial.println("AudioSynthWavetableV2: 32 notes / up to 128 sample voices");
+    Serial.println("USB microphone output: stereo, 16-bit PCM.");
+    Serial.println("Select the ESP32 USB microphone in Audacity and start recording.");
+
+    // The managed USB device is started by AudioMemory(). No USB.begin(),
+    // USBAudioCard instance or loop() polling is needed.
+    AudioMemory(24);
+
+    if (!usbOutput.isConfigured()) {
+        haltWithError("Managed AudioOutputUSB initialization failed. Check the USB build environment.");
+    }
+
+    if (!synth.setInstrument(instrument)) {
+        haltWithError("Invalid V2 instrument data.");
+    }
+    synth.amplitude(0.35f);
+
+    Serial.printf("USB audio rate: %.0f Hz. Waiting 5 seconds for Audacity...\n",
+                  AUDIO_SAMPLE_RATE_EXACT);
+    delay(5000);
+
+    Serial.println("Stress test started. It repeats until the board is reset.");
+}
+
+void loop() {
+    AudioProcessorUsageTotalMaxReset();
+    synth.AudioProcessorUsageMaxReset();
+    AudioMemoryUsageMaxReset();
+
+    playStressChord();
+
+    // Keep the 32-note / 128-layer load active while the PC records USB audio.
     monitorFor(3000);
 
     synth.allNotesOff();
     Serial.println("Note-Off sent; recording the release tails.");
-    monitorFor(1800);
+    monitorFor(1200);
 
-    if (recorder.stop()) {
-        Serial.println("Saved /wavetable_v2.wav to SD card.");
-    } else {
-        Serial.printf("WAV finalization failed; recorder error=%s. "
-                      "Check /wavetable_v2.tmp for recovery.\n",
-                      recorder.hasError() ? "yes" : "no");
-    }
-
-    printLoad();
-}
-
-void loop() {
-    delay(1000);
+    // Leave a short gap before the next run. This makes it easy to identify
+    // separate measurement cycles in the Audacity recording.
+    delay(800);
 }

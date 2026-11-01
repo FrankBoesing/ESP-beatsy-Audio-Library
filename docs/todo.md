@@ -45,11 +45,13 @@ unchanged so existing sketches and generated headers continue to work.
   allocation occurs in `update()`. The initial V2 renderer uses mono signed
   16-bit PCM with linear interpolation; each sample array includes one
   interpolation guard frame.
-- [x] **Add a hardware stress-test and WAV-recording example for V2.**
+- [x] **Add a hardware stress-test example for V2.**
   `examples/Synthesis/WavetableV2` starts 32 simultaneous notes with four
-  overlapping sample zones (up to 128 active sample layers), records the mono
-  output to SD_MMC as `wavetable_v2.wav`, and reports total audio-graph CPU
-  usage, V2-node CPU usage, peak load and audio-block memory usage.
+  overlapping sample zones (up to 128 active sample layers), routes the mono
+  synthesizer output to both channels of `AudioOutputUSB`, and reports total
+  audio-graph CPU usage, V2-node CPU usage, peak load and audio-block memory
+  usage. The host PC can record the stereo 16-bit USB microphone stream with
+  Audacity or another audio recorder.
 - [ ] **Optimize the V2 render and mix hot paths.** Profile the complete
   per-sample loop on real ESP32-S3 and ESP32-P4 hardware. Reduce phase,
   interpolation, envelope, accumulation and voice-state overhead without
