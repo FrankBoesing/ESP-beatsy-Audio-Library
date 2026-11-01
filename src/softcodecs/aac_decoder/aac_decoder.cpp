@@ -11,6 +11,7 @@
 
 #include "aac_decoder.h"
 #include "aac_decoder_consts.h"
+#include "../../utility/clz.h"
 
 //----------------------------------------------------------------------------------------------------------------------
 static inline int32_t MULSHIFT32(int32_t x, int32_t y) {
@@ -19,7 +20,7 @@ static inline int32_t MULSHIFT32(int32_t x, int32_t y) {
     return z;
 }
 static inline int32_t CLZ(int32_t x) {
-    return x == 0 ? 32 : __builtin_clz(x);
+    return audio_clz32((uint32_t)x);
 } // calls(0) exist.
 static inline int32_t FASTABS(int32_t x) {
     return __builtin_abs(x);
