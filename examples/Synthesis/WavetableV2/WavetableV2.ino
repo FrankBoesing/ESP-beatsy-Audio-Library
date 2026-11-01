@@ -94,15 +94,19 @@ static const AudioSynthWavetableV2::zone_data zones[] = {
 
 static const AudioSynthWavetableV2::instrument_data instrument(zones, 4);
 
+static USBCDC &serialConsole() {
+    return AudioUSBSerial();
+}
+
 static void haltWithError(const char *message) {
-    Serial.println(message);
+    serialConsole().println(message);
     while (true) {
         delay(1000);
     }
 }
 
 static void printLoad() {
-    Serial.printf(
+    serialConsole().printf(
         "Audio CPU: graph %5.1f%% (max %5.1f%%), V2 %5.1f%% (max %5.1f%%), "
         "notes %u, sample voices %u, audio blocks %u/%u, USB configured %s\n",
         AudioStream::AudioProcessorUsageTotal(), AudioStream::AudioProcessorUsageTotalMax(),
@@ -139,22 +143,21 @@ static void playStressChord() {
         }
     }
 
-    Serial.printf("Started %u notes and %u sample layers. Expected maximum: 32 / 128.\n",
+    serialConsole().printf("Started %u notes and %u sample layers. Expected maximum: 32 / 128.\n",
                   (unsigned)startedNotes, (unsigned)startedSamples);
 }
 
 void setup() {
-    Serial.begin(115200);
-    delay(500);
-
-    Serial.println();
-    Serial.println("AudioSynthWavetableV2: 32 notes / up to 128 sample voices");
-    Serial.println("USB microphone output: stereo, 16-bit PCM.");
-    Serial.println("Select the ESP32 USB microphone in Audacity and start recording.");
-
-    // The managed USB device is started by AudioMemory(). No USB.begin(),
-    // USBAudioCard instance or loop() polling is needed.
+    // The managed USB device (including its CDC serial interface) is started
+    // by AudioMemory(). No USB.begin(), USBAudioCard instance or loop() polling
+    // is needed.
     AudioMemory(24);
+    delay(300);
+
+    serialConsole().println();
+    serialConsole().println("AudioSynthWavetableV2: 32 notes / up to 128 sample voices");
+    serialConsole().println("USB microphone output: stereo, 16-bit PCM.");
+    serialConsole().println("Select the ESP32 USB microphone in Audacity and start recording.");
 
     if (!usbOutput.isConfigured()) {
         haltWithError("Managed AudioOutputUSB initialization failed. Check the USB build environment.");
@@ -165,11 +168,11 @@ void setup() {
     }
     synth.amplitude(0.35f);
 
-    Serial.printf("USB audio rate: %.0f Hz. Waiting 5 seconds for Audacity...\n",
+    serialConsole().printf("USB audio rate: %.0f Hz. Waiting 5 seconds for Audacity...\n",
                   AUDIO_SAMPLE_RATE_EXACT);
     delay(5000);
 
-    Serial.println("Stress test started. It repeats until the board is reset.");
+    serialConsole().println("Stress test started. It repeats until the board is reset.");
 }
 
 void loop() {
@@ -183,7 +186,7 @@ void loop() {
     monitorFor(3000);
 
     synth.allNotesOff();
-    Serial.println("Note-Off sent; recording the release tails.");
+    serialConsole().println("Note-Off sent; recording the release tails.");
     monitorFor(1200);
 
     // Leave a short gap before the next run. This makes it easy to identify
