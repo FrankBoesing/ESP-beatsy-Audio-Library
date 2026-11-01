@@ -20,6 +20,8 @@
 
 #include <Arduino.h>
 #include <Audio.h>
+#include <stdarg.h>
+#include <stdio.h>
 
 constexpr uint8_t TEST_NOTE_COUNT = AudioSynthWavetableV2::MAX_NOTES;
 constexpr int TEST_FIRST_NOTE = 48;
@@ -94,19 +96,44 @@ static const AudioSynthWavetableV2::zone_data zones[] = {
 
 static const AudioSynthWavetableV2::instrument_data instrument(zones, 4);
 
-static USBCDC &serialConsole() {
-    return AudioUSBSerial();
+static void consolePrintln(const char *message) {
+    Serial.println(message);
+
+    USBCDC &usbCdc = AudioUSBSerial();
+    if (usbCdc) {
+        usbCdc.println(message);
+    }
+}
+
+static void consolePrintf(const char *format, ...) {
+    char buffer[256];
+
+    va_list args;
+    va_start(args, format);
+    const int length = vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    if (length <= 0) {
+        return;
+    }
+
+    Serial.print(buffer);
+
+    USBCDC &usbCdc = AudioUSBSerial();
+    if (usbCdc) {
+        usbCdc.print(buffer);
+    }
 }
 
 static void haltWithError(const char *message) {
-    serialConsole().println(message);
+    consolePrintln(message);
     while (true) {
         delay(1000);
     }
 }
 
 static void printLoad() {
-    serialConsole().printf(
+    consolePrintf(
         "Audio CPU: graph %5.1f%% (max %5.1f%%), V2 %5.1f%% (max %5.1f%%), "
         "notes %u, sample voices %u, audio blocks %u/%u, USB configured %s\n",
         AudioStream::AudioProcessorUsageTotal(), AudioStream::AudioProcessorUsageTotalMax(),
@@ -143,21 +170,25 @@ static void playStressChord() {
         }
     }
 
-    serialConsole().printf("Started %u notes and %u sample layers. Expected maximum: 32 / 128.\n",
+    consolePrintf("Started %u notes and %u sample layers. Expected maximum: 32 / 128.\n",
                   (unsigned)startedNotes, (unsigned)startedSamples);
 }
 
 void setup() {
+    // Keep UART0 available for the PlatformIO monitor. Diagnostics are mirrored
+    // to the USBManager-owned CDC interface after AudioMemory() starts USB.
+    Serial.begin(115200);
+
     // The managed USB device (including its CDC serial interface) is started
     // by AudioMemory(). No USB.begin(), USBAudioCard instance or loop() polling
     // is needed.
     AudioMemory(24);
     delay(300);
 
-    serialConsole().println();
-    serialConsole().println("AudioSynthWavetableV2: 32 notes / up to 128 sample voices");
-    serialConsole().println("USB microphone output: stereo, 16-bit PCM.");
-    serialConsole().println("Select the ESP32 USB microphone in Audacity and start recording.");
+    consolePrintln();
+    consolePrintln("AudioSynthWavetableV2: 32 notes / up to 128 sample voices");
+    consolePrintln("USB microphone output: stereo, 16-bit PCM.");
+    consolePrintln("Select the ESP32 USB microphone in Audacity and start recording.");
 
     if (!usbOutput.isConfigured()) {
         haltWithError("Managed AudioOutputUSB initialization failed. Check the USB build environment.");
@@ -168,28 +199,28 @@ void setup() {
     }
     synth.amplitude(0.35f);
 
-    serialConsole().printf("USB audio rate: %.0f Hz. Waiting 5 seconds for Audacity...\n",
+    consolePrintf("USB audio rate: %.0f Hz. Waiting 5 seconds for Audacity...\n",
                   AUDIO_SAMPLE_RATE_EXACT);
     delay(5000);
 
-    serialConsole().println("Stress test started. It repeats until the board is reset.");
+    consolePrintln("Stress test started. It repeats until the board is reset.");
 }
 
 void loop() {
-    serialConsole().println("Loop entered.");
+    consolePrintln("Loop entered.");
 
     AudioStream::AudioProcessorUsageTotalMaxReset();
     synth.AudioProcessorUsageMaxReset();
     AudioMemoryUsageMaxReset();
 
-    serialConsole().println("Loop counters reset; starting noteOn calls.");
+    consolePrintln("Loop counters reset; starting noteOn calls.");
     playStressChord();
 
     // Keep the 32-note / 128-layer load active while the PC records USB audio.
     monitorFor(3000);
 
     synth.allNotesOff();
-    serialConsole().println("Note-Off sent; recording the release tails.");
+    consolePrintln("Note-Off sent; recording the release tails.");
     monitorFor(1200);
 
     // Leave a short gap before the next run. This makes it easy to identify
