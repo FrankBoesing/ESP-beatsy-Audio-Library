@@ -73,7 +73,7 @@ void AudioEffectChorus::update() {
     }
 
     // If begin() has not succeeded, behave as a transparent effect.
-    if (l_delayline == nullptr || delay_length <= 0) {
+    if (l_delayline == nullptr || delay_length <= 0) [[unlikely]] {
         transmit(block);
         release(block);
         return;
@@ -83,7 +83,7 @@ void AudioEffectChorus::update() {
 
     // Bypass still records the input so enabling chorus does not start with
     // an entirely stale delay line.
-    if (chorusVoices <= 1) {
+    if (chorusVoices <= 1) [[unlikely]] {
         for (int32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
             ++l_circ_idx;
             if (l_circ_idx >= delay_length) {
