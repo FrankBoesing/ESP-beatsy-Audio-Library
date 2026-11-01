@@ -45,21 +45,30 @@ unchanged so existing sketches and generated headers continue to work.
   allocation occurs in `update()`. The initial V2 renderer uses mono signed
   16-bit PCM with linear interpolation; each sample array includes one
   interpolation guard frame.
-- [x] **Add a hardware stress-test example for V2.**
-  `examples/Synthesis/WavetableV2` starts 32 simultaneous notes with four
-  overlapping sample zones (up to 128 active sample layers), routes the mono
-  synthesizer output to both channels of `AudioOutputUSB`, and reports total
-  audio-graph CPU usage, V2-node CPU usage, peak load and audio-block memory
-  usage. The host PC can record the stereo 16-bit USB microphone stream with
-  Audacity or another audio recorder.
-- [ ] **Optimize the V2 render and mix hot paths.** Profile the complete
-  per-sample loop on real ESP32-S3 and ESP32-P4 hardware. Reduce phase,
-  interpolation, envelope, accumulation and voice-state overhead without
-  changing output semantics. Keep a portable scalar implementation as the
-  reference/fallback. Evaluate separately compiled, compile-time-selected
-  optimized kernels for ESP32-S3 (Xtensa LX7 DSP/SIMD capabilities) and
-  ESP32-P4 (RISC-V core and its verified compiler/intrinsic capabilities).
-  Use target-specific code only where repeatable benchmarks show a measurable
+- [x] **Add a configurable hardware stress-test example for V2.**
+  `examples/Synthesis/WavetableV2` routes the mono synthesizer output to both
+  channels of `AudioOutputUSB` and reports total audio-graph CPU usage,
+  V2-node CPU usage, peak load and audio-block memory usage. The test defaults
+  to one MIDI note with four overlapping sample layers; set
+  `WAVETABLE_V2_TEST_NOTE_COUNT` in build flags to increase the load up to
+  32 notes / 128 sample layers. The host PC can record the stereo 16-bit USB
+  microphone stream with Audacity or another audio recorder.
+- [x] **Apply the first portable scalar optimization pass to V2.** The renderer
+  now snapshots and commits voices in batches of eight (with the generation
+  check retained), retires finished notes with one active-voice scan, advances
+  envelopes inline with saturating 32-bit arithmetic, hoists loop/phase
+  invariants out of the sample loop, and uses a Q16 effective envelope gain
+  plus 32-bit interpolation/mixing multiplies instead of per-sample 64-bit
+  multiplies.
+- [ ] **Benchmark and continue optimizing the V2 render and mix hot paths.**
+  Measure the changes on real ESP32-S3 and ESP32-P4 hardware against the
+  pre-optimization baseline. Check audio continuity, envelope/release behavior,
+  interpolation error and worst-case block time at 4, 8, 16, 32, 64 and 128
+  sample voices. Keep a portable scalar implementation as the reference/
+  fallback. Evaluate separately compiled, compile-time-selected optimized
+  kernels for ESP32-S3 (Xtensa LX7 DSP/SIMD capabilities) and ESP32-P4
+  (RISC-V core and its verified compiler/intrinsic capabilities). Use
+  target-specific code only where repeatable benchmarks show a measurable
   benefit; avoid unverified instruction assumptions.
 - [ ] **Benchmark V2 polyphony and memory placement.** Measure 16, 32, 64 and
   128 simultaneous sample instances at 44.1 and 48 kHz on ESP32-S3 and
