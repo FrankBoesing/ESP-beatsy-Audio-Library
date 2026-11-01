@@ -115,7 +115,7 @@ void MP3Decoder::RefillBitstreamCache(BitStreamInfo *bsi) {
          * nBytes >= 4
          *
          * Optimize for 32-bit loads.
-         * REV32() converts the native ESP32 byte order
+         * audio_rev32() converts the native ESP32 byte order
          * to the big-endian representation expected
          * by the bitstream decoder.
          */
