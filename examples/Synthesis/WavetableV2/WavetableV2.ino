@@ -129,6 +129,12 @@ static void consolePrintln(const char *text) {
     if (usbCdc) usbCdc.println(text);
 }
 
+static void consolePrintln(uint32_t value) {
+    Serial.println(value);
+    USBCDC &usbCdc = AudioUSBSerial();
+    if (usbCdc) usbCdc.println(value);
+}
+
 static void haltWithError(const char *message) {
     consolePrintln(message);
     while (true) {
