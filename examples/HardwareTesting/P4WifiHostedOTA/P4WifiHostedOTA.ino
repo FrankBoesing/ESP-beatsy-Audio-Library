@@ -1,16 +1,13 @@
-// Update the ESP32-C6 ESP-Hosted slave firmware from the P4 over Wi-Fi.
+// Optional maintenance tool: update the ESP32-C6 ESP-Hosted slave firmware
+// from the P4 over Wi-Fi.
 //
-// Build a matching ESP-Hosted v2.13.0 slave image first (see
-// docs/esp32-p4-wifi6-wifi.md). Copy the resulting network_adapter.bin to a
-// folder served by a temporary HTTP server on the same trusted LAN.
-// Define WIFI_SSID, WIFI_PASS and HOSTED_FW_URL in local secrets.h in the sketch folder.
+// Supply a C6 slave image that matches the ESP-Hosted host version reported by
+// hostedHasUpdate() (see docs/esp32-p4-wifi6-wifi.md). Serve the image from a
+// temporary HTTP server on the same trusted LAN.
+// Define WIFI_SSID, WIFI_PASS and HOSTED_FW_URL in local secrets.h.
 //
-// HOSTED_FW_URL should look like:
-//   "http://192.168.178.10:8000/network_adapter.bin"
-//
-// This example uses the core's Hosted OTA primitives directly. The upstream
-// ESP_HostedOTA helper hard-codes a URL whose v2.13.0 file is not published,
-// and its HTTPClient/NetworkClient cleanup can fault on the error path.
+// This update is not needed for normal Wi-Fi or Internet Radio operation.
+// Building a replacement C6 slave image is separate from the P4 Arduino build.
 
 #include <Arduino.h>
 #include <WiFi.h>
