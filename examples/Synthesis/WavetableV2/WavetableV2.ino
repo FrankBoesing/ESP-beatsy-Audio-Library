@@ -1,8 +1,10 @@
 /*
  * AudioSynthWavetableV2 stress test -> USB microphone.
  *
- * Starts 32 notes with four matching sample layers each (up to 128 sample
- * voices) and sends the mono synth signal to both channels of AudioOutputUSB.
+ * Starts a configurable number of notes with four matching sample layers
+ * each, and sends the mono synth signal to both channels of AudioOutputUSB.
+ * The default is one note (four sample voices); increase the build macro only
+ * after confirming that lower voice counts render cleanly.
  * Record the ESP32 USB microphone input on the PC, e.g. with Audacity.
  *
  * PlatformIO: env:freenove_esp32_s3_display_USBAUDIO
@@ -23,7 +25,16 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-constexpr uint8_t TEST_NOTE_COUNT = AudioSynthWavetableV2::MAX_NOTES;
+// Start conservatively: 1 note x 4 layers. Override in build flags to increase
+// the load gradually, e.g. -D WAVETABLE_V2_TEST_NOTE_COUNT=4.
+#ifndef WAVETABLE_V2_TEST_NOTE_COUNT
+#define WAVETABLE_V2_TEST_NOTE_COUNT 1
+#endif
+
+constexpr uint8_t TEST_NOTE_COUNT = WAVETABLE_V2_TEST_NOTE_COUNT;
+static_assert(TEST_NOTE_COUNT >= 1 &&
+              TEST_NOTE_COUNT <= AudioSynthWavetableV2::MAX_NOTES,
+              "WAVETABLE_V2_TEST_NOTE_COUNT must be between 1 and MAX_NOTES");
 constexpr int TEST_FIRST_NOTE = 48;
 constexpr int TEST_VELOCITY = 112;
 
@@ -170,8 +181,10 @@ static void playStressChord() {
         }
     }
 
-    consolePrintf("Started %u notes and %u sample layers. Expected maximum: 32 / 128.\n",
-                  (unsigned)startedNotes, (unsigned)startedSamples);
+    consolePrintf("Started %u notes and %u sample layers. Configured maximum: %u / %u.\\n",
+                  (unsigned)startedNotes, (unsigned)startedSamples,
+                  (unsigned)TEST_NOTE_COUNT,
+                  (unsigned)(TEST_NOTE_COUNT * AudioSynthWavetableV2::MAX_SAMPLE_LAYERS_PER_NOTE));
 }
 
 void setup() {
@@ -186,7 +199,9 @@ void setup() {
     delay(300);
 
     consolePrintln("");
-    consolePrintln("AudioSynthWavetableV2: 32 notes / up to 128 sample voices");
+    consolePrintf("AudioSynthWavetableV2: %u notes, up to %u sample voices.\\n",
+                  (unsigned)TEST_NOTE_COUNT,
+                  (unsigned)(TEST_NOTE_COUNT * AudioSynthWavetableV2::MAX_SAMPLE_LAYERS_PER_NOTE));
     consolePrintln("USB microphone output: stereo, 16-bit PCM.");
     consolePrintln("Select the ESP32 USB microphone in Audacity and start recording.");
 
