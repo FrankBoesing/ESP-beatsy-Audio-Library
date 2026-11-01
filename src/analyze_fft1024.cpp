@@ -115,7 +115,7 @@ void AudioAnalyzeFFT1024::processFrame(void) {
         const int16_t *samples = blocklist[blockIndex]->data;
         for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i, ++sampleIndex) {
             float sample = (float)(samples[i]) * q15Scale;
-            if (window != nullptr) {
+            if (window != nullptr) [[likely]] {
                 sample *= (float)(window[sampleIndex]) * q15Scale;
             }
             fftBuffer[2U * sampleIndex] = sample;
@@ -123,7 +123,7 @@ void AudioAnalyzeFFT1024::processFrame(void) {
         }
     }
 
-    if (!AudioFFT::transform(fftBuffer, FFT_SIZE)) {
+    if (!AudioFFT::transform(fftBuffer, FFT_SIZE)) [[unlikely]] {
         return;
     }
 
@@ -142,7 +142,7 @@ void AudioAnalyzeFFT1024::processFrame(void) {
 
 void AudioAnalyzeFFT1024::update(void) {
     audio_block_t *block = receiveReadOnly();
-    if (block == nullptr) {
+    if (block == nullptr) [[unlikely]] {
         return;
     }
 
@@ -151,7 +151,7 @@ void AudioAnalyzeFFT1024::update(void) {
     // 16. The analyzer deliberately consumes AudioMemory pool capacity.
     blocklist[blocksCollected++] = block;
 
-    if (blocksCollected < BLOCKS_PER_FRAME) {
+    if (blocksCollected < BLOCKS_PER_FRAME) [[likely]] {
         return;
     }
 
