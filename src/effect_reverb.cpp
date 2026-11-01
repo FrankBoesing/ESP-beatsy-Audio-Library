@@ -115,10 +115,10 @@ void AudioEffectReverb::_do_comb_apf(comb_apf *filter, int32_t *in_buf, int32_t 
         filter->buffer[wr_idx] = acc_x;
         out_buf[n] = acc_y;
 
-        if (++rd_idx >= buf_len) {
+        if (++rd_idx >= buf_len) [[unlikely]] {
             rd_idx = 0;
         }
-        if (++wr_idx >= buf_len) {
+        if (++wr_idx >= buf_len) [[unlikely]] {
             wr_idx = 0;
         }
     }
@@ -146,10 +146,10 @@ void AudioEffectReverb::_do_comb_lpf(comb_lpf *filter, int32_t *in_buf, int32_t 
         filter->buffer[wr_idx] = z;
         out_buf[n] = y;
 
-        if (++rd_idx >= buf_len) {
+        if (++rd_idx >= buf_len) [[unlikely]] {
             rd_idx = 0;
         }
-        if (++wr_idx >= buf_len) {
+        if (++wr_idx >= buf_len) [[unlikely]] {
             wr_idx = 0;
         }
     }
@@ -248,7 +248,7 @@ OSPEED
 void AudioEffectReverb::update() {
     // The preferred path is to call begin() in setup(), before starting audio.
     // Keep existing sketches working by retrying initialization on first update.
-    if (!initialized && !begin()) {
+    if (!initialized && !begin()) [[unlikely]] {
         // If both heaps are exhausted, don't interrupt the signal path.
         audio_block_t *input = receiveReadOnly();
         if (input != nullptr) {
@@ -263,7 +263,7 @@ void AudioEffectReverb::update() {
     // Keep producing the reverb tail when no upstream block was available.
     if (block == nullptr) {
         block = allocate();
-        if (block == nullptr) {
+        if (block == nullptr) [[unlikely]] {
             return;
         }
         memset(block->data, 0, sizeof(block->data));
