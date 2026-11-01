@@ -508,31 +508,22 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
                 return;
             }
 
-            if (voice.envelopeIncrement < 0) {
-                const uint32_t decrement =
-                    (uint32_t)(-(int64_t)voice.envelopeIncrement);
-                if ((uint32_t)voice.envelopeMultiplier <= decrement) {
-                    voice.envelopeMultiplier = 0;
-                    voice.releaseGainQ16_16 = 0;
-                    voice.releaseGainRemainder = 0;
-                } else {
-                    voice.envelopeMultiplier -= (int32_t)decrement;
-
-                    if (voice.releaseGainRemainder <
-                        voice.releaseGainStepRemainder) {
-                        voice.releaseGainRemainder = (uint16_t)(
-                            voice.releaseGainRemainder + 0x8000U -
-                            voice.releaseGainStepRemainder);
-                        voice.releaseGainQ16_16 -=
-                            voice.releaseGainStepQ16_16 + 1U;
-                    } else {
-                        voice.releaseGainRemainder = (uint16_t)(
-                            voice.releaseGainRemainder -
-                            voice.releaseGainStepRemainder);
-                        voice.releaseGainQ16_16 -=
-                            voice.releaseGainStepQ16_16;
-                    }
-                }
+            // The per-sample release decrement is already scaled by the
+            // voice amplitude. Only the fixed-point quotient/remainder needs
+            // updating; envelopeMultiplier is no longer used in this state.
+            if (voice.releaseGainRemainder <
+                voice.releaseGainStepRemainder) {
+                voice.releaseGainRemainder = (uint16_t)(
+                    voice.releaseGainRemainder + 0x8000U -
+                    voice.releaseGainStepRemainder);
+                voice.releaseGainQ16_16 -=
+                    voice.releaseGainStepQ16_16 + 1U;
+            } else {
+                voice.releaseGainRemainder = (uint16_t)(
+                    voice.releaseGainRemainder -
+                    voice.releaseGainStepRemainder);
+                voice.releaseGainQ16_16 -=
+                    voice.releaseGainStepQ16_16;
             }
 
             ++voice.envelopeSubCount;
