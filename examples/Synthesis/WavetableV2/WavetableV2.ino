@@ -185,7 +185,7 @@ void setup() {
     AudioMemory(24);
     delay(300);
 
-    consolePrintln();
+    consolePrintln("");
     consolePrintln("AudioSynthWavetableV2: 32 notes / up to 128 sample voices");
     consolePrintln("USB microphone output: stereo, 16-bit PCM.");
     consolePrintln("Select the ESP32 USB microphone in Audacity and start recording.");
