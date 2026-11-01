@@ -45,7 +45,6 @@
       "pio-test/*",
       "pio-test/**/*",
       "platformio.ini",
-      "sdkconfig.defaults.esp32-p4-wifi6",
       "secrets.h",
       "src/secrets.h"
     ]
