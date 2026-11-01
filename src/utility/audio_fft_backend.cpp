@@ -122,7 +122,7 @@ static bool initializeEspDSP() {
 #endif
 
 static bool transformPortable(float *data, uint16_t n) {
-    if (data == nullptr || (n != 256 && n != 1024)) {
+    if (data == nullptr || (n != 256 && n != 1024)) [[unlikely]] {
         return false;
     }
 
@@ -197,7 +197,7 @@ void initialize() {
 }
 
 bool transform(float *data, uint16_t length) {
-    if (data == nullptr || (length != 256 && length != 1024)) {
+    if (data == nullptr || (length != 256 && length != 1024)) [[unlikely]] {
         return false;
     }
 
@@ -213,7 +213,7 @@ bool transform(float *data, uint16_t length) {
         // permutation AFTER the FFT to return bins to natural order.
         result = dsps_fft4r_fc32(data, length);
 #endif
-        if (result != ESP_OK) {
+        if (result != ESP_OK) [[unlikely]] {
             return false;
         }
 
@@ -228,7 +228,7 @@ bool transform(float *data, uint16_t length) {
 }
 
 uint32_t magnitudeSquaredScaled(const float *data, uint16_t bin, float powerScale) {
-    if (data == nullptr) {
+    if (data == nullptr) [[unlikely]] {
         return 0;
     }
 
@@ -243,7 +243,7 @@ uint32_t magnitudeSquaredScaled(const float *data, uint16_t bin, float powerScal
 
     // For normalized int16 input, power is <= 32768^2 for both supported
     // FFT sizes. Keep the conversion guarded for arbitrary/custom windows.
-    if (power >= 4294967040.0f) {
+    if (power >= 4294967040.0f) [[unlikely]] {
         return UINT32_MAX;
     }
 
