@@ -134,12 +134,12 @@ void AudioInputI2S::end() {
 OSPEED
 bool AUDIO_I2S_ISR_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t, i2s_event_data_t *event, void *userContext) {
     auto *input = static_cast<AudioInputI2S *>(userContext);
-    if (input == nullptr || event == nullptr || event->dma_buf == nullptr) return false;
-    if (input->running.load(std::memory_order_acquire) == 0) return false;
+    if (input == nullptr || event == nullptr || event->dma_buf == nullptr) [[unlikely]] return false;
+    if (input->running.load(std::memory_order_acquire) == 0) [[unlikely]] return false;
 
     // dma_frame_num is AUDIO_BLOCK_SAMPLES and the slots are 16-bit stereo:
     // one valid RX callback is exactly one interleaved AudioStream block.
-    if (event->size != sizeof(input->rxSampleRing[0])) {
+    if (event->size != sizeof(input->rxSampleRing[0])) [[unlikely]] {
         input->rxErrorCountValue.fetch_add(1, std::memory_order_relaxed);
         return false;
     }
@@ -147,7 +147,7 @@ bool AUDIO_I2S_ISR_ATTR AudioInputI2S::onI2SReceive(i2s_chan_handle_t, i2s_event
     const uint32_t write = input->writeBlockIndex.load(std::memory_order_relaxed);
     const uint32_t read = input->readBlockIndex.load(std::memory_order_acquire);
 
-    if (write - read >= RX_RING_BLOCKS) {
+    if (write - read >= RX_RING_BLOCKS) [[unlikely]] {
         // Never overwrite data the consumer may be copying. Keep queued blocks
         // and drop this newest DMA block instead.
         input->droppedBlockCountValue.fetch_add(1, std::memory_order_relaxed);
@@ -192,7 +192,7 @@ GCC_UNROLL
     audio_block_t *left = allocate();
     audio_block_t *right = left != nullptr ? allocate() : nullptr;
 
-    if (left == nullptr || right == nullptr) {
+    if (left == nullptr || right == nullptr) [[unlikely]] {
         if (left != nullptr) release(left);
         if (right != nullptr) release(right);
 
