@@ -53,7 +53,7 @@ GCC_UNROLL
 static void applyGainThenAdd(int16_t *dst, const int16_t *src, int32_t mult) {
     const int16_t *end = dst + AUDIO_BLOCK_SAMPLES;
 
-    if (mult == MULTI_UNITYGAIN) {
+    if (mult == MULTI_UNITYGAIN) [[likely]] {
 GCC_UNROLL
         do {
             const int32_t value = (int32_t)*dst + (int32_t)*src++;
@@ -162,7 +162,7 @@ void AudioMixerN::update(void) {
 
     audio_block_t *out = allocate();
 
-    if (!out) {
+    if (!out) [[unlikely]] {
         for (unsigned int i = 0; i < activeInputs; ++i) {
             release(inputs[i]);
         }
@@ -261,7 +261,7 @@ void AudioMixer4::update(void) {
             out = receiveWritable(channel);
 
             if (out) {
-                if (mult != MULTI_UNITYGAIN) {
+                if (mult != MULTI_UNITYGAIN) [[unlikely]] {
                     applyGain(out->data, mult);
                 }
             }
@@ -295,7 +295,7 @@ void AudioAmplifier::update(void) {
 
     const int32_t mult = multiplier;
 
-    if (mult == 0) {
+    if (mult == 0) [[unlikely]] {
         // Zero gain:
         // discard input.
 
@@ -305,7 +305,7 @@ void AudioAmplifier::update(void) {
             release(block);
         }
 
-    } else if (mult == MULTI_UNITYGAIN) {
+    } else if (mult == MULTI_UNITYGAIN) [[likely]] {
         // Unity gain:
         // no sample calculation required.
 
