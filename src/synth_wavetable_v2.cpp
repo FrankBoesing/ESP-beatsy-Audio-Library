@@ -8,12 +8,53 @@
 
 #include <limits.h>
 #include <math.h>
-#include <string.h>
 
 static inline int16_t wavetableV2Saturate16(int32_t value) {
     if (value > 32767) return 32767;
     if (value < -32768) return -32768;
     return (int16_t)value;
+}
+
+// MIDI note frequencies in Q16.16 Hz.
+static const uint32_t wavetableV2NoteFrequencyQ16[128] = {
+    535809U, 567670U, 601425U, 637188U, 675077U, 715219U, 757749U, 802807U,
+    850544U, 901120U, 954703U, 1011473U, 1071618U, 1135340U, 1202851U, 1274376U,
+    1350154U, 1430439U, 1515497U, 1605613U, 1701088U, 1802240U, 1909407U, 2022946U,
+    2143237U, 2270680U, 2405702U, 2548752U, 2700309U, 2860878U, 3030994U, 3211227U,
+    3402176U, 3604480U, 3818814U, 4045892U, 4286473U, 4541360U, 4811404U, 5097505U,
+    5400618U, 5721755U, 6061989U, 6422453U, 6804352U, 7208960U, 7637627U, 8091784U,
+    8572947U, 9082720U, 9622807U, 10195009U, 10801236U, 11443511U, 12123977U, 12844906U,
+    13608704U, 14417920U, 15275254U, 16183568U, 17145893U, 18165441U, 19245614U, 20390018U,
+    21602472U, 22887021U, 24247954U, 25689813U, 27217409U, 28835840U, 30550508U, 32367136U,
+    34291786U, 36330882U, 38491228U, 40780036U, 43204943U, 45774043U, 48495909U, 51379626U,
+    54434817U, 57671680U, 61101017U, 64734272U, 68583572U, 72661764U, 76982457U, 81560072U,
+    86409886U, 91548086U, 96991818U, 102759252U, 108869635U, 115343360U, 122202033U, 129468544U,
+    137167144U, 145323527U, 153964914U, 163120144U, 172819773U, 183096171U, 193983636U, 205518503U,
+    217739269U, 230686720U, 244404066U, 258937088U, 274334289U, 290647054U, 307929828U, 326240288U,
+    345639545U, 366192342U, 387967272U, 411037006U, 435478539U, 461373440U, 488808132U, 517874176U,
+    548668578U, 581294109U, 615859655U, 652480576U, 691279090U, 732384684U, 775934544U, 822074013U
+};
+
+static inline uint32_t wavetableV2PhaseIncrement(uint32_t frequencyQ16,
+                                                float perHertzPhaseIncrement,
+                                                float phaseScale) {
+    const float coefficient = perHertzPhaseIncrement * phaseScale;
+    if (!isfinite(coefficient) || coefficient <= 0.0f) return 0;
+
+    // Convert the per-Hertz coefficient to Q16.16. The product is Q32.32.
+    const float coefficientQ16Float = coefficient * 65536.0f;
+    if (!isfinite(coefficientQ16Float) ||
+        coefficientQ16Float >= 1.8446744073709552e19f) return UINT32_MAX;
+
+    const uint64_t coefficientQ16 = (uint64_t)(coefficientQ16Float + 0.5f);
+    if (coefficientQ16 > UINT64_MAX / frequencyQ16) return UINT32_MAX;
+
+    const uint64_t product = (uint64_t)frequencyQ16 * coefficientQ16;
+    if (product > UINT64_MAX - 0x80000000ULL) return UINT32_MAX;
+
+    const uint64_t increment = (product + 0x80000000ULL) >> 32;
+    if (increment == 0) return 1;
+    return increment >= UINT32_MAX ? UINT32_MAX : (uint32_t)increment;
 }
 
 bool AudioSynthWavetableV2::setInstrument(const instrument_data &newInstrument) {
@@ -71,9 +112,7 @@ bool AudioSynthWavetableV2::setInstrument(const instrument_data &newInstrument) 
         notes_[i] = NoteState{};
     }
     for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        const uint32_t generation = sampleVoices_[i].generation + 1U;
         sampleVoices_[i] = SampleVoice{};
-        sampleVoices_[i].generation = generation;
     }
     for (uint8_t i = 0; i < 16; ++i) {
         sustain_[i] = false;
@@ -101,7 +140,7 @@ uint32_t AudioSynthWavetableV2::maximumPhase(const sample_data &sample) const {
 float AudioSynthWavetableV2::noteToFreq(int note) {
     if (note < 0) note = 0;
     if (note > 127) note = 127;
-    return 440.0f * powf(2.0f, ((float)note - 69.0f) / 12.0f);
+    return (float)wavetableV2NoteFrequencyQ16[note] * (1.0f / 65536.0f);
 }
 
 uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
@@ -116,12 +155,13 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
         return 0;
     }
 
-    // Read the immutable instrument descriptor under the lock, then resolve
-    // zones outside the critical section. setInstrument() is checked again
-    // before any voice slots are changed.
+    // Read the instrument and sample-rate scale under the control lock, then
+    // resolve zones and calculate phase increments outside the critical section.
     const instrument_data *instrument;
+    float phaseScale;
     portENTER_CRITICAL(&stateMux_);
     instrument = instrument_;
+    phaseScale = phaseIncrementScale_;
     portEXIT_CRITICAL(&stateMux_);
 
     if (instrument == nullptr || instrument->ZONES == nullptr ||
@@ -145,12 +185,19 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
 
     if (layerCount == 0) return 0;
 
+    const uint32_t frequencyQ16 = wavetableV2NoteFrequencyQ16[note];
+    uint32_t phaseIncrements[MAX_SAMPLE_LAYERS_PER_NOTE];
+    for (uint8_t layer = 0; layer < layerCount; ++layer) {
+        phaseIncrements[layer] = wavetableV2PhaseIncrement(
+            frequencyQ16, matchingSamples[layer]->PER_HERTZ_PHASE_INCREMENT,
+            phaseScale);
+    }
+
     portENTER_CRITICAL(&stateMux_);
     if (instrument_ != instrument) {
         portEXIT_CRITICAL(&stateMux_);
         return 0;
     }
-    const float phaseScale = phaseIncrementScale_;
 
     int noteSlot = -1;
     for (uint8_t i = 0; i < MAX_NOTES; ++i) {
@@ -221,7 +268,6 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
     for (uint8_t layer = 0; layer < layerCount; ++layer) {
         const uint16_t slot = freeSlots[layer];
         SampleVoice &voice = sampleVoices_[slot];
-        const uint32_t generation = voice.generation + 1U;
         const sample_data *sample = matchingSamples[layer];
 
         voice = SampleVoice{};
@@ -229,19 +275,14 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
         voice.released = false;
         voice.noteSlot = (uint8_t)noteSlot;
         voice.noteToken = token;
-        voice.generation = generation;
         voice.sample = sample;
         voice.phase = 0;
+        voice.phaseIncrement = phaseIncrements[layer];
 
-        float increment = frequency * sample->PER_HERTZ_PHASE_INCREMENT * phaseScale;
-        if (!isfinite(increment) || increment <= 0.0f) {
+        if (voice.phaseIncrement == 0) {
             voice.active = false;
             continue;
         }
-        if (increment < 1.0f) increment = 1.0f;
-        voice.phaseIncrement = increment >= 4294967295.0f
-                                   ? UINT32_MAX
-                                   : (uint32_t)(increment + 0.5f);
 
         voice.amplitude = (uint16_t)(((uint64_t)velocityGain *
                                       sample->INITIAL_ATTENUATION_SCALAR) >> 16);
@@ -268,7 +309,7 @@ void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice) {
 
     voice.released = true;
     if (voice.envelopeState == STATE_IDLE || voice.envelopeState == STATE_RELEASE) {
-        ++voice.generation;
+
         return;
     }
 
@@ -301,7 +342,6 @@ void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice) {
     voice.releaseGainStepQ16_16 = (uint32_t)(gainStepProduct >> 15);
     voice.releaseGainStepRemainder = (uint16_t)(gainStepProduct & 0x7FFFU);
 
-    ++voice.generation;
 }
 
 void AudioSynthWavetableV2::releaseNoteLocked(uint8_t noteSlot) {
@@ -326,7 +366,7 @@ void AudioSynthWavetableV2::stealNoteLocked(uint8_t noteSlot) {
         if (voice.active && voice.noteSlot == noteSlot &&
             voice.noteToken == token) {
             voice.active = false;
-            ++voice.generation;
+
         }
     }
     notes_[noteSlot] = NoteState{};
@@ -747,19 +787,19 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
 }
 
 void AudioSynthWavetableV2::update() {
-    bool anyActive = false;
-    uint16_t masterGain;
+    // update() runs on the high-priority AudioTask on AUDIO_PROCESSING_CORE.
+    // All control calls are made on that same core at lower task priority, so
+    // they cannot run concurrently with this renderer. Control-side critical
+    // sections prevent AudioTask from preempting multi-field state changes.
+    const uint16_t masterGain = masterGain_;
 
-    portENTER_CRITICAL(&stateMux_);
-    masterGain = masterGain_;
+    bool anyActive = false;
     for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
         if (sampleVoices_[i].active) {
             anyActive = true;
             break;
         }
     }
-    portEXIT_CRITICAL(&stateMux_);
-
     if (!anyActive) return;
 
     audio_block_t *block = allocate();
@@ -767,64 +807,32 @@ void AudioSynthWavetableV2::update() {
 
     int32_t mix[AUDIO_BLOCK_SAMPLES] = {};
 
-    // Copy and commit small batches rather than locking separately for every
-    // sample voice. Eight voices keep the AudioTask stack use bounded while
-    // reducing the lock/unlock count by a factor of eight.
-    constexpr uint16_t VOICE_BATCH_SIZE = 8;
-    SampleVoice localVoices[VOICE_BATCH_SIZE];
-
-    for (uint16_t base = 0; base < MAX_SAMPLE_VOICES; base += VOICE_BATCH_SIZE) {
-        uint16_t batchCount = MAX_SAMPLE_VOICES - base;
-        if (batchCount > VOICE_BATCH_SIZE) {
-            batchCount = VOICE_BATCH_SIZE;
+    // Render directly into the live voice array. No snapshots, commits,
+    // version checks or stateMux_ operations are needed with the
+    // same-core/high-priority AudioTask execution model.
+    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
+        if (sampleVoices_[i].active) {
+            renderVoice(sampleVoices_[i], mix);
         }
+    }
 
-        portENTER_CRITICAL(&stateMux_);
-        for (uint16_t i = 0; i < batchCount; ++i) {
-            localVoices[i] = sampleVoices_[base + i];
+    // Retire notes whose final sample layer has ended.
+    uint32_t noteHasActiveLayer = 0;
+    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
+        const SampleVoice &voice = sampleVoices_[i];
+        if (!voice.active || voice.noteSlot >= MAX_NOTES) continue;
+
+        const NoteState &noteState = notes_[voice.noteSlot];
+        if (noteState.active && noteState.token == voice.noteToken) {
+            noteHasActiveLayer |= (1UL << voice.noteSlot);
         }
-        portEXIT_CRITICAL(&stateMux_);
+    }
 
-        for (uint16_t i = 0; i < batchCount; ++i) {
-            if (localVoices[i].active) {
-                renderVoice(localVoices[i], mix);
-            }
+    for (uint8_t noteSlot = 0; noteSlot < MAX_NOTES; ++noteSlot) {
+        if (notes_[noteSlot].active &&
+            (noteHasActiveLayer & (1UL << noteSlot)) == 0) {
+            notes_[noteSlot] = NoteState{};
         }
-
-        // MIDI/control operations may alter a voice while its local snapshot is
-        // rendered. The generation check prevents committing stale state over
-        // a newer noteOn(), noteOff(), allSoundOff() or instrument change.
-        portENTER_CRITICAL(&stateMux_);
-        for (uint16_t i = 0; i < batchCount; ++i) {
-            SampleVoice &current = sampleVoices_[base + i];
-            if (current.generation == localVoices[i].generation) {
-                current = localVoices[i];
-            }
-        }
-
-        // On the last batch, also retire notes whose sample layers have ended.
-        // This replaces the previous notes x voices nested scan with one scan
-        // through the active voices, inside the same critical section.
-        if (base + batchCount == MAX_SAMPLE_VOICES) {
-            bool noteHasActiveLayer[MAX_NOTES] = {};
-
-            for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-                const SampleVoice &voice = sampleVoices_[i];
-                if (!voice.active || voice.noteSlot >= MAX_NOTES) continue;
-
-                const NoteState &noteState = notes_[voice.noteSlot];
-                if (noteState.active && noteState.token == voice.noteToken) {
-                    noteHasActiveLayer[voice.noteSlot] = true;
-                }
-            }
-
-            for (uint8_t noteSlot = 0; noteSlot < MAX_NOTES; ++noteSlot) {
-                if (notes_[noteSlot].active && !noteHasActiveLayer[noteSlot]) {
-                    notes_[noteSlot] = NoteState{};
-                }
-            }
-        }
-        portEXIT_CRITICAL(&stateMux_);
     }
 
     for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {

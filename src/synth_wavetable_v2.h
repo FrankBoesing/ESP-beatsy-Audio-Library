@@ -150,7 +150,6 @@ class AudioSynthWavetableV2 : public AudioStream {
         bool released;
         uint8_t noteSlot;
         uint32_t noteToken;
-        uint32_t generation;
         const sample_data *sample;
         uint32_t phase;
         uint32_t phaseIncrement;
@@ -182,6 +181,10 @@ class AudioSynthWavetableV2 : public AudioStream {
     void stealNoteLocked(uint8_t noteSlot);
     void renderVoice(SampleVoice &voice, int32_t *mix) const;
 
+    // Control-plane lock only. AudioTask accesses this state directly and is
+    // pinned to the same core at higher priority than all public control calls.
+    // Do not call control methods from another core or an ISR without revisiting
+    // this synchronization model.
     mutable portMUX_TYPE stateMux_ = portMUX_INITIALIZER_UNLOCKED;
 
     const instrument_data *instrument_ = nullptr;
