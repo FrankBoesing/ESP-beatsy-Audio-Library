@@ -4,13 +4,14 @@
 
 #include <stdint.h>
 #include <math.h>
+#include "clz.h"
 
 #define _INLINE_ __attribute__((always_inline, unused))
 
 // Portable versions of the fixed-point DSP helpers used by the Audio Library.
 
 static inline int CLZ(unsigned int x) _INLINE_;
-static inline int CLZ(unsigned int x) { return x == 0 ? 32 : __builtin_clz(x); };
+static inline int CLZ(unsigned int x) { return audio_clz32((uint32_t)x); };
 
 static inline unsigned int REV16(unsigned int value) _INLINE_;
 static inline unsigned int REV16(unsigned int value) {
