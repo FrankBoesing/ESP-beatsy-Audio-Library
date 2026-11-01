@@ -22,8 +22,6 @@
 
 #include <Arduino.h>
 #include <Audio.h>
-#include <stdarg.h>
-#include <stdio.h>
 
 // Start conservatively: 1 note x 4 layers. Override in build flags to increase
 // the load gradually, e.g. -D WAVETABLE_V2_TEST_NOTE_COUNT=4.
@@ -107,33 +105,28 @@ static const AudioSynthWavetableV2::zone_data zones[] = {
 
 static const AudioSynthWavetableV2::instrument_data instrument(zones, 4);
 
-static void consolePrintln(const char *message) {
-    Serial.println(message);
-
+static void consolePrint(const char *text) {
+    Serial.print(text);
     USBCDC &usbCdc = AudioUSBSerial();
-    if (usbCdc) {
-        usbCdc.println(message);
-    }
+    if (usbCdc) usbCdc.print(text);
 }
 
-static void consolePrintf(const char *format, ...) {
-    char buffer[256];
-
-    va_list args;
-    va_start(args, format);
-    const int length = vsnprintf(buffer, sizeof(buffer), format, args);
-    va_end(args);
-
-    if (length <= 0) {
-        return;
-    }
-
-    Serial.print(buffer);
-
+static void consolePrint(uint32_t value) {
+    Serial.print(value);
     USBCDC &usbCdc = AudioUSBSerial();
-    if (usbCdc) {
-        usbCdc.print(buffer);
-    }
+    if (usbCdc) usbCdc.print(value);
+}
+
+static void consolePrint(float value, uint8_t digits = 1) {
+    Serial.print(value, digits);
+    USBCDC &usbCdc = AudioUSBSerial();
+    if (usbCdc) usbCdc.print(value, digits);
+}
+
+static void consolePrintln(const char *text) {
+    Serial.println(text);
+    USBCDC &usbCdc = AudioUSBSerial();
+    if (usbCdc) usbCdc.println(text);
 }
 
 static void haltWithError(const char *message) {
@@ -144,14 +137,24 @@ static void haltWithError(const char *message) {
 }
 
 static void printLoad() {
-    consolePrintf(
-        "Audio CPU: graph %5.1f%% (max %5.1f%%), V2 %5.1f%% (max %5.1f%%), "
-        "notes %u, sample voices %u, audio blocks %u/%u, USB configured %s\n",
-        AudioStream::AudioProcessorUsageTotal(), AudioStream::AudioProcessorUsageTotalMax(),
-        synth.AudioProcessorUsage(), synth.AudioProcessorUsageMax(),
-        (unsigned)synth.activeNoteCount(), (unsigned)synth.activeSampleCount(),
-        (unsigned)AudioMemoryUsage(), (unsigned)AudioMemoryUsageMax(),
-        usbOutput.isConfigured() ? "yes" : "no");
+    consolePrint("Audio CPU: graph ");
+    consolePrint(AudioStream::AudioProcessorUsageTotal(), 1);
+    consolePrint("% (max ");
+    consolePrint(AudioStream::AudioProcessorUsageTotalMax(), 1);
+    consolePrint("%), V2 ");
+    consolePrint(synth.AudioProcessorUsage(), 1);
+    consolePrint("% (max ");
+    consolePrint(synth.AudioProcessorUsageMax(), 1);
+    consolePrint("%), notes ");
+    consolePrint((uint32_t)synth.activeNoteCount());
+    consolePrint(", sample voices ");
+    consolePrint((uint32_t)synth.activeSampleCount());
+    consolePrint(", audio blocks ");
+    consolePrint((uint32_t)AudioMemoryUsage());
+    consolePrint("/");
+    consolePrint((uint32_t)AudioMemoryUsageMax());
+    consolePrint(", USB configured ");
+    consolePrintln(usbOutput.isConfigured() ? "yes" : "no");
 }
 
 static void monitorFor(uint32_t durationMs) {
@@ -174,17 +177,28 @@ static void playStressChord() {
 
     for (uint8_t i = 0; i < TEST_NOTE_COUNT; ++i) {
         const int note = TEST_FIRST_NOTE + i;
+
+        consolePrint("Calling noteOn for MIDI note ");
+        consolePrint((uint32_t)note);
+        consolePrintln(".");
+
         const uint8_t layers = synth.noteOn(note, TEST_VELOCITY);
+
+        consolePrint("noteOn returned; layers = ");
+        consolePrint((uint32_t)layers);
+        consolePrintln(".");
+
         if (layers != 0) {
             ++startedNotes;
             startedSamples += layers;
         }
     }
 
-    consolePrintf("Started %u notes and %u sample layers. Configured maximum: %u / %u.\n",
-                  (unsigned)startedNotes, (unsigned)startedSamples,
-                  (unsigned)TEST_NOTE_COUNT,
-                  (unsigned)(TEST_NOTE_COUNT * AudioSynthWavetableV2::MAX_SAMPLE_LAYERS_PER_NOTE));
+    consolePrint("Started notes: ");
+    consolePrint((uint32_t)startedNotes);
+    consolePrint(", sample layers: ");
+    consolePrint((uint32_t)startedSamples);
+    consolePrintln(" started.");
 }
 
 void setup() {
@@ -199,9 +213,11 @@ void setup() {
     delay(300);
 
     consolePrintln("");
-    consolePrintf("AudioSynthWavetableV2: %u notes, up to %u sample voices.\n",
-                  (unsigned)TEST_NOTE_COUNT,
-                  (unsigned)(TEST_NOTE_COUNT * AudioSynthWavetableV2::MAX_SAMPLE_LAYERS_PER_NOTE));
+    consolePrintln("AudioSynthWavetableV2 stress test.");
+    consolePrint("Configured notes: ");
+    consolePrint((uint32_t)TEST_NOTE_COUNT);
+    consolePrint(", maximum sample voices: ");
+    consolePrintln((uint32_t)(TEST_NOTE_COUNT * AudioSynthWavetableV2::MAX_SAMPLE_LAYERS_PER_NOTE));
     consolePrintln("USB microphone output: stereo, 16-bit PCM.");
     consolePrintln("Select the ESP32 USB microphone in Audacity and start recording.");
 
@@ -214,8 +230,9 @@ void setup() {
     }
     synth.amplitude(0.35f);
 
-    consolePrintf("USB audio rate: %.0f Hz. Waiting 5 seconds for Audacity...\n",
-                  AUDIO_SAMPLE_RATE_EXACT);
+    consolePrint("USB audio rate: ");
+    consolePrint(AUDIO_SAMPLE_RATE_EXACT, 0);
+    consolePrintln(" Hz. Waiting 5 seconds for Audacity...");
     delay(5000);
 
     consolePrintln("Stress test started. It repeats until the board is reset.");
