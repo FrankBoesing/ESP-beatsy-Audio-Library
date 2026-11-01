@@ -12,6 +12,7 @@
 #include "mp3_decoder.h"
 #include "mp3_decoder_consts.h"
 #include "../../utility/clz.h"
+#include "../../utility/byteorder.h"
 
 /* clip to range [-2^n, 2^n - 1] */
 static inline int32_t CLIP_2N(int32_t y, int32_t n) {
@@ -55,10 +56,10 @@ static inline int16_t ClipToShort(int32_t x) {
 #endif
 
 static inline unsigned int REV16(unsigned int value) {
-    return (unsigned int)__builtin_bswap16((unsigned short)value);
+    return (unsigned int)audio_rev16((uint32_t)value);
 }; //FB
 static inline unsigned int REV32(unsigned int value) {
-    return __builtin_bswap32(value);
+    return (unsigned int)audio_rev32((uint32_t)value);
 }; //FB
 static inline int32_t FASTABS(int32_t x) {
     return __builtin_abs(x);
