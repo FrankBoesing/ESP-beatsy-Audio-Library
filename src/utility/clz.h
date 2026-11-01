@@ -17,7 +17,7 @@
 // global architecture attributes. Keep this path restricted to ESP32-P4.
 static inline int audio_clz32(uint32_t x) __attribute__((always_inline, unused));
 static inline int audio_clz32(uint32_t x) {
-#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xlen) && (__riscv_xlen == 32)
+#if defined(__riscv) && (defined(CONFIG_IDF_TARGET_ESP32P4) || defined(CONFIG_IDF_TARGET_ESP32S31)) && defined(__riscv_xlen) && (__riscv_xlen == 32)
     uint32_t result;
     __asm__(
         ".option push\n"
