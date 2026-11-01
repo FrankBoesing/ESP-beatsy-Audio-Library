@@ -81,7 +81,7 @@ GCC_UNROLL
     }
 
     // The host may have disabled capture while the block was being interleaved.
-    if (!streaming_.load(std::memory_order_acquire)) {
+    if (!streaming_.load(std::memory_order_acquire)) [[unlikely]] {
         return;
     }
 
@@ -92,7 +92,7 @@ GCC_UNROLL
     // A whole-frame short write drops the unaccepted tail of this block.
     // A partial stereo frame would desynchronize L/R, so clear the FIFO to
     // restore frame alignment; queued audio is sacrificed only on this error path.
-    if ((written % bytesPerFrame) != 0) {
+    if ((written % bytesPerFrame) != 0) [[unlikely]] {
         (void)tud_audio_clear_ep_in_ff();
     }
 }
