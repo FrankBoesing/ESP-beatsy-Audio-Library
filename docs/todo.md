@@ -45,11 +45,36 @@ unchanged so existing sketches and generated headers continue to work.
   allocation occurs in `update()`. The initial V2 renderer uses mono signed
   16-bit PCM with linear interpolation; each sample array includes one
   interpolation guard frame.
-- [x] **Add a hardware example for V2.** `examples/Synthesis/WavetableV2`
-  demonstrates a four-note chord, velocity-dependent zone selection and
-  two-layer playback on notes 48..84.
-- [ ] **Extend V2 modulation support.** Add SF2 vibrato and supported
-  modulation parameters after the baseline polyphonic renderer is benchmarked.
+- [x] **Add a hardware stress-test and WAV-recording example for V2.**
+  `examples/Synthesis/WavetableV2` starts 32 simultaneous notes with four
+  overlapping sample zones (up to 128 active sample layers), records the mono
+  output to SD_MMC as `wavetable_v2.wav`, and reports total audio-graph CPU
+  usage, V2-node CPU usage, peak load and audio-block memory usage.
+- [ ] **Optimize the V2 render and mix hot paths.** Profile the complete
+  per-sample loop on real ESP32-S3 and ESP32-P4 hardware. Reduce phase,
+  interpolation, envelope, accumulation and voice-state overhead without
+  changing output semantics. Keep a portable scalar implementation as the
+  reference/fallback. Evaluate separately compiled, compile-time-selected
+  optimized kernels for ESP32-S3 (Xtensa LX7 DSP/SIMD capabilities) and
+  ESP32-P4 (RISC-V core and its verified compiler/intrinsic capabilities).
+  Use target-specific code only where repeatable benchmarks show a measurable
+  benefit; avoid unverified instruction assumptions.
+- [ ] **Benchmark V2 polyphony and memory placement.** Measure 16, 32, 64 and
+  128 simultaneous sample instances at 44.1 and 48 kHz on ESP32-S3 and
+  ESP32-P4. Record V2-node and total graph CPU usage, peak block time, audio
+  memory use, clipping and underruns. Compare internal SRAM and PSRAM sample
+  data, aligned and unaligned access, and realistic SF2 sample lengths. Keep
+  benchmark results by target and toolchain version.
+- [ ] **Add per-layer vibrato / pitch modulation.** Implement SF2-compatible
+  vibrato delay, rate and depth with independent state per sample layer.
+  Verify pitch range, modulation update cost and stable behavior when notes
+  are released or voices are stolen. Add additional supported modulators only
+  after the baseline vibrato path is measured.
+- [ ] **Add stereo sample playback.** Extend a sample layer to reference linked
+  left/right PCM data while sharing phase, pitch and envelope state. Provide
+  two output channels with defined pan/balance behavior and preserve mono
+  instrument compatibility. Benchmark the extra memory bandwidth and mixing
+  cost; define how the SF2 converter represents linked stereo zones.
 - [x] **Add key/velocity zone selection.** V2 resolves all matching
   key-low/high and velocity-low/high rectangles at note-on. Velocity selects
   the zones and also sets the initial note level; `amplitude()` is a separate
@@ -68,7 +93,7 @@ unchanged so existing sketches and generated headers continue to work.
   parameters to the existing fields. Verify the time and phase calculations at
   all runtime sample rates supported by the library.
 - [ ] **Define explicit handling for SF2 features the current node cannot
-  render.** `AudioSynthWavetable` is currently a mono output with one
+  render.** `AudioSynthWavetableV2` currently renders mono output with one
   `int16_t` sample stream per layer. The first converter version should
   downmix linked stereo sample pairs to mono and convert optional SF2 24-bit
   `sm24` data to the engine's 16-bit PCM format. Report unsupported filter
