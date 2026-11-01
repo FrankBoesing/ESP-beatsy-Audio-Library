@@ -468,6 +468,51 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
     for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         if (!voice.active) break;
 
+        // A sustained envelope is constant until Note-Off. Render the rest of
+        // this block without per-sample envelope bookkeeping or gain setup.
+        if (voice.envelopeState == STATE_SUSTAIN) {
+            const uint32_t envelopeGainQ16 =
+                (uint32_t)voice.envelopeMultiplier >> 15;
+            const uint32_t effectiveAmplitude =
+                ((uint32_t)voice.amplitude * envelopeGainQ16) >> 16;
+
+            for (; i < AUDIO_BLOCK_SAMPLES; ++i) {
+                if (!voice.active) break;
+
+                if (stopAtEnd && voice.phase >= maxPhase) {
+                    voice.active = false;
+                    voice.envelopeState = STATE_IDLE;
+                    break;
+                }
+
+                uint32_t sampleIndex = voice.phase >> sampleIndexShift;
+                if (sampleIndex > maxSampleIndex) {
+                    sampleIndex = maxSampleIndex;
+                }
+
+                const uint32_t interpolation =
+                    (voice.phase >> interpolationShift) & 0xFFFFU;
+                const int32_t sample0 = sample.SAMPLE[sampleIndex];
+                const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+
+                const int32_t weight0 = (int32_t)(0x10000U - interpolation);
+                const int32_t weightedSample =
+                    sample0 * weight0 + sample1 * (int32_t)interpolation;
+                const int32_t interpolated = weightedSample >> 16;
+
+                mix[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
+
+                voice.phase += voice.phaseIncrement;
+
+                if (loopEnabled && loopLength != 0 && voice.phase >= loopEnd) {
+                    const uint32_t loopStart = loopEnd - loopLength;
+                    const uint32_t overshoot = voice.phase - loopEnd;
+                    voice.phase = loopStart + (overshoot % loopLength);
+                }
+            }
+            break;
+        }
+
         if (stopAtEnd && voice.phase >= maxPhase) {
             voice.active = false;
             voice.envelopeState = STATE_IDLE;
