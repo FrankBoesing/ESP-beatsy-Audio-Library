@@ -55,12 +55,6 @@ static inline int16_t ClipToShort(int32_t x) {
 };
 #endif
 
-static inline unsigned int REV16(unsigned int value) {
-    return (unsigned int)audio_rev16((uint32_t)value);
-}; //FB
-static inline unsigned int REV32(unsigned int value) {
-    return (unsigned int)audio_rev32((uint32_t)value);
-}; //FB
 static inline int32_t FASTABS(int32_t x) {
     return __builtin_abs(x);
 } //xtensa has a fast abs instruction //fb
@@ -127,7 +121,7 @@ void MP3Decoder::RefillBitstreamCache(BitStreamInfo *bsi) {
          */
         unsigned int *Ptr32 = (unsigned int *)bsi->bytePtr;
 
-        bsi->iCache = REV32(*Ptr32);
+        bsi->iCache = audio_rev32((uint32_t)*Ptr32);
         bsi->bytePtr += 4;
         bsi->cachedBits = 32;
         bsi->nBytes -= 4;
@@ -138,7 +132,7 @@ void MP3Decoder::RefillBitstreamCache(BitStreamInfo *bsi) {
     case 2: {
         unsigned short *Ptr16 = (unsigned short *)bsi->bytePtr;
 
-        bsi->iCache = REV16(*Ptr16);
+        bsi->iCache = audio_rev16((uint32_t)*Ptr16);
         bsi->bytePtr += 2;
         bsi->cachedBits = 16;
         bsi->nBytes = 0;
