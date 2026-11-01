@@ -205,17 +205,17 @@ void AudioPlayMemory::update() {
 
     const bool stereo = !rawPcm && isStereoFormat(play_format);
     audio_block_t *block = allocate();
-    if (block == nullptr) {
+    if (block == nullptr) [[unlikely]] {
         return;
     }
     audio_block_t *rightBlock = stereo ? allocate() : nullptr;
-    if (stereo && rightBlock == nullptr) {
+    if (stereo && rightBlock == nullptr) [[unlikely]] {
         release(block);
         return;
     }
 
     const uint32_t sourceRate = rawPcm ? pcmRate : sampleRateForFormat(play_format);
-    if ((rawPcm ? pcmData == nullptr : data == nullptr) || total_samples == 0 || sourceRate == 0) {
+    if ((rawPcm ? pcmData == nullptr : data == nullptr) || total_samples == 0 || sourceRate == 0) [[unlikely]] {
         portENTER_CRITICAL(&playback_state_mux);
         if (playback_generation == generation) {
             playing = 0;
@@ -228,7 +228,7 @@ void AudioPlayMemory::update() {
     }
 
     // Defer loop restart until the next audio block.
-    if (loop && index >= total_samples) {
+    if (loop && index >= total_samples) [[unlikely]] {
         index = 0;
         fraction = 0.0f;
     }
@@ -276,11 +276,11 @@ void AudioPlayMemory::update() {
 
             // Unity rate still needs sample-rate conversion for 11.025/22.05 kHz,
             // but it does not need the per-sample rate-smoothing calculation.
-            if (unityRate) {
+            if (unityRate) [[likely]] {
                 fraction += baseStep;
             } else {
                 const float rateDelta = targetRate - currentRate;
-                if (rateDelta > -0.0001f && rateDelta < 0.0001f) {
+                if (rateDelta > -0.0001f && rateDelta < 0.0001f) [[likely]] {
                     currentRate = targetRate;
                 } else {
                     currentRate += rateDelta * 0.0015f;
@@ -299,12 +299,12 @@ void AudioPlayMemory::update() {
         }
     }
 
-    if (!loop && index >= total_samples) {
+    if (!loop && index >= total_samples) [[unlikely]] {
         finished = true;
     }
 
     portENTER_CRITICAL(&playback_state_mux);
-    if (playback_generation != generation) {
+    if (playback_generation != generation) [[unlikely]] {
         portEXIT_CRITICAL(&playback_state_mux);
         release(block);
         if (rightBlock != nullptr) release(rightBlock);
@@ -314,7 +314,7 @@ void AudioPlayMemory::update() {
     sample_index = index;
     sample_fraction = fraction;
     current_playback_rate = currentRate;
-    if (finished) {
+    if (finished) [[unlikely]] {
         playing = 0;
         ++playback_generation;
     }

@@ -11,6 +11,8 @@
 
 #include "mp3_decoder.h"
 #include "mp3_decoder_consts.h"
+#include "../../utility/clz.h"
+#include "../../utility/byteorder.h"
 
 /* clip to range [-2^n, 2^n - 1] */
 static inline int32_t CLIP_2N(int32_t y, int32_t n) {
@@ -31,7 +33,7 @@ static inline int32_t CLIP_2N(int32_t y, int32_t n) {
 }
 
 static inline int CLZ(unsigned int x) {
-    return x == 0 ? 32 : __builtin_clz(x);
+    return audio_clz32((uint32_t)x);
 }; //FB (calls (0) exist)
 
 
@@ -53,12 +55,6 @@ static inline int16_t ClipToShort(int32_t x) {
 };
 #endif
 
-static inline unsigned int REV16(unsigned int value) {
-    return (unsigned int)__builtin_bswap16((unsigned short)value);
-}; //FB
-static inline unsigned int REV32(unsigned int value) {
-    return __builtin_bswap32(value);
-}; //FB
 static inline int32_t FASTABS(int32_t x) {
     return __builtin_abs(x);
 } //xtensa has a fast abs instruction //fb
@@ -119,13 +115,13 @@ void MP3Decoder::RefillBitstreamCache(BitStreamInfo *bsi) {
          * nBytes >= 4
          *
          * Optimize for 32-bit loads.
-         * REV32() converts the native ESP32 byte order
+         * audio_rev32() converts the native ESP32 byte order
          * to the big-endian representation expected
          * by the bitstream decoder.
          */
         unsigned int *Ptr32 = (unsigned int *)bsi->bytePtr;
 
-        bsi->iCache = REV32(*Ptr32);
+        bsi->iCache = audio_rev32((uint32_t)*Ptr32);
         bsi->bytePtr += 4;
         bsi->cachedBits = 32;
         bsi->nBytes -= 4;
@@ -136,7 +132,7 @@ void MP3Decoder::RefillBitstreamCache(BitStreamInfo *bsi) {
     case 2: {
         unsigned short *Ptr16 = (unsigned short *)bsi->bytePtr;
 
-        bsi->iCache = REV16(*Ptr16);
+        bsi->iCache = audio_rev16((uint32_t)*Ptr16);
         bsi->bytePtr += 2;
         bsi->cachedBits = 16;
         bsi->nBytes = 0;

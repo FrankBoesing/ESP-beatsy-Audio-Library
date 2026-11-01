@@ -74,7 +74,7 @@ float AudioAnalyzePeak::readPeakToPeak() {
 OSPEED
 void AudioAnalyzePeak::update() {
     audio_block_t *block = receiveReadOnly();
-    if (block == nullptr) {
+    if (block == nullptr) [[unlikely]] {
         return;
     }
 
@@ -98,10 +98,10 @@ void AudioAnalyzePeak::update() {
         max_sample = maximum;
         have_samples = true;
     } else {
-        if (minimum < min_sample) {
+        if (minimum < min_sample) [[unlikely]] {
             min_sample = minimum;
         }
-        if (maximum > max_sample) {
+        if (maximum > max_sample) [[unlikely]] {
             max_sample = maximum;
         }
     }

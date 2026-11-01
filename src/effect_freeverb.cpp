@@ -243,7 +243,7 @@ int16_t AudioEffectFreeverbBase::processSample(
             (int32_t)input + feedback_sample, 0);
 
         uint16_t next = (uint16_t)(index + 1U);
-        if (next >= channel.comb_length[i]) {
+        if (next >= channel.comb_length[i]) [[unlikely]] {
             next = 0;
         }
         channel.comb_index[i] = next;
@@ -262,7 +262,7 @@ int16_t AudioEffectFreeverbBase::processSample(
         output = shift_toward_zero((int32_t)bufout - output, 1);
 
         uint16_t next = (uint16_t)(index + 1U);
-        if (next >= channel.allpass_length[i]) {
+        if (next >= channel.allpass_length[i]) [[unlikely]] {
             next = 0;
         }
         channel.allpass_index[i] = next;
@@ -292,13 +292,13 @@ AudioEffectFreeverb::AudioEffectFreeverb()
 
 OSPEED
 void AudioEffectFreeverb::update() {
-    if (!begin()) {
+    if (!begin()) [[unlikely]] {
         passThroughOnAllocationFailure();
         return;
     }
 
     audio_block_t *output = allocate();
-    if (output == nullptr) {
+    if (output == nullptr) [[unlikely]] {
         audio_block_t *input = receiveReadOnly();
         if (input != nullptr) {
             release(input);
@@ -336,7 +336,7 @@ AudioEffectFreeverbStereo::AudioEffectFreeverbStereo()
 
 OSPEED
 void AudioEffectFreeverbStereo::update() {
-    if (!begin()) {
+    if (!begin()) [[unlikely]] {
         passThroughOnAllocationFailure();
         return;
     }
@@ -344,7 +344,7 @@ void AudioEffectFreeverbStereo::update() {
     audio_block_t *output_left = allocate();
     audio_block_t *output_right = allocate();
 
-    if (output_left == nullptr || output_right == nullptr) {
+    if (output_left == nullptr || output_right == nullptr) [[unlikely]] {
         if (output_left != nullptr) {
             release(output_left);
         }

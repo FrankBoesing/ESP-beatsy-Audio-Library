@@ -293,7 +293,7 @@ void AudioEffectEnvelope::update(void) {
 
     // A noteOn()/noteOff() happened while update() was running.
     // Do not overwrite the newer state.
-    if (_stateGeneration != generation) {
+    if (_stateGeneration != generation) [[unlikely]] {
         portEXIT_CRITICAL(&_stateMux);
 
         if (block) {

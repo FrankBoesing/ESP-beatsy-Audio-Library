@@ -33,7 +33,7 @@ OSPEED
 void AudioEffectMultiply::update() {
 
     const bool bypassed = _bypassed.load(std::memory_order_relaxed);
-    if (bypassed) {
+    if (bypassed) [[unlikely]] {
         audio_block_t *output = receiveReadOnly(0);
         audio_block_t *modulator = receiveReadOnly(1);
         if (output != nullptr) {

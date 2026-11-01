@@ -85,7 +85,7 @@ void AudioInputUSB::setStreaming(bool enabled) {
 void AudioInputUSB::onUsbData(void *data, uint16_t len) {
     callbackCount_.fetch_add(1);
     AudioInputUSB *input = instance_.load();
-    if (input != nullptr) {
+    if (input != nullptr) [[likely]] {
         input->receiveData(data, len);
     }
     callbackCount_.fetch_sub(1);
@@ -98,7 +98,7 @@ void AudioInputUSB::receiveData(void *data, uint16_t len) {
 
     constexpr uint32_t bytesPerFrame = 2U * sizeof(int16_t);
     if (!isConfigured() || !streaming_.load(std::memory_order_acquire) ||
-        data == nullptr || len == 0 || (len % bytesPerFrame) != 0) {
+        data == nullptr || len == 0 || (len % bytesPerFrame) != 0) [[unlikely]] {
         fillFrames_ = 0;
         return;
     }
@@ -114,12 +114,12 @@ void AudioInputUSB::receiveData(void *data, uint16_t len) {
     while (framesRemaining != 0) {
         // Check capacity only when starting a new block.
         if (fillFrames_ == 0 &&
-            write - readBlockIndex_.load(std::memory_order_acquire) >= RX_RING_BLOCKS) {
+            write - readBlockIndex_.load(std::memory_order_acquire) >= RX_RING_BLOCKS) [[unlikely]] {
             return;
         }
 
         uint32_t framesToCopy = AUDIO_BLOCK_SAMPLES - fillFrames_;
-        if (framesToCopy > framesRemaining) {
+        if (framesToCopy > framesRemaining) [[likely]] {
             framesToCopy = framesRemaining;
         }
 
@@ -147,7 +147,7 @@ void AudioInputUSB::update() {
     const uint32_t write = writeBlockIndex_.load(std::memory_order_acquire);
 
     // Discard queued samples when the host opens or closes the USB stream.
-    if (discardPending_.exchange(false, std::memory_order_acq_rel)) {
+    if (discardPending_.exchange(false, std::memory_order_acq_rel)) [[unlikely]] {
         readBlockIndex_.store(writeBlockIndex_.load(std::memory_order_acquire), std::memory_order_release);
         return;
     }
@@ -163,7 +163,7 @@ void AudioInputUSB::update() {
 
     audio_block_t *left = allocate();
     audio_block_t *right = left != nullptr ? allocate() : nullptr;
-    if (left == nullptr || right == nullptr) {
+    if (left == nullptr || right == nullptr) [[unlikely]] {
         if (left != nullptr) {
             release(left);
         }
@@ -184,7 +184,7 @@ GCC_UNROLL
     readBlockIndex_.store(read + 1U, std::memory_order_release);
 
     // The host may have stopped the speaker interface while the block was copied.
-    if (!streaming_.load(std::memory_order_acquire)) {
+    if (!streaming_.load(std::memory_order_acquire)) [[unlikely]] {
         release(left);
         release(right);
         return;

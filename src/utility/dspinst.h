@@ -4,20 +4,20 @@
 
 #include <stdint.h>
 #include <math.h>
+#include "clz.h"
+#include "byteorder.h"
 
 #define _INLINE_ __attribute__((always_inline, unused))
 
 // Portable versions of the fixed-point DSP helpers used by the Audio Library.
 
 static inline int CLZ(unsigned int x) _INLINE_;
-static inline int CLZ(unsigned int x) { return x == 0 ? 32 : __builtin_clz(x); };
+static inline int CLZ(unsigned int x) { return audio_clz32((uint32_t)x); };
 
 static inline unsigned int REV16(unsigned int value) _INLINE_;
-static inline unsigned int REV16(unsigned int value) {
-    return (unsigned int)__builtin_bswap16((unsigned short)value);
-}; //FB
+static inline unsigned int REV16(unsigned int value) { return (unsigned int)audio_rev16((uint32_t)value); }; //FB
 static inline unsigned int REV32(unsigned int value) _INLINE_;
-static inline unsigned int REV32(unsigned int value) { return __builtin_bswap32(value); };
+static inline unsigned int REV32(unsigned int value) { return (unsigned int)audio_rev32((uint32_t)value); };
 static inline int32_t FASTABS(int32_t x) _INLINE_;
 static inline int32_t FASTABS(int32_t x) { return __builtin_abs(x); }
 static inline uint64_t SAR64(uint64_t x, int32_t n) _INLINE_;
@@ -37,18 +37,48 @@ static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) 
 static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) {
     int32_t out = val >> rshift;
     const int32_t max = (int32_t)1 << (bits - 1);
+
+#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xlen) && (__riscv_xlen == 32)
+    const int32_t min = -max;
+    const int32_t upper = max - 1;
+
+    __asm__ volatile (
+        ".option push\n"
+        ".option arch, +xespv\n"
+        "esp.sat %0, %1, %2\n"
+        ".option pop\n"
+        : "+&r"(out)
+        : "r"(min), "r"(upper)
+    );
+#else
     if (out >= 0) {
         if (out > max - 1) out = max - 1;
     } else {
         if (out < -max) out = -max;
     }
+#endif
+
     return out;
 }
 
 static inline int16_t saturate16(int32_t val) _INLINE_;
 static inline int16_t saturate16(int32_t val) {
+#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xlen) && (__riscv_xlen == 32)
+    const int32_t min = -32768;
+    const int32_t max = 32767;
+
+    __asm__ volatile (
+        ".option push\n"
+        ".option arch, +xespv\n"
+        "esp.sat %0, %1, %2\n"
+        ".option pop\n"
+        : "+&r"(val)
+        : "r"(min), "r"(max)
+    );
+#else
     val = (val > 32767) ? 32767 : val;
     val = (val < -32768) ? -32768 : val;
+#endif
     return (int16_t)val;
 }
 

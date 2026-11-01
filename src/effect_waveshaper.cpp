@@ -77,7 +77,7 @@ OSPEED
 void AudioEffectWaveshaper::update() {
 
     const bool bypassed = _bypassed.load(std::memory_order_relaxed);
-    if (bypassed) {
+    if (bypassed) [[unlikely]] {
         audio_block_t *block = receiveReadOnly();
         if (block != nullptr) {
             transmit(block);

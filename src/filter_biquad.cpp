@@ -32,11 +32,11 @@ static inline int64_t roundQ30(int64_t value) {
 }
 
 static inline int16_t saturatePcm(int64_t value) {
-    if (value > 32767) {
+    if (value > 32767) [[unlikely]] {
         return 32767;
     }
 
-    if (value < -32768) {
+    if (value < -32768) [[unlikely]] {
         return -32768;
     }
 
@@ -345,7 +345,7 @@ void AudioFilterBiquad::update() {
     memcpy(coefficients, _coefficients, stageCount * sizeof(Coefficients));
     portEXIT_CRITICAL(&_configMux);
 
-    if (stageCount == 0) {
+    if (stageCount == 0) [[unlikely]] {
         release(block);
         return;
     }

@@ -38,12 +38,12 @@ void AudioEffectFade::update(void) {
     uint32_t pos;
 
     pos = position;
-    if (pos == 0) {
+    if (pos == 0) [[unlikely]] {
         // output is silent
         block = receiveReadOnly();
         if (block) release(block);
         return;
-    } else if (pos == MAX_FADE) {
+    } else if (pos == MAX_FADE) [[likely]] {
         // output is 100%
         block = receiveReadOnly();
         if (!block) return;

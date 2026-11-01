@@ -100,7 +100,7 @@ void AudioEffectDelay::disable(uint8_t channel) {
 
 void AudioEffectDelay::update(void) {
     int16_t *buf = buffer;
-    if (!buf) {
+    if (!buf) [[unlikely]] {
         audio_block_t *in = receiveReadOnly();
         if (in) release(in);
         return;
@@ -110,17 +110,17 @@ void AudioEffectDelay::update(void) {
     const uint32_t start = writeIndex;
     audio_block_t *in = receiveReadOnly();
     uint32_t first = capacity - start;
-    if (first > AUDIO_BLOCK_SAMPLES) first = AUDIO_BLOCK_SAMPLES;
+    if (first > AUDIO_BLOCK_SAMPLES) [[likely]] first = AUDIO_BLOCK_SAMPLES;
     if (in) {
         memcpy(buf + start, in->data, first * sizeof(int16_t));
-        if (first < AUDIO_BLOCK_SAMPLES) memcpy(buf, in->data + first, (AUDIO_BLOCK_SAMPLES - first) * sizeof(int16_t));
+        if (first < AUDIO_BLOCK_SAMPLES) [[unlikely]] memcpy(buf, in->data + first, (AUDIO_BLOCK_SAMPLES - first) * sizeof(int16_t));
         release(in);
     } else {
         memset(buf + start, 0, first * sizeof(int16_t));
-        if (first < AUDIO_BLOCK_SAMPLES) memset(buf, 0, (AUDIO_BLOCK_SAMPLES - first) * sizeof(int16_t));
+        if (first < AUDIO_BLOCK_SAMPLES) [[unlikely]] memset(buf, 0, (AUDIO_BLOCK_SAMPLES - first) * sizeof(int16_t));
     }
     uint32_t next = start + AUDIO_BLOCK_SAMPLES;
-    if (next >= capacity) next -= capacity;
+    if (next >= capacity) [[unlikely]] next -= capacity;
     writeIndex = next;
 
     // output = input delayed by position[channel] samples
@@ -128,16 +128,16 @@ void AudioEffectDelay::update(void) {
     for (uint8_t channel = 0; channel < 8; channel++) {
         if (!(mask & (1 << channel))) continue;
         audio_block_t *output = allocate();
-        if (!output) continue;
+        if (!output) [[unlikely]] continue;
 
         uint32_t n = position[channel];
-        if (n > capacity - AUDIO_BLOCK_SAMPLES) n = capacity - AUDIO_BLOCK_SAMPLES;
+        if (n > capacity - AUDIO_BLOCK_SAMPLES) [[unlikely]] n = capacity - AUDIO_BLOCK_SAMPLES;
         uint32_t rd = (start + capacity - n) % capacity;
 
         uint32_t len1 = capacity - rd;
-        if (len1 > AUDIO_BLOCK_SAMPLES) len1 = AUDIO_BLOCK_SAMPLES;
+        if (len1 > AUDIO_BLOCK_SAMPLES) [[likely]] len1 = AUDIO_BLOCK_SAMPLES;
         memcpy(output->data, buf + rd, len1 * sizeof(int16_t));
-        if (len1 < AUDIO_BLOCK_SAMPLES)
+        if (len1 < AUDIO_BLOCK_SAMPLES) [[unlikely]]
             memcpy(output->data + len1, buf, (AUDIO_BLOCK_SAMPLES - len1) * sizeof(int16_t));
 
         transmit(output, channel);

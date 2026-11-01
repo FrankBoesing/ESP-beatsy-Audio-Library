@@ -55,6 +55,8 @@
 #define _ASSEMBLY_H
 
 #include <stdint.h>
+#include "../utility/clz.h"
+#include "../utility/byteorder.h"
 
 /* toolchain:           MSFT Visual C++
  * target architecture: x86
@@ -426,12 +428,12 @@ static inline int CLZ(int x) {
 
 //Reverse byte order (16 bit) //FB
 static inline unsigned int REV16(unsigned int value) {
-    return (unsigned int)__builtin_bswap16((unsigned short)value);
+    return (unsigned int)audio_rev16((uint32_t)value);
 }
 
 //Reverse byte order (32 bit) //FB
 static inline unsigned int REV32(unsigned int value) {
-    return __builtin_bswap32(value);
+    return (unsigned int)audio_rev32((uint32_t)value);
 }
 
 typedef long long Word64;
@@ -482,15 +484,15 @@ static inline int FASTABS(int x) {
 }
 
 static inline int CLZ(unsigned int x) {
-    return x == 0 ? 32 : __builtin_clz(x);
+    return audio_clz32(x);
 }
 
 static inline unsigned int REV16(unsigned int value) {
-    return (unsigned int)__builtin_bswap16((unsigned short)value);
+    return (unsigned int)audio_rev16((uint32_t)value);
 }
 
 static inline unsigned int REV32(unsigned int value) {
-    return __builtin_bswap32(value);
+    return (unsigned int)audio_rev32((uint32_t)value);
 }
 
 static inline Word64 MADD64(Word64 sum64, int x, int y) {

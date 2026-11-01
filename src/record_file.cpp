@@ -300,24 +300,24 @@ bool AudioRecordFile::writeFinalHeader() {
 
 void AudioRecordFile::copyIntoRing(size_t index, const uint8_t *source, size_t size) {
     size_t first = _bufferSize - index;
-    if (first > size) {
+    if (first > size) [[likely]] {
         first = size;
     }
 
     memcpy(_buffer + index, source, first);
-    if (size > first) {
+    if (size > first) [[unlikely]] {
         memcpy(_buffer, source + first, size - first);
     }
 }
 
 void AudioRecordFile::copyFromRing(size_t index, uint8_t *destination, size_t size) {
     size_t first = _bufferSize - index;
-    if (first > size) {
+    if (first > size) [[likely]] {
         first = size;
     }
 
     memcpy(destination, _buffer + index, first);
-    if (size > first) {
+    if (size > first) [[unlikely]] {
         memcpy(destination + first, _buffer, size - first);
     }
 }
@@ -343,7 +343,7 @@ void AudioRecordFile::update() {
         bytesToCopy = AUDIO_BLOCK_SAMPLES * channels * sizeof(int16_t);
 
         if (_bufferSize - _bufferedBytes < bytesToCopy ||
-            _dataBytesAccepted + bytesToCopy > _maxDataBytes) {
+            _dataBytesAccepted + bytesToCopy > _maxDataBytes) [[unlikely]] {
             // Never block the audio update waiting for the SD card.
             _recording = false;
             _stopRequested = true;
@@ -361,7 +361,7 @@ void AudioRecordFile::update() {
     if (acceptBlock) {
         const int16_t *leftSamples = left != nullptr ? left->data : audio_zeroblock;
 
-        if (channels == 1) {
+        if (channels == 1) [[unlikely]] {
             copyIntoRing(writeIndex, (const uint8_t *)leftSamples, bytesToCopy);
         } else {
             const int16_t *rightSamples = right != nullptr ? right->data : audio_zeroblock;
@@ -428,11 +428,11 @@ void AudioRecordFile::writerTaskLoop() {
 
         // Once the SD write itself fails, preserve the .tmp file and wait only
         // for any in-flight producer copy to finish before freeing PSRAM.
-        if (writeFailed && !producerActive) {
+        if (writeFailed && !producerActive) [[unlikely]] {
             break;
         }
 
-        if (!writeFailed && bytesAvailable > 0) {
+        if (!writeFailed && bytesAvailable > 0) [[likely]] {
             size_t bytesToWrite = bytesAvailable;
             if (bytesToWrite > sizeof(chunk)) {
                 bytesToWrite = sizeof(chunk);
@@ -441,7 +441,7 @@ void AudioRecordFile::writerTaskLoop() {
             copyFromRing(readIndex, chunk, bytesToWrite);
             const size_t written = _file.write(chunk, bytesToWrite);
 
-            if (written > 0) {
+            if (written > 0) [[likely]] {
                 portENTER_CRITICAL(&_bufferMux);
                 _readIndex = (_readIndex + written) % _bufferSize;
                 _bufferedBytes -= written;
@@ -450,7 +450,7 @@ void AudioRecordFile::writerTaskLoop() {
                 _dataBytesWritten += written;
             }
 
-            if (written != bytesToWrite) {
+            if (written != bytesToWrite) [[unlikely]] {
                 writeFailed = true;
 
                 portENTER_CRITICAL(&_bufferMux);
@@ -463,7 +463,7 @@ void AudioRecordFile::writerTaskLoop() {
             continue;
         }
 
-        if (stopRequested && bytesAvailable == 0 && !producerActive) {
+        if (stopRequested && bytesAvailable == 0 && !producerActive) [[unlikely]] {
             break;
         }
 
@@ -477,10 +477,10 @@ void AudioRecordFile::writerTaskLoop() {
 
     bool success = false;
 
-    if (!writeFailed && !hasError && writeFinalHeader()) {
+    if (!writeFailed && !hasError && writeFinalHeader()) [[likely]] {
         _file.close();
 
-        if (_filesystem != nullptr && _filesystem->rename(_tempPath, _finalPath)) {
+        if (_filesystem != nullptr && _filesystem->rename(_tempPath, _finalPath)) [[likely]] {
             success = true;
         }
     } else {

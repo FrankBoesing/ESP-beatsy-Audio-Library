@@ -11,6 +11,8 @@
 
 #include "aac_decoder.h"
 #include "aac_decoder_consts.h"
+#include "../../utility/clz.h"
+#include "../../utility/byteorder.h"
 
 //----------------------------------------------------------------------------------------------------------------------
 static inline int32_t MULSHIFT32(int32_t x, int32_t y) {
@@ -19,17 +21,11 @@ static inline int32_t MULSHIFT32(int32_t x, int32_t y) {
     return z;
 }
 static inline int32_t CLZ(int32_t x) {
-    return x == 0 ? 32 : __builtin_clz(x);
+    return audio_clz32((uint32_t)x);
 } // calls(0) exist.
 static inline int32_t FASTABS(int32_t x) {
     return __builtin_abs(x);
 } //FB
-static inline uint16_t REV16(uint16_t value) {
-    return __builtin_bswap16(value);
-} //FB
-static inline uint32_t REV32(uint32_t value) {
-    return __builtin_bswap32(value);
-}; //FB
 static inline int64_t MADD64(int64_t sum64, int32_t x, int32_t y) {
     sum64 += (int64_t)x * (int64_t)y;
     return sum64;
@@ -4879,7 +4875,7 @@ inline void AACDecoder::RefillBitstreamCache() {
     }
 }
 */
-//Optimized for REV16, REV32 (FB)
+// Uses the shared byte-order helper for the 32-bit cache load (FB)
 inline void AACDecoder::RefillBitstreamCache() {
     const int32_t nBytes = m_aac_BitStreamInfo.nBytes;
     uint8_t *ptr = m_aac_BitStreamInfo.bytePtr;
@@ -4888,7 +4884,7 @@ inline void AACDecoder::RefillBitstreamCache() {
         // 32-bit aligned load + byte swap:
         // buffer:  12 34 56 78
         // iCache:  0x12345678
-        m_aac_BitStreamInfo.iCache = REV32(*(const uint32_t *)ptr);
+        m_aac_BitStreamInfo.iCache = audio_rev32(*(const uint32_t *)ptr);
         m_aac_BitStreamInfo.bytePtr = ptr + 4;
         m_aac_BitStreamInfo.cachedBits = 32;
         m_aac_BitStreamInfo.nBytes = nBytes - 4;

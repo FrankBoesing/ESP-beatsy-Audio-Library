@@ -138,7 +138,7 @@ void AudioRecordQueue::freeBuffer(void)
 void AudioRecordQueue::update(void)
 {
 	audio_block_t *block = receiveReadOnly();
-	if (block == NULL) return;
+	if (block == NULL) [[unlikely]] return;
 
 	portENTER_CRITICAL(&record_queue_mux);
 
@@ -146,7 +146,7 @@ void AudioRecordQueue::update(void)
 		uint8_t h = head + 1;
 		if (h >= max_buffers) h = 0;
 
-		if (h != tail) {
+		if (h != tail) [[likely]] {
 			queue[h] = block;
 			head = h;
 			block = NULL;

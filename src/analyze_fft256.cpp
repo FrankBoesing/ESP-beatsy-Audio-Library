@@ -103,14 +103,14 @@ void AudioAnalyzeFFT256::processFrame(void) {
     // are zero. Window coefficients are Q15, as in the Teensy API.
     for (uint16_t i = 0; i < FFT_SIZE; ++i) {
         float sample = (float)(frameSamples[i]) * q15Scale;
-        if (window != nullptr) {
+        if (window != nullptr) [[likely]] {
             sample *= (float)(window[i]) * q15Scale;
         }
         fftBuffer[2U * i] = sample;
         fftBuffer[2U * i + 1U] = 0.0f;
     }
 
-    if (!AudioFFT::transform(fftBuffer, FFT_SIZE)) {
+    if (!AudioFFT::transform(fftBuffer, FFT_SIZE)) [[unlikely]] {
         return;
     }
 
@@ -126,7 +126,7 @@ void AudioAnalyzeFFT256::processFrame(void) {
     }
 
     ++averageCount;
-    if (averageCount < naverage) {
+    if (averageCount < naverage) [[likely]] {
         return;
     }
 
@@ -144,7 +144,7 @@ void AudioAnalyzeFFT256::processFrame(void) {
 
 void AudioAnalyzeFFT256::update(void) {
     audio_block_t *block = receiveReadOnly();
-    if (block == nullptr) {
+    if (block == nullptr) [[unlikely]] {
         return;
     }
 
@@ -153,7 +153,7 @@ void AudioAnalyzeFFT256::update(void) {
     for (uint32_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         frameSamples[samplesCollected++] = block->data[i];
 
-        if (samplesCollected == FFT_SIZE) {
+        if (samplesCollected == FFT_SIZE) [[unlikely]] {
             processFrame();
             memmove(frameSamples, frameSamples + (FFT_SIZE / 2), (FFT_SIZE / 2) * sizeof(frameSamples[0]));
             samplesCollected = FFT_SIZE / 2;
