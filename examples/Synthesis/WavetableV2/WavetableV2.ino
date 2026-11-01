@@ -105,7 +105,7 @@ static void printLoad() {
     Serial.printf(
         "Audio CPU: graph %5.1f%% (max %5.1f%%), V2 %5.1f%% (max %5.1f%%), "
         "notes %u, sample voices %u, audio blocks %u/%u, USB configured %s\n",
-        AudioProcessorUsageTotal(), AudioProcessorUsageTotalMax(),
+        AudioStream::AudioProcessorUsageTotal(), AudioStream::AudioProcessorUsageTotalMax(),
         synth.AudioProcessorUsage(), synth.AudioProcessorUsageMax(),
         (unsigned)synth.activeNoteCount(), (unsigned)synth.activeSampleCount(),
         (unsigned)AudioMemoryUsage(), (unsigned)AudioMemoryUsageMax(),
@@ -173,7 +173,7 @@ void setup() {
 }
 
 void loop() {
-    AudioProcessorUsageTotalMaxReset();
+    AudioStream::AudioProcessorUsageTotalMaxReset();
     synth.AudioProcessorUsageMaxReset();
     AudioMemoryUsageMaxReset();
 
