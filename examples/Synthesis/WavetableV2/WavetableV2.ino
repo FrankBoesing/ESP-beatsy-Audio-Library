@@ -176,10 +176,13 @@ void setup() {
 }
 
 void loop() {
+    serialConsole().println("Loop entered.");
+
     AudioStream::AudioProcessorUsageTotalMaxReset();
     synth.AudioProcessorUsageMaxReset();
     AudioMemoryUsageMaxReset();
 
+    serialConsole().println("Loop counters reset; starting noteOn calls.");
     playStressChord();
 
     // Keep the 32-note / 128-layer load active while the PC records USB audio.
