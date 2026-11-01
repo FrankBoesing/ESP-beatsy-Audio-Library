@@ -284,6 +284,23 @@ void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice) {
                                   ? (int32_t)(-(int64_t)voice.envelopeMultiplier /
                                               denominator)
                                   : 0;
+
+    // Precompute the amplitude-scaled release ramp. The quotient/remainder
+    // pair preserves the exact product decrement without a 64-bit multiply
+    // in the per-sample render loop.
+    const uint32_t releaseStep = voice.envelopeIncrement < 0
+                                     ? (uint32_t)(-(int64_t)voice.envelopeIncrement)
+                                     : 0U;
+    const uint64_t gainProduct =
+        (uint64_t)voice.amplitude * (uint32_t)voice.envelopeMultiplier;
+    const uint64_t gainStepProduct =
+        (uint64_t)voice.amplitude * releaseStep;
+
+    voice.releaseGainQ16_16 = (uint32_t)(gainProduct >> 15);
+    voice.releaseGainRemainder = (uint16_t)(gainProduct & 0x7FFFU);
+    voice.releaseGainStepQ16_16 = (uint32_t)(gainStepProduct >> 15);
+    voice.releaseGainStepRemainder = (uint16_t)(gainStepProduct & 0x7FFFU);
+
     ++voice.generation;
 }
 
@@ -464,6 +481,97 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
     const uint32_t sampleIndexShift = 32U - sample.INDEX_BITS;
     const uint32_t interpolationShift = 16U - sample.INDEX_BITS;
     const uint32_t maxSampleIndex = sample.SAMPLE_COUNT - 2U;
+
+    // Release has a fixed linear slope. Its amplitude-scaled ramp was prepared
+    // by beginReleaseLocked(), so this path needs only integer subtracts and one
+    // sample multiply per frame; the generic ADSR state machine is bypassed.
+    if (voice.envelopeState == STATE_RELEASE) {
+        for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            if (!voice.active) break;
+
+            if (stopAtEnd && voice.phase >= maxPhase) {
+                voice.active = false;
+                voice.envelopeState = STATE_IDLE;
+                break;
+            }
+
+            if (voice.envelopeSubCount == 0 && voice.envelopeCount <= 0) {
+                voice.active = false;
+                voice.envelopeState = STATE_IDLE;
+                voice.envelopeCount = 0;
+                voice.envelopeMultiplier = 0;
+                voice.envelopeIncrement = 0;
+                voice.releaseGainQ16_16 = 0;
+                voice.releaseGainRemainder = 0;
+                voice.releaseGainStepQ16_16 = 0;
+                voice.releaseGainStepRemainder = 0;
+                return;
+            }
+
+            if (voice.envelopeIncrement < 0) {
+                const uint32_t decrement =
+                    (uint32_t)(-(int64_t)voice.envelopeIncrement);
+                if ((uint32_t)voice.envelopeMultiplier <= decrement) {
+                    voice.envelopeMultiplier = 0;
+                    voice.releaseGainQ16_16 = 0;
+                    voice.releaseGainRemainder = 0;
+                } else {
+                    voice.envelopeMultiplier -= (int32_t)decrement;
+
+                    if (voice.releaseGainRemainder <
+                        voice.releaseGainStepRemainder) {
+                        voice.releaseGainRemainder = (uint16_t)(
+                            voice.releaseGainRemainder + 0x8000U -
+                            voice.releaseGainStepRemainder);
+                        voice.releaseGainQ16_16 -=
+                            voice.releaseGainStepQ16_16 + 1U;
+                    } else {
+                        voice.releaseGainRemainder = (uint16_t)(
+                            voice.releaseGainRemainder -
+                            voice.releaseGainStepRemainder);
+                        voice.releaseGainQ16_16 -=
+                            voice.releaseGainStepQ16_16;
+                    }
+                }
+            }
+
+            ++voice.envelopeSubCount;
+            if (voice.envelopeSubCount >= ENVELOPE_PERIOD) {
+                voice.envelopeSubCount = 0;
+                if (voice.envelopeCount > INT32_MIN) {
+                    --voice.envelopeCount;
+                }
+            }
+
+            uint32_t sampleIndex = voice.phase >> sampleIndexShift;
+            if (sampleIndex > maxSampleIndex) {
+                sampleIndex = maxSampleIndex;
+            }
+
+            const uint32_t interpolation =
+                (voice.phase >> interpolationShift) & 0xFFFFU;
+            const int32_t sample0 = sample.SAMPLE[sampleIndex];
+            const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+
+            const int32_t weight0 = (int32_t)(0x10000U - interpolation);
+            const int32_t weightedSample =
+                sample0 * weight0 + sample1 * (int32_t)interpolation;
+            const int32_t interpolated = weightedSample >> 16;
+
+            const uint32_t effectiveAmplitude =
+                voice.releaseGainQ16_16 >> 16;
+            mix[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
+
+            voice.phase += voice.phaseIncrement;
+
+            if (loopEnabled && loopLength != 0 && voice.phase >= loopEnd) {
+                const uint32_t loopStart = loopEnd - loopLength;
+                const uint32_t overshoot = voice.phase - loopEnd;
+                voice.phase = loopStart + (overshoot % loopLength);
+            }
+        }
+        return;
+    }
 
     for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         if (!voice.active) break;

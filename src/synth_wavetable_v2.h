@@ -162,6 +162,12 @@ class AudioSynthWavetableV2 : public AudioStream {
         int32_t envelopeIncrement;
         uint8_t envelopeSubCount;
 
+        // Amplitude-scaled linear release ramp (Q16.16 plus /32768 remainder).
+        uint32_t releaseGainQ16_16;
+        uint32_t releaseGainStepQ16_16;
+        uint16_t releaseGainRemainder;
+        uint16_t releaseGainStepRemainder;
+
         uint32_t delayCount;
         uint32_t attackCount;
         uint32_t holdCount;
