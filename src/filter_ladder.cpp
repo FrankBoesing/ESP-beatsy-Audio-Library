@@ -320,7 +320,7 @@ void AudioFilterLadder::update() {
 
     // frequency() only changes the requested base frequency from task context.
     // Coefficients are recalculated here, in the audio task.
-    if (config.frequencyGeneration != appliedFrequencyGeneration) {
+    if (config.frequencyGeneration != appliedFrequencyGeneration) [[unlikely]] {
         computeCoefficients(config.baseFrequency, currentSampleRate, alpha, qAdjust);
         appliedFrequencyGeneration = config.frequencyGeneration;
     }
