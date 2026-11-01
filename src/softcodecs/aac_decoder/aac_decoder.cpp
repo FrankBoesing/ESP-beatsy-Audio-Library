@@ -12,6 +12,7 @@
 #include "aac_decoder.h"
 #include "aac_decoder_consts.h"
 #include "../../utility/clz.h"
+#include "../../utility/byteorder.h"
 
 //----------------------------------------------------------------------------------------------------------------------
 static inline int32_t MULSHIFT32(int32_t x, int32_t y) {
@@ -26,10 +27,10 @@ static inline int32_t FASTABS(int32_t x) {
     return __builtin_abs(x);
 } //FB
 static inline uint16_t REV16(uint16_t value) {
-    return __builtin_bswap16(value);
+    return (uint16_t)audio_rev16((uint32_t)value);
 } //FB
 static inline uint32_t REV32(uint32_t value) {
-    return __builtin_bswap32(value);
+    return audio_rev32(value);
 }; //FB
 static inline int64_t MADD64(int64_t sum64, int32_t x, int32_t y) {
     sum64 += (int64_t)x * (int64_t)y;
