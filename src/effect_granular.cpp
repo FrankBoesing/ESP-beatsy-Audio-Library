@@ -170,7 +170,7 @@ void AudioEffectGranular::update() {
         return;
     }
 
-    if (generation != _activeGeneration) {
+    if (generation != _activeGeneration) [[unlikely]] {
         _activeGeneration = generation;
         resetPlayback(requestedMode, freezeLength, glitchLength);
     }
