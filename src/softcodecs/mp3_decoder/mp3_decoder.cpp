@@ -11,6 +11,7 @@
 
 #include "mp3_decoder.h"
 #include "mp3_decoder_consts.h"
+#include "../../utility/clz.h"
 
 /* clip to range [-2^n, 2^n - 1] */
 static inline int32_t CLIP_2N(int32_t y, int32_t n) {
@@ -31,7 +32,7 @@ static inline int32_t CLIP_2N(int32_t y, int32_t n) {
 }
 
 static inline int CLZ(unsigned int x) {
-    return x == 0 ? 32 : __builtin_clz(x);
+    return audio_clz32((uint32_t)x);
 }; //FB (calls (0) exist)
 
 
