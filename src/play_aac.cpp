@@ -351,12 +351,12 @@ AudioDecoderStream::DecodeResult AudioPlayAac::decodePcmBuffer(int16_t *destinat
                                                                size_t &outSamples) {
     outSamples = 0;
 
-    if (!_decoder.IsInit() || destination == nullptr || capacity < AAC_PCM_BUFFER_SAMPLES) {
+    if (!_decoder.IsInit() || destination == nullptr || capacity < AAC_PCM_BUFFER_SAMPLES) [[unlikely]] {
         _lastError = ERR_DECODER;
         return DecodeResult::ERROR;
     }
 
-    if (!_inputPrepared && !prepareAacInput()) {
+    if (!_inputPrepared && !prepareAacInput()) [[unlikely]] {
         return DecodeResult::ERROR;
     }
 
@@ -382,14 +382,14 @@ AudioDecoderStream::DecodeResult AudioPlayAac::decodePcmBuffer(int16_t *destinat
 #endif
         const int consumed = bytesBefore - bytesLeft;
 
-        if (consumed < 0 || (size_t)consumed > _inputLeft) {
+        if (consumed < 0 || (size_t)consumed > _inputLeft) [[unlikely]] {
             _lastError = ERR_DECODER;
             ESP_LOGE(TAG, "AAC decoder returned invalid byte count");
             return DecodeResult::ERROR;
         }
 
-        if (decodeResult == ERR_AAC_NONE) {
-            if (consumed == 0) {
+        if (decodeResult == ERR_AAC_NONE) [[likely]] {
+            if (consumed == 0) [[unlikely]] {
                 _lastError = ERR_DECODER;
                 ESP_LOGE(TAG, "AAC decoder consumed no input bytes");
                 return DecodeResult::ERROR;
@@ -401,7 +401,7 @@ AudioDecoderStream::DecodeResult AudioPlayAac::decodePcmBuffer(int16_t *destinat
             AACFrameInfo info = {};
             _decoder.GetLastFrameInfo(&info);
 
-            if (!validateFrameInfo(info)) {
+            if (!validateFrameInfo(info)) [[unlikely]] {
                 return DecodeResult::ERROR;
             }
 
@@ -430,7 +430,7 @@ AudioDecoderStream::DecodeResult AudioPlayAac::decodePcmBuffer(int16_t *destinat
             if (info.nChans == 2) {
                 outSamples = decoderSamples;
             } else {
-                if (decoderSamples * 2U > capacity) {
+                if (decoderSamples * 2U > capacity) [[unlikely]] {
                     _lastError = ERR_DECODER;
                     ESP_LOGE(TAG, "mono frame does not fit output buffer");
                     return DecodeResult::ERROR;
@@ -443,7 +443,7 @@ AudioDecoderStream::DecodeResult AudioPlayAac::decodePcmBuffer(int16_t *destinat
             return outSamples > 0 ? DecodeResult::FILLED : DecodeResult::ERROR;
         }
 
-        if (decodeResult == ERR_AAC_INDATA_UNDERFLOW) {
+        if (decodeResult == ERR_AAC_INDATA_UNDERFLOW) [[unlikely]] {
             if (_inputEof) {
                 return DecodeResult::END_OF_STREAM;
             }
