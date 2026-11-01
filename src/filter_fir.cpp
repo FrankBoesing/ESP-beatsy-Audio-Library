@@ -81,7 +81,7 @@ void AudioFilterFIR::update() {
     }
 
     portENTER_CRITICAL(&_configMux);
-    if (generation != _configurationGeneration) {
+    if (generation != _configurationGeneration) [[unlikely]] {
         portEXIT_CRITICAL(&_configMux);
         release(block);
         return;
@@ -108,7 +108,7 @@ void AudioFilterFIR::update() {
         return;
     }
 
-    if (resetHistory) {
+    if (resetHistory) [[unlikely]] {
         memset(_history, 0, sizeof(_history));
     }
 
