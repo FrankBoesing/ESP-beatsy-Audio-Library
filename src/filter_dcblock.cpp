@@ -42,7 +42,7 @@ void AudioFilterDCBlock::update() {
     }
 
     const float currentSampleRate = sampleRate();
-    if (!std::isfinite(currentSampleRate) || currentSampleRate <= 0.0f) {
+    if (!std::isfinite(currentSampleRate) || currentSampleRate <= 0.0f) [[unlikely]] {
         release(block);
         return;
     }
@@ -85,9 +85,9 @@ void AudioFilterDCBlock::update() {
                                multiplyQ31Rounded(poleQ31, previousOutput);
 
         previousInput = input;
-        if (output > std::numeric_limits<int32_t>::max()) {
+        if (output > std::numeric_limits<int32_t>::max()) [[unlikely]] {
             previousOutput = std::numeric_limits<int32_t>::max();
-        } else if (output < std::numeric_limits<int32_t>::min()) {
+        } else if (output < std::numeric_limits<int32_t>::min()) [[unlikely]] {
             previousOutput = std::numeric_limits<int32_t>::min();
         } else {
             // Retain the internal filter state before 16-bit output clipping.
