@@ -441,12 +441,12 @@ OSPEED
 AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination, size_t capacity, size_t &outSamples) {
     outSamples = 0;
 
-    if (!_decoder.IsInit() || destination == nullptr || capacity < MP3_PCM_BUFFER_SAMPLES) {
+    if (!_decoder.IsInit() || destination == nullptr || capacity < MP3_PCM_BUFFER_SAMPLES) [[unlikely]] {
         _lastError = ERR_DECODER;
         return DecodeResult::ERROR;
     }
 
-    if (!_inputPrepared) {
+    if (!_inputPrepared) [[unlikely]] {
         if (!prepareMp3Input()) {
             return DecodeResult::ERROR;
         }
@@ -499,14 +499,14 @@ AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination, s
 #endif
         const int consumed = bytesBefore - bytesLeft;
 
-        if (consumed < 0 || (size_t)(consumed) > _inputLeft) {
+        if (consumed < 0 || (size_t)(consumed) > _inputLeft) [[unlikely]] {
             _lastError = ERR_DECODER;
 
             ESP_LOGE(TAG, "MP3 decoder returned invalid byte count");
             return DecodeResult::ERROR;
         }
 
-        if (decodeResult == ERR_MP3_NONE) {
+        if (decodeResult == ERR_MP3_NONE) [[likely]] {
             _inputPos += (size_t)(consumed);
             _inputLeft -= (size_t)(consumed);
 
@@ -526,7 +526,7 @@ AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination, s
             info.layer = _decoder.MP3GetLayer();
             info.version = _decoder.MP3GetVersion();
 
-            if (!validateFrameInfo(info)) {
+            if (!validateFrameInfo(info)) [[unlikely]] {
                 return DecodeResult::ERROR;
             }
 
@@ -561,7 +561,7 @@ AudioPlayMp3::DecodeResult AudioPlayMp3::decodePcmBuffer(int16_t *destination, s
             if (info.nChans == 2) {
                 outSamples = decoderSamples;
             } else {
-                if (decoderSamples * 2U > capacity) {
+                if (decoderSamples * 2U > capacity) [[unlikely]] {
                     _lastError = ERR_DECODER;
                     ESP_LOGE(TAG, "mono frame does not fit output buffer");
                     return DecodeResult::ERROR;
