@@ -181,7 +181,7 @@ static void playStressChord() {
         }
     }
 
-    consolePrintf("Started %u notes and %u sample layers. Configured maximum: %u / %u.\\n",
+    consolePrintf("Started %u notes and %u sample layers. Configured maximum: %u / %u.\n",
                   (unsigned)startedNotes, (unsigned)startedSamples,
                   (unsigned)TEST_NOTE_COUNT,
                   (unsigned)(TEST_NOTE_COUNT * AudioSynthWavetableV2::MAX_SAMPLE_LAYERS_PER_NOTE));
@@ -199,7 +199,7 @@ void setup() {
     delay(300);
 
     consolePrintln("");
-    consolePrintf("AudioSynthWavetableV2: %u notes, up to %u sample voices.\\n",
+    consolePrintf("AudioSynthWavetableV2: %u notes, up to %u sample voices.\n",
                   (unsigned)TEST_NOTE_COUNT,
                   (unsigned)(TEST_NOTE_COUNT * AudioSynthWavetableV2::MAX_SAMPLE_LAYERS_PER_NOTE));
     consolePrintln("USB microphone output: stereo, 16-bit PCM.");
