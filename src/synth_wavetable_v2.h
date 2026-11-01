@@ -174,7 +174,6 @@ class AudioSynthWavetableV2 : public AudioStream {
     void beginReleaseLocked(SampleVoice &voice);
     void releaseNoteLocked(uint8_t noteSlot);
     void stealNoteLocked(uint8_t noteSlot);
-    bool advanceEnvelope(SampleVoice &voice) const;
     void renderVoice(SampleVoice &voice, int32_t *mix) const;
 
     mutable portMUX_TYPE stateMux_ = portMUX_INITIALIZER_UNLOCKED;

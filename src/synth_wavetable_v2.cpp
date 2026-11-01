@@ -447,90 +447,6 @@ uint16_t AudioSynthWavetableV2::activeSampleCount() const {
     return count;
 }
 
-bool AudioSynthWavetableV2::advanceEnvelope(SampleVoice &voice) const {
-    if (!voice.active) return false;
-
-    if (voice.envelopeSubCount == 0) {
-        while (voice.envelopeCount <= 0) {
-            switch (voice.envelopeState) {
-            case STATE_DELAY:
-                voice.envelopeState = STATE_ATTACK;
-                voice.envelopeCount = (int32_t)(voice.attackCount ? voice.attackCount : 1U);
-                voice.envelopeIncrement = (int32_t)((int64_t)UNITY_GAIN /
-                    ((int64_t)voice.envelopeCount * ENVELOPE_PERIOD));
-                break;
-
-            case STATE_ATTACK:
-                voice.envelopeMultiplier = UNITY_GAIN;
-                voice.envelopeState = STATE_HOLD;
-                voice.envelopeCount = (int32_t)voice.holdCount;
-                voice.envelopeIncrement = 0;
-                break;
-
-            case STATE_HOLD: {
-                voice.envelopeState = STATE_DECAY;
-                voice.envelopeCount = (int32_t)(voice.decayCount ? voice.decayCount : 1U);
-                int32_t sustainLoss = voice.sample->SUSTAIN_MULT;
-                if (sustainLoss < 0) sustainLoss = 0;
-                if (sustainLoss > UNITY_GAIN) sustainLoss = UNITY_GAIN;
-                voice.envelopeIncrement = (int32_t)(-((int64_t)sustainLoss) /
-                    ((int64_t)voice.envelopeCount * ENVELOPE_PERIOD));
-                break;
-            }
-
-            case STATE_DECAY: {
-                int32_t sustainLoss = voice.sample->SUSTAIN_MULT;
-                if (sustainLoss < 0) sustainLoss = 0;
-                if (sustainLoss > UNITY_GAIN) sustainLoss = UNITY_GAIN;
-                voice.envelopeMultiplier = UNITY_GAIN - sustainLoss;
-                voice.envelopeState = STATE_SUSTAIN;
-                voice.envelopeCount = INT32_MAX;
-                voice.envelopeIncrement = 0;
-                break;
-            }
-
-            case STATE_SUSTAIN:
-                voice.envelopeCount = INT32_MAX;
-                voice.envelopeIncrement = 0;
-                break;
-
-            case STATE_RELEASE:
-            case STATE_IDLE:
-            default:
-                voice.envelopeState = STATE_IDLE;
-                voice.active = false;
-                voice.envelopeCount = 0;
-                voice.envelopeMultiplier = 0;
-                voice.envelopeIncrement = 0;
-                return false;
-            }
-
-            if (voice.envelopeState == STATE_SUSTAIN) break;
-        }
-    }
-
-    const int64_t nextMultiplier = (int64_t)voice.envelopeMultiplier +
-                                   voice.envelopeIncrement;
-    if (nextMultiplier <= 0) {
-        voice.envelopeMultiplier = 0;
-    } else if (nextMultiplier >= UNITY_GAIN) {
-        voice.envelopeMultiplier = UNITY_GAIN;
-    } else {
-        voice.envelopeMultiplier = (int32_t)nextMultiplier;
-    }
-
-    ++voice.envelopeSubCount;
-    if (voice.envelopeSubCount >= ENVELOPE_PERIOD) {
-        voice.envelopeSubCount = 0;
-        if (voice.envelopeState != STATE_SUSTAIN &&
-            voice.envelopeCount > INT32_MIN) {
-            --voice.envelopeCount;
-        }
-    }
-
-    return voice.active;
-}
-
 void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const {
     if (!voice.active || voice.sample == nullptr) return;
 
@@ -538,44 +454,143 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
     const bool stopAtEnd = sample.LOOP_MODE == LoopMode::ONE_SHOT ||
                            (sample.LOOP_MODE == LoopMode::UNTIL_RELEASE &&
                             voice.released);
+    const bool loopEnabled = sample.LOOP_MODE == LoopMode::CONTINUOUS ||
+                             (sample.LOOP_MODE == LoopMode::UNTIL_RELEASE &&
+                              !voice.released);
+
     const uint32_t maxPhase = maximumPhase(sample);
     const uint32_t loopLength = sample.LOOP_PHASE_LENGTH;
     const uint32_t loopEnd = sample.LOOP_PHASE_END;
+    const uint32_t sampleIndexShift = 32U - sample.INDEX_BITS;
+    const uint32_t interpolationShift = 16U - sample.INDEX_BITS;
+    const uint32_t maxSampleIndex = sample.SAMPLE_COUNT - 2U;
 
     for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        if (!voice.active) break;
-
         if (stopAtEnd && voice.phase >= maxPhase) {
             voice.active = false;
             voice.envelopeState = STATE_IDLE;
             break;
         }
 
-        if (!advanceEnvelope(voice)) break;
+        // Advance the envelope at audio-sample rate. State transitions and
+        // envelope-time divisions happen only once per ENVELOPE_PERIOD samples.
+        if (voice.envelopeSubCount == 0) {
+            while (voice.envelopeCount <= 0) {
+                switch (voice.envelopeState) {
+                case STATE_DELAY:
+                    voice.envelopeState = STATE_ATTACK;
+                    voice.envelopeCount = (int32_t)(voice.attackCount ? voice.attackCount : 1U);
+                    voice.envelopeIncrement = (int32_t)((int64_t)UNITY_GAIN /
+                        ((int64_t)voice.envelopeCount * ENVELOPE_PERIOD));
+                    break;
 
-        uint32_t sampleIndex = voice.phase >> (32U - sample.INDEX_BITS);
-        if (sampleIndex >= sample.SAMPLE_COUNT - 1U) {
-            sampleIndex = sample.SAMPLE_COUNT - 2U;
+                case STATE_ATTACK:
+                    voice.envelopeMultiplier = UNITY_GAIN;
+                    voice.envelopeState = STATE_HOLD;
+                    voice.envelopeCount = (int32_t)voice.holdCount;
+                    voice.envelopeIncrement = 0;
+                    break;
+
+                case STATE_HOLD: {
+                    voice.envelopeState = STATE_DECAY;
+                    voice.envelopeCount = (int32_t)(voice.decayCount ? voice.decayCount : 1U);
+                    int32_t sustainLoss = voice.sample->SUSTAIN_MULT;
+                    if (sustainLoss < 0) sustainLoss = 0;
+                    if (sustainLoss > UNITY_GAIN) sustainLoss = UNITY_GAIN;
+                    voice.envelopeIncrement = (int32_t)(-((int64_t)sustainLoss) /
+                        ((int64_t)voice.envelopeCount * ENVELOPE_PERIOD));
+                    break;
+                }
+
+                case STATE_DECAY: {
+                    int32_t sustainLoss = voice.sample->SUSTAIN_MULT;
+                    if (sustainLoss < 0) sustainLoss = 0;
+                    if (sustainLoss > UNITY_GAIN) sustainLoss = UNITY_GAIN;
+                    voice.envelopeMultiplier = UNITY_GAIN - sustainLoss;
+                    voice.envelopeState = STATE_SUSTAIN;
+                    voice.envelopeCount = INT32_MAX;
+                    voice.envelopeIncrement = 0;
+                    break;
+                }
+
+                case STATE_SUSTAIN:
+                    voice.envelopeCount = INT32_MAX;
+                    voice.envelopeIncrement = 0;
+                    break;
+
+                case STATE_RELEASE:
+                case STATE_IDLE:
+                default:
+                    voice.envelopeState = STATE_IDLE;
+                    voice.active = false;
+                    voice.envelopeCount = 0;
+                    voice.envelopeMultiplier = 0;
+                    voice.envelopeIncrement = 0;
+                    return;
+                }
+
+                if (voice.envelopeState == STATE_SUSTAIN) break;
+            }
         }
 
-        const uint32_t phaseScale = (voice.phase << sample.INDEX_BITS) >> 16;
-        const uint32_t interpolation = phaseScale & 0xFFFFU;
+        // The envelope multiplier is nonnegative Q31. Saturating 32-bit
+        // arithmetic avoids a 64-bit add in every rendered sample.
+        const int32_t envelopeIncrement = voice.envelopeIncrement;
+        if (envelopeIncrement > 0) {
+            if (voice.envelopeMultiplier >= UNITY_GAIN - envelopeIncrement) {
+                voice.envelopeMultiplier = UNITY_GAIN;
+            } else {
+                voice.envelopeMultiplier += envelopeIncrement;
+            }
+        } else if (envelopeIncrement < 0) {
+            const int32_t zeroThreshold = -envelopeIncrement;
+            if (voice.envelopeMultiplier <= zeroThreshold) {
+                voice.envelopeMultiplier = 0;
+            } else {
+                voice.envelopeMultiplier += envelopeIncrement;
+            }
+        }
 
+        ++voice.envelopeSubCount;
+        if (voice.envelopeSubCount >= ENVELOPE_PERIOD) {
+            voice.envelopeSubCount = 0;
+            if (voice.envelopeState != STATE_SUSTAIN &&
+                voice.envelopeCount > INT32_MIN) {
+                --voice.envelopeCount;
+            }
+        }
+
+        uint32_t sampleIndex = voice.phase >> sampleIndexShift;
+        if (sampleIndex > maxSampleIndex) {
+            sampleIndex = maxSampleIndex;
+        }
+
+        const uint32_t interpolation =
+            (voice.phase >> interpolationShift) & 0xFFFFU;
         const int32_t sample0 = sample.SAMPLE[sampleIndex];
         const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
-        const int32_t part0 = (sample0 * (int32_t)(0xFFFFU - interpolation)) >> 16;
-        const int32_t part1 = (sample1 * (int32_t)interpolation) >> 16;
-        const int32_t interpolated = part0 + part1;
 
-        int64_t value = ((int64_t)voice.amplitude * interpolated) >> 16;
-        value = (value * voice.envelopeMultiplier) >> 31;
-        mix[i] += (int32_t)value;
+        // Linear interpolation with weights summing to exactly 1.0 in Q16.
+        // The weighted sum remains in int32_t because it is a convex mix of
+        // two signed 16-bit samples.
+        const int32_t weight0 = (int32_t)(0x10000U - interpolation);
+        const int32_t weightedSample =
+            sample0 * weight0 + sample1 * (int32_t)interpolation;
+        const int32_t interpolated = weightedSample >> 16;
+
+        // Fold the Q31 envelope into a Q16 voice amplitude. The resulting
+        // 16-bit gain has at most one Q16 gain-step of quantization and lets
+        // both multiplications below use native 32-bit arithmetic.
+        const uint32_t envelopeGainQ16 =
+            (uint32_t)voice.envelopeMultiplier >> 15;
+        const uint32_t effectiveAmplitude =
+            ((uint32_t)voice.amplitude * envelopeGainQ16) >> 16;
+        const int32_t value =
+            ((int32_t)effectiveAmplitude * interpolated) >> 16;
+
+        mix[i] += value;
 
         voice.phase += voice.phaseIncrement;
-
-        const bool loopEnabled =
-            sample.LOOP_MODE == LoopMode::CONTINUOUS ||
-            (sample.LOOP_MODE == LoopMode::UNTIL_RELEASE && !voice.released);
 
         if (loopEnabled && loopLength != 0 && voice.phase >= loopEnd) {
             const uint32_t loopStart = loopEnd - loopLength;
@@ -606,43 +621,65 @@ void AudioSynthWavetableV2::update() {
 
     int32_t mix[AUDIO_BLOCK_SAMPLES] = {};
 
-    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        SampleVoice localVoice;
+    // Copy and commit small batches rather than locking separately for every
+    // sample voice. Eight voices keep the AudioTask stack use bounded while
+    // reducing the lock/unlock count by a factor of eight.
+    constexpr uint16_t VOICE_BATCH_SIZE = 8;
+    SampleVoice localVoices[VOICE_BATCH_SIZE];
+
+    for (uint16_t base = 0; base < MAX_SAMPLE_VOICES; base += VOICE_BATCH_SIZE) {
+        uint16_t batchCount = MAX_SAMPLE_VOICES - base;
+        if (batchCount > VOICE_BATCH_SIZE) {
+            batchCount = VOICE_BATCH_SIZE;
+        }
+
         portENTER_CRITICAL(&stateMux_);
-        localVoice = sampleVoices_[i];
-        portEXIT_CRITICAL(&stateMux_);
-
-        if (!localVoice.active) continue;
-
-        renderVoice(localVoice, mix);
-
-        portENTER_CRITICAL(&stateMux_);
-        if (sampleVoices_[i].generation == localVoice.generation) {
-            sampleVoices_[i] = localVoice;
+        for (uint16_t i = 0; i < batchCount; ++i) {
+            localVoices[i] = sampleVoices_[base + i];
         }
         portEXIT_CRITICAL(&stateMux_);
-    }
 
-    // Remove note records after their last sample layer has ended.
-    portENTER_CRITICAL(&stateMux_);
-    for (uint8_t noteSlot = 0; noteSlot < MAX_NOTES; ++noteSlot) {
-        NoteState &noteState = notes_[noteSlot];
-        if (!noteState.active) continue;
-
-        bool hasActiveLayer = false;
-        for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-            const SampleVoice &voice = sampleVoices_[i];
-            if (voice.active && voice.noteSlot == noteSlot &&
-                voice.noteToken == noteState.token) {
-                hasActiveLayer = true;
-                break;
+        for (uint16_t i = 0; i < batchCount; ++i) {
+            if (localVoices[i].active) {
+                renderVoice(localVoices[i], mix);
             }
         }
-        if (!hasActiveLayer) {
-            noteState = NoteState{};
+
+        // MIDI/control operations may alter a voice while its local snapshot is
+        // rendered. The generation check prevents committing stale state over
+        // a newer noteOn(), noteOff(), allSoundOff() or instrument change.
+        portENTER_CRITICAL(&stateMux_);
+        for (uint16_t i = 0; i < batchCount; ++i) {
+            SampleVoice &current = sampleVoices_[base + i];
+            if (current.generation == localVoices[i].generation) {
+                current = localVoices[i];
+            }
         }
+
+        // On the last batch, also retire notes whose sample layers have ended.
+        // This replaces the previous notes x voices nested scan with one scan
+        // through the active voices, inside the same critical section.
+        if (base + batchCount == MAX_SAMPLE_VOICES) {
+            bool noteHasActiveLayer[MAX_NOTES] = {};
+
+            for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
+                const SampleVoice &voice = sampleVoices_[i];
+                if (!voice.active || voice.noteSlot >= MAX_NOTES) continue;
+
+                const NoteState &noteState = notes_[voice.noteSlot];
+                if (noteState.active && noteState.token == voice.noteToken) {
+                    noteHasActiveLayer[voice.noteSlot] = true;
+                }
+            }
+
+            for (uint8_t noteSlot = 0; noteSlot < MAX_NOTES; ++noteSlot) {
+                if (notes_[noteSlot].active && !noteHasActiveLayer[noteSlot]) {
+                    notes_[noteSlot] = NoteState{};
+                }
+            }
+        }
+        portEXIT_CRITICAL(&stateMux_);
     }
-    portEXIT_CRITICAL(&stateMux_);
 
     for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const int32_t scaled = (int32_t)(((int64_t)mix[i] * masterGain) >> 16);
