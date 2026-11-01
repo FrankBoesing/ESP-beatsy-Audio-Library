@@ -44,10 +44,10 @@ static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) 
     const int32_t upper = max - 1;
 
     __asm__ volatile (
-        ".option push\\n"
-        ".option arch, +xespv\\n"
-        "esp.sat %0, %1, %2\\n"
-        ".option pop\\n"
+        ".option push\n"
+        ".option arch, +xespv\n"
+        "esp.sat %0, %1, %2\n"
+        ".option pop\n"
         : "+&r"(out)
         : "r"(min), "r"(upper)
     );
@@ -69,10 +69,10 @@ static inline int16_t saturate16(int32_t val) {
     const int32_t max = 32767;
 
     __asm__ volatile (
-        ".option push\\n"
-        ".option arch, +xespv\\n"
-        "esp.sat %0, %1, %2\\n"
-        ".option pop\\n"
+        ".option push\n"
+        ".option arch, +xespv\n"
+        "esp.sat %0, %1, %2\n"
+        ".option pop\n"
         : "+&r"(val)
         : "r"(min), "r"(max)
     );
