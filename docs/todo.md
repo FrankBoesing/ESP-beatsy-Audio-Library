@@ -28,36 +28,38 @@ the audio recorder are intentionally omitted because they are already present.
   setup code. Reuse existing biquad stages initially; a new DSP class is not
   required.
 
-## SF2 SoundFont Import / AudioSynthWavetable
+## SF2 SoundFont Import / AudioSynthWavetableV2
 
-The planned SF2 tool should generate native `AudioSynthWavetable` instrument
-headers, not just extract WAV files. This requires a small, backwards-compatible
-extension of the wavetable engine before the converter can export complete
-presets.
+The SF2 tool will target the new, independent `AudioSynthWavetableV2` class.
+The legacy `AudioSynthWavetable` class, its data layout and its API remain
+unchanged so existing sketches and generated headers continue to work.
 
-- [ ] **Extend `AudioSynthWavetable` to represent SF2 sample zones.** The
-  current `instrument_data` model uses sorted `sample_note_ranges` and selects
-  exactly one sample using the note number. It cannot express SF2 key *and*
-  velocity rectangles, preset/instrument global and local zone combinations,
-  or overlapping zones that layer multiple samples. Add a zone-based instrument
-  representation with key-low/high and velocity-low/high bounds, and resolve
-  all matching zones at note-on. Support a bounded number of simultaneous
-  sample layers per note, with independent sample phase, loop and envelope
-  state per layer; mix them safely without heap allocation in `update()`.
-  Keep the existing `instrument_data` layout and current API working for
-  existing generated instruments and examples.
-- [ ] **Add explicit velocity-zone selection without breaking amplitude
-  control.** The existing `playNote(note, amp)` argument controls note level
-  and is not currently used to select a zone. Define an unambiguous velocity
-  input/path (and retain a separate output-level control if needed), then use
-  MIDI velocity to select/intersect SF2 velocity ranges. Define how overlapping
-  velocity layers are mixed and how the maximum layer count is enforced.
-- [ ] **Complete the SF2 loop behaviour needed by the engine.** Map forward
-  sample loops to `LOOP_PHASE_END` and `LOOP_PHASE_LENGTH`. Add a loop mode
-  that can leave the loop on note-off for SF2 loop-until-release zones; the
-  current `LOOP` flag wraps continuously even while the release envelope is
-  running. Define and document the handling of unsupported ping-pong/reverse
-  loops. Preserve the existing one-shot and continuous-loop behaviour.
+- [x] **Add the initial polyphonic `AudioSynthWavetableV2` engine.** The new
+  class has a fixed pool for 32 MIDI notes and up to four sample layers per
+  note (128 sample-playback instances total), matches key/velocity zones,
+  keeps independent phase and volume-envelope state per layer, supports
+  note-on/note-off, 16 MIDI channels, sustain pedal, one-shot/continuous/
+  loop-until-release playback and oldest-note voice stealing. Voice stealing is
+  currently immediate; click-free stealing/crossfades remain a later task.
+  Mixing uses a single 32-bit accumulator and saturates once at the output. No heap
+  allocation occurs in `update()`. The initial V2 renderer uses mono signed
+  16-bit PCM with linear interpolation; each sample array includes one
+  interpolation guard frame.
+- [x] **Add a hardware example for V2.** `examples/Synthesis/WavetableV2`
+  demonstrates a four-note chord, velocity-dependent zone selection and
+  two-layer playback on notes 48..84.
+- [ ] **Extend V2 modulation support.** Add SF2 vibrato and supported
+  modulation parameters after the baseline polyphonic renderer is benchmarked.
+- [x] **Add key/velocity zone selection.** V2 resolves all matching
+  key-low/high and velocity-low/high rectangles at note-on. Velocity selects
+  the zones and also sets the initial note level; `amplitude()` is a separate
+  master control that affects already-playing notes. The current hard limit is
+  four matching sample layers per note; additional matching zones are ignored
+  after the first four.
+- [x] **Add SF2 forward-loop modes.** V2 supports one-shot, continuous looping
+  and loop-until-release. Ping-pong and reverse loops remain unsupported and
+  must be reported by the converter.
+
 - [ ] **Map supported SF2 generators to `sample_data`.** Convert root key,
   coarse/fine tuning and sample rate into the phase increment; convert sample
   start/end and loop offsets into phase limits; translate volume-envelope
