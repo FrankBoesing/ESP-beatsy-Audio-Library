@@ -60,7 +60,7 @@ unchanged so existing sketches and generated headers continue to work.
   and loop-until-release. Ping-pong and reverse loops remain unsupported and
   must be reported by the converter.
 
-- [ ] **Map supported SF2 generators to `sample_data`.** Convert root key,
+- [ ] **Map supported SF2 generators to V2 `sample_data`.** Convert root key,
   coarse/fine tuning and sample rate into the phase increment; convert sample
   start/end and loop offsets into phase limits; translate volume-envelope
   timecents and sustain centibels into delay/attack/hold/decay/release counts
@@ -109,7 +109,7 @@ unchanged so existing sketches and generated headers continue to work.
   selection, key/velocity boundaries, overlapping layers, root-key tuning,
   loops including note-off, envelope timing, sample-rate adaptation, memory
   footprint and clipping. Compare browser preview with the generated
-  `AudioSynthWavetable` output on ESP32-S3 and ESP32-P4. Include at least one
+  `AudioSynthWavetableV2` output on ESP32-S3 and ESP32-P4. Include at least one
   simple single-zone preset and one preset with velocity splits and layered
   zones in the tests.
 
