@@ -617,7 +617,7 @@ void AudioStream::process_all_now(void) {
             const uint32_t elapsed_cycles = esp_cpu_get_cycle_count() - start;
 
             stream->cpu_time_cycles = elapsed_cycles;
-            if (elapsed_cycles > stream->cpu_time_max_cycles) {
+            if (elapsed_cycles > stream->cpu_time_max_cycles) [[unlikely]] {
                 stream->cpu_time_max_cycles = elapsed_cycles;
             }
         }
@@ -639,7 +639,7 @@ void AudioStream::process_all_now(void) {
 
     cpu_time_total_us = total_elapsed;
 
-    if (total_elapsed > cpu_time_total_max_us) {
+    if (total_elapsed > cpu_time_total_max_us) [[unlikely]] {
         cpu_time_total_max_us = total_elapsed;
     }
 
@@ -822,7 +822,7 @@ audio_block_t *AudioStream::allocate_locked(void) {
             block->ref_count = 1;
             ++memory_used;
 
-            if (memory_used > memory_used_max) {
+            if (memory_used > memory_used_max) [[unlikely]] {
                 memory_used_max = memory_used;
             }
 
@@ -867,7 +867,7 @@ void AudioStream::release_locked(audio_block_t *block) {
     }
 #endif
 
-    if (block->ref_count == 0) {
+    if (block->ref_count == 0) [[unlikely]] {
         // Invalid ownership state. Do not modify the pool.
         return;
     }
@@ -881,7 +881,7 @@ void AudioStream::release_locked(audio_block_t *block) {
     // The block is now returned to the pool.
 
     uint16_t block_index = block->memory_pool_index;
-    if (block_index >= memory_pool_size) {
+    if (block_index >= memory_pool_size) [[unlikely]] {
         return;
     }
 
@@ -895,7 +895,7 @@ void AudioStream::release_locked(audio_block_t *block) {
 
     block->ref_count = 0;
 
-    if (memory_used > 0) {
+    if (memory_used > 0) [[likely]] {
         --memory_used;
     }
 }
@@ -927,11 +927,11 @@ void AudioStream::transmit(audio_block_t *block, unsigned char index) {
             continue;
         }
 
-        if (c->dst == nullptr) {
+        if (c->dst == nullptr) [[unlikely]] {
             continue;
         }
 
-        if (c->dest_index >= c->dst->num_inputs) {
+        if (c->dest_index >= c->dst->num_inputs) [[unlikely]] {
             continue;
         }
 
