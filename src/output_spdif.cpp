@@ -220,7 +220,7 @@ void AudioOutputSPDIF::update() {
         return;
     }
 
-    if (xQueueSend(txQueue, &pair, 0) != pdTRUE) {
+    if (xQueueSend(txQueue, &pair, 0) != pdTRUE) [[unlikely]] {
         BlockPair oldPair;
         if (xQueueReceive(txQueue, &oldPair, 0) == pdTRUE) {
             releasePair(oldPair);
@@ -304,12 +304,12 @@ void AudioOutputSPDIF::txTaskLoop() {
     uint32_t lastErrorLogMs = 0;
     BlockPair pair{nullptr, nullptr};
     while (isRunning()) {
-        if (!isRunning() || xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) {
+        if (!isRunning() || xQueueReceive(txQueue, &pair, pdMS_TO_TICKS(10)) != pdTRUE) [[unlikely]] {
             if (!isRunning()) break;
             continue;
         }
 
-        if (!isRunning()) {
+        if (!isRunning()) [[unlikely]] {
             releasePair(pair);
             pair = {nullptr, nullptr};
             break;
@@ -327,25 +327,28 @@ void AudioOutputSPDIF::txTaskLoop() {
                 const int16_t leftSample = leftSamples[i];
                 const int16_t rightSample = rightSamples[i];
                 const uint8_t statusBit = channelStatusBit(frameInBlock);
-                const uint8_t leftPreamble = frameInBlock == 0 ? PREAMBLE_B : PREAMBLE_M;
+                uint8_t leftPreamble = PREAMBLE_M;
+                if (frameInBlock == 0) [[unlikely]] {
+                    leftPreamble = PREAMBLE_B;
+                }
 
                 encodeSubframe(leftSample, statusBit != 0, leftPreamble, &encodedBuffer[i * 8U]);
                 encodeSubframe(rightSample, statusBit != 0, PREAMBLE_W, &encodedBuffer[i * 8U + 4U]);
 
-                if (++frameInBlock >= 192U) frameInBlock = 0;
+                if (++frameInBlock >= 192U) [[unlikely]] frameInBlock = 0;
             }
         };
         encodeBlock(left, right);
 
         size_t bytesWritten = 0;
-        if (!isRunning()) {
+        if (!isRunning()) [[unlikely]] {
             frameInBlock = frameInBlockStart;
             releasePair(pair);
             break;
         }
 
         const esp_err_t err = i2s_channel_write(txHandle, encodedBuffer, sizeof(encodedBuffer), &bytesWritten, 100);
-        if (err != ESP_OK || bytesWritten != sizeof(encodedBuffer)) {
+        if (err != ESP_OK || bytesWritten != sizeof(encodedBuffer)) [[unlikely]] {
             // Keep the status-frame index aligned to complete stereo subframes
             // accepted by the driver, rather than counting an unwritten tail.
             constexpr size_t BYTES_PER_SPDIF_FRAME = 8U * sizeof(uint16_t);
