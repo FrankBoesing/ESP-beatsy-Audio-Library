@@ -215,7 +215,7 @@ void AudioPlayQueue::update(void) {
 
     portENTER_CRITICAL(&play_queue_mux);
 
-    if (tail != head) {
+    if (tail != head) [[likely]] {
         uint8_t next_tail = tail + 1;
         if (next_tail >= max_buffers) next_tail = 0;
         tail = next_tail;
