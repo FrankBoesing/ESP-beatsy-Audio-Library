@@ -466,6 +466,8 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
     const uint32_t maxSampleIndex = sample.SAMPLE_COUNT - 2U;
 
     for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        if (!voice.active) break;
+
         if (stopAtEnd && voice.phase >= maxPhase) {
             voice.active = false;
             voice.envelopeState = STATE_IDLE;
