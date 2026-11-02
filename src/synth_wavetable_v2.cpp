@@ -1391,6 +1391,12 @@ void AudioSynthWavetableV2::update() {
  *   traversal; it does not optimize the release render loop or its arithmetic.
  * - Implementation committed on 2026-11-02. Its control-side timing is not
  *   measured by AudioProcessorUsage(), which starts at update() entry.
+ * - Low-overhead cycle-counter measurement — 2026-11-02, 240 MHz CPU:
+ *   64 voices: 38915 cycles = 162 us;
+ *   128 voices: 29290 cycles = 122 us.
+ *   These are single measurements and unexpectedly do not scale with voice
+ *   count. Treat them as approximate call durations, not as a reliable
+ *   scaling result; task/interrupt timing variation may be significant.
  *
  * 11. RELEASE SAMPLE COUNTDOWN
  * -----------------------------
@@ -1433,11 +1439,23 @@ void AudioSynthWavetableV2::update() {
  * - Hardware measurement — 2026-11-02, 48 kHz USB, 128-sample blocks,
  *   WAVETABLE_V2_TEST_STEREO=1 (three mono layers plus one stereo layer per
  *   note):
- *   64 voices: release node_peak_us=1789, graph_peak_us=1812
+ *   Earlier run with verbose 500 ms reports enabled:
+ *   64 voices: sustain node_peak_us=1233, graph_peak_us=1256;
+ *   release node_peak_us=1789, graph_peak_us=1812
  *   (67.1 / 67.9%).
  *   128 voices: sustain node_peak_us=2397, graph_peak_us=2411
  *   (89.9 / 90.4%); release node_peak_us=3585, graph_peak_us=3600
  *   (134.4 / 135.0%).
+ * - Low-diagnostic-output run (WAVETABLE_V2_TEST_VERBOSE=0):
+ *   64 voices: sustain node_peak_us=1128, graph_peak_us=1132
+ *   (V2 / graph 46.3 / 46.6%); release node_peak_us=1739,
+ *   graph_peak_us=1745 (65.2 / 65.4%).
+ *   128 voices: sustain node_peak_us=2314, graph_peak_us=2320
+ *   (86.8 / 87.0%); release node_peak_us=3475, graph_peak_us=3479
+ *   (130.3 / 130.4%).
+ * - The quiet run reduces the observed peaks relative to the previous verbose
+ *   run, but this is not a strict A/B test. For 128 voices, release still
+ *   exceeds the 2667 us deadline by about 812 us (30.4%).
  * - Compared with the preceding 128-voice release measurement in section 11
  *   (3496 / 3504 us), this run is 89 / 96 us slower (about 2.5 / 2.7%).
  *   This is not evidence of a performance gain; with one run per build, the
