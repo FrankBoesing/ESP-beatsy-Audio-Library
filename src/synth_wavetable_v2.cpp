@@ -1539,6 +1539,21 @@ void AudioSynthWavetableV2::update() {
  *   above as evidence that fewer source-level operations per sample do not
  *   necessarily produce faster machine code on the target.
  *
+ * 15. ESP32-S3 RELEASE MACHINE-CODE REVIEW — PENDING / DEFERRED
+ * ---------------------------------------------------------------
+ * - Before further release arithmetic changes, inspect the generated Xtensa
+ *   assembly for renderVoicePath<..., ..., false>() on the ESP32-S3.
+ * - Focus on the release loop's fraction subtraction, borrow extraction,
+ *   fraction mask, 16-bit gain update, countdown, interpolation and PCM
+ *   multiply. Verify register allocation, spills/reloads and instruction
+ *   count; source-level operation count alone is not a performance metric.
+ * - Compare the generated release loop with the STATE_SUSTAIN loop and
+ *   identify which additional instructions are actually introduced by the
+ *   release ramp.
+ * - No source change is authorized by this review item. It is intentionally
+ *   deferred until after the ESP32-P4 USB benchmark, then should be resumed
+ *   using the S3 toolchain/disassembly from the matching PlatformIO build.
+ *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
  * State whether the optimization is implemented, experimentally measured,
