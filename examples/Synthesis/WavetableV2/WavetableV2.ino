@@ -41,6 +41,7 @@
 
 #include <Arduino.h>
 #include <Audio.h>
+#include <esp_cpu.h>
 
 // Maximum note count for the automatic 1/2/4/8/16/32-note sweep.
 // For the full range use -D WAVETABLE_V2_TEST_NOTE_COUNT=32.
@@ -50,6 +51,12 @@
 
 #ifndef WAVETABLE_V2_TEST_STEREO
 #define WAVETABLE_V2_TEST_STEREO 0
+#endif
+
+// Set to 1 to enable periodic console load reports during measurement windows.
+// Keep disabled for timing runs to minimize diagnostic I/O.
+#ifndef WAVETABLE_V2_TEST_VERBOSE
+#define WAVETABLE_V2_TEST_VERBOSE 0
 #endif
 
 constexpr uint8_t TEST_NOTE_COUNT = WAVETABLE_V2_TEST_NOTE_COUNT;
@@ -215,6 +222,7 @@ static void haltWithError(const char *message) {
     }
 }
 
+#if WAVETABLE_V2_TEST_VERBOSE
 static void printLoad() {
     consolePrint("Audio CPU: graph ");
     consolePrint(AudioStream::AudioProcessorUsageTotal(), 1);
@@ -240,6 +248,7 @@ static void printLoad() {
     consolePrintln(audioOutput.isRunning() ? "yes" : "no");
 #endif
 }
+#endif
 
 static void printPhasePeak(const char *phase) {
     consolePrint(phase);
@@ -252,14 +261,18 @@ static void printPhasePeak(const char *phase) {
 
 static void monitorFor(uint32_t durationMs) {
     const uint32_t start = millis();
+#if WAVETABLE_V2_TEST_VERBOSE
     uint32_t lastReport = start;
+#endif
 
     while ((uint32_t)(millis() - start) < durationMs) {
+#if WAVETABLE_V2_TEST_VERBOSE
         const uint32_t now = millis();
         if ((uint32_t)(now - lastReport) >= 500U) {
             lastReport = now;
             printLoad();
         }
+#endif
         delay(20);
     }
 }
@@ -346,11 +359,25 @@ static void runBenchmarkStage(uint8_t noteCount) {
     // Measure the release envelope separately from the sustained workload.
     AudioStream::AudioProcessorUsageTotalMaxReset();
     synth.AudioProcessorUsageMaxReset();
+
+    // Keep instrumentation to two cycle-counter reads around allNotesOff().
+    // Defer all console output until the release measurement window has ended.
+    const uint32_t noteOffStartCycles = esp_cpu_get_cycle_count();
     synth.allNotesOff();
-    consolePrintln("Note-Off sent; measuring release tails.");
+    const uint32_t noteOffCycles = esp_cpu_get_cycle_count() - noteOffStartCycles;
+
     monitorFor(1200);
     printBenchmarkRow("release", noteCount);
     printPhasePeak("Release");
+
+    const uint32_t cpuMHz = getCpuFrequencyMhz();
+    const uint32_t noteOffUs = cpuMHz != 0 ? noteOffCycles / cpuMHz : 0;
+    consolePrint("NOTE_OFF,");
+    consolePrint(noteOffCycles);
+    consolePrint(",");
+    consolePrint(cpuMHz);
+    consolePrint(",");
+    consolePrintln(noteOffUs);
 
     // Hard-stop residual voices before the next stage, then leave a short gap.
     synth.allSoundOff();
