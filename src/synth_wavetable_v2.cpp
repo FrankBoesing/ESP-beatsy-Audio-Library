@@ -45,7 +45,9 @@ static inline int16_t wavetableV2Saturate16(int32_t value) {
 #if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xespv)
 // ESP32-P4 XespV: clamp four signed 32-bit values in parallel. The temporary
 // and bound vectors are 16-byte aligned because VLD.128 requires alignment.
-// MOVI.16.A extracts the low half-word of each clamped 32-bit lane.
+// MOVI.16.A extracts the low half-word of each clamped 32-bit lane. This runs
+// in AudioTask task context; ESP-IDF FreeRTOS manages PIE lazy context switching.
+// Do not call this helper from an ISR.
 static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
                                                 uint16_t gain,
                                                 int16_t *output) {
@@ -63,15 +65,12 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
         32767, 32767, 32767, 32767
     };
 
-    // XespV scalar operands are kept in a2-a7, a register subset accepted by
-    // the PIE instructions. The compiler still owns allocation and liveness.
-    register const int32_t *scaledPtr asm("a2") = scaled;
-    register const int32_t *lowerPtr asm("a3") = lowerBound;
-    register const int32_t *upperPtr asm("a4") = upperBound;
-    register uint32_t out0 asm("a5");
-    register uint32_t out1 asm("a6");
-    register uint32_t out2 asm("a7");
-    register uint32_t out3 asm("t3");
+    // Let GCC allocate scalar registers; early-clobber keeps the
+    // post-increment pointers distinct from the extracted output values.
+    const int32_t *scaledPtr = scaled;
+    const int32_t *lowerPtr = lowerBound;
+    const int32_t *upperPtr = upperBound;
+    uint32_t out0, out1, out2, out3;
 
     __asm__ volatile(
         "esp.vld.128.ip q0, %[scaled], 16\n"
@@ -83,13 +82,13 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
         "esp.movi.16.a q2, %[out1], 2\n"
         "esp.movi.16.a q2, %[out2], 4\n"
         "esp.movi.16.a q2, %[out3], 6\n"
-        : [scaled] "+r"(scaledPtr),
-          [lower] "+r"(lowerPtr),
-          [upper] "+r"(upperPtr),
-          [out0] "=r"(out0),
-          [out1] "=r"(out1),
-          [out2] "=r"(out2),
-          [out3] "=r"(out3)
+        : [scaled] "+&r"(scaledPtr),
+          [lower] "+&r"(lowerPtr),
+          [upper] "+&r"(upperPtr),
+          [out0] "=&r"(out0),
+          [out1] "=&r"(out1),
+          [out2] "=&r"(out2),
+          [out3] "=&r"(out3)
         :
         : "q0", "q1", "q2", "memory");
 
