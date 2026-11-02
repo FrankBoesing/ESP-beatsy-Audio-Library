@@ -17,6 +17,7 @@
   var summary = document.getElementById("sf2Summary");
   var metadata = document.getElementById("sf2Metadata");
   var presetInfo = document.getElementById("sf2PresetInfo");
+  var analyzerPanel = document.getElementById("sf2Analyzer");
   var outputInfo = document.getElementById("sf2OutputInfo");
   var wavetableModeInput = document.getElementById("sf2WavetableMode");
   var keyboardStartSelect = document.getElementById("sf2KeyboardStart");
@@ -700,8 +701,468 @@
     return matches;
   }
 
+  var ANALYZER_GRID_STRIDE = 129;
+  var ANALYZER_COMBINATION_COUNT = 128 * 127;
+
+  function addAnalyzerRectangle(grid, keyRange, velocityRange) {
+    var stride = ANALYZER_GRID_STRIDE;
+    var keyStart = keyRange.low;
+    var keyEnd = keyRange.high + 1;
+    var velocityStart = velocityRange.low;
+    var velocityEnd = velocityRange.high + 1;
+
+    grid[keyStart * stride + velocityStart]++;
+    grid[keyEnd * stride + velocityStart]--;
+    grid[keyStart * stride + velocityEnd]--;
+    grid[keyEnd * stride + velocityEnd]++;
+  }
+
+  function analyzerSampleInfo(soundFont, region) {
+    var sample = soundFont.samples[region.sampleIndex];
+    if (!sample) {
+      return {
+        stereo: false, stereoDeclared: false, invalidStereoLink: false,
+        rom: false, compressed: false, linked: false, invalid: true
+      };
+    }
+
+    var sampleType = sample.type & 0x000f;
+    var stereoDeclared = sampleType === 2 || sampleType === 4;
+    var linked = stereoDeclared ? soundFont.samples[sample.link] : null;
+    var expectedType = sampleType === 4 ? 2 : 4;
+    var stereoValid = stereoDeclared && linked &&
+      (linked.type & 0x000f) === expectedType &&
+      linked.sampleRate === sample.sampleRate;
+
+    return {
+      stereo: !!stereoValid,
+      stereoDeclared: stereoDeclared,
+      invalidStereoLink: stereoDeclared && !stereoValid,
+      rom: !!(sample.type & 0x8000),
+      compressed: !!(sample.type & 0x0010),
+      linked: sampleType === 8,
+      invalid: sampleType !== 1 && sampleType !== 2 &&
+        sampleType !== 4 && sampleType !== 8
+    };
+  }
+
+  function prefixAnalyzerGrid(grid) {
+    var stride = ANALYZER_GRID_STRIDE;
+    for (var note = 0; note < 128; note++) {
+      var row = note * stride;
+      var above = row - stride;
+      for (var velocity = 0; velocity <= 127; velocity++) {
+        var index = row + velocity;
+        var value = grid[index];
+        if (note > 0) value += grid[above + velocity];
+        if (velocity > 0) value += grid[index - 1];
+        if (note > 0 && velocity > 0) value -= grid[above + velocity - 1];
+        grid[index] = value;
+      }
+    }
+  }
+
+  function formatVelocityRanges(flags) {
+    var ranges = [];
+    var start = -1;
+    for (var velocity = 1; velocity <= 128; velocity++) {
+      var active = velocity <= 127 && flags[velocity];
+      if (active && start < 0) {
+        start = velocity;
+      } else if (!active && start >= 0) {
+        ranges.push(start === velocity - 1 ?
+          String(start) : start + "–" + (velocity - 1));
+        start = -1;
+      }
+    }
+    return ranges.length ? ranges.join(", ") : "—";
+  }
+
+  function analyzePresetVoices(preset) {
+    if (preset.voiceAnalysis) return preset.voiceAnalysis;
+
+    var layerGrid = new Int32Array(ANALYZER_GRID_STRIDE * ANALYZER_GRID_STRIDE);
+    var stereoGrid = new Int32Array(ANALYZER_GRID_STRIDE * ANALYZER_GRID_STRIDE);
+    var sampleSet = Object.create(null);
+    var instrumentSet = Object.create(null);
+    var stereoZones = 0;
+    var invalidStereoLinks = 0;
+    var romZones = 0;
+    var compressedZones = 0;
+    var linkedZones = 0;
+    var invalidTypeZones = 0;
+
+    // Each resolved preset zone is one potential musical layer. A valid
+    // linked left/right pair remains one layer but needs two PCM channel reads.
+    for (var i = 0; i < preset.zones.length; i++) {
+      var region = preset.zones[i];
+      var sample = font.samples[region.sampleIndex];
+      if (!sample) continue;
+
+      var sampleInfo = analyzerSampleInfo(font, region);
+      addAnalyzerRectangle(layerGrid, region.keyRange, region.velocityRange);
+      if (sampleInfo.stereo) {
+        addAnalyzerRectangle(stereoGrid, region.keyRange, region.velocityRange);
+        stereoZones++;
+      }
+      if (sampleInfo.invalidStereoLink) invalidStereoLinks++;
+      if (sampleInfo.rom) romZones++;
+      if (sampleInfo.compressed) compressedZones++;
+      if (sampleInfo.linked) linkedZones++;
+      if (sampleInfo.invalid) invalidTypeZones++;
+      instrumentSet[region.instrumentName] = true;
+
+      var sampleType = sample.type & 0x000f;
+      var sampleKey = sampleInfo.stereo ?
+        "stereo:" + Math.min(region.sampleIndex, sample.link) + ":" +
+          Math.max(region.sampleIndex, sample.link) :
+        "sample:" + region.sampleIndex;
+      if (sampleType === 8) sampleKey = "linked:" + region.sampleIndex;
+      sampleSet[sampleKey] = true;
+    }
+
+    // Two-dimensional prefix sums turn all key/velocity rectangles into a
+    // complete 128 x 127 activation map in O(zones + 16,256) time.
+    prefixAnalyzerGrid(layerGrid);
+    prefixAnalyzerGrid(stereoGrid);
+
+    var histogram = [0, 0, 0, 0, 0, 0];
+    var perNote = [];
+    var maxLayers = 0;
+    var maxLayerCells = 0;
+    var maxChannels = 0;
+    var maxChannelCells = 0;
+    var coveredCells = 0;
+    var totalLayers = 0;
+    var totalPcmChannels = 0;
+    var moreThanV2LimitCells = 0;
+    var moreThanEightLayerCells = 0;
+    var notesOverV2Limit = 0;
+    var notesOverEightLayers = 0;
+
+    for (var note = 0; note < 128; note++) {
+      var noteMaxLayers = 0;
+      var noteMaxChannels = 0;
+      var peakLayerVelocities = new Uint8Array(128);
+      var peakChannelVelocities = new Uint8Array(128);
+
+      for (var velocity = 1; velocity <= 127; velocity++) {
+        var index = note * ANALYZER_GRID_STRIDE + velocity;
+        var layers = layerGrid[index];
+        var stereoLayers = stereoGrid[index];
+        var channels = layers + stereoLayers;
+
+        histogram[layers >= 5 ? 5 : layers]++;
+        totalLayers += layers;
+        totalPcmChannels += channels;
+        if (layers > 0) coveredCells++;
+        if (layers > V2_MAX_LAYERS_PER_NOTE) moreThanV2LimitCells++;
+        if (layers > MAX_PREVIEW_LAYERS_PER_NOTE) moreThanEightLayerCells++;
+
+        if (layers > noteMaxLayers) {
+          noteMaxLayers = layers;
+          peakLayerVelocities.fill(0);
+          peakLayerVelocities[velocity] = 1;
+        } else if (layers === noteMaxLayers && layers > 0) {
+          peakLayerVelocities[velocity] = 1;
+        }
+
+        if (channels > noteMaxChannels) {
+          noteMaxChannels = channels;
+          peakChannelVelocities.fill(0);
+          peakChannelVelocities[velocity] = 1;
+        } else if (channels === noteMaxChannels && channels > 0) {
+          peakChannelVelocities[velocity] = 1;
+        }
+
+        if (layers > maxLayers) {
+          maxLayers = layers;
+          maxLayerCells = 1;
+        } else if (layers === maxLayers && layers > 0) {
+          maxLayerCells++;
+        }
+
+        if (channels > maxChannels) {
+          maxChannels = channels;
+          maxChannelCells = 1;
+        } else if (channels === maxChannels && channels > 0) {
+          maxChannelCells++;
+        }
+      }
+
+      perNote.push({
+        note: note,
+        maxLayers: noteMaxLayers,
+        maxChannels: noteMaxChannels,
+        peakLayerRange: formatVelocityRanges(peakLayerVelocities),
+        peakChannelRange: formatVelocityRanges(peakChannelVelocities)
+      });
+      if (noteMaxLayers > V2_MAX_LAYERS_PER_NOTE) notesOverV2Limit++;
+      if (noteMaxLayers > MAX_PREVIEW_LAYERS_PER_NOTE) notesOverEightLayers++;
+    }
+
+    var peakLayerNotes = [];
+    var peakChannelNotes = [];
+    for (var n = 0; n < perNote.length; n++) {
+      var entry = perNote[n];
+      if (maxLayers > 0 && entry.maxLayers === maxLayers) peakLayerNotes.push(entry);
+      if (maxChannels > 0 && entry.maxChannels === maxChannels) peakChannelNotes.push(entry);
+    }
+
+    var result = {
+      zoneCount: preset.zones.length,
+      instrumentCount: Object.keys(instrumentSet).length,
+      uniqueSampleSets: Object.keys(sampleSet).length,
+      stereoZones: stereoZones,
+      invalidStereoLinks: invalidStereoLinks,
+      romZones: romZones,
+      compressedZones: compressedZones,
+      linkedZones: linkedZones,
+      invalidTypeZones: invalidTypeZones,
+      maxLayers: maxLayers,
+      maxLayerCells: maxLayerCells,
+      maxChannels: maxChannels,
+      maxChannelCells: maxChannelCells,
+      coveredCells: coveredCells,
+      totalLayers: totalLayers,
+      totalPcmChannels: totalPcmChannels,
+      histogram: histogram,
+      moreThanV2LimitCells: moreThanV2LimitCells,
+      moreThanEightLayerCells: moreThanEightLayerCells,
+      notesOverV2Limit: notesOverV2Limit,
+      notesOverEightLayers: notesOverEightLayers,
+      peakLayerNotes: peakLayerNotes,
+      peakChannelNotes: peakChannelNotes,
+      layerGrid: layerGrid,
+      stereoGrid: stereoGrid,
+      perNote: perNote
+    };
+
+    preset.voiceAnalysis = result;
+    return result;
+  }
+
+  function appendAnalyzerMetric(parent, label, value, detail) {
+    var metric = document.createElement("div");
+    metric.className = "sf2-analyzer-metric";
+
+    var valueElement = document.createElement("strong");
+    valueElement.textContent = value;
+    var labelElement = document.createElement("span");
+    labelElement.textContent = label;
+    metric.appendChild(valueElement);
+    metric.appendChild(labelElement);
+
+    if (detail) {
+      var detailElement = document.createElement("small");
+      detailElement.textContent = detail;
+      metric.appendChild(detailElement);
+    }
+    parent.appendChild(metric);
+  }
+
+  function appendAnalyzerTableCell(row, value, header) {
+    var cell = document.createElement(header ? "th" : "td");
+    cell.textContent = value;
+    row.appendChild(cell);
+  }
+
+  function renderPresetVoiceAnalyzer(preset) {
+    if (!analyzerPanel) return;
+    analyzerPanel.textContent = "";
+    if (!preset) return;
+
+    var analysis = analyzePresetVoices(preset);
+    var selectedVelocity = currentVelocity();
+    var selectedNote = Math.max(0, Math.min(127, parseInt(noteInput.value, 10) || 0));
+    var selectedCoveredNotes = 0;
+    var selectedOverlappingNotes = 0;
+    var selectedMaxLayers = 0;
+    var selectedMaxLayerNote = -1;
+    var selectedMaxChannels = 0;
+    var selectedMaxChannelNote = -1;
+
+    for (var i = 0; i < analysis.perNote.length; i++) {
+      var item = analysis.perNote[i];
+      var gridIndex = item.note * ANALYZER_GRID_STRIDE + selectedVelocity;
+      item.selectedLayers = analysis.layerGrid[gridIndex];
+      item.selectedStereoLayers = analysis.stereoGrid[gridIndex];
+      item.selectedChannels = item.selectedLayers + item.selectedStereoLayers;
+
+      if (item.selectedLayers > 0) selectedCoveredNotes++;
+      if (item.selectedLayers > 1) selectedOverlappingNotes++;
+      if (item.selectedLayers > selectedMaxLayers) {
+        selectedMaxLayers = item.selectedLayers;
+        selectedMaxLayerNote = item.note;
+      }
+      if (item.selectedChannels > selectedMaxChannels) {
+        selectedMaxChannels = item.selectedChannels;
+        selectedMaxChannelNote = item.note;
+      }
+    }
+
+    var heading = document.createElement("h3");
+    heading.textContent = "Preset / Voice analyzer";
+    analyzerPanel.appendChild(heading);
+
+    var intro = document.createElement("p");
+    intro.className = "help";
+    intro.textContent =
+      "All 128 MIDI notes × 127 playable velocity values are checked. " +
+      "A resolved zone counts as one musical layer; a valid linked stereo pair counts as two PCM channels.";
+    analyzerPanel.appendChild(intro);
+
+    var metrics = document.createElement("div");
+    metrics.className = "sf2-analyzer-grid";
+    appendAnalyzerMetric(metrics, "Maximum simultaneous layers",
+      String(analysis.maxLayers),
+      analysis.peakLayerNotes.length ?
+        analysis.peakLayerNotes.slice(0, 6).map(function (entry) {
+          return midiName(entry.note) + " (velocity " + entry.peakLayerRange + ")";
+        }).join(" · ") +
+        (analysis.peakLayerNotes.length > 6 ? " · +" + (analysis.peakLayerNotes.length - 6) + " notes" : "") :
+        "No playable key/velocity combinations.");
+    appendAnalyzerMetric(metrics, "Maximum mono PCM channels",
+      String(analysis.maxChannels),
+      analysis.peakChannelNotes.length ?
+        analysis.peakChannelNotes.slice(0, 6).map(function (entry) {
+          return midiName(entry.note) + " (velocity " + entry.peakChannelRange + ")";
+        }).join(" · ") +
+        (analysis.peakChannelNotes.length > 6 ? " · +" + (analysis.peakChannelNotes.length - 6) + " notes" : "") :
+        "No playable key/velocity combinations.");
+    appendAnalyzerMetric(metrics, "Key/velocity combinations covered",
+      analysis.coveredCells.toLocaleString() + " / " + ANALYZER_COMBINATION_COUNT.toLocaleString(),
+      (analysis.coveredCells * 100 / ANALYZER_COMBINATION_COUNT).toFixed(1) + "% of the complete MIDI grid.");
+    appendAnalyzerMetric(metrics, "Combinations above current V2 layer limit",
+      analysis.moreThanV2LimitCells.toLocaleString(),
+      "More than " + V2_MAX_LAYERS_PER_NOTE + " layers; " +
+        analysis.notesOverV2Limit + " notes affected.");
+    appendAnalyzerMetric(metrics, "Stereo sample zones",
+      String(analysis.stereoZones),
+      "One valid stereo zone is one musical layer but two mono PCM streams.");
+    appendAnalyzerMetric(metrics, "Resolved zones / instruments / sample sets",
+      analysis.zoneCount + " / " + analysis.instrumentCount + " / " + analysis.uniqueSampleSets,
+      "Linked left/right headers are counted as one sample set.");
+    analyzerPanel.appendChild(metrics);
+
+    var selectedNoteEntry = analysis.perNote[selectedNote];
+    var velocityHeading = document.createElement("h4");
+    velocityHeading.textContent = "At selected velocity " + selectedVelocity;
+    analyzerPanel.appendChild(velocityHeading);
+
+    var selectedSummary = document.createElement("p");
+    selectedSummary.className = "sf2-analyzer-summary";
+    selectedSummary.textContent =
+      selectedCoveredNotes + " notes covered · " +
+      selectedOverlappingNotes + " notes with multiple layers · " +
+      "maximum " + selectedMaxLayers + " layers at " +
+      (selectedMaxLayerNote >= 0 ? midiName(selectedMaxLayerNote) : "—") +
+      " · maximum " + selectedMaxChannels + " PCM channels at " +
+      (selectedMaxChannelNote >= 0 ? midiName(selectedMaxChannelNote) : "—") + ".";
+    analyzerPanel.appendChild(selectedSummary);
+
+    var selectedNoteSummary = document.createElement("p");
+    selectedNoteSummary.className = "sf2-analyzer-summary";
+    selectedNoteSummary.textContent =
+      "Preview note " + midiName(selectedNote) + " @ velocity " +
+      selectedVelocity + ": " + selectedNoteEntry.selectedLayers + " layers, " +
+      selectedNoteEntry.selectedChannels + " mono PCM channels (" +
+      selectedNoteEntry.selectedStereoLayers + " stereo layers).";
+    analyzerPanel.appendChild(selectedNoteSummary);
+
+    var distributionHeading = document.createElement("h4");
+    distributionHeading.textContent = "Layer distribution across the complete key/velocity grid";
+    analyzerPanel.appendChild(distributionHeading);
+
+    var distribution = document.createElement("div");
+    distribution.className = "sf2-analyzer-distribution";
+    var bucketLabels = ["0 layers", "1 layer", "2 layers", "3 layers", "4 layers", "5+ layers"];
+    for (var bucket = 0; bucket < analysis.histogram.length; bucket++) {
+      var count = analysis.histogram[bucket];
+      var row = document.createElement("div");
+      row.className = "sf2-analyzer-bar-row";
+
+      var label = document.createElement("span");
+      label.textContent = bucketLabels[bucket];
+      var track = document.createElement("div");
+      track.className = "sf2-analyzer-bar-track";
+      var bar = document.createElement("div");
+      bar.className = "sf2-analyzer-bar";
+      bar.style.width = (count * 100 / ANALYZER_COMBINATION_COUNT).toFixed(2) + "%";
+      track.appendChild(bar);
+      var number = document.createElement("span");
+      number.textContent = count.toLocaleString() + " (" +
+        (count * 100 / ANALYZER_COMBINATION_COUNT).toFixed(1) + "%)";
+      row.appendChild(label);
+      row.appendChild(track);
+      row.appendChild(number);
+      distribution.appendChild(row);
+    }
+    analyzerPanel.appendChild(distribution);
+
+    var limits = document.createElement("p");
+    limits.className = "help";
+    limits.textContent =
+      "Combinations above 8 layers (browser preview cap): " +
+      analysis.moreThanEightLayerCells.toLocaleString() +
+      "; above 4 layers (current V2 cap): " +
+      analysis.moreThanV2LimitCells.toLocaleString() +
+      ". Maximum sample channels include two reads for every valid stereo zone.";
+    analyzerPanel.appendChild(limits);
+
+    if (analysis.romZones || analysis.compressedZones || analysis.linkedZones ||
+        analysis.invalidTypeZones || analysis.invalidStereoLinks) {
+      var warning = document.createElement("p");
+      warning.className = "sf2-analyzer-warning";
+      var warningParts = [];
+      if (analysis.romZones) warningParts.push(analysis.romZones + " ROM zone(s)");
+      if (analysis.compressedZones) warningParts.push(analysis.compressedZones + " Ogg/SF3 zone(s)");
+      if (analysis.linkedZones) warningParts.push(analysis.linkedZones + " undefined linked-sample zone(s)");
+      if (analysis.invalidTypeZones) warningParts.push(analysis.invalidTypeZones + " zone(s) with unknown sample type");
+      if (analysis.invalidStereoLinks) warningParts.push(analysis.invalidStereoLinks + " invalid stereo link(s)");
+      warning.textContent = "Sample-format warnings: " + warningParts.join(", ") +
+        ". These zones are counted by their metadata, but may not be playable by this tool.";
+      analyzerPanel.appendChild(warning);
+    }
+
+    var details = document.createElement("details");
+    details.className = "sf2-analyzer-details";
+    var detailsSummary = document.createElement("summary");
+    detailsSummary.textContent = "Show note-by-note peak layers and velocity ranges";
+    details.appendChild(detailsSummary);
+
+    var tableWrap = document.createElement("div");
+    tableWrap.className = "sf2-analyzer-table-wrap";
+    var table = document.createElement("table");
+    var thead = document.createElement("thead");
+    var headerRow = document.createElement("tr");
+    ["Note", "Peak layers", "Peak velocity", "PCM channels at peak", "Layers @ selected velocity"].forEach(function (value) {
+      appendAnalyzerTableCell(headerRow, value, true);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    var tbody = document.createElement("tbody");
+    for (var noteIndex = 0; noteIndex < analysis.perNote.length; noteIndex++) {
+      var noteEntry = analysis.perNote[noteIndex];
+      if (noteEntry.maxLayers === 0) continue;
+      var noteRow = document.createElement("tr");
+      appendAnalyzerTableCell(noteRow, midiName(noteEntry.note));
+      appendAnalyzerTableCell(noteRow, String(noteEntry.maxLayers));
+      appendAnalyzerTableCell(noteRow, noteEntry.peakLayerRange);
+      appendAnalyzerTableCell(noteRow, String(noteEntry.maxChannels));
+      appendAnalyzerTableCell(noteRow, String(noteEntry.selectedLayers));
+      tbody.appendChild(noteRow);
+    }
+    table.appendChild(tbody);
+    tableWrap.appendChild(table);
+    details.appendChild(tableWrap);
+    analyzerPanel.appendChild(details);
+  }
+
   function updatePresetInfo() {
     presetInfo.textContent = "";
+    if (analyzerPanel) analyzerPanel.textContent = "";
     if (!font) return;
     var preset = font.presets[parseInt(presetSelect.value, 10)];
     if (!preset) return;
@@ -732,6 +1193,7 @@
       lines.push("These notes use multiple layers. Disable Wavetable-compatible preview to audition them in browser mode; V1 export requires one zone per note.");
     }
     presetInfo.textContent = lines.join("\n");
+    renderPresetVoiceAnalyzer(preset);
   }
 
   function renderMetadata(info) {
@@ -787,6 +1249,8 @@
   var MAX_PREVIEW_LAYERS_PER_NOTE = 8;
   var MAX_PREVIEW_SAMPLE_FRAMES = 4000000;
   var MAX_PREVIEW_CACHE_FRAMES = 10000000;
+  // Keep this aligned with AudioSynthWavetableV2::MAX_SAMPLE_LAYERS_PER_NOTE.
+  var V2_MAX_LAYERS_PER_NOTE = 4;
   var WAVETABLE_DEFAULT_AMPLITUDE = 90 / 127;
 
   function keyboardLabelsForLayout(layout) {
@@ -1531,6 +1995,7 @@
     presetSelect.innerHTML = "";
     presetSelect.disabled = true;
     presetInfo.textContent = "";
+    if (analyzerPanel) analyzerPanel.textContent = "";
     metadata.innerHTML = "";
     summary.textContent = "";
     renderKeyboard();
@@ -1588,6 +2053,7 @@
       presetSelect.disabled = true;
       metadata.innerHTML = "";
       summary.textContent = "";
+      if (analyzerPanel) analyzerPanel.textContent = "";
       renderKeyboard();
       exportButton.disabled = true;
       playButton.disabled = true;
@@ -1603,6 +2069,9 @@
   velocityInput.addEventListener("change", function () {
     stopPreview();
     resetOutput();
+    updatePresetInfo();
+  });
+  noteInput.addEventListener("change", function () {
     updatePresetInfo();
   });
   playButton.addEventListener("click", playPreview);
