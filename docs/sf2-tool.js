@@ -974,7 +974,9 @@
 
     var analysis = analyzePresetVoices(preset);
     var selectedVelocity = currentVelocity();
-    var selectedNote = Math.max(0, Math.min(127, parseInt(noteInput.value, 10) || 0));
+    var selectedNoteValue = parseInt(noteInput.value, 10);
+    var selectedNote = Math.max(0, Math.min(127,
+      isNaN(selectedNoteValue) ? 60 : selectedNoteValue));
     var selectedCoveredNotes = 0;
     var selectedOverlappingNotes = 0;
     var selectedMaxLayers = 0;
@@ -1136,7 +1138,8 @@
     var table = document.createElement("table");
     var thead = document.createElement("thead");
     var headerRow = document.createElement("tr");
-    ["Note", "Peak layers", "Peak velocity", "PCM channels at peak", "Layers @ selected velocity"].forEach(function (value) {
+    ["Note", "Peak layers", "Peak velocity", "PCM channels at peak",
+      "Layers @ selected velocity", "PCM channels @ selected velocity"].forEach(function (value) {
       appendAnalyzerTableCell(headerRow, value, true);
     });
     thead.appendChild(headerRow);
@@ -1152,6 +1155,7 @@
       appendAnalyzerTableCell(noteRow, noteEntry.peakLayerRange);
       appendAnalyzerTableCell(noteRow, String(noteEntry.maxChannels));
       appendAnalyzerTableCell(noteRow, String(noteEntry.selectedLayers));
+      appendAnalyzerTableCell(noteRow, String(noteEntry.selectedChannels));
       tbody.appendChild(noteRow);
     }
     table.appendChild(tbody);
