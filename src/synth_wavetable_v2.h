@@ -172,6 +172,7 @@ class AudioSynthWavetableV2 : public AudioStream {
         uint32_t releaseGainStepQ16_16;
         uint16_t releaseGainRemainder;
         uint16_t releaseGainStepRemainder;
+        uint32_t releaseSamplesRemaining;
 
         uint32_t delayCount;
         uint32_t attackCount;

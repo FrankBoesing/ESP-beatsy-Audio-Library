@@ -411,11 +411,18 @@ void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice) {
     uint32_t releaseCount = voice.releaseCount;
     if (releaseCount == 0) releaseCount = 1;
 
+    // The render loop counts samples directly. Keep the count in 32 bits so
+    // its hot path needs only a native decrement; cap pathological release
+    // times at the largest whole ENVELOPE_PERIOD count that fits.
+    const uint32_t maxReleaseCount = UINT32_MAX / ENVELOPE_PERIOD;
+    if (releaseCount > maxReleaseCount) releaseCount = maxReleaseCount;
+    voice.releaseSamplesRemaining = releaseCount * ENVELOPE_PERIOD;
+
     voice.envelopeState = STATE_RELEASE;
-    voice.envelopeCount = (int32_t)releaseCount;
+    voice.envelopeCount = 0;
     voice.envelopeSubCount = 0;
 
-    const int64_t denominator = (int64_t)releaseCount * ENVELOPE_PERIOD;
+    const int64_t denominator = (int64_t)voice.releaseSamplesRemaining;
     voice.envelopeIncrement = denominator > 0
                                   ? (int32_t)(-(int64_t)voice.envelopeMultiplier /
                                               denominator)
@@ -702,7 +709,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 break;
             }
 
-            if (voice.envelopeSubCount == 0 && voice.envelopeCount <= 0) {
+            if (voice.releaseSamplesRemaining == 0) {
                 voice.active = false;
                 voice.envelopeState = STATE_IDLE;
                 voice.envelopeCount = 0;
@@ -731,13 +738,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             voice.releaseGainQ16_16 -=
                 voice.releaseGainStepQ16_16 + remainderBorrow;
 
-            ++voice.envelopeSubCount;
-            if (voice.envelopeSubCount >= ENVELOPE_PERIOD) {
-                voice.envelopeSubCount = 0;
-                if (voice.envelopeCount > INT32_MIN) {
-                    --voice.envelopeCount;
-                }
-            }
+            --voice.releaseSamplesRemaining;
 
             const uint32_t phaseFraction = phase >> interpolationShift;
             uint32_t sampleIndex = phaseFraction >> 16;
@@ -1244,9 +1245,10 @@ void AudioSynthWavetableV2::update() {
  *
  * 4. ADSR / ENVELOPE HOT-PATH OPTIMIZATIONS
  * ----------------------------------------
- * - Envelope time is advanced at ENVELOPE_PERIOD granularity (currently
- *   eight audio samples). State transitions and envelope-time divisions are
- *   therefore not repeated for every output sample.
+ * - Attack, hold and decay envelope time is advanced at ENVELOPE_PERIOD
+ *   granularity (currently eight audio samples). Release uses a dedicated
+ *   sample countdown, so its expiry bookkeeping does not use this period
+ *   counter in the render loop.
  * - STATE_SUSTAIN has a dedicated inner loop: its gain is constant until
  *   Note-Off, so normal ADSR bookkeeping is skipped while sustaining.
  * - beginReleaseLocked() precomputes an amplitude-scaled release ramp as a
@@ -1387,6 +1389,21 @@ void AudioSynthWavetableV2::update() {
  *   traversal; it does not optimize the release render loop or its arithmetic.
  * - Implementation committed on 2026-11-02. Hardware performance impact has
  *   not yet been measured; validate with the 32-note / 128-layer benchmark.
+ *
+ * 11. RELEASE SAMPLE COUNTDOWN
+ * -----------------------------
+ * - beginReleaseLocked() converts the envelope's period count into a direct
+ *   per-sample countdown. The RELEASE renderer decrements this once per output
+ *   sample, replacing the per-sample envelopeSubCount increment/compare and
+ *   the once-per-period envelopeCount decrement.
+ * - The Q16.16 release-gain quotient/remainder ramp is unchanged. For release
+ *   times within the counter range, the rendered gain sequence and release
+ *   duration remain unchanged; only the expiry bookkeeping is simplified.
+ * - The 32-bit countdown is capped at the largest whole ENVELOPE_PERIOD count
+ *   that fits (UINT32_MAX / ENVELOPE_PERIOD periods). This still represents
+ *   roughly 24.9 hours at 48 kHz, far beyond ordinary instrument releases.
+ * - This adds one 32-bit counter to each SampleVoice. Hardware CPU impact is
+ *   pending; validate with the 32-note / 128-layer benchmark at the same rate.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
