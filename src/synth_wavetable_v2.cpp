@@ -611,9 +611,13 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
     const uint32_t maxPhase = maximumPhase(sample);
     const uint32_t loopLength = sample.LOOP_PHASE_LENGTH;
     const uint32_t loopEnd = sample.LOOP_PHASE_END;
-    const uint32_t sampleIndexShift = 32U - sample.INDEX_BITS;
     const uint32_t interpolationShift = 16U - sample.INDEX_BITS;
     const uint32_t maxSampleIndex = sample.SAMPLE_COUNT - 2U;
+
+    // Keep the phase accumulator in a register throughout this block. Only
+    // store it back once, rather than loading/storing it for every sample.
+    uint32_t phase = voice.phase;
+    const uint32_t phaseIncrement = voice.phaseIncrement;
 
     // Release has a fixed linear slope. Its amplitude-scaled ramp was prepared
     // by beginReleaseLocked(), so this path needs only integer subtracts and one
@@ -622,7 +626,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
         for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
             if (!voice.active) break;
 
-            if (StopAtEnd && voice.phase >= maxPhase) {
+            if (StopAtEnd && phase >= maxPhase) {
                 voice.active = false;
                 voice.envelopeState = STATE_IDLE;
                 break;
@@ -638,6 +642,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
                 voice.releaseGainRemainder = 0;
                 voice.releaseGainStepQ16_16 = 0;
                 voice.releaseGainStepRemainder = 0;
+                voice.phase = phase;
                 return;
             }
 
@@ -664,13 +669,13 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
                 }
             }
 
-            uint32_t sampleIndex = voice.phase >> sampleIndexShift;
-            if (sampleIndex > maxSampleIndex) {
+            const uint32_t phaseFraction = phase >> interpolationShift;
+            uint32_t sampleIndex = phaseFraction >> 16;
+            if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
                 sampleIndex = maxSampleIndex;
             }
 
-            const uint32_t interpolation =
-                (voice.phase >> interpolationShift) & 0xFFFFU;
+            const uint32_t interpolation = phaseFraction & 0xFFFFU;
             const int32_t sample0 = sample.SAMPLE[sampleIndex];
             const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
 
@@ -683,14 +688,15 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
                 voice.releaseGainQ16_16 >> 16;
             mix[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
 
-            voice.phase += voice.phaseIncrement;
+            phase += phaseIncrement;
 
-            if (WrapLoop && voice.phase >= loopEnd) {
+            if (WrapLoop && phase >= loopEnd) {
                 const uint32_t loopStart = loopEnd - loopLength;
-                const uint32_t overshoot = voice.phase - loopEnd;
-                voice.phase = loopStart + (overshoot % loopLength);
+                const uint32_t overshoot = phase - loopEnd;
+                phase = loopStart + (overshoot % loopLength);
             }
         }
+        voice.phase = phase;
         return;
     }
 
@@ -708,19 +714,19 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
             for (; i < AUDIO_BLOCK_SAMPLES; ++i) {
                 if (!voice.active) break;
 
-                if (StopAtEnd && voice.phase >= maxPhase) {
+                if (StopAtEnd && phase >= maxPhase) {
                     voice.active = false;
                     voice.envelopeState = STATE_IDLE;
                     break;
                 }
 
-                uint32_t sampleIndex = voice.phase >> sampleIndexShift;
-                if (sampleIndex > maxSampleIndex) {
+                const uint32_t phaseFraction = phase >> interpolationShift;
+                uint32_t sampleIndex = phaseFraction >> 16;
+                if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
                     sampleIndex = maxSampleIndex;
                 }
 
-                const uint32_t interpolation =
-                    (voice.phase >> interpolationShift) & 0xFFFFU;
+                const uint32_t interpolation = phaseFraction & 0xFFFFU;
                 const int32_t sample0 = sample.SAMPLE[sampleIndex];
                 const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
 
@@ -731,18 +737,18 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
 
                 mix[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
 
-                voice.phase += voice.phaseIncrement;
+                phase += phaseIncrement;
 
-                if (WrapLoop && voice.phase >= loopEnd) {
+                if (WrapLoop && phase >= loopEnd) {
                     const uint32_t loopStart = loopEnd - loopLength;
-                    const uint32_t overshoot = voice.phase - loopEnd;
-                    voice.phase = loopStart + (overshoot % loopLength);
+                    const uint32_t overshoot = phase - loopEnd;
+                    phase = loopStart + (overshoot % loopLength);
                 }
             }
             break;
         }
 
-        if (StopAtEnd && voice.phase >= maxPhase) {
+        if (StopAtEnd && phase >= maxPhase) {
             voice.active = false;
             voice.envelopeState = STATE_IDLE;
             break;
@@ -802,6 +808,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
                     voice.envelopeCount = 0;
                     voice.envelopeMultiplier = 0;
                     voice.envelopeIncrement = 0;
+                    voice.phase = phase;
                     return;
                 }
 
@@ -836,13 +843,13 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
             }
         }
 
-        uint32_t sampleIndex = voice.phase >> sampleIndexShift;
-        if (sampleIndex > maxSampleIndex) {
+        const uint32_t phaseFraction = phase >> interpolationShift;
+        uint32_t sampleIndex = phaseFraction >> 16;
+        if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
             sampleIndex = maxSampleIndex;
         }
 
-        const uint32_t interpolation =
-            (voice.phase >> interpolationShift) & 0xFFFFU;
+        const uint32_t interpolation = phaseFraction & 0xFFFFU;
         const int32_t sample0 = sample.SAMPLE[sampleIndex];
         const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
 
@@ -863,14 +870,15 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
 
         mix[i] += value;
 
-        voice.phase += voice.phaseIncrement;
+        phase += phaseIncrement;
 
-        if (WrapLoop && voice.phase >= loopEnd) {
+        if (WrapLoop && phase >= loopEnd) {
             const uint32_t loopStart = loopEnd - loopLength;
-            const uint32_t overshoot = voice.phase - loopEnd;
-            voice.phase = loopStart + (overshoot % loopLength);
+            const uint32_t overshoot = phase - loopEnd;
+            phase = loopStart + (overshoot % loopLength);
         }
     }
+    voice.phase = phase;
 }
 
 void AudioSynthWavetableV2::update() {
