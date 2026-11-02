@@ -9,11 +9,96 @@
 #include <limits.h>
 #include <math.h>
 
+#if defined(__XTENSA__)
+#include <xtensa/config/core-isa.h>
+#endif
+
+// Keep the Q16 gain conversion exact without a 64-bit multiply.
+// Splitting the signed input into a signed high word and an unsigned low word
+// gives: floor((value * gain) / 65536) = high * gain + ((low * gain) >> 16).
+static inline int32_t wavetableV2ScaleQ16(int32_t value, uint16_t gain) {
+    const uint32_t bits = (uint32_t)value;
+    const int32_t high =
+        (int32_t)(bits >> 16) - (value < 0 ? 65536 : 0);
+    const uint32_t low = bits & 0xFFFFU;
+
+    return high * (int32_t)gain +
+           (int32_t)((low * (uint32_t)gain) >> 16);
+}
+
+// Xtensa LX7 (ESP32-S3): CLAMPS performs an exact signed 16-bit clamp.
 static inline int16_t wavetableV2Saturate16(int32_t value) {
+#if defined(__XTENSA__) && defined(XCHAL_HAVE_CLAMPS) && XCHAL_HAVE_CLAMPS
+    int32_t clamped;
+    __asm__ volatile(
+        "clamps %0, %1, 15"
+        : "=a"(clamped)
+        : "a"(value));
+    return (int16_t)clamped;
+#else
     if (value > 32767) return 32767;
     if (value < -32768) return -32768;
     return (int16_t)value;
+#endif
 }
+
+#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xespv)
+// ESP32-P4 XespV: clamp four signed 32-bit values in parallel. The temporary
+// and bound vectors are 16-byte aligned because VLD.128 requires alignment.
+// MOVI.16.A extracts the low half-word of each clamped 32-bit lane.
+static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
+                                                uint16_t gain,
+                                                int16_t *output) {
+    alignas(16) int32_t scaled[4] = {
+        wavetableV2ScaleQ16(input[0], gain),
+        wavetableV2ScaleQ16(input[1], gain),
+        wavetableV2ScaleQ16(input[2], gain),
+        wavetableV2ScaleQ16(input[3], gain)
+    };
+
+    alignas(16) static const int32_t lowerBound[4] = {
+        -32768, -32768, -32768, -32768
+    };
+    alignas(16) static const int32_t upperBound[4] = {
+        32767, 32767, 32767, 32767
+    };
+
+    // XespV scalar operands are kept in a2-a7, a register subset accepted by
+    // the PIE instructions. The compiler still owns allocation and liveness.
+    register const int32_t *scaledPtr asm("a2") = scaled;
+    register const int32_t *lowerPtr asm("a3") = lowerBound;
+    register const int32_t *upperPtr asm("a4") = upperBound;
+    register uint32_t out0 asm("a5");
+    register uint32_t out1 asm("a6");
+    register uint32_t out2 asm("a7");
+    register uint32_t out3 asm("t3");
+
+    __asm__ volatile(
+        "esp.vld.128.ip q0, %[scaled], 16\n"
+        "esp.vld.128.ip q1, %[lower], 16\n"
+        "esp.vmax.s32 q2, q0, q1\n"
+        "esp.vld.128.ip q1, %[upper], 16\n"
+        "esp.vmin.s32 q2, q2, q1\n"
+        "esp.movi.16.a q2, %[out0], 0\n"
+        "esp.movi.16.a q2, %[out1], 2\n"
+        "esp.movi.16.a q2, %[out2], 4\n"
+        "esp.movi.16.a q2, %[out3], 6\n"
+        : [scaled] "+r"(scaledPtr),
+          [lower] "+r"(lowerPtr),
+          [upper] "+r"(upperPtr),
+          [out0] "=r"(out0),
+          [out1] "=r"(out1),
+          [out2] "=r"(out2),
+          [out3] "=r"(out3)
+        :
+        : "q0", "q1", "q2", "memory");
+
+    output[0] = (int16_t)out0;
+    output[1] = (int16_t)out1;
+    output[2] = (int16_t)out2;
+    output[3] = (int16_t)out3;
+}
+#endif
 
 // MIDI note frequencies in Q16.16 Hz.
 static const uint32_t wavetableV2NoteFrequencyQ16[128] = {
@@ -832,14 +917,30 @@ void AudioSynthWavetableV2::update() {
         }
     }
 
-    // Convert and saturate two output samples per loop iteration.
+    // Apply Q16 master gain and saturate to signed 16-bit PCM.
+#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xespv)
+    uint16_t i = 0;
+#if defined(__GNUC__)
+#pragma GCC unroll 2
+#endif
+    for (; (uint16_t)(i + 3U) < AUDIO_BLOCK_SAMPLES; i += 4U) {
+        wavetableV2ScaleSaturate4P4(&mix[i], masterGain, &block->data[i]);
+    }
+    for (; i < AUDIO_BLOCK_SAMPLES; ++i) {
+        const int32_t scaled = wavetableV2ScaleQ16(mix[i], masterGain);
+        block->data[i] = wavetableV2Saturate16(scaled);
+    }
+#else
+    // Xtensa uses a single CLAMPS instruction for saturation; other targets
+    // use the portable comparison-based fallback.
 #if defined(__GNUC__)
 #pragma GCC unroll 2
 #endif
     for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        const int32_t scaled = (int32_t)(((int64_t)mix[i] * masterGain) >> 16);
+        const int32_t scaled = wavetableV2ScaleQ16(mix[i], masterGain);
         block->data[i] = wavetableV2Saturate16(scaled);
     }
+#endif
 
     transmit(block);
     release(block);
