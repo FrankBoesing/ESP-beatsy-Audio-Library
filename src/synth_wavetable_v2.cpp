@@ -26,6 +26,24 @@ static inline int32_t wavetableV2ScaleQ16(int32_t value, uint16_t gain) {
            (int32_t)((low * (uint32_t)gain) >> 16);
 }
 
+// Exact Q16 linear interpolation using one 32-bit product.
+// Centering the fraction around 0.5 keeps |delta * centered| within int32_t.
+// The low-product half-bit correction preserves the original floor result.
+static inline int32_t wavetableV2InterpolateQ16(int16_t sample0,
+                                                 int16_t sample1,
+                                                 uint16_t fraction) {
+    const int32_t delta = (int32_t)sample1 - (int32_t)sample0;
+    const int32_t centered = (int32_t)fraction - 32768;
+    const int32_t product = delta * centered;
+
+    const uint32_t productBits = (uint32_t)product;
+    const uint32_t roundingCarry =
+        ((uint32_t)delta & 1U) & ((productBits >> 15) & 1U);
+
+    return (int32_t)sample0 + (delta >> 1) + (product >> 16) +
+           (int32_t)roundingCarry;
+}
+
 // Xtensa LX7 (ESP32-S3): CLAMPS performs an exact signed 16-bit clamp.
 static inline int16_t wavetableV2Saturate16(int32_t value) {
 #if defined(__XTENSA__) && defined(XCHAL_HAVE_CLAMPS) && XCHAL_HAVE_CLAMPS
@@ -671,13 +689,10 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
 
             const uint32_t interpolation =
                 (voice.phase >> interpolationShift) & 0xFFFFU;
-            const int32_t sample0 = sample.SAMPLE[sampleIndex];
-            const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
-
-            const int32_t weight0 = (int32_t)(0x10000U - interpolation);
-            const int32_t weightedSample =
-                sample0 * weight0 + sample1 * (int32_t)interpolation;
-            const int32_t interpolated = weightedSample >> 16;
+            const int16_t sample0 = sample.SAMPLE[sampleIndex];
+            const int16_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+            const int32_t interpolated =
+                wavetableV2InterpolateQ16(sample0, sample1, (uint16_t)interpolation);
 
             const uint32_t effectiveAmplitude =
                 voice.releaseGainQ16_16 >> 16;
@@ -721,13 +736,10 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
 
                 const uint32_t interpolation =
                     (voice.phase >> interpolationShift) & 0xFFFFU;
-                const int32_t sample0 = sample.SAMPLE[sampleIndex];
-                const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
-
-                const int32_t weight0 = (int32_t)(0x10000U - interpolation);
-                const int32_t weightedSample =
-                    sample0 * weight0 + sample1 * (int32_t)interpolation;
-                const int32_t interpolated = weightedSample >> 16;
+                const int16_t sample0 = sample.SAMPLE[sampleIndex];
+                const int16_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+                const int32_t interpolated =
+                    wavetableV2InterpolateQ16(sample0, sample1, (uint16_t)interpolation);
 
                 mix[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
 
@@ -843,16 +855,10 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
 
         const uint32_t interpolation =
             (voice.phase >> interpolationShift) & 0xFFFFU;
-        const int32_t sample0 = sample.SAMPLE[sampleIndex];
-        const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
-
-        // Linear interpolation with weights summing to exactly 1.0 in Q16.
-        // The weighted sum remains in int32_t because it is a convex mix of
-        // two signed 16-bit samples.
-        const int32_t weight0 = (int32_t)(0x10000U - interpolation);
-        const int32_t weightedSample =
-            sample0 * weight0 + sample1 * (int32_t)interpolation;
-        const int32_t interpolated = weightedSample >> 16;
+        const int16_t sample0 = sample.SAMPLE[sampleIndex];
+        const int16_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+        const int32_t interpolated =
+            wavetableV2InterpolateQ16(sample0, sample1, (uint16_t)interpolation);
 
         // Fold the Q31 envelope into a Q16 voice amplitude. The resulting
         // 16-bit gain has at most one Q16 gain-step of quantization and lets
