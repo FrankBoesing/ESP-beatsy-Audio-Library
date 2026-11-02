@@ -26,6 +26,51 @@ static inline int32_t wavetableV2ScaleQ16(int32_t value, uint16_t gain) {
            (int32_t)((low * (uint32_t)gain) >> 16);
 }
 
+// Exact Q16 linear interpolation. The ESP32-S3 path uses its MAC16
+// accumulator; other targets retain the original weighted-sum implementation.
+static inline int32_t wavetableV2InterpolateQ16(int16_t sample0,
+                                                 int16_t sample1,
+                                                 uint16_t fraction) {
+#if defined(CONFIG_IDF_TARGET_ESP32S3) && defined(__XTENSA__) && \
+    defined(XCHAL_HAVE_MAC16) && XCHAL_HAVE_MAC16
+    // Interpret the Q16 fraction as signed. For fraction < 0x8000, sample0
+    // is the base and the correction is sample0*(-f) + sample1*f.
+    // For fraction > 0x8000, the signed fraction is negative, sample1 is
+    // the base, and the same correction formula remains exact.
+    // The midpoint is special because -(-32768) cannot be represented in
+    // signed 16-bit form.
+    if (fraction == 0x8000U) {
+        return ((int32_t)sample0 + (int32_t)sample1) >> 1;
+    }
+
+    const int32_t signedFraction = (int16_t)fraction;
+    const int32_t negativeFraction = -signedFraction;
+    int32_t base = (int32_t)sample0;
+    int32_t product;
+
+    // "A" tells GCC that the implicit result is held in the MAC16
+    // accumulator. GCC then reads ACCLO when product is used below.
+    // The complete accumulator sequence stays in one asm block.
+    __asm__ volatile(
+        "movltz %[base], %[sample1], %[fraction]\n"
+        "mul.aa.ll %[sample0], %[negativeFraction]\n"
+        "mula.aa.ll %[sample1], %[fraction]"
+        : [base] "+&a"(base),
+          [product] "=A"(product)
+        : [sample0] "a"((int32_t)sample0),
+          [sample1] "a"((int32_t)sample1),
+          [fraction] "a"(signedFraction),
+          [negativeFraction] "a"(negativeFraction));
+
+    return base + (product >> 16);
+#else
+    const int32_t weight0 = (int32_t)(0x10000U - (uint32_t)fraction);
+    const int32_t weightedSample =
+        (int32_t)sample0 * weight0 + (int32_t)sample1 * (int32_t)fraction;
+    return weightedSample >> 16;
+#endif
+}
+
 // Xtensa LX7 (ESP32-S3): CLAMPS performs an exact signed 16-bit clamp.
 static inline int16_t wavetableV2Saturate16(int32_t value) {
 #if defined(__XTENSA__) && defined(XCHAL_HAVE_CLAMPS) && XCHAL_HAVE_CLAMPS
@@ -671,13 +716,10 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
 
             const uint32_t interpolation =
                 (voice.phase >> interpolationShift) & 0xFFFFU;
-            const int32_t sample0 = sample.SAMPLE[sampleIndex];
-            const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
-
-            const int32_t weight0 = (int32_t)(0x10000U - interpolation);
-            const int32_t weightedSample =
-                sample0 * weight0 + sample1 * (int32_t)interpolation;
-            const int32_t interpolated = weightedSample >> 16;
+            const int16_t sample0 = sample.SAMPLE[sampleIndex];
+            const int16_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+            const int32_t interpolated =
+                wavetableV2InterpolateQ16(sample0, sample1, (uint16_t)interpolation);
 
             const uint32_t effectiveAmplitude =
                 voice.releaseGainQ16_16 >> 16;
@@ -721,13 +763,10 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
 
                 const uint32_t interpolation =
                     (voice.phase >> interpolationShift) & 0xFFFFU;
-                const int32_t sample0 = sample.SAMPLE[sampleIndex];
-                const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
-
-                const int32_t weight0 = (int32_t)(0x10000U - interpolation);
-                const int32_t weightedSample =
-                    sample0 * weight0 + sample1 * (int32_t)interpolation;
-                const int32_t interpolated = weightedSample >> 16;
+                const int16_t sample0 = sample.SAMPLE[sampleIndex];
+                const int16_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+                const int32_t interpolated =
+                    wavetableV2InterpolateQ16(sample0, sample1, (uint16_t)interpolation);
 
                 mix[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
 
@@ -843,13 +882,10 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
 
         const uint32_t interpolation =
             (voice.phase >> interpolationShift) & 0xFFFFU;
-        const int32_t sample0 = sample.SAMPLE[sampleIndex];
-        const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
-
-        const int32_t weight0 = (int32_t)(0x10000U - interpolation);
-        const int32_t weightedSample =
-            sample0 * weight0 + sample1 * (int32_t)interpolation;
-        const int32_t interpolated = weightedSample >> 16;
+        const int16_t sample0 = sample.SAMPLE[sampleIndex];
+        const int16_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+        const int32_t interpolated =
+            wavetableV2InterpolateQ16(sample0, sample1, (uint16_t)interpolation);
 
         // Fold the Q31 envelope into a Q16 voice amplitude. The resulting
         // 16-bit gain has at most one Q16 gain-step of quantization and lets
