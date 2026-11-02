@@ -18,6 +18,12 @@
   var metadata = document.getElementById("sf2Metadata");
   var presetInfo = document.getElementById("sf2PresetInfo");
   var analyzerPanel = document.getElementById("sf2Analyzer");
+  var allPresetScanButton = document.getElementById("sf2ScanAllPresets");
+  var allPresetScanStatus = document.getElementById("sf2ScanStatus");
+  var allPresetScanPanel = document.getElementById("sf2ScanPanel");
+  var allPresetScanLog = document.getElementById("sf2ScanLog");
+  var allPresetScanCopyButton = document.getElementById("sf2ScanCopy");
+  var allPresetScanDownloadButton = document.getElementById("sf2ScanDownload");
   var outputInfo = document.getElementById("sf2OutputInfo");
   var wavetableModeInput = document.getElementById("sf2WavetableMode");
   var keyboardStartSelect = document.getElementById("sf2KeyboardStart");
@@ -30,6 +36,7 @@
   var font = null;
   var currentFileName = "";
   var loadGeneration = 0;
+  var allPresetScanGeneration = 0;
   var audioContext = null;
   var masterGain = null;
   var activeVoices = [];
@@ -778,8 +785,9 @@
     return ranges.length ? ranges.join(", ") : "—";
   }
 
-  function analyzePresetVoices(preset) {
+  function analyzePresetVoices(preset, retainGrid) {
     if (preset.voiceAnalysis) return preset.voiceAnalysis;
+    var keepGrid = retainGrid !== false;
 
     var layerGrid = new Int32Array(ANALYZER_GRID_STRIDE * ANALYZER_GRID_STRIDE);
     var stereoGrid = new Int32Array(ANALYZER_GRID_STRIDE * ANALYZER_GRID_STRIDE);
@@ -933,12 +941,14 @@
       notesOverEightLayers: notesOverEightLayers,
       peakLayerNotes: peakLayerNotes,
       peakChannelNotes: peakChannelNotes,
-      layerGrid: layerGrid,
-      stereoGrid: stereoGrid,
       perNote: perNote
     };
 
-    preset.voiceAnalysis = result;
+    if (keepGrid) {
+      result.layerGrid = layerGrid;
+      result.stereoGrid = stereoGrid;
+      preset.voiceAnalysis = result;
+    }
     return result;
   }
 
@@ -1164,6 +1174,180 @@
     tableWrap.appendChild(table);
     details.appendChild(tableWrap);
     analyzerPanel.appendChild(details);
+  }
+
+  function safeLogField(value) {
+    return String(value === undefined || value === null ? "" : value)
+      .replace(/[\t\r\n|]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function analyzerPeakNoteList(entries, rangeKey) {
+    if (!entries.length) return "—";
+    var limit = 12;
+    var result = entries.slice(0, limit).map(function (entry) {
+      return midiName(entry.note) + "@" + entry[rangeKey];
+    });
+    if (entries.length > limit) result.push("+" + (entries.length - limit) + " notes");
+    return result.join(", ");
+  }
+
+  async function scanAllSoundFontPresets() {
+    if (!font || !allPresetScanButton) return;
+
+    var soundFont = font;
+    var scanGeneration = ++allPresetScanGeneration;
+    var presets = soundFont.presets;
+    var results = [];
+    var maxLayersOverall = 0;
+    var maxChannelsOverall = 0;
+    var presetsAboveV2Limit = 0;
+    var presetsAboveEightLayers = 0;
+    var presetsWithStereo = 0;
+    var maxLayerHistogram = [0, 0, 0, 0, 0, 0];
+    var totalResolvedZones = 0;
+
+    stopPreview();
+    allPresetScanButton.disabled = true;
+    allPresetScanCopyButton.disabled = true;
+    allPresetScanDownloadButton.disabled = true;
+    allPresetScanPanel.classList.add("hidden");
+    allPresetScanLog.value = "";
+    allPresetScanStatus.textContent = "Starting full bank/preset scan…";
+
+    try {
+      for (var i = 0; i < presets.length; i++) {
+        if (scanGeneration !== allPresetScanGeneration || soundFont !== font) return;
+
+        var preset = presets[i];
+        // Do not retain per-preset 128x129 grids during this bulk scan.
+        var analysis = analyzePresetVoices(preset, false);
+        var instrumentNames = Object.create(null);
+        for (var z = 0; z < preset.zones.length; z++) {
+          instrumentNames[preset.zones[z].instrumentName] = true;
+        }
+        var names = Object.keys(instrumentNames).sort(function (a, b) {
+          return a.localeCompare(b);
+        });
+
+        var maxLayers = analysis.maxLayers;
+        var histogramIndex = maxLayers >= 5 ? 5 : maxLayers;
+        maxLayerHistogram[histogramIndex]++;
+        if (maxLayers > maxLayersOverall) maxLayersOverall = maxLayers;
+        if (analysis.maxChannels > maxChannelsOverall) maxChannelsOverall = analysis.maxChannels;
+        if (maxLayers > V2_MAX_LAYERS_PER_NOTE) presetsAboveV2Limit++;
+        if (maxLayers > MAX_PREVIEW_LAYERS_PER_NOTE) presetsAboveEightLayers++;
+        if (analysis.stereoZones) presetsWithStereo++;
+        totalResolvedZones += analysis.zoneCount;
+
+        results.push({
+          bank: preset.bank,
+          program: preset.program,
+          name: preset.name,
+          zones: analysis.zoneCount,
+          instrumentCount: analysis.instrumentCount,
+          instruments: names.join(", "),
+          sampleSets: analysis.uniqueSampleSets,
+          maxLayers: maxLayers,
+          peakLayers: analyzerPeakNoteList(analysis.peakLayerNotes, "peakLayerRange"),
+          maxChannels: analysis.maxChannels,
+          peakChannels: analyzerPeakNoteList(analysis.peakChannelNotes, "peakChannelRange"),
+          coveredCells: analysis.coveredCells,
+          overV2Cells: analysis.moreThanV2LimitCells,
+          stereoZones: analysis.stereoZones,
+          romZones: analysis.romZones,
+          compressedZones: analysis.compressedZones,
+          invalidStereoLinks: analysis.invalidStereoLinks
+        });
+
+        if ((i & 3) === 3 || i === presets.length - 1) {
+          allPresetScanStatus.textContent =
+            "Analyzing " + (i + 1) + " / " + presets.length +
+            " presets — " + safeLogField(preset.name) +
+            " (Bank " + preset.bank + ", Program " + preset.program + ")";
+          await new Promise(function (resolve) { setTimeout(resolve, 0); });
+        }
+      }
+
+      if (scanGeneration !== allPresetScanGeneration || soundFont !== font) return;
+
+      results.sort(function (a, b) {
+        return b.maxLayers - a.maxLayers ||
+          b.maxChannels - a.maxChannels ||
+          a.bank - b.bank ||
+          a.program - b.program ||
+          a.name.localeCompare(b.name);
+      });
+
+      var lines = [];
+      lines.push("ESP-beatsy SF2 all-preset voice analysis");
+      lines.push("File: " + safeLogField(currentFileName));
+      lines.push("SoundFont: " + safeLogField(soundFont.info.INAM || ""));
+      lines.push("SF2 version: " + safeLogField(soundFont.info.Version || ""));
+      lines.push("Presets analyzed: " + results.length + " / " + presets.length);
+      lines.push("SoundFont instruments: " + soundFont.instrumentCount);
+      lines.push("Sample headers: " + Math.max(0, soundFont.samples.length - 1));
+      lines.push("Resolved preset zones (sum over presets): " + totalResolvedZones);
+      lines.push("Maximum simultaneous layers in any preset: " + maxLayersOverall);
+      lines.push("Maximum mono PCM channels in any preset: " + maxChannelsOverall);
+      lines.push("Presets by maximum layers: " +
+        maxLayerHistogram.map(function (count, index) {
+          return (index === 5 ? "5+" : String(index)) + "=" + count;
+        }).join(", "));
+      lines.push("Presets above V2 limit (" + V2_MAX_LAYERS_PER_NOTE + " layers): " + presetsAboveV2Limit);
+      lines.push("Presets above browser preview limit (" + MAX_PREVIEW_LAYERS_PER_NOTE + " layers): " +
+        presetsAboveEightLayers);
+      lines.push("Presets containing valid stereo zones: " + presetsWithStereo);
+      lines.push("");
+      lines.push([
+        "Bank", "Program", "Preset", "Zones", "Instrument count", "Instrument names",
+        "Sample sets", "Max layers", "Notes/velocity at max layers",
+        "Max PCM channels", "Notes/velocity at max PCM", "Covered key/velocity cells",
+        "Cells above V2 limit", "Stereo zones", "ROM zones", "Ogg/SF3 zones",
+        "Invalid stereo links"
+      ].join("\t"));
+
+      for (var r = 0; r < results.length; r++) {
+        var item = results[r];
+        lines.push([
+          item.bank, item.program, safeLogField(item.name), item.zones,
+          item.instrumentCount, safeLogField(item.instruments), item.sampleSets,
+          item.maxLayers, safeLogField(item.peakLayers), item.maxChannels,
+          safeLogField(item.peakChannels), item.coveredCells, item.overV2Cells,
+          item.stereoZones, item.romZones, item.compressedZones, item.invalidStereoLinks
+        ].join("\t"));
+      }
+
+      var report = lines.join("\n");
+      allPresetScanLog.value = report;
+      allPresetScanPanel.classList.remove("hidden");
+      allPresetScanCopyButton.disabled = false;
+      allPresetScanDownloadButton.disabled = false;
+      allPresetScanStatus.textContent =
+        "Completed: " + results.length + " presets. Maximum " +
+        maxLayersOverall + " simultaneous layers and " + maxChannelsOverall +
+        " mono PCM channels. The report is sorted by maximum layer count.";
+      console.log("ESP-beatsy SF2 all-preset voice analysis\n" + report);
+    } catch (error) {
+      if (scanGeneration === allPresetScanGeneration && soundFont === font) {
+        allPresetScanStatus.textContent = "Full preset scan failed: " + error.message;
+      }
+    } finally {
+      if (scanGeneration === allPresetScanGeneration && soundFont === font) {
+        allPresetScanButton.disabled = false;
+      }
+    }
+  }
+
+  function resetAllPresetScan() {
+    allPresetScanGeneration++;
+    if (allPresetScanButton) allPresetScanButton.disabled = true;
+    if (allPresetScanStatus) allPresetScanStatus.textContent = "";
+    if (allPresetScanLog) allPresetScanLog.value = "";
+    if (allPresetScanPanel) allPresetScanPanel.classList.add("hidden");
+    if (allPresetScanCopyButton) allPresetScanCopyButton.disabled = true;
+    if (allPresetScanDownloadButton) allPresetScanDownloadButton.disabled = true;
   }
 
   function updatePresetInfo() {
@@ -1994,6 +2178,7 @@
     // Large SF2 files can finish reading out of order.
     var thisLoad = ++loadGeneration;
 
+    resetAllPresetScan();
     stopPreview();
     resetOutput();
     font = null;
@@ -2051,6 +2236,7 @@
       setStatus("Loaded " + file.name + ". The first preset is selected; choose another preset in the list to audition it.", "good");
       exportButton.disabled = false;
       playButton.disabled = false;
+      allPresetScanButton.disabled = false;
     } catch (error) {
       if (thisLoad !== loadGeneration) return;
       font = null;
@@ -2082,6 +2268,30 @@
   });
   playButton.addEventListener("click", playPreview);
   stopButton.addEventListener("click", stopPreview);
+
+  allPresetScanButton.addEventListener("click", scanAllSoundFontPresets);
+  allPresetScanCopyButton.addEventListener("click", async function () {
+    if (!allPresetScanLog.value) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(allPresetScanLog.value);
+      } else {
+        allPresetScanLog.focus();
+        allPresetScanLog.select();
+        if (!document.execCommand("copy")) throw new Error("Clipboard access was blocked.");
+      }
+      allPresetScanStatus.textContent = "Full preset report copied to the clipboard.";
+    } catch (error) {
+      allPresetScanLog.focus();
+      allPresetScanLog.select();
+      allPresetScanStatus.textContent = "Clipboard access was blocked. The report is selected; use Ctrl+C.";
+    }
+  });
+  allPresetScanDownloadButton.addEventListener("click", function () {
+    if (!allPresetScanLog.value) return;
+    var baseName = currentFileName.replace(/\.[^.]+$/, "").replace(/[^A-Za-z0-9_-]/g, "_");
+    downloadText(allPresetScanLog.value, (baseName || "SoundFont") + "_preset_voice_analysis.txt");
+  });
 
   if (keyboardElement) {
     renderKeyboard();
@@ -2203,6 +2413,9 @@
   exportButton.disabled = true;
   playButton.disabled = true;
   stopButton.disabled = true;
+  allPresetScanButton.disabled = true;
+  allPresetScanCopyButton.disabled = true;
+  allPresetScanDownloadButton.disabled = true;
   downloadButton.disabled = true;
   copyButton.disabled = true;
   updateModeInfo();

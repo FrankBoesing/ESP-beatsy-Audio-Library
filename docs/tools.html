@@ -79,6 +79,12 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
  .sf2-analyzer th,.sf2-analyzer td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
  .sf2-analyzer th{position:sticky;top:0;background:#edf2f7;z-index:1}
  @media(max-width:560px){.sf2-analyzer-bar-row{grid-template-columns:62px minmax(25px,1fr) 104px;gap:6px;font-size:.68rem}.sf2-analyzer{padding:10px}}
+
+ .sf2-scan-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0 6px}
+ .sf2-scan-tools .help{margin:0;color:var(--muted);font-size:.8rem}
+ .sf2-scan-panel{margin:8px 0 14px;padding:12px;border:1px solid var(--line);border-radius:9px;background:#f9fbfd}
+ .sf2-scan-panel label{display:block;margin:8px 0 5px;font-weight:650}
+ .sf2-scan-panel textarea{display:block;width:100%;min-height:260px;resize:vertical;font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre;overflow:auto}
 .sf2-player{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:10px;background:#f9fbfd}
 .sf2-player-options{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(180px,1fr);gap:12px;align-items:end}
 .sf2-check{display:flex;align-items:center;gap:9px;font-weight:600;margin:0 0 7px}
@@ -257,6 +263,17 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
       </div>
       <pre id="sf2PresetInfo" class="sf2-zone-info" aria-live="polite"></pre>
       <div id="sf2Analyzer" class="sf2-analyzer" aria-live="polite"></div>
+      <div class="sf2-scan-tools">
+        <button id="sf2ScanAllPresets" type="button" disabled>Analyze all banks / presets</button>
+        <span id="sf2ScanStatus" class="help" role="status" aria-live="polite"></span>
+      </div>
+      <div id="sf2ScanPanel" class="sf2-scan-panel hidden">
+        <p class="help">Full SoundFont scan, sorted by maximum simultaneous layers. Tab-separated columns can be pasted into a spreadsheet.</p>
+        <label for="sf2ScanLog">All-presets analysis log</label>
+        <textarea id="sf2ScanLog" rows="16" readonly spellcheck="false"></textarea>
+        <button id="sf2ScanCopy" type="button" class="secondary" disabled>Copy report</button>
+        <button id="sf2ScanDownload" type="button" class="secondary" disabled>Download report (.txt)</button>
+      </div>
       <div class="sf2-player">
         <div class="sf2-player-options">
           <label class="sf2-check" for="sf2WavetableMode">
