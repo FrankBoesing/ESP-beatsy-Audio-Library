@@ -1370,10 +1370,10 @@ void AudioSynthWavetableV2::update() {
  *   128 sample voices. The default example setting does NOT test that target.
  * - WAVETABLE_V2_TEST_STEREO=0 tests mono-only playback. Setting it to 1 makes
  *   the fourth of the four layers stereo, exercising a mixed mono/stereo load.
- * - No 128-voice result, CPU percentage, real-time margin or cross-board
- *   performance comparison is claimed here until the user supplies hardware
- *   logs. Record active_layers as well as requested_notes: the former is the
- *   actual number of live sample voices.
+ * - The subsequent 2026-11-02 release-countdown measurement is recorded in
+ *   section 12 below. These measurements apply to the short-waveform USB
+ *   stress instrument only; they do not establish I2S, P4, stereo or long-SF2
+ *   performance. Record active_layers as the actual number of live voices.
  *
  * 10. BULK NOTE-OFF
  * -----------------
@@ -1387,8 +1387,8 @@ void AudioSynthWavetableV2::update() {
  * - Release-envelope initialization still runs once per released sample voice
  *   and remains inside stateMux_. This optimization removes redundant list
  *   traversal; it does not optimize the release render loop or its arithmetic.
- * - Implementation committed on 2026-11-02. Hardware performance impact has
- *   not yet been measured; validate with the 32-note / 128-layer benchmark.
+ * - Implementation committed on 2026-11-02. Its control-side timing is not
+ *   measured by AudioProcessorUsage(), which starts at update() entry.
  *
  * 11. RELEASE SAMPLE COUNTDOWN
  * -----------------------------
@@ -1402,8 +1402,19 @@ void AudioSynthWavetableV2::update() {
  * - The 32-bit countdown is capped at the largest whole ENVELOPE_PERIOD count
  *   that fits (UINT32_MAX / ENVELOPE_PERIOD periods). This still represents
  *   roughly 24.9 hours at 48 kHz, far beyond ordinary instrument releases.
- * - This adds one 32-bit counter to each SampleVoice. Hardware CPU impact is
- *   pending; validate with the 32-note / 128-layer benchmark at the same rate.
+ * - This adds one 32-bit counter to each SampleVoice.
+ * - Hardware measurement — 2026-11-02, 48 kHz USB, 128-sample blocks:
+ *   32 voices: node_peak_us=896, graph_peak_us=904 (33.6 / 33.9%);
+ *   64 voices: node_peak_us=1776, graph_peak_us=1784 (66.6 / 66.9%);
+ *   128 voices: node_peak_us=3496, graph_peak_us=3504 (131.1 / 131.4%).
+ * - At 128 voices, sustain node_peak_us=2393 and graph_peak_us=2396
+ *   (89.7 / 89.8%). The immediately preceding 48 kHz run, before this
+ *   countdown change, measured release peaks of 4112 / 4121 us. The new
+ *   release peak is lower by 616 / 617 us, approximately 15.0%, while sustain
+ *   is effectively unchanged (previous graph peak 2396 us).
+ * - The 48 kHz block deadline is about 2667 us. Release still exceeds it by
+ *   about 837 us (31.4%); this optimization is a measurable improvement but
+ *   does not yet make 128-voice release real-time safe.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
