@@ -14,17 +14,28 @@
  * and sweep on the ESP32-S3 and ESP32-P4 at 44.1 and 48 kHz.
  * Record the ESP32 USB microphone input on the PC, e.g. with Audacity.
  *
- * PlatformIO: env:freenove_esp32_s3_display_USBAUDIO
- * The environment must enable AUDIO_OUTPUT_USB and configure 48 kHz UAC1.
+ * PlatformIO:
+ *   ESP32-S3: env:freenove_esp32_s3_display_USBAUDIO (USB capture, 48 kHz UAC1)
+ *   ESP32-P4: env:esp32-p4 (I2S output; board pin macros from platformio.ini)
+ *
+ * For I2S builds, define WAVETABLE_V2_TEST_RATE=44100 or 48000 to select the
+ * output rate before AudioMemory() starts the audio clock. USB UAC1 uses the
+ * host/device rate configured by its descriptor; the current test environment
+ * is fixed at 48 kHz.
  */
 
+#if defined(AUDIO_OUTPUT_USB)
 #if !defined(ARDUINO_USB_MODE) || ARDUINO_USB_MODE != 0 || \
     !defined(ARDUINO_USB_CDC_ON_BOOT) || ARDUINO_USB_CDC_ON_BOOT != 0
 #error "WavetableV2 USB output requires TinyUSB mode and ARDUINO_USB_CDC_ON_BOOT=0."
 #endif
-
-#if !defined(AUDIO_OUTPUT_USB)
-#error "Build this example with AUDIO_OUTPUT_USB enabled."
+#else
+#if !defined(PIN_I2S_BLCK) || !defined(PIN_I2S_WS) || !defined(PIN_I2S_DOUT)
+#error "Define PIN_I2S_BLCK, PIN_I2S_WS and PIN_I2S_DOUT for I2S benchmark output."
+#endif
+#ifndef PIN_I2S_MLCK
+#define PIN_I2S_MLCK -1
+#endif
 #endif
 
 #include <Arduino.h>
@@ -48,9 +59,26 @@ constexpr int TEST_FIRST_NOTE = 48;
 constexpr int TEST_VELOCITY = 112;
 
 AudioSynthWavetableV2 synth;
-AudioOutputUSB usbOutput;
-AudioConnection synthToUsbLeft(synth, 0, usbOutput, 0);
-AudioConnection synthToUsbRight(synth, 1, usbOutput, 1);
+#if defined(AUDIO_OUTPUT_USB)
+AudioOutputUSB audioOutput;
+#else
+AudioOutputI2S audioOutput({
+    PIN_I2S_BLCK,
+    PIN_I2S_WS,
+    PIN_I2S_DOUT,
+    PIN_I2S_MLCK
+});
+#endif
+AudioConnection synthToOutputLeft(synth, 0, audioOutput, 0);
+AudioConnection synthToOutputRight(synth, 1, audioOutput, 1);
+
+#if defined(WAVETABLE_V2_TEST_RATE)
+static_assert(WAVETABLE_V2_TEST_RATE == 44100 || WAVETABLE_V2_TEST_RATE == 48000,
+              "WAVETABLE_V2_TEST_RATE must be 44100 or 48000.");
+constexpr uint32_t TEST_OUTPUT_RATE = WAVETABLE_V2_TEST_RATE;
+#else
+constexpr uint32_t TEST_OUTPUT_RATE = (uint32_t)AUDIO_SAMPLE_RATE_EXACT;
+#endif
 
 // 32 playable frames plus one interpolation guard frame.
 // Each table is one single-cycle waveform; phase wraps naturally at 32 frames.
@@ -130,32 +158,42 @@ static const AudioSynthWavetableV2::instrument_data instrument(zones, 4);
 
 static void consolePrint(const char *text) {
     Serial.print(text);
+#if defined(AUDIO_OUTPUT_USB)
     USBCDC &usbCdc = AudioUSBSerial();
     if (usbCdc) usbCdc.print(text);
+#endif
 }
 
 static void consolePrint(uint32_t value) {
     Serial.print(value);
+#if defined(AUDIO_OUTPUT_USB)
     USBCDC &usbCdc = AudioUSBSerial();
     if (usbCdc) usbCdc.print(value);
+#endif
 }
 
 static void consolePrint(float value, uint8_t digits = 1) {
     Serial.print(value, digits);
+#if defined(AUDIO_OUTPUT_USB)
     USBCDC &usbCdc = AudioUSBSerial();
     if (usbCdc) usbCdc.print(value, digits);
+#endif
 }
 
 static void consolePrintln(const char *text) {
     Serial.println(text);
+#if defined(AUDIO_OUTPUT_USB)
     USBCDC &usbCdc = AudioUSBSerial();
     if (usbCdc) usbCdc.println(text);
+#endif
 }
 
 static void consolePrintln(uint32_t value) {
     Serial.println(value);
+#if defined(AUDIO_OUTPUT_USB)
     USBCDC &usbCdc = AudioUSBSerial();
     if (usbCdc) usbCdc.println(value);
+#endif
 }
 
 static void haltWithError(const char *message) {
@@ -182,8 +220,13 @@ static void printLoad() {
     consolePrint((uint32_t)AudioMemoryUsage());
     consolePrint("/");
     consolePrint((uint32_t)AudioMemoryUsageMax());
+#if defined(AUDIO_OUTPUT_USB)
     consolePrint(", USB configured ");
-    consolePrintln(usbOutput.isConfigured() ? "yes" : "no");
+    consolePrintln(audioOutput.isConfigured() ? "yes" : "no");
+#else
+    consolePrint(", I2S running ");
+    consolePrintln(audioOutput.isRunning() ? "yes" : "no");
+#endif
 }
 
 static void printPhasePeak(const char *phase) {
@@ -307,9 +350,14 @@ void setup() {
     // to the USBManager-owned CDC interface after AudioMemory() starts USB.
     Serial.begin(115200);
 
-    // The managed USB device (including its CDC serial interface) is started
-    // by AudioMemory(). No USB.begin(), USBAudioCard instance or loop() polling
-    // is needed.
+#if !defined(AUDIO_OUTPUT_USB) && defined(WAVETABLE_V2_TEST_RATE)
+    // Select the hardware rate before AudioMemory() starts the I2S clock.
+    if (!audioOutput.setSampleRate((float)TEST_OUTPUT_RATE)) {
+        haltWithError("Could not configure the requested I2S sample rate.");
+    }
+#endif
+
+    // USB composite audio or I2S hardware is started by the Audio graph.
     AudioMemory(24);
     delay(300);
 
@@ -324,21 +372,35 @@ void setup() {
 #else
     consolePrintln("USB output: mono mix mirrored to stereo, 16-bit PCM.");
 #endif
+#if defined(AUDIO_OUTPUT_USB)
     consolePrintln("Select the ESP32 USB microphone in Audacity and start recording.");
+#else
+    consolePrintln("Record the codec output through line-in or an external recorder.");
+#endif
     consolePrintln("BENCH CSV: phase,rate_hz,requested_notes,active_notes,active_layers,node_us,node_peak_us,graph_us,graph_peak_us,blocks,blocks_peak");
 
-    if (!usbOutput.isConfigured()) {
+#if defined(AUDIO_OUTPUT_USB)
+    if (!audioOutput.isConfigured()) {
         haltWithError("Managed AudioOutputUSB initialization failed. Check the USB build environment.");
     }
+#else
+    if (!audioOutput.isRunning() && !audioOutput.begin()) {
+        haltWithError("AudioOutputI2S initialization failed. Check the I2S pin mapping.");
+    }
+#endif
 
     if (!synth.setInstrument(instrument)) {
         haltWithError("Invalid V2 instrument data.");
     }
     synth.amplitude(0.35f);
 
-    consolePrint("USB audio rate: ");
-    consolePrint(AUDIO_SAMPLE_RATE_EXACT, 0);
-    consolePrintln(" Hz. Waiting 5 seconds for Audacity...");
+    consolePrint("Audio output rate: ");
+    consolePrint(TEST_OUTPUT_RATE);
+#if defined(AUDIO_OUTPUT_USB)
+    consolePrintln(" Hz (USB UAC1). Waiting 5 seconds for Audacity...");
+#else
+    consolePrintln(" Hz (I2S). Waiting 5 seconds for external recording...");
+#endif
     delay(5000);
 
     consolePrintln("Stress test started. It repeats until the board is reset.");
