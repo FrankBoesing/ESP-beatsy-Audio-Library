@@ -78,7 +78,13 @@ AudioControlES8388 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER
 AudioConnection synthToOutputLeft(synth, 0, audioOutput, 0);
 AudioConnection synthToOutputRight(synth, 1, audioOutput, 1);
 
+#if defined(AUDIO_OUTPUT_USB)
 #if defined(WAVETABLE_V2_TEST_RATE)
+static_assert(WAVETABLE_V2_TEST_RATE == (uint32_t)AUDIO_SAMPLE_RATE_EXACT,
+              "USB UAC1 rate is fixed by the descriptor; WAVETABLE_V2_TEST_RATE must match it.");
+#endif
+constexpr uint32_t TEST_OUTPUT_RATE = (uint32_t)AUDIO_SAMPLE_RATE_EXACT;
+#elif defined(WAVETABLE_V2_TEST_RATE)
 static_assert(WAVETABLE_V2_TEST_RATE == 44100 || WAVETABLE_V2_TEST_RATE == 48000,
               "WAVETABLE_V2_TEST_RATE must be 44100 or 48000.");
 constexpr uint32_t TEST_OUTPUT_RATE = WAVETABLE_V2_TEST_RATE;
