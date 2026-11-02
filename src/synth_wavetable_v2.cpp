@@ -1391,29 +1391,15 @@ void AudioSynthWavetableV2::update() {
  * - Implementation committed on 2026-11-02. Its control-side timing is not
  *   measured by AudioProcessorUsage(), which starts at update() entry.
  *
- * 12. RELEASE GAIN ACCUMULATOR
- * ----------------------------
- * - The release gain and step are now split at bit 31: a 16-bit integer output
- *   gain plus a 31-bit fractional accumulator. This represents the same
- *   47-bit amplitude*envelope product as the former Q16.16 + 15-bit remainder
- *   representation, but exposes the output gain directly without a per-sample
- *   >> 16 operation.
- * - Each sample subtracts the 31-bit fractional step, extracts its borrow, and
- *   subtracts the integer step plus borrow from the 16-bit gain. This is
- *   mathematically equivalent to the previous quotient/remainder update for
- *   valid release ranges; the intended PCM gain sequence is unchanged.
- * - Hardware performance impact is pending. Compare the 32-note / 128-layer
- *   48 kHz release peak and verify release tails against the previous build.
- *
  * 11. RELEASE SAMPLE COUNTDOWN
  * -----------------------------
  * - beginReleaseLocked() converts the envelope's period count into a direct
  *   per-sample countdown. The RELEASE renderer decrements this once per output
  *   sample, replacing the per-sample envelopeSubCount increment/compare and
  *   the once-per-period envelopeCount decrement.
- * - The Q16.16 release-gain quotient/remainder ramp is unchanged. For release
- *   times within the counter range, the rendered gain sequence and release
- *   duration remain unchanged; only the expiry bookkeeping is simplified.
+ * - The release-gain ramp retains its previous sample-by-sample sequence.
+ *   Its updated exact integer/fraction representation is documented in
+ *   section 12.
  * - The 32-bit countdown is capped at the largest whole ENVELOPE_PERIOD count
  *   that fits (UINT32_MAX / ENVELOPE_PERIOD periods). This still represents
  *   roughly 24.9 hours at 48 kHz, far beyond ordinary instrument releases.
@@ -1430,6 +1416,20 @@ void AudioSynthWavetableV2::update() {
  * - The 48 kHz block deadline is about 2667 us. Release still exceeds it by
  *   about 837 us (31.4%); this optimization is a measurable improvement but
  *   does not yet make 128-voice release real-time safe.
+ *
+ * 12. RELEASE GAIN ACCUMULATOR
+ * ----------------------------
+ * - The release gain and step are now split at bit 31: a 16-bit integer output
+ *   gain plus a 31-bit fractional accumulator. This represents the same
+ *   47-bit amplitude*envelope product as the former Q16.16 + 15-bit remainder
+ *   representation, but exposes the output gain directly without a per-sample
+ *   >> 16 operation.
+ * - Each sample subtracts the 31-bit fractional step, extracts its borrow, and
+ *   subtracts the integer step plus borrow from the 16-bit gain. This is
+ *   mathematically equivalent to the previous quotient/remainder update for
+ *   valid release ranges; the intended PCM gain sequence is unchanged.
+ * - Hardware performance impact is pending. Compare the 32-note / 128-layer
+ *   48 kHz release peak and verify release tails against the previous build.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
