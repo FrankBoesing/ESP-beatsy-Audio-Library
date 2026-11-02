@@ -199,6 +199,7 @@ bool AudioSynthWavetableV2::setInstrument(const instrument_data &newInstrument) 
     for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
         sampleVoices_[i] = SampleVoice{};
     }
+    activeVoiceCount_ = 0;
     for (uint8_t i = 0; i < 16; ++i) {
         sustain_[i] = false;
     }
@@ -343,11 +344,12 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
     noteState.sustainHeld = false;
     noteState.note = (uint8_t)note;
     noteState.channel = channel;
-    noteState.layerCount = layerCount;
+    noteState.layerCount = 0;
     noteState.token = token;
     noteState.age = ++nextAge_;
 
     const uint32_t velocityGain = ((uint32_t)velocity * UINT16_MAX + 63U) / 127U;
+    uint8_t startedLayers = 0;
 
     for (uint8_t layer = 0; layer < layerCount; ++layer) {
         const uint16_t slot = freeSlots[layer];
@@ -363,10 +365,13 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
         voice.phase = 0;
         voice.phaseIncrement = phaseIncrements[layer];
 
-        if (voice.phaseIncrement == 0) {
+        if (voice.phaseIncrement == 0 || activeVoiceCount_ >= MAX_SAMPLE_VOICES) {
             voice.active = false;
             continue;
         }
+
+        activeVoiceSlots_[activeVoiceCount_++] = slot;
+        ++startedLayers;
 
         voice.amplitude = (uint16_t)(((uint64_t)velocityGain *
                                       sample->INITIAL_ATTENUATION_SCALAR) >> 16);
@@ -384,8 +389,13 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
         voice.releaseCount = scaleSampleCount(sample->RELEASE_COUNT);
     }
 
+    noteState.layerCount = startedLayers;
+    if (startedLayers == 0) {
+        noteState = NoteState{};
+    }
+
     portEXIT_CRITICAL(&stateMux_);
-    return layerCount;
+    return startedLayers;
 }
 
 void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice) {
@@ -427,14 +437,24 @@ void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice) {
 
 }
 
+void AudioSynthWavetableV2::compactInactiveVoices() {
+    uint16_t write = 0;
+    for (uint16_t read = 0; read < activeVoiceCount_; ++read) {
+        const uint16_t slot = activeVoiceSlots_[read];
+        if (sampleVoices_[slot].active) {
+            activeVoiceSlots_[write++] = slot;
+        }
+    }
+    activeVoiceCount_ = write;
+}
+
 void AudioSynthWavetableV2::releaseNoteLocked(uint8_t noteSlot) {
     if (noteSlot >= MAX_NOTES || !notes_[noteSlot].active) return;
 
     const uint32_t token = notes_[noteSlot].token;
-    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        SampleVoice &voice = sampleVoices_[i];
-        if (voice.active && voice.noteSlot == noteSlot &&
-            voice.noteToken == token) {
+    for (uint16_t i = 0; i < activeVoiceCount_; ++i) {
+        SampleVoice &voice = sampleVoices_[activeVoiceSlots_[i]];
+        if (voice.noteSlot == noteSlot && voice.noteToken == token) {
             beginReleaseLocked(voice);
         }
     }
@@ -444,11 +464,14 @@ void AudioSynthWavetableV2::stealNoteLocked(uint8_t noteSlot) {
     if (noteSlot >= MAX_NOTES || !notes_[noteSlot].active) return;
 
     const uint32_t token = notes_[noteSlot].token;
-    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        SampleVoice &voice = sampleVoices_[i];
-        if (voice.active && voice.noteSlot == noteSlot &&
-            voice.noteToken == token) {
+    for (uint16_t i = 0; i < activeVoiceCount_;) {
+        const uint16_t slot = activeVoiceSlots_[i];
+        SampleVoice &voice = sampleVoices_[slot];
+        if (voice.noteSlot == noteSlot && voice.noteToken == token) {
             voice.active = false;
+            activeVoiceSlots_[i] = activeVoiceSlots_[--activeVoiceCount_];
+        } else {
+            ++i;
         }
     }
     notes_[noteSlot] = NoteState{};
@@ -555,13 +578,7 @@ void AudioSynthWavetableV2::amplitude(float value) {
 
 bool AudioSynthWavetableV2::isPlaying() const {
     portENTER_CRITICAL(&stateMux_);
-    bool playing = false;
-    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        if (sampleVoices_[i].active) {
-            playing = true;
-            break;
-        }
-    }
+    const bool playing = activeVoiceCount_ != 0;
     portEXIT_CRITICAL(&stateMux_);
     return playing;
 }
@@ -578,10 +595,7 @@ uint8_t AudioSynthWavetableV2::activeNoteCount() const {
 
 uint16_t AudioSynthWavetableV2::activeSampleCount() const {
     portENTER_CRITICAL(&stateMux_);
-    uint16_t count = 0;
-    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        if (sampleVoices_[i].active) ++count;
-    }
+    const uint16_t count = activeVoiceCount_;
     portEXIT_CRITICAL(&stateMux_);
     return count;
 }
@@ -950,8 +964,8 @@ void AudioSynthWavetableV2::updateStereo(uint16_t masterGain) {
 
     // First render mono voices with the unchanged mono kernel. Their completed
     // mix is duplicated once, before any stereo voice is added.
-    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        SampleVoice &voice = sampleVoices_[i];
+    for (uint16_t i = 0; i < activeVoiceCount_; ++i) {
+        SampleVoice &voice = sampleVoices_[activeVoiceSlots_[i]];
         if (!voice.active) continue;
         if (voice.sample != nullptr &&
             voice.sample->SAMPLE_RIGHT != nullptr) {
@@ -972,8 +986,8 @@ void AudioSynthWavetableV2::updateStereo(uint16_t masterGain) {
 
     // Stereo voices share phase, pitch, loop and envelope state. Only the PCM
     // fetch, interpolation and final channel accumulation are performed twice.
-    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        SampleVoice &voice = sampleVoices_[i];
+    for (uint16_t i = 0; i < activeVoiceCount_; ++i) {
+        SampleVoice &voice = sampleVoices_[activeVoiceSlots_[i]];
         if (!voice.active || voice.sample == nullptr ||
             voice.sample->SAMPLE_RIGHT == nullptr) {
             continue;
@@ -988,6 +1002,8 @@ void AudioSynthWavetableV2::updateStereo(uint16_t masterGain) {
             }
         }
     }
+
+    compactInactiveVoices();
 
     for (uint8_t noteSlot = 0; noteSlot < MAX_NOTES; ++noteSlot) {
         if (notes_[noteSlot].active &&
@@ -1051,18 +1067,16 @@ void AudioSynthWavetableV2::update() {
     // sections prevent AudioTask from preempting multi-field state changes.
     const uint16_t masterGain = masterGain_;
 
-    bool anyActive = false;
+    if (activeVoiceCount_ == 0) return;
+
     bool anyStereo = false;
-    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        const SampleVoice &voice = sampleVoices_[i];
-        if (!voice.active) continue;
-        anyActive = true;
+    for (uint16_t i = 0; i < activeVoiceCount_; ++i) {
+        const SampleVoice &voice = sampleVoices_[activeVoiceSlots_[i]];
         if (voice.sample != nullptr && voice.sample->SAMPLE_RIGHT != nullptr) {
             anyStereo = true;
             break;
         }
     }
-    if (!anyActive) return;
     if (anyStereo) {
         updateStereo(masterGain);
         return;
@@ -1078,17 +1092,22 @@ void AudioSynthWavetableV2::update() {
     // this block are not counted as active layers. This replaces a second
     // full scan over sampleVoices_.
     uint32_t noteHasActiveLayer = 0;
-    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        SampleVoice &voice = sampleVoices_[i];
-        if (!voice.active) continue;
+    for (uint16_t i = 0; i < activeVoiceCount_;) {
+        const uint16_t slot = activeVoiceSlots_[i];
+        SampleVoice &voice = sampleVoices_[slot];
 
         renderVoice(voice, mix);
 
-        if (voice.active && voice.noteSlot < MAX_NOTES) {
-            const NoteState &noteState = notes_[voice.noteSlot];
-            if (noteState.active && noteState.token == voice.noteToken) {
-                noteHasActiveLayer |= (1UL << voice.noteSlot);
+        if (voice.active) {
+            if (voice.noteSlot < MAX_NOTES) {
+                const NoteState &noteState = notes_[voice.noteSlot];
+                if (noteState.active && noteState.token == voice.noteToken) {
+                    noteHasActiveLayer |= (1UL << voice.noteSlot);
+                }
             }
+            ++i;
+        } else {
+            activeVoiceSlots_[i] = activeVoiceSlots_[--activeVoiceCount_];
         }
     }
 
