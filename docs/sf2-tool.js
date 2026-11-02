@@ -1138,8 +1138,9 @@
     var table = document.createElement("table");
     var thead = document.createElement("thead");
     var headerRow = document.createElement("tr");
-    ["Note", "Peak layers", "Peak velocity", "PCM channels at peak",
-      "Layers @ selected velocity", "PCM channels @ selected velocity"].forEach(function (value) {
+    ["Note", "Max layers", "Velocity range (layers)", "Max PCM channels",
+      "Velocity range (PCM)", "Layers @ selected velocity",
+      "PCM channels @ selected velocity"].forEach(function (value) {
       appendAnalyzerTableCell(headerRow, value, true);
     });
     thead.appendChild(headerRow);
@@ -1154,6 +1155,7 @@
       appendAnalyzerTableCell(noteRow, String(noteEntry.maxLayers));
       appendAnalyzerTableCell(noteRow, noteEntry.peakLayerRange);
       appendAnalyzerTableCell(noteRow, String(noteEntry.maxChannels));
+      appendAnalyzerTableCell(noteRow, noteEntry.peakChannelRange);
       appendAnalyzerTableCell(noteRow, String(noteEntry.selectedLayers));
       appendAnalyzerTableCell(noteRow, String(noteEntry.selectedChannels));
       tbody.appendChild(noteRow);
