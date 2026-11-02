@@ -2163,7 +2163,7 @@
           " frames per layer with INDEX_BITS=16.");
       }
       if (layout.loopMode === 2) {
-        featureWarningMap.pingPong = "SF2 ping-pong loops are unsupported and were exported as one-shot samples.";
+        featureWarningMap.reservedSampleMode = "SF2 sampleModes value 2 is reserved/unsupported and was exported as one-shot audio.";
       }
       if ((layout.loopMode === 1 || layout.loopMode === 3) && !layout.loop) {
         featureWarningMap.invalidLoop = "One or more zones have invalid forward-loop points and were exported as one-shot samples.";
@@ -2247,7 +2247,7 @@
     lines.push("// Requires AudioSynthWavetableV2. Legacy AudioSynthWavetable data is not modified.");
     lines.push("// PCM arrays contain one interpolation guard frame per channel.");
     lines.push("// All SF2 sample rates are retained; V2 adapts playback to the runtime audio sample rate.");
-    lines.push("// SF2 filters, arbitrary modulators, pan/placement, chorus/reverb sends and ping-pong loops are not rendered.");
+    lines.push("// SF2 filters, arbitrary modulators, pan/placement, chorus/reverb sends and reserved sample modes are not rendered.");
     if (font.modulatorCount) lines.push("// WARNING: " + font.modulatorCount + " SF2 modulator record(s) were ignored.");
     if (preset.warnings.length) lines.push("// WARNING: unsupported SF2 generators are present; see the tool's preset report.");
     Object.keys(featureWarningMap).forEach(function (key) {
