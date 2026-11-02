@@ -1532,10 +1532,22 @@ void AudioSynthWavetableV2::update() {
  *   active-state timing when the release length ends exactly on a block
  *   boundary.
  * - This is an exact control-flow transformation, not a gain quantization.
- *   Expected benefit: fewer countdown instructions in every rendered release
- *   sample. Hardware performance is pending; compare 64- and 128-voice mono
- *   release peaks against section 13. Also verify a release duration that is
- *   an exact multiple of AUDIO_BLOCK_SAMPLES.
+ *   It removes the per-sample countdown check and decrement while preserving
+ *   the gain accumulator and PCM sample sequence. A duration ending exactly
+ *   on a block boundary retains the previous active-state transition timing.
+ * - First hardware measurement after this change — 2026-11-02, 48 kHz USB,
+ *   128-sample blocks, mono, quiet diagnostics:
+ *   64 voices: sustain node/graph peak=957/967 us; release=1673/1686 us;
+ *   allNotesOff=17296 cycles at 240 MHz (72 us).
+ *   128 voices: sustain node/graph peak=1894/1903 us; release=3350/3375 us;
+ *   allNotesOff=49159 cycles at 240 MHz (204 us).
+ * - Compared with section 13, the observed peaks are higher:
+ *   64 voices: sustain +52 us, release +107 us (graph);
+ *   128 voices: sustain +98 us, release +345 us (graph).
+ *   Since sustain also rose by about 5–6%, this single run does not isolate
+ *   a regression caused by the countdown change. A repeated run is required.
+ *   On this run, 128-voice mono release is 708 us (26.6%) over the 2667 us
+ *   block deadline. The expected performance benefit is not demonstrated.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
