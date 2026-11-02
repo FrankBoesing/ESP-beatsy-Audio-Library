@@ -632,20 +632,17 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
             // The per-sample release decrement is already scaled by the
             // voice amplitude. Only the fixed-point quotient/remainder needs
             // updating; envelopeMultiplier is no longer used in this state.
-            if (voice.releaseGainRemainder <
-                voice.releaseGainStepRemainder) {
-                voice.releaseGainRemainder = (uint16_t)(
-                    voice.releaseGainRemainder + 0x8000U -
-                    voice.releaseGainStepRemainder);
-                voice.releaseGainQ16_16 -=
-                    voice.releaseGainStepQ16_16 + 1U;
-            } else {
-                voice.releaseGainRemainder = (uint16_t)(
-                    voice.releaseGainRemainder -
-                    voice.releaseGainStepRemainder);
-                voice.releaseGainQ16_16 -=
-                    voice.releaseGainStepQ16_16;
-            }
+            // Unsigned underflow marks the remainder borrow in bit 31. Folding
+            // that borrow into the 15-bit remainder and Q16 decrement replaces
+            // the per-sample if/else without changing the release ramp.
+            const uint32_t remainderDiff =
+                (uint32_t)voice.releaseGainRemainder -
+                (uint32_t)voice.releaseGainStepRemainder;
+            const uint32_t remainderBorrow = remainderDiff >> 31;
+            voice.releaseGainRemainder =
+                (uint16_t)(remainderDiff + (remainderBorrow << 15));
+            voice.releaseGainQ16_16 -=
+                voice.releaseGainStepQ16_16 + remainderBorrow;
 
             ++voice.envelopeSubCount;
             if (voice.envelopeSubCount >= ENVELOPE_PERIOD) {
