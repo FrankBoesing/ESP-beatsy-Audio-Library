@@ -1634,6 +1634,55 @@ void AudioSynthWavetableV2::update() {
  * - Do not compare these values directly with the earlier S3 USB runs as an
  *   architecture-only speedup: CPU clock, sample rate and output path differ.
  *
+ * 20. ESP32-P4 I2S MIXED-STEREO BENCHMARK — 2026-11-02
+ * ------------------------------------------------------
+ * - User-provided hardware run on the ESP32-P4 using env:esp32-p4:
+ *   400 MHz CPU, I2S output, 44.1 kHz sample rate, quiet benchmark diagnostics.
+ *   The benchmark uses four sample layers per note and covers 1/2/4/8/16/32
+ *   notes, corresponding to 4/8/16/32/64/128 active sample voices.
+ * - Mixed-stereo configuration: WAVETABLE_V2_TEST_STEREO=1 replaces the
+ *   fourth mono layer with a linked left/right sample. The BENCH rows report
+ *   blocks_peak=2 at every stage, consistent with simultaneous left/right
+ *   output blocks. This is three mono layers plus one stereo layer per note;
+ *   it is not an all-stereo instrument test.
+ * - Graph peak timings from the BENCH rows (sustain / release):
+ *   4 voices: 75 / 97 us;
+ *   8 voices: 112 / 149 us;
+ *   16 voices: 190 / 265 us;
+ *   32 voices: 345 / 492 us;
+ *   64 voices: 654 / 952 us;
+ *   128 voices: 1277 / 1870 us.
+ * - Corresponding V2 node peak timings (sustain / release):
+ *   4 voices: 69 / 91 us;
+ *   8 voices: 106 / 143 us;
+ *   16 voices: 183 / 258 us;
+ *   32 voices: 338 / 486 us;
+ *   64 voices: 648 / 945 us;
+ *   128 voices: 1271 / 1863 us.
+ * - At 44.1 kHz with 128-sample blocks, the deadline is approximately
+ *   2902 us. At 128 voices, the graph release peak of 1870 us leaves about
+ *   1032 us (35.6%) of the block period. The measured sustain and release
+ *   peaks are both below the real-time deadline.
+ * - Direct comparison with the preceding P4 mono run (section 19):
+ *   32 voices: graph sustain/release 290/431 -> 345/492 us
+ *     (+55 / +61 us; +19.0% / +14.2%);
+ *   64 voices: 553/840 -> 654/952 us
+ *     (+101 / +112 us; +18.3% / +13.3%);
+ *   128 voices: 1086/1657 -> 1277/1870 us
+ *     (+191 / +213 us; +17.6% / +12.9%).
+ *   For this three-mono/one-stereo layer mix, stereo adds a measurable but
+ *   moderate cost; the relative overhead falls slightly with voice count.
+ * - allNotesOff() timings measured around the call: 6569, 2132, 3496, 6322,
+ *   11761 and 22702 cycles at 400 MHz for 4/8/16/32/64/128 voices
+ *   (reported as 16/5/8/15/29/56 us). The first few values are non-monotonic,
+ *   so treat them as short single-call measurements affected by timing noise;
+ *   the 128-voice result is approximately 56 us.
+ * - The stress test uses small generated looping waveforms, not representative
+ *   long SF2 samples. The run verifies mixed mono/stereo scheduling and
+ *   real-time load for this test data; it does not prove all-stereo performance,
+ *   PSRAM sample-fetch performance or bit-identical PIE output versus scalar
+ *   reference PCM. Those checks remain open.
+ *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
  * State whether the optimization is implemented, experimentally measured,
