@@ -1371,10 +1371,11 @@ void AudioSynthWavetableV2::update() {
  *   128 sample voices. The default example setting does NOT test that target.
  * - WAVETABLE_V2_TEST_STEREO=0 tests mono-only playback. Setting it to 1 makes
  *   the fourth of the four layers stereo, exercising a mixed mono/stereo load.
- * - The subsequent 2026-11-02 release-countdown measurement is recorded in
- *   section 12 below. These measurements apply to the short-waveform USB
- *   stress instrument only; they do not establish I2S, P4, stereo or long-SF2
- *   performance. Record active_layers as the actual number of live voices.
+ * - The subsequent 2026-11-02 measurements are recorded in sections 11
+ *   and 12 below. The 48 kHz USB results use WAVETABLE_V2_TEST_STEREO=1:
+ *   three mono layers plus one stereo layer per note. They do not establish
+ *   mono-only, all-stereo, I2S, P4 or long-SF2 performance. Record
+ *   active_layers as the actual number of live voices.
  *
  * 10. BULK NOTE-OFF
  * -----------------
@@ -1404,18 +1405,19 @@ void AudioSynthWavetableV2::update() {
  *   that fits (UINT32_MAX / ENVELOPE_PERIOD periods). This still represents
  *   roughly 24.9 hours at 48 kHz, far beyond ordinary instrument releases.
  * - This adds one 32-bit counter to each SampleVoice.
- * - Hardware measurement — 2026-11-02, 48 kHz USB, 128-sample blocks:
+ * - Hardware measurement — 2026-11-02, 48 kHz USB, 128-sample blocks,
+ *   mixed mono/stereo load (WAVETABLE_V2_TEST_STEREO=1):
  *   32 voices: node_peak_us=896, graph_peak_us=904 (33.6 / 33.9%);
  *   64 voices: node_peak_us=1776, graph_peak_us=1784 (66.6 / 66.9%);
  *   128 voices: node_peak_us=3496, graph_peak_us=3504 (131.1 / 131.4%).
  * - At 128 voices, sustain node_peak_us=2393 and graph_peak_us=2396
  *   (89.7 / 89.8%). The immediately preceding 48 kHz run, before this
  *   countdown change, measured release peaks of 4112 / 4121 us. The new
- *   release peak is lower by 616 / 617 us, approximately 15.0%, while sustain
- *   is effectively unchanged (previous graph peak 2396 us).
+ *   release peak was lower by 616 / 617 us, approximately 15.0%, while
+ *   sustain was effectively unchanged (previous graph peak 2396 us).
  * - The 48 kHz block deadline is about 2667 us. Release still exceeds it by
  *   about 837 us (31.4%); this optimization is a measurable improvement but
- *   does not yet make 128-voice release real-time safe.
+ *   does not make 128-voice release real-time safe.
  *
  * 12. RELEASE GAIN ACCUMULATOR
  * ----------------------------
@@ -1428,8 +1430,28 @@ void AudioSynthWavetableV2::update() {
  *   subtracts the integer step plus borrow from the 16-bit gain. This is
  *   mathematically equivalent to the previous quotient/remainder update for
  *   valid release ranges; the intended PCM gain sequence is unchanged.
- * - Hardware performance impact is pending. Compare the 32-note / 128-layer
- *   48 kHz release peak and verify release tails against the previous build.
+ * - Hardware measurement — 2026-11-02, 48 kHz USB, 128-sample blocks,
+ *   WAVETABLE_V2_TEST_STEREO=1 (three mono layers plus one stereo layer per
+ *   note):
+ *   64 voices: release node_peak_us=1789, graph_peak_us=1812
+ *   (67.1 / 67.9%).
+ *   128 voices: sustain node_peak_us=2397, graph_peak_us=2411
+ *   (89.9 / 90.4%); release node_peak_us=3585, graph_peak_us=3600
+ *   (134.4 / 135.0%).
+ * - Compared with the preceding 128-voice release measurement in section 11
+ *   (3496 / 3504 us), this run is 89 / 96 us slower (about 2.5 / 2.7%).
+ *   This is not evidence of a performance gain; with one run per build, the
+ *   small difference may include measurement variation. The release still
+ *   exceeds the 2667 us block deadline by about 918 / 933 us.
+ * - One earlier run stopped printing after the 128-voice sustain result and
+ *   before "Note-Off sent". The audio developed progressively longer silent
+ *   gaps and the board required a manual reset. A subsequent run completed
+ *   the release phase. Cause is unknown; the point of failure places
+ *   allNotesOff() (including 128 release initializations under stateMux_) or
+ *   the immediately following console output among the areas to instrument.
+ * - Audio dropouts are consistent with update() taking longer than the
+ *   2667 us block period under 128-voice release load. This is a timing
+ *   interpretation, not a confirmed diagnosis of the intermittent hang.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
