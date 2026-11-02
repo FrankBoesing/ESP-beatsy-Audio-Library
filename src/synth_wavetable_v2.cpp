@@ -200,6 +200,7 @@ bool AudioSynthWavetableV2::setInstrument(const instrument_data &newInstrument) 
         sampleVoices_[i] = SampleVoice{};
     }
     activeVoiceCount_ = 0;
+    activeStereoVoiceCount_ = 0;
     for (uint8_t i = 0; i < 16; ++i) {
         sustain_[i] = false;
     }
@@ -371,6 +372,7 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
         }
 
         activeVoiceSlots_[activeVoiceCount_++] = slot;
+        if (sample->SAMPLE_RIGHT != nullptr) ++activeStereoVoiceCount_;
         ++startedLayers;
 
         voice.amplitude = (uint16_t)(((uint64_t)velocityGain *
@@ -443,6 +445,9 @@ void AudioSynthWavetableV2::compactInactiveVoices() {
         const uint16_t slot = activeVoiceSlots_[read];
         if (sampleVoices_[slot].active) {
             activeVoiceSlots_[write++] = slot;
+        } else if (sampleVoices_[slot].sample != nullptr &&
+                   sampleVoices_[slot].sample->SAMPLE_RIGHT != nullptr) {
+            --activeStereoVoiceCount_;
         }
     }
     activeVoiceCount_ = write;
@@ -469,6 +474,9 @@ void AudioSynthWavetableV2::stealNoteLocked(uint8_t noteSlot) {
         SampleVoice &voice = sampleVoices_[slot];
         if (voice.noteSlot == noteSlot && voice.noteToken == token) {
             voice.active = false;
+            if (voice.sample != nullptr && voice.sample->SAMPLE_RIGHT != nullptr) {
+                --activeStereoVoiceCount_;
+            }
             activeVoiceSlots_[i] = activeVoiceSlots_[--activeVoiceCount_];
         } else {
             ++i;
@@ -1068,16 +1076,7 @@ void AudioSynthWavetableV2::update() {
     const uint16_t masterGain = masterGain_;
 
     if (activeVoiceCount_ == 0) return;
-
-    bool anyStereo = false;
-    for (uint16_t i = 0; i < activeVoiceCount_; ++i) {
-        const SampleVoice &voice = sampleVoices_[activeVoiceSlots_[i]];
-        if (voice.sample != nullptr && voice.sample->SAMPLE_RIGHT != nullptr) {
-            anyStereo = true;
-            break;
-        }
-    }
-    if (anyStereo) {
+    if (activeStereoVoiceCount_ != 0) {
         updateStereo(masterGain);
         return;
     }
@@ -1087,10 +1086,9 @@ void AudioSynthWavetableV2::update() {
 
     int32_t mix[AUDIO_BLOCK_SAMPLES] = {};
 
-    // Render directly into the live voice array. Build the active-note
-    // bitmap after each voice has been rendered, so voices that end during
-    // this block are not counted as active layers. This replaces a second
-    // full scan over sampleVoices_.
+    // Render only the dense active-slot list. Build the active-note bitmap
+    // after each voice has been rendered, so voices that end during this block
+    // are not counted as active layers. Ended slots are removed in-place.
     uint32_t noteHasActiveLayer = 0;
     for (uint16_t i = 0; i < activeVoiceCount_;) {
         const uint16_t slot = activeVoiceSlots_[i];
