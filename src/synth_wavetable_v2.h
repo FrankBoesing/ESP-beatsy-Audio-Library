@@ -183,6 +183,7 @@ class AudioSynthWavetableV2 : public AudioStream {
     uint32_t scaleSampleCount(uint32_t value) const;
     uint32_t maximumPhase(const sample_data &sample) const;
     void beginReleaseLocked(SampleVoice &voice);
+    void compactInactiveVoices();
     void releaseNoteLocked(uint8_t noteSlot);
     void stealNoteLocked(uint8_t noteSlot);
     void renderVoice(SampleVoice &voice, int32_t *mix) const;
@@ -206,6 +207,9 @@ class AudioSynthWavetableV2 : public AudioStream {
     const instrument_data *instrument_ = nullptr;
     NoteState notes_[MAX_NOTES] = {};
     SampleVoice sampleVoices_[MAX_SAMPLE_VOICES] = {};
+    // Dense active-slot list keeps update() work proportional to actual polyphony.
+    uint16_t activeVoiceSlots_[MAX_SAMPLE_VOICES] = {};
+    uint16_t activeVoiceCount_ = 0;
     bool sustain_[16] = {};
 
     float sampleCountScale_ = 1.0f;
