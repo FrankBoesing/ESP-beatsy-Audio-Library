@@ -8,6 +8,7 @@
 
 #include <limits.h>
 #include <math.h>
+#include <string.h>
 
 #if defined(__XTENSA__)
 #include <xtensa/config/core-isa.h>
@@ -712,7 +713,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             const uint32_t effectiveAmplitude =
                 voice.releaseGainQ16_16 >> 16;
             mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
-            if constexpr (Stereo) {
+            if (Stereo) {
                 const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
                 const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
                 const int32_t weightedSampleRight =
@@ -770,7 +771,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 const int32_t interpolated = weightedSample >> 16;
 
                 mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
-                if constexpr (Stereo) {
+                if (Stereo) {
                     const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
                     const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
                     const int32_t weightedSampleRight =
@@ -912,7 +913,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             ((int32_t)effectiveAmplitude * interpolated) >> 16;
 
         mixLeft[i] += value;
-        if constexpr (Stereo) {
+        if (Stereo) {
             const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
             const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
             const int32_t weightedSampleRight =
@@ -942,8 +943,8 @@ void AudioSynthWavetableV2::updateStereo(uint16_t masterGain) {
     // keep audio running by producing a mono downmix in the first block.
     audio_block_t *blockRight = allocate();
 
-    int32_t mixLeft[AUDIO_BLOCK_SAMPLES] = {};
-    int32_t mixRight[AUDIO_BLOCK_SAMPLES] = {};
+    alignas(16) int32_t mixLeft[AUDIO_BLOCK_SAMPLES] = {};
+    alignas(16) int32_t mixRight[AUDIO_BLOCK_SAMPLES] = {};
 
     uint32_t noteHasActiveLayer = 0;
 
