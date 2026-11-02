@@ -66,8 +66,10 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
         32767, 32767, 32767, 32767
     };
 
-    // Let GCC allocate scalar registers; early-clobber keeps the
+    // Let GCC allocate scalar RISC-V registers; early-clobber keeps the
     // post-increment pointers distinct from the extracted output values.
+    // PIE Q registers are named explicitly by the instructions below and are
+    // not valid GCC clobber names. Keep the memory clobber for the vector loads.
     const int32_t *scaledPtr = scaled;
     const int32_t *lowerPtr = lowerBound;
     const int32_t *upperPtr = upperBound;
