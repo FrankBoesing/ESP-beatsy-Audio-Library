@@ -1458,6 +1458,10 @@ void AudioSynthWavetableV2::update() {
  *   cycle-counter reads; cycles and derived microseconds are printed after
  *   the 1200 ms release observation window. Serial/USB-CDC output is therefore
  *   kept out of the measured audio windows and immediately after note-off.
+ * - printLoad() remains defined in all builds because the Arduino sketch
+ *   preprocessor can emit a static prototype even for a function hidden by
+ *   #if. monitorFor() uses the constant verbosity flag so the quiet default
+ *   branch optimizes to one delay() without a diagnostic loop.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
