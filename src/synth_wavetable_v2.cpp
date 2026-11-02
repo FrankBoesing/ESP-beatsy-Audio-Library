@@ -1520,6 +1520,23 @@ void AudioSynthWavetableV2::update() {
  * - Mono uses one output block (peak block usage 1) while the mixed-stereo
  *   path uses two (peak block usage 2) in these benchmark runs.
  *
+ * 14. BLOCK-BASED RELEASE COUNTDOWN
+ * ---------------------------------
+ * - The renderer now calculates the number of release samples to render in
+ *   the current block once, then subtracts that amount from
+ *   releaseSamplesRemaining after the sample loop. The per-sample zero check
+ *   and decrement are removed; the gain accumulator and PCM sample sequence
+ *   are unchanged.
+ * - If the release expires partway through a block, only the remaining valid
+ *   samples are rendered. The completion condition preserves the former
+ *   active-state timing when the release length ends exactly on a block
+ *   boundary.
+ * - This is an exact control-flow transformation, not a gain quantization.
+ *   Expected benefit: fewer countdown instructions in every rendered release
+ *   sample. Hardware performance is pending; compare 64- and 128-voice mono
+ *   release peaks against section 13. Also verify a release duration that is
+ *   an exact multiple of AUDIO_BLOCK_SAMPLES.
+ *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
  * State whether the optimization is implemented, experimentally measured,
