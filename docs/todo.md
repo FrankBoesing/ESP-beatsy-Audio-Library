@@ -93,7 +93,8 @@ unchanged so existing sketches and generated headers continue to work.
   cannot provide the second output block, the current update falls back to a
   mono average for that block. SF2 pan generators and arbitrary stereo
   placement are not applied yet. The legacy V1 converter remains mono and
-  deliberately downmixes linked stereo pairs; a V2 exporter is still needed.
+  deliberately downmixes linked stereo pairs; the V2 exporter now preserves
+  linked left/right sample arrays.
 - [x] **Add key/velocity zone selection.** V2 resolves all matching
   key-low/high and velocity-low/high rectangles at note-on. Velocity selects
   the zones and also sets the initial note level; `amplitude()` is a separate
@@ -104,20 +105,24 @@ unchanged so existing sketches and generated headers continue to work.
   and loop-until-release. Ping-pong and reverse loops remain unsupported and
   must be reported by the converter.
 
-- [ ] **Map supported SF2 generators to V2 `sample_data`.** Convert root key,
-  coarse/fine tuning and sample rate into the phase increment; convert sample
-  start/end and loop offsets into phase limits; translate volume-envelope
+- [x] **Map the core SF2 playback generators to V2 `sample_data`.** The
+  converter maps root key, coarse/fine tuning, pitch correction and each
+  sample's native sample rate into the phase coefficient; maps sample start/end
+  and forward-loop offsets into phase limits; converts volume-envelope
   timecents and sustain centibels into delay/attack/hold/decay/release counts
-  and `SUSTAIN_MULT`; map initial attenuation and supported vibrato/modulation
-  parameters to the existing fields. Verify the time and phase calculations at
-  all runtime sample rates supported by the library.
-- [ ] **Define explicit handling for SF2 features the current node cannot
-  render.** `AudioSynthWavetableV2` renders mono or linked left/right `int16_t` PCM
-  streams per layer. The legacy V1 exporter still downmixes linked stereo pairs;
-  the future V2 exporter should preserve both arrays and pass the right pointer
-  to `sample_data`. Convert optional SF2 24-bit `sm24` data to 16-bit PCM.
-  Report unsupported filter generators, arbitrary modulators, SF2 pan/placement
-  and effects instead of implying that they are reproduced.
+  and `SUSTAIN_MULT`; and maps initial attenuation. When fixed key number,
+  non-100-cent scale tuning, or key-tracked hold/decay changes the values by
+  note, the exporter splits that SF2 key range into single-key descriptors.
+  Runtime sample-rate adaptation is handled by V2 relative to
+  `AUDIO_SAMPLE_RATE_EXACT`. Per-layer vibrato and other modulation remain a
+  separate TODO; unsupported generators are reported.
+- [x] **Define explicit handling for SF2 features V2 cannot render.**
+  The V2 exporter preserves mono PCM and linked left/right `int16_t` PCM
+  streams, including interpolation guard frames, and rounds optional `sm24`
+  low-byte data to 16-bit PCM. It reports unsupported generators, fixed-velocity
+  overrides, modulators, filters, pan/placement, effects sends, invalid forward
+  loops and the reserved sample mode instead of implying that they are
+  reproduced. Legacy V1 export continues to downmix linked stereo pairs.
 - [x] **Create V1 of the offline SF2 converter for the legacy wavetable API.**
   Implemented in `docs/tools.html` and `docs/sf2-tool.js`: local SF2 parsing,
   preset/instrument global-local zone resolution, fixed-velocity export,
@@ -139,15 +144,17 @@ unchanged so existing sketches and generated headers continue to work.
   Browser sample buffers are bounded to avoid unbounded memory growth. This is
   preview functionality only; it does not implement missing SF2 modulators,
   filters, pan or effects in the ESP32 synth.
-- [ ] **Upgrade the SF2 browser tool to the extended instrument model.** Keep
-  local/offline file processing, but export a compile-ready C++ header for a
-  selected SF2 preset with deduplicated PCM arrays, key/velocity rectangles,
-  per-zone `sample_data` parameters and the extended instrument descriptor.
-  Preserve linked stereo samples by the documented mono-downmix policy and
-  convert `sm24` data to 16-bit PCM. Correctly combine preset and instrument
-  global/local generators. Preview and export must share the same velocity-zone
-  selection and layered-sample rules. Keep optional per-sample WAV export only
-  as a diagnostic feature, not as the primary result.
+- [x] **Upgrade the SF2 browser tool to the V2 instrument model.** The offline
+  tool now defaults to a compile-ready `AudioSynthWavetableV2` header and
+  keeps an explicit legacy V1 export option. V2 export preserves resolved
+  key/velocity rectangles, overlapping layers (with a full-domain check
+  against the engine's four-layer limit), deduplicated mono or linked stereo
+  PCM arrays, per-zone sample descriptors, supported envelope/tuning/loop
+  parameters and `sm24` conversion. Key-specific descriptors are emitted
+  where SF2 key-number, scale-tuning or key-tracked envelope settings require
+  them. The browser preview can play linked stereo and has a V2-compatible
+  32-note/four-layer mode. Unsupported features are described in the generated
+  header and preset report.
 - [ ] **Validate SF2 conversion and playback end-to-end.** Check preset/bank
   selection, key/velocity boundaries, overlapping layers, root-key tuning,
   loops including note-off, envelope timing, sample-rate adaptation, memory
