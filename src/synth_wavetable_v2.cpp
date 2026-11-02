@@ -1570,6 +1570,22 @@ void AudioSynthWavetableV2::update() {
  *   name Q registers in the instructions while allowing GCC to allocate the
  *   scalar RISC-V operands. P4 compile and runtime verification are pending.
  *
+ * 17. ESP32-P4 PIE AR REGISTER CONSTRAINTS
+ * ----------------------------------------
+ * - The next P4 build reached the MOVI.16.A extraction instructions but the
+ *   assembler rejected an operand allocated as a6 (RISC-V x16). PIE
+ *   instructions cannot address x16-x23; their AR register set is x8-x15 and
+ *   x24-x31.
+ * - Constrained every scalar register operand used by the PIE sequence with
+ *   GCC's RISC-V "cr" constraint, which restricts allocation to x8-x15.
+ *   This is a valid subset of the PIE AR register set and prevents GCC from
+ *   selecting a6 or another non-PIE register for either a pointer or result.
+ * - The MOVI.16.A selectors 0, 2, 4 and 6 are retained: they select the low
+ *   16-bit halfword of each of the four 32-bit lanes in q2. They are valid
+ *   halfword indices, not byte offsets.
+ * - P4 compile and runtime verification of this constraint change are
+ *   pending; the user's next PlatformIO build is required to confirm it.
+ *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
  * State whether the optimization is implemented, experimentally measured,
