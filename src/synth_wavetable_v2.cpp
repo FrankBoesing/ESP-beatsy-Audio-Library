@@ -91,7 +91,7 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
           [out2] "=&r"(out2),
           [out3] "=&r"(out3)
         :
-        : "q0", "q1", "q2", "memory");
+        : "memory");
 
     output[0] = (int16_t)out0;
     output[1] = (int16_t)out1;
