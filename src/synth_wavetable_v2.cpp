@@ -592,9 +592,21 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
     const bool stopAtEnd = sample.LOOP_MODE == LoopMode::ONE_SHOT ||
                            (sample.LOOP_MODE == LoopMode::UNTIL_RELEASE &&
                             voice.released);
-    const bool loopEnabled = sample.LOOP_MODE == LoopMode::CONTINUOUS ||
-                             (sample.LOOP_MODE == LoopMode::UNTIL_RELEASE &&
-                              !voice.released);
+
+    // Select the loop policy once per voice. Continuous/held samples with no
+    // loop range retain their previous behavior: they neither wrap nor stop.
+    if (stopAtEnd) {
+        renderVoicePath<true, false>(voice, mix);
+    } else if (sample.LOOP_PHASE_LENGTH != 0) {
+        renderVoicePath<false, true>(voice, mix);
+    } else {
+        renderVoicePath<false, false>(voice, mix);
+    }
+}
+
+template <bool StopAtEnd, bool WrapLoop>
+void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) const {
+    const sample_data &sample = *voice.sample;
 
     const uint32_t maxPhase = maximumPhase(sample);
     const uint32_t loopLength = sample.LOOP_PHASE_LENGTH;
@@ -610,7 +622,7 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
         for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
             if (!voice.active) break;
 
-            if (stopAtEnd && voice.phase >= maxPhase) {
+            if (StopAtEnd && voice.phase >= maxPhase) {
                 voice.active = false;
                 voice.envelopeState = STATE_IDLE;
                 break;
@@ -673,7 +685,7 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
 
             voice.phase += voice.phaseIncrement;
 
-            if (loopEnabled && loopLength != 0 && voice.phase >= loopEnd) {
+            if (WrapLoop && voice.phase >= loopEnd) {
                 const uint32_t loopStart = loopEnd - loopLength;
                 const uint32_t overshoot = voice.phase - loopEnd;
                 voice.phase = loopStart + (overshoot % loopLength);
@@ -696,7 +708,7 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
             for (; i < AUDIO_BLOCK_SAMPLES; ++i) {
                 if (!voice.active) break;
 
-                if (stopAtEnd && voice.phase >= maxPhase) {
+                if (StopAtEnd && voice.phase >= maxPhase) {
                     voice.active = false;
                     voice.envelopeState = STATE_IDLE;
                     break;
@@ -721,7 +733,7 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
 
                 voice.phase += voice.phaseIncrement;
 
-                if (loopEnabled && loopLength != 0 && voice.phase >= loopEnd) {
+                if (WrapLoop && voice.phase >= loopEnd) {
                     const uint32_t loopStart = loopEnd - loopLength;
                     const uint32_t overshoot = voice.phase - loopEnd;
                     voice.phase = loopStart + (overshoot % loopLength);
@@ -730,7 +742,7 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
             break;
         }
 
-        if (stopAtEnd && voice.phase >= maxPhase) {
+        if (StopAtEnd && voice.phase >= maxPhase) {
             voice.active = false;
             voice.envelopeState = STATE_IDLE;
             break;
@@ -856,7 +868,7 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
 
         voice.phase += voice.phaseIncrement;
 
-        if (loopEnabled && loopLength != 0 && voice.phase >= loopEnd) {
+        if (WrapLoop && voice.phase >= loopEnd) {
             const uint32_t loopStart = loopEnd - loopLength;
             const uint32_t overshoot = voice.phase - loopEnd;
             voice.phase = loopStart + (overshoot % loopLength);
