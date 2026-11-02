@@ -1481,6 +1481,37 @@ void AudioSynthWavetableV2::update() {
  *   #if. monitorFor() uses the constant verbosity flag so the quiet default
  *   branch optimizes to one delay() without a diagnostic loop.
  *
+ * 13. MONO RENDERING BENCHMARK
+ * ----------------------------
+ * - Hardware measurement — 2026-11-02, 48 kHz USB, 128-sample blocks,
+ *   WAVETABLE_V2_TEST_STEREO=0, quiet diagnostics (WAVETABLE_V2_TEST_VERBOSE=0):
+ *   32 voices: sustain node_peak_us=468, graph_peak_us=472;
+ *   release node_peak_us=816, graph_peak_us=823;
+ *   allNotesOff=29112 cycles at 240 MHz (121 us).
+ *   64 voices: sustain node_peak_us=911, graph_peak_us=915;
+ *   release node_peak_us=1573, graph_peak_us=1579;
+ *   allNotesOff=16552 cycles at 240 MHz (68 us).
+ *   128 voices: sustain node_peak_us=1802, graph_peak_us=1805;
+ *   release node_peak_us=3026, graph_peak_us=3030;
+ *   allNotesOff=43667 cycles at 240 MHz (181 us).
+ * - 128-voice mono release exceeds the 2667 us block deadline by about
+ *   363 us (13.6%). It is substantially closer to real-time than the
+ *   mixed mono/stereo run, but is not yet real-time safe at 128 voices.
+ * - Direct quiet-run comparison with WAVETABLE_V2_TEST_STEREO=1, where one
+ *   of four layers per note is stereo:
+ *   64 voices: mixed-stereo adds 217 us sustain (915 -> 1132 us) and
+ *   166 us release (1579 -> 1745 us).
+ *   128 voices: mixed-stereo adds 515 us sustain (1805 -> 2320 us) and
+ *   449 us release (3030 -> 3479 us).
+ *   These runs show the cost of the mixed-stereo test configuration; they
+ *   do not represent an all-stereo instrument.
+ * - The single allNotesOff() duration readings (121, 68 and 181 us for
+ *   32/64/128 voices) vary non-monotonically. Do not infer scaling from them;
+ *   scheduler/interrupt timing and the measurement boundary can influence
+ *   these short elapsed-time readings.
+ * - Mono uses one output block (peak block usage 1) while the mixed-stereo
+ *   path uses two (peak block usage 2) in these benchmark runs.
+ *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
  * State whether the optimization is implemented, experimentally measured,
