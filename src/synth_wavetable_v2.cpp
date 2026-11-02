@@ -771,7 +771,8 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
 
         if (voice.active) {
             voice.releaseSamplesRemaining = samplesRemaining - samplesToRender;
-            if (voice.releaseSamplesRemaining == 0) {
+            if (voice.releaseSamplesRemaining == 0 &&
+                samplesRemaining < AUDIO_BLOCK_SAMPLES) {
                 voice.active = false;
                 voice.envelopeState = STATE_IDLE;
                 voice.envelopeCount = 0;
