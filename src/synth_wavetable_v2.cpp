@@ -1575,21 +1575,26 @@ void AudioSynthWavetableV2::update() {
  *   name Q registers in the instructions while allowing GCC to allocate the
  *   scalar RISC-V operands. P4 compile and runtime verification are pending.
  *
- * 17. ESP32-P4 PIE AR REGISTER CONSTRAINTS
- * ----------------------------------------
- * - The next P4 build reached the MOVI.16.A extraction instructions but the
- *   assembler rejected an operand allocated as a6 (RISC-V x16). PIE
- *   instructions cannot address x16-x23; their AR register set is x8-x15 and
- *   x24-x31.
- * - Constrained every scalar register operand used by the PIE sequence with
- *   GCC's RISC-V "cr" constraint, which restricts allocation to x8-x15.
- *   This is a valid subset of the PIE AR register set and prevents GCC from
- *   selecting a6 or another non-PIE register for either a pointer or result.
- * - The MOVI.16.A selectors 0, 2, 4 and 6 are retained: they select the low
- *   16-bit halfword of each of the four 32-bit lanes in q2. They are valid
- *   halfword indices, not byte offsets.
- * - P4 compile and runtime verification of this constraint change are
- *   pending; the user's next PlatformIO build is required to confirm it.
+ * 17. ESP32-P4 PIE AR REGISTER CONSTRAINTS — SUPERSEDED
+ * ------------------------------------------------------
+ * - The first attempt used GCC's RISC-V "cr" constraint to restrict operands
+ *   to x8-x15 after the assembler rejected a6 (x16). Although that register
+ *   subset is PIE-compatible, the selected toolchain could not satisfy the
+ *   combined seven-operand constraint ("impossible constraint").
+ * - Do not restore this "cr" implementation. The follow-up uses explicit
+ *   local register variables bound to valid PIE AR registers instead.
+ *
+ * 18. ESP32-P4 PIE EXPLICIT AR REGISTER BINDING
+ * ---------------------------------------------
+ * - The PIE helper now binds its seven scalar operands explicitly to s8, s9,
+ *   s10, s11, t3, t4 and t5 (RISC-V x24-x30). These all belong to the P4 PIE
+ *   AR register set x8-x15 / x24-x31.
+ * - The bindings use GCC local register variables as extended-asm operands.
+ *   The general "r" constraint remains, but the associated local variables
+ *   force the operands into those exact valid hard registers. This avoids
+ *   both the earlier x16-x23 allocation and the unsatisfied "cr" constraint.
+ * - The four MOVI.16.A extraction selectors remain 0, 2, 4 and 6.
+ * - P4 compilation and runtime/PCM verification are still pending.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
