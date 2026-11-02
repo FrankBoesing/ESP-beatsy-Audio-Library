@@ -523,6 +523,11 @@ void AudioSynthWavetableV2::allNotesOff(int channel) {
     if (channel < -1 || channel > 15) return;
 
     portENTER_CRITICAL(&stateMux_);
+
+    // Mark notes that need a release. A bit per note lets us match all their
+    // sample layers in one pass over the active voice list below.
+    uint32_t releaseNoteMask = 0;
+
     for (uint8_t i = 0; i < MAX_NOTES; ++i) {
         NoteState &state = notes_[i];
         if (!state.active || (channel >= 0 && state.channel != (uint8_t)channel)) {
@@ -534,9 +539,26 @@ void AudioSynthWavetableV2::allNotesOff(int channel) {
             state.sustainHeld = true;
         } else {
             state.sustainHeld = false;
-            releaseNoteLocked(i);
+            releaseNoteMask |= (1UL << i);
         }
     }
+
+    // Avoid rescanning every active voice once per released note. Each voice
+    // is visited once, and its note token prevents matching a reused note slot.
+    if (releaseNoteMask != 0) {
+        for (uint16_t i = 0; i < activeVoiceCount_; ++i) {
+            SampleVoice &voice = sampleVoices_[activeVoiceSlots_[i]];
+            const uint8_t noteSlot = voice.noteSlot;
+
+            if (noteSlot < MAX_NOTES &&
+                (releaseNoteMask & (1UL << noteSlot)) != 0 &&
+                notes_[noteSlot].active &&
+                voice.noteToken == notes_[noteSlot].token) {
+                beginReleaseLocked(voice);
+            }
+        }
+    }
+
     portEXIT_CRITICAL(&stateMux_);
 }
 
@@ -1350,6 +1372,21 @@ void AudioSynthWavetableV2::update() {
  *   performance comparison is claimed here until the user supplies hardware
  *   logs. Record active_layers as well as requested_notes: the former is the
  *   actual number of live sample voices.
+ *
+ * 10. BULK NOTE-OFF
+ * -----------------
+ * - allNotesOff() first updates the matching NoteState entries and records
+ *   the note slots that need release in a 32-bit bitmap. Notes held by the
+ *   sustain pedal are excluded, preserving channel-specific sustain behavior.
+ * - It then scans activeVoiceSlots_ once and calls beginReleaseLocked() for
+ *   matching voices whose note token still matches the owning NoteState.
+ *   This changes the scan complexity from O(MAX_NOTES * activeVoiceCount_)
+ *   to O(MAX_NOTES + activeVoiceCount_) for a bulk note-off.
+ * - Release-envelope initialization still runs once per released sample voice
+ *   and remains inside stateMux_. This optimization removes redundant list
+ *   traversal; it does not optimize the release render loop or its arithmetic.
+ * - Implementation committed on 2026-11-02. Hardware performance impact has
+ *   not yet been measured; validate with the 32-note / 128-layer benchmark.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
