@@ -222,7 +222,6 @@ static void haltWithError(const char *message) {
     }
 }
 
-#if WAVETABLE_V2_TEST_VERBOSE
 static void printLoad() {
     consolePrint("Audio CPU: graph ");
     consolePrint(AudioStream::AudioProcessorUsageTotal(), 1);
@@ -248,8 +247,6 @@ static void printLoad() {
     consolePrintln(audioOutput.isRunning() ? "yes" : "no");
 #endif
 }
-#endif
-
 static void printPhasePeak(const char *phase) {
     consolePrint(phase);
     consolePrint(" peak: graph ");
@@ -260,22 +257,23 @@ static void printPhasePeak(const char *phase) {
 }
 
 static void monitorFor(uint32_t durationMs) {
-#if WAVETABLE_V2_TEST_VERBOSE
-    const uint32_t start = millis();
-    uint32_t lastReport = start;
+    if (WAVETABLE_V2_TEST_VERBOSE) {
+        const uint32_t start = millis();
+        uint32_t lastReport = start;
 
-    while ((uint32_t)(millis() - start) < durationMs) {
-        const uint32_t now = millis();
-        if ((uint32_t)(now - lastReport) >= 500U) {
-            lastReport = now;
-            printLoad();
+        while ((uint32_t)(millis() - start) < durationMs) {
+            const uint32_t now = millis();
+            if ((uint32_t)(now - lastReport) >= 500U) {
+                lastReport = now;
+                printLoad();
+            }
+            delay(20);
         }
-        delay(20);
+    } else {
+        // The constant false branch is optimized away; no polling or
+        // diagnostic work remains in timing builds.
+        delay(durationMs);
     }
-#else
-    // No polling or diagnostic work in timing runs.
-    delay(durationMs);
-#endif
 }
 
 static void playStressChord(uint8_t noteCount) {
