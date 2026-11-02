@@ -260,21 +260,22 @@ static void printPhasePeak(const char *phase) {
 }
 
 static void monitorFor(uint32_t durationMs) {
-    const uint32_t start = millis();
 #if WAVETABLE_V2_TEST_VERBOSE
+    const uint32_t start = millis();
     uint32_t lastReport = start;
-#endif
 
     while ((uint32_t)(millis() - start) < durationMs) {
-#if WAVETABLE_V2_TEST_VERBOSE
         const uint32_t now = millis();
         if ((uint32_t)(now - lastReport) >= 500U) {
             lastReport = now;
             printLoad();
         }
-#endif
         delay(20);
     }
+#else
+    // No polling or diagnostic work in timing runs.
+    delay(durationMs);
+#endif
 }
 
 static void playStressChord(uint8_t noteCount) {
