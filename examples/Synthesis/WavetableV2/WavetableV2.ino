@@ -1,5 +1,5 @@
 /*
- * AudioSynthWavetableV2 stress test -> USB microphone.
+ * AudioSynthWavetableV2 stress test -> USB or I2S output.
  *
  * Sweeps note counts 1, 2, 4, 8, 16 and 32 (up to the configured maximum),
  * with four matching sample layers per note. This measures the V2 renderer
@@ -12,7 +12,7 @@
  * WAVETABLE_V2_TEST_NOTE_COUNT sets the maximum stage. Set it to 32 for the
  * complete sweep; smaller values produce shorter sweeps. Run the same build
  * and sweep on the ESP32-S3 and ESP32-P4 at 44.1 and 48 kHz.
- * Record the ESP32 USB microphone input on the PC, e.g. with Audacity.
+ * Record USB capture with Audacity, or capture the I2S codec output externally.
  *
  * PlatformIO:
  *   ESP32-S3: env:freenove_esp32_s3_display_USBAUDIO (USB capture, 48 kHz UAC1)
@@ -42,7 +42,7 @@
 #include <Audio.h>
 
 // Maximum note count for the automatic 1/2/4/8/16/32-note sweep.
- // For the full range use -D WAVETABLE_V2_TEST_NOTE_COUNT=32.
+// For the full range use -D WAVETABLE_V2_TEST_NOTE_COUNT=32.
 #ifndef WAVETABLE_V2_TEST_NOTE_COUNT
 #define WAVETABLE_V2_TEST_NOTE_COUNT 1
 #endif
@@ -286,7 +286,7 @@ static void printBenchmarkRow(const char *phase, uint8_t requestedNotes) {
     consolePrint("BENCH,");
     consolePrint(phase);
     consolePrint(",");
-    consolePrint((uint32_t)AUDIO_SAMPLE_RATE_EXACT);
+    consolePrint(TEST_OUTPUT_RATE);
     consolePrint(",");
     consolePrint((uint32_t)requestedNotes);
     consolePrint(",");
@@ -346,8 +346,8 @@ static void runBenchmarkStage(uint8_t noteCount) {
 }
 
 void setup() {
-    // Keep UART0 available for the PlatformIO monitor. Diagnostics are mirrored
-    // to the USBManager-owned CDC interface after AudioMemory() starts USB.
+    // Keep UART0 available for the PlatformIO monitor. USB builds also mirror
+    // diagnostics to the AudioManager-owned CDC interface after startup.
     Serial.begin(115200);
 
 #if !defined(AUDIO_OUTPUT_USB) && defined(WAVETABLE_V2_TEST_RATE)
@@ -367,10 +367,18 @@ void setup() {
     consolePrint((uint32_t)TEST_NOTE_COUNT);
     consolePrint(", maximum sample voices: ");
     consolePrintln((uint32_t)(TEST_NOTE_COUNT * AudioSynthWavetableV2::MAX_SAMPLE_LAYERS_PER_NOTE));
+#if defined(AUDIO_OUTPUT_USB)
 #if WAVETABLE_V2_TEST_STEREO
     consolePrintln("USB output: mixed mono/stereo sample test, 16-bit PCM.");
 #else
     consolePrintln("USB output: mono mix mirrored to stereo, 16-bit PCM.");
+#endif
+#else
+#if WAVETABLE_V2_TEST_STEREO
+    consolePrintln("I2S output: mixed mono/stereo sample test.");
+#else
+    consolePrintln("I2S output: mono mix mirrored to stereo.");
+#endif
 #endif
 #if defined(AUDIO_OUTPUT_USB)
     consolePrintln("Select the ESP32 USB microphone in Audacity and start recording.");
