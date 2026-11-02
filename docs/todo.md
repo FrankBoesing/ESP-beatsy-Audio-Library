@@ -42,12 +42,17 @@ unchanged so existing sketches and generated headers continue to work.
   loop-until-release playback and oldest-note voice stealing. Voice stealing is
   currently immediate; click-free stealing/crossfades remain a later task.
   Mixing uses a single 32-bit accumulator and saturates once at the output. No heap
-  allocation occurs in `update()`. The initial V2 renderer uses mono signed
-  16-bit PCM with linear interpolation; each sample array includes one
-  interpolation guard frame.
+  allocation occurs in `update()`. V2 supports mono PCM and optional linked
+  left/right signed 16-bit PCM per sample layer. Stereo layers share phase,
+  pitch, loop and envelope state; the two channels use independent interpolation
+  and mix accumulators. Mono layers remain on the mono kernel and are mirrored
+  to both outputs when any stereo layer is active. Each channel array includes
+  one interpolation guard frame.
 - [x] **Add a configurable hardware stress-test example for V2.**
-  `examples/Synthesis/WavetableV2` routes the mono synthesizer output to both
-  channels of `AudioOutputUSB` and reports total audio-graph CPU usage,
+  `examples/Synthesis/WavetableV2` routes output indices 0/1 to the two
+  channels of `AudioOutputUSB` and reports total audio-graph CPU usage. Define
+  `WAVETABLE_V2_TEST_STEREO=1` to replace one mono layer with a linked
+  left/right sample and exercise mixed mono/stereo rendering.
   V2-node CPU usage, peak load and audio-block memory usage. The test defaults
   to one MIDI note with four overlapping sample layers; set
   `WAVETABLE_V2_TEST_NOTE_COUNT` in build flags to increase the load up to
@@ -81,11 +86,14 @@ unchanged so existing sketches and generated headers continue to work.
   Verify pitch range, modulation update cost and stable behavior when notes
   are released or voices are stolen. Add additional supported modulators only
   after the baseline vibrato path is measured.
-- [ ] **Add stereo sample playback.** Extend a sample layer to reference linked
-  left/right PCM data while sharing phase, pitch and envelope state. Provide
-  two output channels with defined pan/balance behavior and preserve mono
-  instrument compatibility. Benchmark the extra memory bandwidth and mixing
-  cost; define how the SF2 converter represents linked stereo zones.
+- [x] **Add stereo sample playback.** A sample layer may reference optional
+  linked left/right PCM arrays while sharing phase, pitch, loop and envelope
+  state. Stereo uses output indices 0/1; mono samples are mirrored to both
+  channels without entering the stereo sample loop. If the audio block pool
+  cannot provide the second output block, the current update falls back to a
+  mono average for that block. SF2 pan generators and arbitrary stereo
+  placement are not applied yet. The legacy V1 converter remains mono and
+  deliberately downmixes linked stereo pairs; a V2 exporter is still needed.
 - [x] **Add key/velocity zone selection.** V2 resolves all matching
   key-low/high and velocity-low/high rectangles at note-on. Velocity selects
   the zones and also sets the initial note level; `amplitude()` is a separate
@@ -104,13 +112,12 @@ unchanged so existing sketches and generated headers continue to work.
   parameters to the existing fields. Verify the time and phase calculations at
   all runtime sample rates supported by the library.
 - [ ] **Define explicit handling for SF2 features the current node cannot
-  render.** `AudioSynthWavetableV2` currently renders mono output with one
-  `int16_t` sample stream per layer. The first converter version should
-  downmix linked stereo sample pairs to mono and convert optional SF2 24-bit
-  `sm24` data to the engine's 16-bit PCM format. Report unsupported filter
-  generators, arbitrary modulators, stereo placement and effects instead of
-  silently implying that they are reproduced. Keep those features as possible
-  later extensions, not prerequisites for the first usable converter.
+  render.** `AudioSynthWavetableV2` renders mono or linked left/right `int16_t` PCM
+  streams per layer. The legacy V1 exporter still downmixes linked stereo pairs;
+  the future V2 exporter should preserve both arrays and pass the right pointer
+  to `sample_data`. Convert optional SF2 24-bit `sm24` data to 16-bit PCM.
+  Report unsupported filter generators, arbitrary modulators, SF2 pan/placement
+  and effects instead of implying that they are reproduced.
 - [x] **Create V1 of the offline SF2 converter for the legacy wavetable API.**
   Implemented in `docs/tools.html` and `docs/sf2-tool.js`: local SF2 parsing,
   preset/instrument global-local zone resolution, fixed-velocity export,

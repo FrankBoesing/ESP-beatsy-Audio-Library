@@ -2,7 +2,8 @@
  * AudioSynthWavetableV2 stress test -> USB microphone.
  *
  * Starts a configurable number of notes with four matching sample layers
- * each, and sends the mono synth signal to both channels of AudioOutputUSB.
+ * each. Define WAVETABLE_V2_TEST_STEREO=1 to replace the fourth mono layer
+ * with a linked left/right sample and exercise mixed mono/stereo rendering.
  * The default is one note (four sample voices); increase the build macro only
  * after confirming that lower voice counts render cleanly.
  * Record the ESP32 USB microphone input on the PC, e.g. with Audacity.
@@ -29,6 +30,10 @@
 #define WAVETABLE_V2_TEST_NOTE_COUNT 1
 #endif
 
+#ifndef WAVETABLE_V2_TEST_STEREO
+#define WAVETABLE_V2_TEST_STEREO 0
+#endif
+
 constexpr uint8_t TEST_NOTE_COUNT = WAVETABLE_V2_TEST_NOTE_COUNT;
 static_assert(TEST_NOTE_COUNT >= 1 &&
               TEST_NOTE_COUNT <= AudioSynthWavetableV2::MAX_NOTES,
@@ -39,7 +44,7 @@ constexpr int TEST_VELOCITY = 112;
 AudioSynthWavetableV2 synth;
 AudioOutputUSB usbOutput;
 AudioConnection synthToUsbLeft(synth, 0, usbOutput, 0);
-AudioConnection synthToUsbRight(synth, 0, usbOutput, 1);
+AudioConnection synthToUsbRight(synth, 1, usbOutput, 1);
 
 // 32 playable frames plus one interpolation guard frame.
 // Each table is one single-cycle waveform; phase wraps naturally at 32 frames.
@@ -95,12 +100,24 @@ static const AudioSynthWavetableV2::sample_data squareSample(
     0, AudioSynthWavetableV2::LoopMode::CONTINUOUS,
     0, 0, 5000, 0, 8, 0, 8, 700, 0);
 
+#if WAVETABLE_V2_TEST_STEREO
+// Deliberately different waveforms make the left/right output distinguishable.
+static const AudioSynthWavetableV2::sample_data stereoTestSample(
+    sineWave, 33, 5, 4294967296.0f / AUDIO_SAMPLE_RATE_EXACT,
+    0, AudioSynthWavetableV2::LoopMode::CONTINUOUS,
+    0, 0, 5000, 0, 8, 0, 8, 700, 0, sawWave);
+#endif
+
 // All four zones overlap. Each tested note therefore starts four sample layers.
 static const AudioSynthWavetableV2::zone_data zones[] = {
     AudioSynthWavetableV2::zone_data(48, 84, 96, 127, sineSample),
     AudioSynthWavetableV2::zone_data(48, 84, 96, 127, sawSample),
     AudioSynthWavetableV2::zone_data(48, 84, 96, 127, triangleSample),
+#if WAVETABLE_V2_TEST_STEREO
+    AudioSynthWavetableV2::zone_data(48, 84, 96, 127, stereoTestSample)
+#else
     AudioSynthWavetableV2::zone_data(48, 84, 96, 127, squareSample)
+#endif
 };
 
 static const AudioSynthWavetableV2::instrument_data instrument(zones, 4);
@@ -233,7 +250,11 @@ void setup() {
     consolePrint((uint32_t)TEST_NOTE_COUNT);
     consolePrint(", maximum sample voices: ");
     consolePrintln((uint32_t)(TEST_NOTE_COUNT * AudioSynthWavetableV2::MAX_SAMPLE_LAYERS_PER_NOTE));
-    consolePrintln("USB microphone output: stereo, 16-bit PCM.");
+#if WAVETABLE_V2_TEST_STEREO
+    consolePrintln("USB output: mixed mono/stereo sample test, 16-bit PCM.");
+#else
+    consolePrintln("USB output: mono mix mirrored to stereo, 16-bit PCM.");
+#endif
     consolePrintln("Select the ESP32 USB microphone in Audacity and start recording.");
 
     if (!usbOutput.isConfigured()) {

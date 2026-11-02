@@ -596,17 +596,41 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
     // Select the loop policy once per voice. Continuous/held samples with no
     // loop range retain their previous behavior: they neither wrap nor stop.
     if (stopAtEnd) {
-        renderVoicePath<true, false>(voice, mix);
+        renderVoicePath<true, false, false>(voice, mix, nullptr);
     } else if (sample.LOOP_PHASE_LENGTH != 0) {
-        renderVoicePath<false, true>(voice, mix);
+        renderVoicePath<false, true, false>(voice, mix, nullptr);
     } else {
-        renderVoicePath<false, false>(voice, mix);
+        renderVoicePath<false, false, false>(voice, mix, nullptr);
     }
 }
 
-template <bool StopAtEnd, bool WrapLoop>
+void AudioSynthWavetableV2::renderVoiceStereo(SampleVoice &voice,
+                                               int32_t *mixLeft,
+                                               int32_t *mixRight) const {
+    if (!voice.active || voice.sample == nullptr ||
+        voice.sample->SAMPLE_RIGHT == nullptr) {
+        return;
+    }
+
+    const sample_data &sample = *voice.sample;
+    const bool stopAtEnd = sample.LOOP_MODE == LoopMode::ONE_SHOT ||
+                           (sample.LOOP_MODE == LoopMode::UNTIL_RELEASE &&
+                            voice.released);
+
+    if (stopAtEnd) {
+        renderVoicePath<true, false, true>(voice, mixLeft, mixRight);
+    } else if (sample.LOOP_PHASE_LENGTH != 0) {
+        renderVoicePath<false, true, true>(voice, mixLeft, mixRight);
+    } else {
+        renderVoicePath<false, false, true>(voice, mixLeft, mixRight);
+    }
+}
+
+template <bool StopAtEnd, bool WrapLoop, bool Stereo>
 __attribute__((noinline))
-void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) const {
+void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
+                                             int32_t *mixLeft,
+                                             int32_t *mixRight) const {
     const sample_data &sample = *voice.sample;
 
     const uint32_t maxPhase = maximumPhase(sample);
@@ -687,7 +711,16 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
 
             const uint32_t effectiveAmplitude =
                 voice.releaseGainQ16_16 >> 16;
-            mix[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
+            mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
+            if constexpr (Stereo) {
+                const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
+                const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
+                const int32_t weightedSampleRight =
+                    sample0Right * weight0 + sample1Right * (int32_t)interpolation;
+                const int32_t interpolatedRight = weightedSampleRight >> 16;
+                mixRight[i] +=
+                    ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
+            }
 
             phase += phaseIncrement;
 
@@ -736,7 +769,16 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
                     sample0 * weight0 + sample1 * (int32_t)interpolation;
                 const int32_t interpolated = weightedSample >> 16;
 
-                mix[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
+                mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
+                if constexpr (Stereo) {
+                    const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
+                    const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
+                    const int32_t weightedSampleRight =
+                        sample0Right * weight0 + sample1Right * (int32_t)interpolation;
+                    const int32_t interpolatedRight = weightedSampleRight >> 16;
+                    mixRight[i] +=
+                        ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
+                }
 
                 phase += phaseIncrement;
 
@@ -869,7 +911,17 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
         const int32_t value =
             ((int32_t)effectiveAmplitude * interpolated) >> 16;
 
-        mix[i] += value;
+        mixLeft[i] += value;
+        if constexpr (Stereo) {
+            const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
+            const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
+            const int32_t weightedSampleRight =
+                sample0Right * weight0 + sample1Right * (int32_t)interpolation;
+            const int32_t interpolatedRight = weightedSampleRight >> 16;
+            const int32_t valueRight =
+                ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
+            mixRight[i] += valueRight;
+        }
 
         phase += phaseIncrement;
 
@@ -882,6 +934,115 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
     voice.phase = phase;
 }
 
+void AudioSynthWavetableV2::updateStereo(uint16_t masterGain) {
+    audio_block_t *blockLeft = allocate();
+    if (blockLeft == nullptr) return;
+
+    // Stereo needs a second output block. If the pool is temporarily short,
+    // keep audio running by producing a mono downmix in the first block.
+    audio_block_t *blockRight = allocate();
+
+    int32_t mixLeft[AUDIO_BLOCK_SAMPLES] = {};
+    int32_t mixRight[AUDIO_BLOCK_SAMPLES] = {};
+
+    uint32_t noteHasActiveLayer = 0;
+
+    // First render mono voices with the unchanged mono kernel. Their completed
+    // mix is duplicated once, before any stereo voice is added.
+    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
+        SampleVoice &voice = sampleVoices_[i];
+        if (!voice.active) continue;
+        if (voice.sample != nullptr &&
+            voice.sample->SAMPLE_RIGHT != nullptr) {
+            continue;
+        }
+
+        renderVoice(voice, mixLeft);
+
+        if (voice.active && voice.noteSlot < MAX_NOTES) {
+            const NoteState &noteState = notes_[voice.noteSlot];
+            if (noteState.active && noteState.token == voice.noteToken) {
+                noteHasActiveLayer |= (1UL << voice.noteSlot);
+            }
+        }
+    }
+
+    memcpy(mixRight, mixLeft, sizeof(mixLeft));
+
+    // Stereo voices share phase, pitch, loop and envelope state. Only the PCM
+    // fetch, interpolation and final channel accumulation are performed twice.
+    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
+        SampleVoice &voice = sampleVoices_[i];
+        if (!voice.active || voice.sample == nullptr ||
+            voice.sample->SAMPLE_RIGHT == nullptr) {
+            continue;
+        }
+
+        renderVoiceStereo(voice, mixLeft, mixRight);
+
+        if (voice.active && voice.noteSlot < MAX_NOTES) {
+            const NoteState &noteState = notes_[voice.noteSlot];
+            if (noteState.active && noteState.token == voice.noteToken) {
+                noteHasActiveLayer |= (1UL << voice.noteSlot);
+            }
+        }
+    }
+
+    for (uint8_t noteSlot = 0; noteSlot < MAX_NOTES; ++noteSlot) {
+        if (notes_[noteSlot].active &&
+            (noteHasActiveLayer & (1UL << noteSlot)) == 0) {
+            notes_[noteSlot] = NoteState{};
+        }
+    }
+
+    if (blockRight != nullptr) {
+#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xespv)
+        uint16_t i = 0;
+#if defined(__GNUC__)
+#pragma GCC unroll 2
+#endif
+        for (; (uint16_t)(i + 3U) < AUDIO_BLOCK_SAMPLES; i += 4U) {
+            wavetableV2ScaleSaturate4P4(&mixLeft[i], masterGain, &blockLeft->data[i]);
+            wavetableV2ScaleSaturate4P4(&mixRight[i], masterGain, &blockRight->data[i]);
+        }
+        for (; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            blockLeft->data[i] =
+                wavetableV2Saturate16(wavetableV2ScaleQ16(mixLeft[i], masterGain));
+            blockRight->data[i] =
+                wavetableV2Saturate16(wavetableV2ScaleQ16(mixRight[i], masterGain));
+        }
+#else
+#if defined(__GNUC__)
+#pragma GCC unroll 2
+#endif
+        for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            blockLeft->data[i] =
+                wavetableV2Saturate16(wavetableV2ScaleQ16(mixLeft[i], masterGain));
+            blockRight->data[i] =
+                wavetableV2Saturate16(wavetableV2ScaleQ16(mixRight[i], masterGain));
+        }
+#endif
+        transmit(blockLeft, 0);
+        transmit(blockRight, 1);
+        release(blockLeft);
+        release(blockRight);
+    } else {
+        // Low-memory fallback: average the stereo mix to mono and mirror the
+        // same block to both outputs instead of dropping this audio update.
+#if defined(__GNUC__)
+#pragma GCC unroll 2
+#endif
+        for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            const int32_t mono = (mixLeft[i] + mixRight[i]) >> 1;
+            blockLeft->data[i] =
+                wavetableV2Saturate16(wavetableV2ScaleQ16(mono, masterGain));
+        }
+        transmit(blockLeft, 0);
+        transmit(blockLeft, 1);
+        release(blockLeft);
+    }
+}
+
 void AudioSynthWavetableV2::update() {
     // update() runs on the high-priority AudioTask on AUDIO_PROCESSING_CORE.
     // All control calls are made on that same core at lower task priority, so
@@ -890,13 +1051,21 @@ void AudioSynthWavetableV2::update() {
     const uint16_t masterGain = masterGain_;
 
     bool anyActive = false;
+    bool anyStereo = false;
     for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        if (sampleVoices_[i].active) {
-            anyActive = true;
+        const SampleVoice &voice = sampleVoices_[i];
+        if (!voice.active) continue;
+        anyActive = true;
+        if (voice.sample != nullptr && voice.sample->SAMPLE_RIGHT != nullptr) {
+            anyStereo = true;
             break;
         }
     }
     if (!anyActive) return;
+    if (anyStereo) {
+        updateStereo(masterGain);
+        return;
+    }
 
     audio_block_t *block = allocate();
     if (block == nullptr) return;
@@ -956,6 +1125,8 @@ void AudioSynthWavetableV2::update() {
     }
 #endif
 
-    transmit(block);
+    transmit(block, 0);
+    // A mono mix is identical on both outputs and uses the same audio block.
+    transmit(block, 1);
     release(block);
 }

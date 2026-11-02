@@ -41,7 +41,10 @@ class AudioSynthWavetableV2 : public AudioStream {
 
     struct sample_data {
         const int16_t *SAMPLE;
-        // Number of stored PCM frames, including the interpolation guard frame.
+        // Optional linked right-channel PCM. nullptr keeps this layer mono.
+        // Both arrays must have SAMPLE_COUNT frames and matching sample positions.
+        const int16_t *SAMPLE_RIGHT;
+        // Number of stored PCM frames per channel, including the interpolation guard frame.
         const uint32_t SAMPLE_COUNT;
         const uint8_t INDEX_BITS;
         const float PER_HERTZ_PHASE_INCREMENT;
@@ -69,8 +72,9 @@ class AudioSynthWavetableV2 : public AudioStream {
                     uint16_t initialAttenuationScalar = UINT16_MAX,
                     uint32_t delayCount = 0, uint32_t attackCount = 1,
                     uint32_t holdCount = 0, uint32_t decayCount = 1,
-                    uint32_t releaseCount = 1, int32_t sustainMult = 0)
-        : SAMPLE(sample), SAMPLE_COUNT(sampleCount), INDEX_BITS(indexBits),
+                    uint32_t releaseCount = 1, int32_t sustainMult = 0,
+                    const int16_t *sampleRight = nullptr)
+        : SAMPLE(sample), SAMPLE_RIGHT(sampleRight), SAMPLE_COUNT(sampleCount), INDEX_BITS(indexBits),
           PER_HERTZ_PHASE_INCREMENT(perHertzPhaseIncrement), MAX_PHASE(maxPhase),
           LOOP_MODE(loopMode), LOOP_PHASE_END(loopPhaseEnd),
           LOOP_PHASE_LENGTH(loopPhaseLength),
@@ -180,10 +184,16 @@ class AudioSynthWavetableV2 : public AudioStream {
     void releaseNoteLocked(uint8_t noteSlot);
     void stealNoteLocked(uint8_t noteSlot);
     void renderVoice(SampleVoice &voice, int32_t *mix) const;
+    void renderVoiceStereo(SampleVoice &voice, int32_t *mixLeft,
+                           int32_t *mixRight) const;
+    void updateStereo(uint16_t masterGain);
 
     // Compile-time loop policies keep loop/end checks out of sample loops.
-    template <bool StopAtEnd, bool WrapLoop>
-    void renderVoicePath(SampleVoice &voice, int32_t *mix) const;
+    // Stereo is a separate specialization, so the mono hot loop has no
+    // per-sample channel test or right-channel work.
+    template <bool StopAtEnd, bool WrapLoop, bool Stereo>
+    void renderVoicePath(SampleVoice &voice, int32_t *mixLeft,
+                         int32_t *mixRight) const;
 
     // Control-plane lock only. AudioTask accesses this state directly and is
     // pinned to the same core at higher priority than all public control calls.
