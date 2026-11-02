@@ -15,8 +15,9 @@
  * Record USB capture with Audacity, or capture the I2S codec output externally.
  *
  * PlatformIO:
- *   ESP32-S3: env:freenove_esp32_s3_display_USBAUDIO (USB capture, 48 kHz UAC1)
- *   ESP32-P4: env:esp32-p4 (I2S output; board pin macros from platformio.ini)
+ *   ESP32-S3 USB: env:freenove_esp32_s3_display_USBAUDIO (48 kHz UAC1)
+ *   ESP32-S3 I2S: env:freenove_esp32_s3_display (44.1/48 kHz, ES8311)
+ *   ESP32-P4 I2S: env:esp32-p4 (44.1/48 kHz, ES8311)
  *
  * For I2S builds, define WAVETABLE_V2_TEST_RATE=44100 or 48000 to select the
  * output rate before AudioMemory() starts the audio clock. USB UAC1 uses the
@@ -68,6 +69,11 @@ AudioOutputI2S audioOutput({
     PIN_I2S_DOUT,
     PIN_I2S_MLCK
 });
+#if defined(AUDIO_CODEC_ES8311)
+AudioControlES8311 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER_ACTIVE});
+#elif defined(AUDIO_CODEC_ES8388)
+AudioControlES8388 codec({PIN_I2C_SDA, PIN_I2C_SCL, PIN_AMPLIFIER, PIN_AMPLIFIER_ACTIVE});
+#endif
 #endif
 AudioConnection synthToOutputLeft(synth, 0, audioOutput, 0);
 AudioConnection synthToOutputRight(synth, 1, audioOutput, 1);
@@ -395,6 +401,15 @@ void setup() {
     if (!audioOutput.isRunning() && !audioOutput.begin()) {
         haltWithError("AudioOutputI2S initialization failed. Check the I2S pin mapping.");
     }
+#if defined(AUDIO_CODEC_ES8311)
+    if (!codec.enable(TEST_OUTPUT_RATE) || !codec.volume(0.2f)) {
+        haltWithError("ES8311 initialization failed.");
+    }
+#elif defined(AUDIO_CODEC_ES8388)
+    if (!codec.enable() || !codec.volume(0.2f)) {
+        haltWithError("ES8388 initialization failed.");
+    }
+#endif
 #endif
 
     if (!synth.setInstrument(instrument)) {
