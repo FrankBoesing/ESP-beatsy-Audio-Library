@@ -364,7 +364,6 @@ void AudioSynthWavetableV2::stealNoteLocked(uint8_t noteSlot) {
         if (voice.active && voice.noteSlot == noteSlot &&
             voice.noteToken == token) {
             voice.active = false;
-
         }
     }
     notes_[noteSlot] = NoteState{};
