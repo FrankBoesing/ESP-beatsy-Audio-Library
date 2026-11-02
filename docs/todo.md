@@ -102,8 +102,8 @@ unchanged so existing sketches and generated headers continue to work.
   four matching sample layers per note; additional matching zones are ignored
   after the first four.
 - [x] **Add SF2 forward-loop modes.** V2 supports one-shot, continuous looping
-  and loop-until-release. Ping-pong and reverse loops remain unsupported and
-  must be reported by the converter.
+  and loop-until-release. SF2 `sampleModes` value 2 is reserved/unsupported
+  and is exported as one-shot with a warning.
 
 - [x] **Map the core SF2 playback generators to V2 `sample_data`.** The
   converter maps root key, coarse/fine tuning, pitch correction and each
@@ -132,18 +132,16 @@ unchanged so existing sketches and generated headers continue to work.
   of producing incomplete instrument data. This does not complete the target
   feature below; the converter must be upgraded after the `AudioSynthWavetable`
   zone/layer API exists.
-- [x] **Add an interactive SF2 keyboard player.** The browser tool now provides
+- [x] **Add an interactive SF2 keyboard player.** The browser tool provides
   a two-octave keyboard for mouse/touch input and the PC keyboard, including
   held-note Note On/Off and volume-envelope release. QWERTZ/QWERTY labels are
   read from the browser keyboard map when available, or detected from the
-  actual Y/Z key event (also suitable for Firefox). Its default
-  compatibility mode is monophonic, requires exactly one matching sample zone
-  per note at the selected velocity, applies the current default wavetable
-  amplitude and enforces the legacy 65,535-frame sample limit. An optional
-  browser mode allows up to 16 simultaneous notes and eight layers per note.
-  Browser sample buffers are bounded to avoid unbounded memory growth. This is
-  preview functionality only; it does not implement missing SF2 modulators,
-  filters, pan or effects in the ESP32 synth.
+  actual Y/Z key event (also suitable for Firefox). Its default V2-compatible
+  mode previews up to 32 held notes and four layers per note, including linked
+  stereo playback. The extended browser preview allows up to 16 simultaneous
+  notes and 16 layers per note. Browser sample buffers are bounded to avoid
+  unbounded memory growth. This is still a preview, not a complete SF2 synth;
+  unsupported modulators, filters, pan and effects are not rendered.
 - [x] **Upgrade the SF2 browser tool to the V2 instrument model.** The offline
   tool now defaults to a compile-ready `AudioSynthWavetableV2` header and
   keeps an explicit legacy V1 export option. V2 export preserves resolved
