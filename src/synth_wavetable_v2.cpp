@@ -66,10 +66,11 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
         32767, 32767, 32767, 32767
     };
 
-    // Let GCC allocate scalar RISC-V registers; early-clobber keeps the
-    // post-increment pointers distinct from the extracted output values.
-    // PIE Q registers are named explicitly by the instructions below and are
-    // not valid GCC clobber names. Keep the memory clobber for the vector loads.
+    // PIE instructions can address only AR registers x8-x15 and x24-x31.
+    // GCC's RISC-V "cr" constraint restricts these operands to x8-x15, a valid
+    // subset. Early-clobber keeps the post-increment pointers distinct from
+    // the extracted output values. PIE Q registers are named explicitly by
+    // the instructions and are not valid GCC clobber names; retain "memory".
     const int32_t *scaledPtr = scaled;
     const int32_t *lowerPtr = lowerBound;
     const int32_t *upperPtr = upperBound;
@@ -85,13 +86,13 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
         "esp.movi.16.a q2, %[out1], 2\n"
         "esp.movi.16.a q2, %[out2], 4\n"
         "esp.movi.16.a q2, %[out3], 6\n"
-        : [scaled] "+&r"(scaledPtr),
-          [lower] "+&r"(lowerPtr),
-          [upper] "+&r"(upperPtr),
-          [out0] "=&r"(out0),
-          [out1] "=&r"(out1),
-          [out2] "=&r"(out2),
-          [out3] "=&r"(out3)
+        : [scaled] "+&cr"(scaledPtr),
+          [lower] "+&cr"(lowerPtr),
+          [upper] "+&cr"(upperPtr),
+          [out0] "=&cr"(out0),
+          [out1] "=&cr"(out1),
+          [out2] "=&cr"(out2),
+          [out3] "=&cr"(out3)
         :
         : "memory");
 
