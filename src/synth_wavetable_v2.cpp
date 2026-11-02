@@ -1553,8 +1553,21 @@ void AudioSynthWavetableV2::update() {
  *   identify which additional instructions are actually introduced by the
  *   release ramp.
  * - No source change is authorized by this review item. It is intentionally
- *   deferred until after the ESP32-P4 USB benchmark, then should be resumed
+ *   deferred until after the ESP32-P4 I2S benchmark, then should be resumed
  *   using the S3 toolchain/disassembly from the matching PlatformIO build.
+ *
+ * 16. ESP32-P4 PIE REGISTER CLOBBERS
+ * ---------------------------------
+ * - The P4 vector clamp helper uses the PIE Q0-Q2 register bank explicitly
+ *   in inline assembly. GCC's RISC-V clobber parser rejects "q0", "q1" and
+ *   "q2" as unknown register names; these Q registers are not part of the
+ *   scalar RISC-V register allocator's clobber namespace.
+ * - Removed the invalid Q-register clobbers and retained the "memory"
+ *   clobber for the vector loads. Scalar pointer/output registers remain
+ *   declared as read/write or early-clobber operands.
+ * - This follows Espressif's published PIE inline-assembly examples, which
+ *   name Q registers in the instructions while allowing GCC to allocate the
+ *   scalar RISC-V operands. P4 compile and runtime verification are pending.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
