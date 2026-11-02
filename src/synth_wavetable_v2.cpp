@@ -1286,6 +1286,38 @@ void AudioSynthWavetableV2::update() {
  *
  * 9. VALIDATION / KNOWN LIMITS / NEXT MEASUREMENTS
  * -----------------------------------------------
+ * MEASURED RUN — 2026-11-02 (user-provided serial log):
+ * - 48 kHz, USB Audio output, 32 notes / 128 sample layers were successfully
+ *   started. The log confirms active_notes=32 and active_layers=128.
+ * - Sustain at 128 active layers: node_us=2204, node_peak_us=2387,
+ *   graph_us=2316, graph_peak_us=2391; reported V2 CPU was about 82.6–82.8%
+ *   with a peak of 89.5%. The graph peak was 89.7%.
+ * - Audio block size is 128 samples, so one block at 48 kHz is about 2667 us.
+ *   The measured sustain peak (2387 us) is close to this deadline and leaves
+ *   limited headroom for other nodes, system activity or less cache-friendly
+ *   sample data.
+ * - During the all-notes-off/release phase, node_peak_us reached 4026 us and
+ *   graph_peak_us reached 4030 us (about 151%). The ordinary sampled load was
+ *   already zero by the next periodic report. This is a measured transient;
+ *   its cause is NOT established. Investigate release setup / critical-section
+ *   duration and repeat the test before claiming release handling is safe.
+ * - The exact board model is not printed in the log. USB Audio at 48 kHz
+ *   suggests the S3 USB test environment, but the hardware identity is
+ *   unconfirmed by the log itself.
+ * - The stress instrument uses four short 33-frame looping test waveforms,
+ *   not representative long SF2 samples. This verifies voice scheduling and
+ *   hot-loop work for this workload, but does not yet prove equal performance
+ *   with large sample arrays in PSRAM or arbitrary SF2 instruments.
+ * - No I2S result, ESP32-P4 result, audible dropout assessment or repeated-run
+ *   variance has been recorded yet.
+ * - WAVETABLE_V2_TEST_NOTE_COUNT defaults to 1; the full 1/2/4/8/16/32 note
+ *   sweep must be explicitly enabled with
+ *   -DWAVETABLE_V2_TEST_NOTE_COUNT=32. Four layers per note then request up to
+ *   128 sample voices. Record active_layers as the actual number of live
+ *   sample voices.
+ * - WAVETABLE_V2_TEST_STEREO=0 tests mono-only playback. Setting it to 1 makes
+ *   the fourth of the four layers stereo, exercising a mixed mono/stereo load.
+ *
  * - setInstrument() validates zone ranges, sample pointers and dimensions,
  *   phase capacity and loop bounds before playback.
  * - noteOn() resolves matching zones and computes per-layer phase increments
