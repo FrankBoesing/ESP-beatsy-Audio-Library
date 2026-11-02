@@ -1148,3 +1148,165 @@ void AudioSynthWavetableV2::update() {
     transmit(block, 1);
     release(block);
 }
+
+/*
+ * ============================================================================
+ * PERFORMANCE NOTES / OPTIMIZATION HISTORY
+ * ============================================================================
+ *
+ * Keep this section current whenever the renderer or its data structures are
+ * optimized. It is deliberately kept in this .cpp file so that performance
+ * decisions and their rationale remain next to the implementation.
+ *
+ * IMPORTANT STATUS:
+ * - MAX_NOTES * MAX_SAMPLE_LAYERS_PER_NOTE is a DESIGN CAPACITY of 32 * 4 =
+ *   128 sample voices. This is not a measured or achieved performance result.
+ * - The 128-voice target has NOT yet been reached in the user's hardware tests.
+ *   Do not describe it as supported at full real-time load until a complete
+ *   stress run proves it on the target board(s).
+ * - The active-slot-list change is implemented, but has not yet been validated
+ *   by comparative hardware measurements. Treat its performance benefit as
+ *   an assumption until baseline/current measurements exist.
+ *
+ * 1. VOICE STORAGE, ALLOCATION AND UPDATE TRAVERSAL
+ * -----------------------------------------------
+ * - Fixed-size storage: 32 MIDI NoteState entries and 128 SampleVoice entries.
+ *   Each note may start up to four matching sample layers. No dynamic
+ *   allocation is required by the audio renderer.
+ * - activeVoiceSlots_ is a dense list of indices into sampleVoices_. update()
+ *   traverses active entries rather than scanning all 128 SampleVoice slots.
+ *   Finished entries are removed by swap-with-last in the mono path; the
+ *   stereo path compacts the active list after its two rendering passes.
+ * - activeStereoVoiceCount_ selects the mono-only update path when no stereo
+ *   voice is active. This avoids entering the stereo renderer for mono-only
+ *   instruments. The counter is maintained on voice start, note stealing,
+ *   instrument reset and stereo-list compaction; preserve this invariant.
+ * - noteOn() still searches the fixed sampleVoices_ pool for free slots on the
+ *   control side. The active list optimizes audio traversal, not allocation.
+ * - activeVoiceSlots_ costs 256 bytes for 128 uint16_t indices, plus two
+ *   counters. The list adds an indirection; at very high polyphony it may not
+ *   be faster than a linear contiguous scan. Benchmark before retaining or
+ *   changing this design on performance grounds.
+ *
+ * 2. AUDIO TASK / CONTROL TASK SYNCHRONIZATION
+ * -------------------------------------------
+ * - The renderer accesses live NoteState and SampleVoice objects directly.
+ *   AudioTask is pinned to AUDIO_PROCESSING_CORE and has higher priority than
+ *   the control calls, which are expected to run on that same core.
+ * - stateMux_ protects multi-field control-side changes against AudioTask
+ *   preemption. There are no per-block snapshots, batch copies, generation
+ *   checks or stateMux_ lock/unlock operations in the render loop.
+ * - The old snapshot/batch-of-eight approach was deliberately replaced by
+ *   direct live-state rendering. Do not reintroduce it without revisiting and
+ *   measuring the scheduling and synchronization model.
+ * - This synchronization assumption is not safe for arbitrary cross-core or
+ *   ISR calls. Such use requires a separate synchronization review.
+ *
+ * 3. COMPILE-TIME SPECIALIZED SAMPLE RENDERER
+ * ------------------------------------------
+ * - renderVoicePath<StopAtEnd, WrapLoop, Stereo>() specializes the hot loop at
+ *   compile time for one-shot/end handling, loop wrapping and mono/stereo.
+ *   Those policies are not tested as runtime branches for every PCM sample.
+ * - Mono and stereo use distinct template specializations. The mono kernel
+ *   contains no per-sample right-channel fetch, interpolation or accumulation.
+ * - renderVoicePath() is noinline intentionally to control code size and
+ *   register pressure from its template specializations. Do not remove this
+ *   based only on source-level intuition; compare generated code and timings.
+ * - Voice/sample invariants, including phase increment, loop bounds, sample
+ *   pointers and interpolation configuration, are prepared outside the
+ *   per-sample work where possible.
+ * - Phase is accumulated in a local variable during a block and written back
+ *   to voice.phase once at block exit (or at an early return).
+ * - PCM uses linear interpolation between adjacent samples. Each sample array
+ *   must include the interpolation guard frame described by sample_data.
+ *
+ * 4. ADSR / ENVELOPE HOT-PATH OPTIMIZATIONS
+ * ----------------------------------------
+ * - Envelope time is advanced at ENVELOPE_PERIOD granularity (currently
+ *   eight audio samples). State transitions and envelope-time divisions are
+ *   therefore not repeated for every output sample.
+ * - STATE_SUSTAIN has a dedicated inner loop: its gain is constant until
+ *   Note-Off, so normal ADSR bookkeeping is skipped while sustaining.
+ * - beginReleaseLocked() precomputes an amplitude-scaled release ramp as a
+ *   Q16.16 quotient plus a /32768 remainder. The release loop updates this
+ *   with 32-bit integer arithmetic and a borrow; no per-sample 64-bit
+ *   multiply/divide is needed.
+ * - Normal envelope advancement uses bounded/saturating 32-bit arithmetic.
+ *   Q31 envelope gain is folded into a Q16 effective voice amplitude before
+ *   the PCM multiply, avoiding repeated 64-bit gain multiplies in the loop.
+ *
+ * 5. MIXING AND MASTER-GAIN / SATURATION
+ * -------------------------------------
+ * - Voices accumulate into 32-bit mix buffers. Clipping is deferred until
+ *   after all active voices have contributed; there is no per-voice 16-bit
+ *   saturation.
+ * - wavetableV2ScaleQ16() implements the Q16 master-gain multiply by splitting
+ *   the signed input into high and low 16-bit parts. It avoids a 64-bit
+ *   multiply in the final per-sample conversion while preserving the intended
+ *   fixed-point result.
+ * - The mono path allocates one output block, then transmits that same block
+ *   to left and right. It does not allocate or calculate a duplicate mono mix.
+ *
+ * 6. STEREO PATH
+ * -------------
+ * - A stereo sample stores linked left/right PCM arrays but shares one voice
+ *   state: phase, pitch, loop position and envelope. The state machine is not
+ *   advanced twice for the two channels.
+ * - In updateStereo(), mono voices use the mono renderer first; their mix is
+ *   copied to the right accumulator once. Stereo voices then add their
+ *   independently interpolated left and right samples.
+ * - Mono-only playback dispatches to update(), not updateStereo(). In a mixed
+ *   mono/stereo block, the active list is traversed for the mono pass and the
+ *   stereo pass; this traversal overhead is worth measuring separately.
+ * - If a second audio block cannot be allocated, the stereo mix is averaged
+ *   to mono and the one resulting block is mirrored to both outputs. This is
+ *   a continuity fallback, not full stereo output.
+ *
+ * 7. TARGET-SPECIFIC FINAL PCM OPTIMIZATIONS
+ * -----------------------------------------
+ * - ESP32-S3 / Xtensa LX7: wavetableV2Saturate16() uses CLAMPS when the core
+ *   advertises XCHAL_HAVE_CLAMPS; otherwise it uses the portable scalar clamp.
+ * - ESP32-P4 / XespV: wavetableV2ScaleSaturate4P4() scales four values with
+ *   the Q16 helper, then uses XespV vector instructions for parallel signed
+ *   32-bit clamping and 16-bit extraction. A scalar tail and portable fallback
+ *   remain. This optimizes final scaling/saturation; it does not vectorize the
+ *   per-voice sample renderer.
+ * - These target paths must continue to produce bit-identical PCM to the
+ *   scalar reference. Verify with builds and comparison tests after changes.
+ *
+ * 8. SAMPLE-RATE HANDLING
+ * ----------------------
+ * - setInstrument() reads the active AudioStream sample rate and derives
+ *   sampleCountScale_ and phaseIncrementScale_. Envelope/sample durations are
+ *   scaled with output rate and phase increments are inversely scaled so that
+ *   pitch and time remain consistent when using supported runtime rates such
+ *   as 44.1 kHz and 48 kHz.
+ * - Call setInstrument() after AudioMemory() has established the intended
+ *   sample rate, and call it again after a global sample-rate change.
+ *
+ * 9. VALIDATION / KNOWN LIMITS / NEXT MEASUREMENTS
+ * -----------------------------------------------
+ * - setInstrument() validates zone ranges, sample pointers and dimensions,
+ *   phase capacity and loop bounds before playback.
+ * - noteOn() resolves matching zones and computes per-layer phase increments
+ *   outside the control critical section, then installs the voices under the
+ *   lock. It starts at most four layers per note.
+ * - The stress example is examples/Synthesis/WavetableV2/WavetableV2.ino.
+ *   Its default WAVETABLE_V2_TEST_NOTE_COUNT is 1; the full 1/2/4/8/16/32
+ *   note sweep must be explicitly enabled with
+ *   -DWAVETABLE_V2_TEST_NOTE_COUNT=32. Four layers per note then request up to
+ *   128 sample voices. The default example setting does NOT test that target.
+ * - WAVETABLE_V2_TEST_STEREO=0 tests mono-only playback. Setting it to 1 makes
+ *   the fourth of the four layers stereo, exercising a mixed mono/stereo load.
+ * - No 128-voice result, CPU percentage, real-time margin or cross-board
+ *   performance comparison is claimed here until the user supplies hardware
+ *   logs. Record active_layers as well as requested_notes: the former is the
+ *   actual number of live sample voices.
+ *
+ * MAINTENANCE RULE:
+ * When changing a hot path, update the relevant item above in the same change.
+ * State whether the optimization is implemented, experimentally measured,
+ * rejected or pending. Never turn a theoretical capacity or an assumption
+ * into a measured result without benchmark evidence.
+ * ============================================================================
+ */
