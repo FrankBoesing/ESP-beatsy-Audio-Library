@@ -617,7 +617,6 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
     // Keep the phase accumulator in a register throughout this block. Only
     // store it back once, rather than loading/storing it for every sample.
     uint32_t phase = voice.phase;
-    const uint32_t phaseIncrement = voice.phaseIncrement;
 
     // Release has a fixed linear slope. Its amplitude-scaled ramp was prepared
     // by beginReleaseLocked(), so this path needs only integer subtracts and one
@@ -688,7 +687,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
                 voice.releaseGainQ16_16 >> 16;
             mix[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
 
-            phase += phaseIncrement;
+            phase += voice.phaseIncrement;
 
             if (WrapLoop && phase >= loopEnd) {
                 const uint32_t loopStart = loopEnd - loopLength;
@@ -737,7 +736,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
 
                 mix[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
 
-                phase += phaseIncrement;
+                phase += voice.phaseIncrement;
 
                 if (WrapLoop && phase >= loopEnd) {
                     const uint32_t loopStart = loopEnd - loopLength;
@@ -870,7 +869,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) co
 
         mix[i] += value;
 
-        phase += phaseIncrement;
+        phase += voice.phaseIncrement;
 
         if (WrapLoop && phase >= loopEnd) {
             const uint32_t loopStart = loopEnd - loopLength;
