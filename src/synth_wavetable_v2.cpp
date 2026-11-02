@@ -1594,7 +1594,45 @@ void AudioSynthWavetableV2::update() {
  *   force the operands into those exact valid hard registers. This avoids
  *   both the earlier x16-x23 allocation and the unsatisfied "cr" constraint.
  * - The four MOVI.16.A extraction selectors remain 0, 2, 4 and 6.
- * - P4 compilation and runtime/PCM verification are still pending.
+ * - The corrected P4 build compiled and the helper was exercised by the
+ *   user's ESP32-P4 I2S benchmark on 2026-11-02; measured results are in
+ *   section 19. This confirms that the explicit AR-register bindings assemble
+ *   and execute on the tested board/toolchain. A bit-identical PCM comparison
+ *   against the scalar reference and recorded-output inspection remain open.
+ *
+ * 19. ESP32-P4 I2S BENCHMARK — 2026-11-02
+ * ----------------------------------------
+ * - User-provided hardware run on the ESP32-P4 using env:esp32-p4:
+ *   400 MHz CPU, I2S output, 44.1 kHz sample rate, quiet benchmark diagnostics.
+ *   The benchmark uses four sample layers per note and was run through
+ *   8/16/32 notes, corresponding to 32/64/128 active sample voices.
+ * - Test configuration is mono according to the current source defaults:
+ *   WAVETABLE_V2_TEST_STEREO=0, with no override in the P4 PlatformIO
+ *   environment. The mono mix is mirrored to both I2S outputs. This result
+ *   does not measure mixed-stereo or all-stereo rendering.
+ * - Graph peak timings from the BENCH rows:
+ *   8 notes / 32 voices: sustain 290 us (10.0%), release 431 us (14.9%);
+ *   16 notes / 64 voices: sustain 553 us (19.1%), release 840 us (28.9%);
+ *   32 notes / 128 voices: sustain 1086 us (37.4%), release 1657 us (57.1%).
+ * - Corresponding V2 node peak timings:
+ *   32 voices: sustain 282 us, release 424 us;
+ *   64 voices: sustain 550 us, release 833 us;
+ *   128 voices: sustain 1079 us, release 1651 us.
+ * - At 44.1 kHz with 128 samples per audio block, the block deadline is
+ *   approximately 2902 us. The 128-voice release graph peak of 1657 us leaves
+ *   approximately 1245 us (42.9%) of the block period. The measured 128-voice
+ *   sustain and release peaks are both below the real-time deadline.
+ * - allNotesOff() timings, measured around the call with the cycle counter:
+ *   6326 cycles at 400 MHz (15 us reported); 11782 cycles (29 us);
+ *   22723 cycles (56 us), for 32/64/128 voices respectively. The results
+ *   increase approximately with voice count; the reported microseconds are
+ *   integer-truncated conversions of the cycle counts.
+ * - This confirms successful P4 compilation and execution of the PIE output
+ *   conversion path. It does not establish bit-identical PCM versus the scalar
+ *   reference, nor does it characterize stereo playback or real SF2 sample
+ *   data. The stress test uses its small generated looping test samples.
+ * - Do not compare these values directly with the earlier S3 USB runs as an
+ *   architecture-only speedup: CPU clock, sample rate and output path differ.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
