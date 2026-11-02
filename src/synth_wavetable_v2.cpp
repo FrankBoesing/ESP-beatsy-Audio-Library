@@ -67,14 +67,19 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
     };
 
     // PIE instructions can address only AR registers x8-x15 and x24-x31.
-    // GCC's RISC-V "cr" constraint restricts these operands to x8-x15, a valid
-    // subset. Early-clobber keeps the post-increment pointers distinct from
-    // the extracted output values. PIE Q registers are named explicitly by
-    // the instructions and are not valid GCC clobber names; retain "memory".
-    const int32_t *scaledPtr = scaled;
-    const int32_t *lowerPtr = lowerBound;
-    const int32_t *upperPtr = upperBound;
-    uint32_t out0, out1, out2, out3;
+    // GCC's generic RISC-V "r" constraint does not distinguish this subset,
+    // and the target toolchain cannot satisfy the "cr" constraint for all
+    // seven operands. Bind the operands to valid PIE registers explicitly.
+    // Local register variables are guaranteed in these registers when used
+    // as extended-asm operands. The Q registers remain implicit PIE operands,
+    // not GCC clobbers; retain "memory" for the vector loads.
+    register const int32_t *scaledPtr __asm__("s8") = scaled;
+    register const int32_t *lowerPtr __asm__("s9") = lowerBound;
+    register const int32_t *upperPtr __asm__("s10") = upperBound;
+    register uint32_t out0 __asm__("s11");
+    register uint32_t out1 __asm__("t3");
+    register uint32_t out2 __asm__("t4");
+    register uint32_t out3 __asm__("t5");
 
     __asm__ volatile(
         "esp.vld.128.ip q0, %[scaled], 16\n"
@@ -86,13 +91,13 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
         "esp.movi.16.a q2, %[out1], 2\n"
         "esp.movi.16.a q2, %[out2], 4\n"
         "esp.movi.16.a q2, %[out3], 6\n"
-        : [scaled] "+&cr"(scaledPtr),
-          [lower] "+&cr"(lowerPtr),
-          [upper] "+&cr"(upperPtr),
-          [out0] "=&cr"(out0),
-          [out1] "=&cr"(out1),
-          [out2] "=&cr"(out2),
-          [out3] "=&cr"(out3)
+        : [scaled] "+&r"(scaledPtr),
+          [lower] "+&r"(lowerPtr),
+          [upper] "+&r"(upperPtr),
+          [out0] "=&r"(out0),
+          [out1] "=&r"(out1),
+          [out2] "=&r"(out2),
+          [out3] "=&r"(out3)
         :
         : "memory");
 
