@@ -1312,7 +1312,19 @@ void AudioSynthWavetableV2::update() {
  *   not representative long SF2 samples. This verifies voice scheduling and
  *   hot-loop work for this workload, but does not yet prove equal performance
  *   with large sample arrays in PSRAM or arbitrary SF2 instruments.
- * - No I2S result, ESP32-P4 result, audible dropout assessment or repeated-run
+ * - User-provided Audacity capture "test_usb_stereo.wav" was inspected:
+ *   48 kHz, 16-bit PCM, 1 channel, 32.38 s. It contains the full note-count
+ *   sweep through 128 voices and the beginning of the next sweep repetition.
+ *   The 128-voice sustain region contains no silent 128-sample audio blocks
+ *   in the inspected interval and no digital full-scale clipping; the maximum
+ *   absolute PCM sample was about 0.429. Listening did not reveal an obvious
+ *   sustained dropout or click. This is a qualitative observation, not proof
+ *   of glitch-free playback under all conditions.
+ * - The capture is mono. It therefore cannot verify left/right channel identity
+ *   or stereo separation. The mono-only test is expected to produce the same
+ *   mono mix on both output channels, but that duplication was not measurable
+ *   from this one-channel export.
+ * - No I2S result, ESP32-P4 result or repeated-run variance has been recorded.
  *   variance has been recorded yet.
  * - WAVETABLE_V2_TEST_NOTE_COUNT defaults to 1; the full 1/2/4/8/16/32 note
  *   sweep must be explicitly enabled with
