@@ -40,7 +40,7 @@ class AudioSynthWavetableV2 : public AudioStream {
     static const uint8_t ENVELOPE_PERIOD = 8;
 
     struct sample_data {
-        const int16_t *SAMPLE;
+        const int16_t *SAMPLE; // Mono PCM or the left channel of a stereo pair.
         // Optional linked right-channel PCM. nullptr keeps this layer mono.
         // Both arrays must have SAMPLE_COUNT frames and matching sample positions.
         const int16_t *SAMPLE_RIGHT;
@@ -135,6 +135,8 @@ class AudioSynthWavetableV2 : public AudioStream {
 
     static float noteToFreq(int note);
 
+    // Audio output 0 is left and output 1 is right. Mono voices are mirrored
+    // to both output indices using the same audio block.
     void update() override;
 
   private:

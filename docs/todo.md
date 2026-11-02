@@ -50,10 +50,10 @@ unchanged so existing sketches and generated headers continue to work.
   one interpolation guard frame.
 - [x] **Add a configurable hardware stress-test example for V2.**
   `examples/Synthesis/WavetableV2` routes output indices 0/1 to the two
-  channels of `AudioOutputUSB` and reports total audio-graph CPU usage. Define
+  channels of `AudioOutputUSB` and reports total audio-graph CPU usage,
+  V2-node CPU usage, peak load and audio-block memory usage. Define
   `WAVETABLE_V2_TEST_STEREO=1` to replace one mono layer with a linked
-  left/right sample and exercise mixed mono/stereo rendering.
-  V2-node CPU usage, peak load and audio-block memory usage. The test defaults
+  left/right sample and exercise mixed mono/stereo rendering. The test defaults
   to one MIDI note with four overlapping sample layers; set
   `WAVETABLE_V2_TEST_NOTE_COUNT` in build flags to increase the load up to
   32 notes / 128 sample layers. The host PC can record the stereo 16-bit USB
