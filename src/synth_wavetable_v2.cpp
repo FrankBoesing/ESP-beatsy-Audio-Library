@@ -1511,34 +1511,33 @@ void AudioSynthWavetableV2::update() {
  * - Mono uses one output block (peak block usage 1) while the mixed-stereo
  *   path uses two (peak block usage 2) in these benchmark runs.
  *
- * 14. BLOCK-BASED RELEASE COUNTDOWN
- * ---------------------------------
- * - The renderer now calculates the number of release samples to render in
- *   the current block once, then subtracts that amount from
- *   releaseSamplesRemaining after the sample loop. The per-sample zero check
- *   and decrement are removed; the gain accumulator and PCM sample sequence
- *   are unchanged.
- * - If the release expires partway through a block, only the remaining valid
- *   samples are rendered. The completion condition preserves the former
- *   active-state timing when the release length ends exactly on a block
- *   boundary.
- * - This is an exact control-flow transformation, not a gain quantization.
- *   It removes the per-sample countdown check and decrement while preserving
- *   the gain accumulator and PCM sample sequence. A duration ending exactly
- *   on a block boundary retains the previous active-state transition timing.
- * - First hardware measurement after this change — 2026-11-02, 48 kHz USB,
- *   128-sample blocks, mono, quiet diagnostics:
- *   64 voices: sustain node/graph peak=957/967 us; release=1673/1686 us;
- *   allNotesOff=17296 cycles at 240 MHz (72 us).
- *   128 voices: sustain node/graph peak=1894/1903 us; release=3350/3375 us;
- *   allNotesOff=49159 cycles at 240 MHz (204 us).
- * - Compared with section 13, the observed peaks are higher:
- *   64 voices: sustain +52 us, release +107 us (graph);
- *   128 voices: sustain +98 us, release +345 us (graph).
- *   Since sustain also rose by about 5–6%, this single run does not isolate
- *   a regression caused by the countdown change. A repeated run is required.
- *   On this run, 128-voice mono release is 708 us (26.6%) over the 2667 us
- *   block deadline. The expected performance benefit is not demonstrated.
+ * 14. BLOCK-BASED RELEASE COUNTDOWN — REJECTED / REVERTED
+ * --------------------------------------------------------
+ * - A trial moved releaseSamplesRemaining decrement and zero detection from
+ *   the per-sample loop to the block boundary. It preserved the intended PCM
+ *   sample sequence in integer simulation, including partial-block expiry
+ *   and exact block-boundary expiry.
+ * - Hardware measurement — 2026-11-02, 48 kHz USB, 128-sample blocks, mono,
+ *   quiet diagnostics. First trial run:
+ *   64 voices: sustain graph_peak_us=967, release graph_peak_us=1686;
+ *   128 voices: sustain graph_peak_us=1903, release graph_peak_us=3375.
+ * - Repeat trial run:
+ *   4 voices: sustain/release graph peaks=99/171 us;
+ *   8 voices: 161/268 us;
+ *   16 voices: 276/470 us;
+ *   32 voices: 506/877 us;
+ *   64 voices: 967/1754 us;
+ *   128 voices: 1903/3378 us.
+ * - Before the trial, section 13 recorded mono graph peaks of 915/1579 us
+ *   at 64 voices and 1805/3030 us at 128 voices (sustain/release).
+ *   The repeated trial therefore measured +52/+175 us at 64 voices and
+ *   +98/+348 us at 128 voices. Sustain also rose by about 5–6%, so the
+ *   difference cannot be attributed solely to the countdown rewrite; however,
+ *   the expected release improvement was not demonstrated.
+ * - Decision: reject and revert this change. The renderer again checks and
+ *   decrements releaseSamplesRemaining per sample. Preserve the measurements
+ *   above as evidence that fewer source-level operations per sample do not
+ *   necessarily produce faster machine code on the target.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
