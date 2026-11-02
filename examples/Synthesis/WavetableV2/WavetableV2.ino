@@ -425,6 +425,12 @@ void setup() {
     consolePrintln("Record the codec output through line-in or an external recorder.");
 #endif
     consolePrintln("BENCH CSV: phase,rate_hz,requested_notes,active_notes,active_layers,node_us,node_peak_us,graph_us,graph_peak_us,blocks,blocks_peak");
+    consolePrintln("NOTE_OFF CSV: NOTE_OFF,cycles,cpu_mhz,elapsed_us");
+#if WAVETABLE_V2_TEST_VERBOSE
+    consolePrintln("Periodic diagnostic output enabled.");
+#else
+    consolePrintln("Periodic diagnostic output disabled for timing accuracy.");
+#endif
 
 #if defined(AUDIO_OUTPUT_USB)
     if (!audioOutput.isConfigured()) {
