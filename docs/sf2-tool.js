@@ -46,7 +46,6 @@
   var pcHolds = Object.create(null);
   var pcNoteByCode = Object.create(null);
   var keyboardLayout = "unknown";
-  var legacyStartToken = 0;
   var playbackGeneration = 0;
   var generatedCode = "";
   var generatedFileName = "";
@@ -436,7 +435,8 @@
           var unsupported = [];
           Object.keys(values).forEach(function (key) {
             var op = Number(key);
-            if (SUPPORTED_OPERATORS.indexOf(op) < 0 && values[key] !== 0) {
+            if ((SUPPORTED_OPERATORS.indexOf(op) < 0 && values[key] !== 0) ||
+                (op === GEN.velocity && values[key] >= 0)) {
               unsupported.push(op);
             }
           });
@@ -476,7 +476,8 @@
           13: "modLfoToVolume",
           15: "chorusEffectsSend",
           16: "reverbEffectsSend",
-          17: "pan"
+          17: "pan",
+          47: "fixed velocity override"
         };
         var descriptions = unsupportedList.map(function (op) {
           return op + (generatorLabels[op] ? " (" + generatorLabels[op] + ")" : "");
@@ -659,9 +660,9 @@
     var layout = makeRegionLayout(soundFont, region);
     if (layout.error) throw new Error(layout.error);
 
-    var cacheKey = region.sampleIndex + ":" + layout.start + ":" +
-      layout.rightStart + ":" + layout.frames + ":" +
-      layout.loopStart + ":" + layout.loopEnd;
+    var guardFrame = layout.loop && layout.loopEnd === layout.frames ? layout.loopStart : -1;
+    var cacheKey = (layout.right ? "stereo:" : "mono:") + layout.start + ":" +
+      layout.rightStart + ":" + layout.frames + ":" + guardFrame;
     var leftKey = cacheKey + ":left";
     var rightKey = cacheKey + ":right";
     var left = soundFont.pcmCache[leftKey];
@@ -1748,7 +1749,6 @@
   }
 
   function stopPreview() {
-    legacyStartToken++;
     playbackGeneration++;
     hardStopAllVoices();
     keyboardHolds = Object.create(null);
@@ -2121,6 +2121,7 @@
     var zoneEntries = [];
     var sampleFrameTotal = 0;
     var stereoPairCount = 0;
+    var featureWarningMap = Object.create(null);
     var firstLayerOverflow = null;
 
     // V2 can play at most four matching layers for a note/velocity pair.
@@ -2161,10 +2162,19 @@
           " frames; V2 supports at most " + MAX_SAMPLE_FRAMES +
           " frames per layer with INDEX_BITS=16.");
       }
+      if (layout.loopMode === 2) {
+        featureWarningMap.pingPong = "SF2 ping-pong loops are unsupported and were exported as one-shot samples.";
+      }
+      if ((layout.loopMode === 1 || layout.loopMode === 3) && !layout.loop) {
+        featureWarningMap.invalidLoop = "One or more zones have invalid forward-loop points and were exported as one-shot samples.";
+      }
+      if (region.values[GEN.velocity] >= 0) {
+        featureWarningMap.fixedVelocity = "One or more zones use the SF2 fixed-velocity generator; V2 uses the incoming MIDI velocity instead.";
+      }
 
-      var pcmKey = region.sampleIndex + ":" + layout.start + ":" +
-        layout.rightStart + ":" + layout.frames + ":" +
-        layout.loopStart + ":" + layout.loopEnd;
+      var pcmGuardFrame = layout.loop && layout.loopEnd === layout.frames ? layout.loopStart : -1;
+      var pcmKey = (layout.right ? "stereo:" : "mono:") + layout.start + ":" +
+        layout.rightStart + ":" + layout.frames + ":" + pcmGuardFrame;
       var pcmEntry = sampleMap[pcmKey];
       if (!pcmEntry) {
         var channels = getStereoPcm(font, region);
@@ -2240,6 +2250,9 @@
     lines.push("// SF2 filters, arbitrary modulators, pan/placement, chorus/reverb sends and ping-pong loops are not rendered.");
     if (font.modulatorCount) lines.push("// WARNING: " + font.modulatorCount + " SF2 modulator record(s) were ignored.");
     if (preset.warnings.length) lines.push("// WARNING: unsupported SF2 generators are present; see the tool's preset report.");
+    Object.keys(featureWarningMap).forEach(function (key) {
+      lines.push("// WARNING: " + featureWarningMap[key]);
+    });
     if (font.sample24Chunk) lines.push("// INFO: optional sm24 low bytes were rounded into signed 16-bit PCM.");
     lines.push("#pragma once");
     lines.push("#include <Audio.h>");
