@@ -1,11 +1,17 @@
 /*
  * AudioSynthWavetableV2 stress test -> USB microphone.
  *
- * Starts a configurable number of notes with four matching sample layers
- * each. Define WAVETABLE_V2_TEST_STEREO=1 to replace the fourth mono layer
- * with a linked left/right sample and exercise mixed mono/stereo rendering.
- * The default is one note (four sample voices); increase the build macro only
- * after confirming that lower voice counts render cleanly.
+ * Sweeps note counts 1, 2, 4, 8, 16 and 32 (up to the configured maximum),
+ * with four matching sample layers per note. This measures the V2 renderer
+ * across 4..128 active sample voices without repeated rebuilds.
+ *
+ * Define WAVETABLE_V2_TEST_STEREO=1 to replace the fourth mono layer with a
+ * linked left/right sample and exercise mixed mono/stereo rendering. Build once
+ * with stereo disabled and once enabled to compare mono and mixed-stereo cost.
+ *
+ * WAVETABLE_V2_TEST_NOTE_COUNT sets the maximum stage. Set it to 32 for the
+ * complete sweep; smaller values produce shorter sweeps. Run the same build
+ * and sweep on the ESP32-S3 and ESP32-P4 at 44.1 and 48 kHz.
  * Record the ESP32 USB microphone input on the PC, e.g. with Audacity.
  *
  * PlatformIO: env:freenove_esp32_s3_display_USBAUDIO
@@ -24,8 +30,8 @@
 #include <Arduino.h>
 #include <Audio.h>
 
-// Start conservatively: 1 note x 4 layers. Override in build flags to increase
-// the load gradually, e.g. -D WAVETABLE_V2_TEST_NOTE_COUNT=4.
+// Maximum note count for the automatic 1/2/4/8/16/32-note sweep.
+ // For the full range use -D WAVETABLE_V2_TEST_NOTE_COUNT=32.
 #ifndef WAVETABLE_V2_TEST_NOTE_COUNT
 #define WAVETABLE_V2_TEST_NOTE_COUNT 1
 #endif
@@ -203,11 +209,11 @@ static void monitorFor(uint32_t durationMs) {
     }
 }
 
-static void playStressChord() {
+static void playStressChord(uint8_t noteCount) {
     uint8_t startedNotes = 0;
     uint16_t startedSamples = 0;
 
-    for (uint8_t i = 0; i < TEST_NOTE_COUNT; ++i) {
+    for (uint8_t i = 0; i < noteCount; ++i) {
         const int note = TEST_FIRST_NOTE + i;
 
         consolePrint("Calling noteOn for MIDI note ");
@@ -233,6 +239,69 @@ static void playStressChord() {
     consolePrintln(" started.");
 }
 
+static void printBenchmarkRow(const char *phase, uint8_t requestedNotes) {
+    consolePrint("BENCH,");
+    consolePrint(phase);
+    consolePrint(",");
+    consolePrint((uint32_t)AUDIO_SAMPLE_RATE_EXACT);
+    consolePrint(",");
+    consolePrint((uint32_t)requestedNotes);
+    consolePrint(",");
+    consolePrint((uint32_t)synth.activeNoteCount());
+    consolePrint(",");
+    consolePrint((uint32_t)synth.activeSampleCount());
+    consolePrint(",");
+    consolePrint(synth.cpu_time_us);
+    consolePrint(",");
+    consolePrint(synth.cpu_time_max_us);
+    consolePrint(",");
+    consolePrint(AudioStream::cpu_time_total_us);
+    consolePrint(",");
+    consolePrint(AudioStream::cpu_time_total_max_us);
+    consolePrint(",");
+    consolePrint((uint32_t)AudioMemoryUsage());
+    consolePrint(",");
+    consolePrint((uint32_t)AudioMemoryUsageMax());
+    consolePrintln("");
+}
+
+static void runBenchmarkStage(uint8_t noteCount) {
+    synth.allSoundOff();
+    delay(100);
+
+    AudioStream::AudioProcessorUsageTotalMaxReset();
+    synth.AudioProcessorUsageMaxReset();
+    AudioMemoryUsageMaxReset();
+
+    consolePrintln("");
+    consolePrint("===== BENCHMARK: ");
+    consolePrint((uint32_t)noteCount);
+    consolePrintln(" notes =====");
+    playStressChord(noteCount);
+
+    // Let note-on setup settle before the measured sustain interval.
+    delay(200);
+    AudioStream::AudioProcessorUsageTotalMaxReset();
+    synth.AudioProcessorUsageMaxReset();
+    AudioMemoryUsageMaxReset();
+    monitorFor(3000);
+    printBenchmarkRow("sustain", noteCount);
+    printPhasePeak("Sustain");
+
+    // Measure the release envelope separately from the sustained workload.
+    AudioStream::AudioProcessorUsageTotalMaxReset();
+    synth.AudioProcessorUsageMaxReset();
+    synth.allNotesOff();
+    consolePrintln("Note-Off sent; measuring release tails.");
+    monitorFor(1200);
+    printBenchmarkRow("release", noteCount);
+    printPhasePeak("Release");
+
+    // Hard-stop residual voices before the next stage, then leave a short gap.
+    synth.allSoundOff();
+    delay(150);
+}
+
 void setup() {
     // Keep UART0 available for the PlatformIO monitor. Diagnostics are mirrored
     // to the USBManager-owned CDC interface after AudioMemory() starts USB.
@@ -256,6 +325,7 @@ void setup() {
     consolePrintln("USB output: mono mix mirrored to stereo, 16-bit PCM.");
 #endif
     consolePrintln("Select the ESP32 USB microphone in Audacity and start recording.");
+    consolePrintln("BENCH CSV: phase,rate_hz,requested_notes,active_notes,active_layers,node_us,node_peak_us,graph_us,graph_peak_us,blocks,blocks_peak");
 
     if (!usbOutput.isConfigured()) {
         haltWithError("Managed AudioOutputUSB initialization failed. Check the USB build environment.");
@@ -275,30 +345,19 @@ void setup() {
 }
 
 void loop() {
-    consolePrintln("Loop entered.");
+    // Run a logarithmic polyphony sweep in one firmware build.
+    // The last stage is always the configured maximum, even when it is not
+    // an exact power of two (for example, 6 produces 1, 2, 4, 6).
+    uint8_t noteCount = 1;
+    for (;;) {
+        runBenchmarkStage(noteCount);
+        if (noteCount >= TEST_NOTE_COUNT) break;
 
-    AudioStream::AudioProcessorUsageTotalMaxReset();
-    synth.AudioProcessorUsageMaxReset();
-    AudioMemoryUsageMaxReset();
+        uint16_t nextCount = (uint16_t)noteCount * 2U;
+        if (nextCount > TEST_NOTE_COUNT) nextCount = TEST_NOTE_COUNT;
+        noteCount = (uint8_t)nextCount;
+    }
 
-    consolePrintln("Loop counters reset; starting noteOn calls.");
-    playStressChord();
-
-    // Measure the sustained workload separately from the release workload.
-    monitorFor(3000);
-    printPhasePeak("Sustain");
-
-    // Reset peak trackers immediately before Note-Off so the next maximum
-    // describes the release phase rather than the preceding sustain phase.
-    AudioStream::AudioProcessorUsageTotalMaxReset();
-    synth.AudioProcessorUsageMaxReset();
-
-    synth.allNotesOff();
-    consolePrintln("Note-Off sent; recording the release tails.");
-    monitorFor(1200);
-    printPhasePeak("Release");
-
-    // Leave a short gap before the next run. This makes it easy to identify
-    // separate measurement cycles in the Audacity recording.
-    delay(800);
+    consolePrintln("Sweep complete. Repeating in 1 second.");
+    delay(1000);
 }
