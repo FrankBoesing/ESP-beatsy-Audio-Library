@@ -1296,11 +1296,15 @@ void AudioSynthWavetableV2::update() {
  *   The measured sustain peak (2387 us) is close to this deadline and leaves
  *   limited headroom for other nodes, system activity or less cache-friendly
  *   sample data.
- * - During the all-notes-off/release phase, node_peak_us reached 4026 us and
- *   graph_peak_us reached 4030 us (about 151%). The ordinary sampled load was
- *   already zero by the next periodic report. This is a measured transient;
- *   its cause is NOT established. Investigate release setup / critical-section
- *   duration and repeat the test before claiming release handling is safe.
+ * - Release node_peak_us by sample-voice count was: 4=204 us, 8=313 us,
+ *   16=556 us, 32=1053 us, 64=2072 us and 128=4026 us. At 128 voices,
+ *   graph_peak_us was 4030 us (about 151%). The corresponding 128-voice
+ *   sustain peak was 2387 us. The release path is therefore substantially
+ *   more expensive than sustain, and its peak scales roughly with voice count.
+ *   This points toward the per-sample STATE_RELEASE render path as a likely
+ *   optimization target, but does not prove the exact cause. The ordinary
+ *   sampled load was already zero by the next periodic report because the
+ *   release stage had completed. A repeat / isolated release test is needed.
  * - The exact board model is not printed in the log. USB Audio at 48 kHz
  *   suggests the S3 USB test environment, but the hardware identity is
  *   unconfirmed by the log itself.
