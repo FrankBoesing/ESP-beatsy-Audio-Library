@@ -605,7 +605,8 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
 }
 
 template <bool StopAtEnd, bool WrapLoop>
-void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) const __attribute__((noinline)) {
+__attribute__((noinline))
+void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice, int32_t *mix) const {
     const sample_data &sample = *voice.sample;
 
     const uint32_t maxPhase = maximumPhase(sample);
