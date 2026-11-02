@@ -210,6 +210,7 @@ class AudioSynthWavetableV2 : public AudioStream {
     // Dense active-slot list keeps update() work proportional to actual polyphony.
     uint16_t activeVoiceSlots_[MAX_SAMPLE_VOICES] = {};
     uint16_t activeVoiceCount_ = 0;
+    uint16_t activeStereoVoiceCount_ = 0;
     bool sustain_[16] = {};
 
     float sampleCountScale_ = 1.0f;
