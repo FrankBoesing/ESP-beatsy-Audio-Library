@@ -363,6 +363,7 @@ static void runBenchmarkStage(uint8_t noteCount) {
 
     // Keep instrumentation to two cycle-counter reads around allNotesOff().
     // Defer all console output until the release measurement window has ended.
+    const uint32_t cpuMHz = getCpuFrequencyMhz();
     const uint32_t noteOffStartCycles = esp_cpu_get_cycle_count();
     synth.allNotesOff();
     const uint32_t noteOffCycles = esp_cpu_get_cycle_count() - noteOffStartCycles;
@@ -371,7 +372,6 @@ static void runBenchmarkStage(uint8_t noteCount) {
     printBenchmarkRow("release", noteCount);
     printPhasePeak("Release");
 
-    const uint32_t cpuMHz = getCpuFrequencyMhz();
     const uint32_t noteOffUs = cpuMHz != 0 ? noteOffCycles / cpuMHz : 0;
     consolePrint("NOTE_OFF,");
     consolePrint(noteOffCycles);
