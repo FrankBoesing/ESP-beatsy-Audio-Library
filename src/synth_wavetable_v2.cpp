@@ -523,11 +523,6 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
     // by beginReleaseLocked(), so this path needs only integer subtracts and one
     // sample multiply per frame; the generic ADSR state machine is bypassed.
     if (voice.envelopeState == STATE_RELEASE) {
-        // Ask GCC to process two adjacent output frames per loop iteration.
-        // This keeps the portable scalar path and does not change sample order.
-#if defined(__GNUC__)
-#pragma GCC unroll 2
-#endif
         for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
             if (!voice.active) break;
 
@@ -617,11 +612,6 @@ void AudioSynthWavetableV2::renderVoice(SampleVoice &voice, int32_t *mix) const 
             const uint32_t effectiveAmplitude =
                 ((uint32_t)voice.amplitude * envelopeGainQ16) >> 16;
 
-            // Sustained voices spend almost the entire block in this loop.
-            // Two-way unrolling reduces loop-control overhead in the hot path.
-#if defined(__GNUC__)
-#pragma GCC unroll 2
-#endif
             for (; i < AUDIO_BLOCK_SAMPLES; ++i) {
                 if (!voice.active) break;
 
@@ -842,6 +832,10 @@ void AudioSynthWavetableV2::update() {
         }
     }
 
+    // Convert and saturate two output samples per loop iteration.
+#if defined(__GNUC__)
+#pragma GCC unroll 2
+#endif
     for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const int32_t scaled = (int32_t)(((int64_t)mix[i] * masterGain) >> 16);
         block->data[i] = wavetableV2Saturate16(scaled);
