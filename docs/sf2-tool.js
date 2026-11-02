@@ -482,7 +482,7 @@
         var descriptions = unsupportedList.map(function (op) {
           return op + (generatorLabels[op] ? " (" + generatorLabels[op] + ")" : "");
         });
-        preset.warnings.push("Not rendered by V2: SF2 generator(s) " +
+        preset.warnings.push("Not rendered by the wavetable engine: SF2 generator(s) " +
           descriptions.join(", ") + ".");
       }
       presets.push(preset);
