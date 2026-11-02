@@ -704,21 +704,27 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
     // by beginReleaseLocked(), so this path needs only integer subtracts and one
     // sample multiply per frame; the generic ADSR state machine is bypassed.
     if (voice.envelopeState == STATE_RELEASE) {
-        // The countdown is needed only at block boundaries. Bound this block's
-        // render length up front instead of testing/decrementing it per sample.
-        const uint32_t samplesRemaining = voice.releaseSamplesRemaining;
-        const uint16_t samplesToRender =
-            samplesRemaining < AUDIO_BLOCK_SAMPLES
-                ? (uint16_t)samplesRemaining
-                : AUDIO_BLOCK_SAMPLES;
-
-        for (uint16_t i = 0; i < samplesToRender; ++i) {
+        for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
             if (!voice.active) break;
 
             if (StopAtEnd && phase >= maxPhase) {
                 voice.active = false;
                 voice.envelopeState = STATE_IDLE;
                 break;
+            }
+
+            if (voice.releaseSamplesRemaining == 0) {
+                voice.active = false;
+                voice.envelopeState = STATE_IDLE;
+                voice.envelopeCount = 0;
+                voice.envelopeMultiplier = 0;
+                voice.envelopeIncrement = 0;
+                voice.releaseGain = 0;
+                voice.releaseGainFraction = 0;
+                voice.releaseGainStep = 0;
+                voice.releaseGainStepFraction = 0;
+                voice.phase = phase;
+                return;
             }
 
             // The per-sample release decrement is already scaled by the
@@ -732,6 +738,8 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             voice.releaseGainFraction = fractionDiff & 0x7FFFFFFFU;
             voice.releaseGain -=
                 (uint16_t)(voice.releaseGainStep + fractionBorrow);
+
+            --voice.releaseSamplesRemaining;
 
             const uint32_t phaseFraction = phase >> interpolationShift;
             uint32_t sampleIndex = phaseFraction >> 16;
@@ -768,23 +776,6 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 phase = loopStart + (overshoot % loopLength);
             }
         }
-
-        if (voice.active) {
-            voice.releaseSamplesRemaining = samplesRemaining - samplesToRender;
-            if (voice.releaseSamplesRemaining == 0 &&
-                samplesRemaining < AUDIO_BLOCK_SAMPLES) {
-                voice.active = false;
-                voice.envelopeState = STATE_IDLE;
-                voice.envelopeCount = 0;
-                voice.envelopeMultiplier = 0;
-                voice.envelopeIncrement = 0;
-                voice.releaseGain = 0;
-                voice.releaseGainFraction = 0;
-                voice.releaseGainStep = 0;
-                voice.releaseGainStepFraction = 0;
-            }
-        }
-
         voice.phase = phase;
         return;
     }
