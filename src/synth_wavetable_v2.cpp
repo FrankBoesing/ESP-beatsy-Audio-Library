@@ -263,7 +263,6 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
     noteState.age = ++nextAge_;
 
     const uint32_t velocityGain = ((uint32_t)velocity * UINT16_MAX + 63U) / 127U;
-    const float frequency = noteToFreq(note);
 
     for (uint8_t layer = 0; layer < layerCount; ++layer) {
         const uint16_t slot = freeSlots[layer];
@@ -309,7 +308,6 @@ void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice) {
 
     voice.released = true;
     if (voice.envelopeState == STATE_IDLE || voice.envelopeState == STATE_RELEASE) {
-
         return;
     }
 
