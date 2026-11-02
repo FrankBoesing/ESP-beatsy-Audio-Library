@@ -1452,12 +1452,12 @@ void AudioSynthWavetableV2::update() {
  * - Audio dropouts are consistent with update() taking longer than the
  *   2667 us block period under 128-voice release load. This is a timing
  *   interpretation, not a confirmed diagnosis of the intermittent hang.
- * - The WavetableV2 benchmark now disables 500 ms console load reports by
- *   default (enable with WAVETABLE_V2_TEST_VERBOSE=1). It times allNotesOff()
- *   with only two cycle-counter reads; cycles and the derived microseconds
- *   are printed after the 1200 ms release observation window. This keeps
- *   serial/USB-CDC output out of both measured audio windows and immediately
- *   after note-off.
+ * - The WavetableV2 benchmark now disables periodic console load reports
+ *   by default (enable with WAVETABLE_V2_TEST_VERBOSE=1). Quiet timing windows
+ *   use one delay() instead of polling. allNotesOff() is timed with only two
+ *   cycle-counter reads; cycles and derived microseconds are printed after
+ *   the 1200 ms release observation window. Serial/USB-CDC output is therefore
+ *   kept out of the measured audio windows and immediately after note-off.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
