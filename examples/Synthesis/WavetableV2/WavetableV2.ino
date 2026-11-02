@@ -17,12 +17,13 @@
  * PlatformIO:
  *   ESP32-S3 USB: env:freenove_esp32_s3_display_USBAUDIO (48 kHz UAC1)
  *   ESP32-S3 I2S: env:freenove_esp32_s3_display (44.1/48 kHz, ES8311)
+ *   ESP32-P4 USB: env:esp32-p4_USBAUDIO (48 kHz UAC2, USB 2.0 High-Speed)
  *   ESP32-P4 I2S: env:esp32-p4 (44.1/48 kHz, ES8311)
  *
  * For I2S builds, define WAVETABLE_V2_TEST_RATE=44100 or 48000 to select the
- * output rate before AudioMemory() starts the audio clock. USB UAC1 uses the
- * host/device rate configured by its descriptor; the current test environment
- * is fixed at 48 kHz.
+ * output rate before AudioMemory() starts the audio clock. USB builds use the
+ * 48 kHz rate declared by their audio descriptor. S3 uses UAC1/Full-Speed;
+ * P4 uses UAC2/High-Speed.
  */
 
 #if defined(AUDIO_OUTPUT_USB)
