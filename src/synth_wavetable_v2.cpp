@@ -888,26 +888,26 @@ void AudioSynthWavetableV2::update() {
 
     int32_t mix[AUDIO_BLOCK_SAMPLES] = {};
 
-    // Render directly into the live voice array. No snapshots, commits,
-    // version checks or stateMux_ operations are needed with the
-    // same-core/high-priority AudioTask execution model.
+    // Render directly into the live voice array. Build the active-note
+    // bitmap after each voice has been rendered, so voices that end during
+    // this block are not counted as active layers. This replaces a second
+    // full scan over sampleVoices_.
+    uint32_t noteHasActiveLayer = 0;
     for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        if (sampleVoices_[i].active) {
-            renderVoice(sampleVoices_[i], mix);
+        SampleVoice &voice = sampleVoices_[i];
+        if (!voice.active) continue;
+
+        renderVoice(voice, mix);
+
+        if (voice.active && voice.noteSlot < MAX_NOTES) {
+            const NoteState &noteState = notes_[voice.noteSlot];
+            if (noteState.active && noteState.token == voice.noteToken) {
+                noteHasActiveLayer |= (1UL << voice.noteSlot);
+            }
         }
     }
 
     // Retire notes whose final sample layer has ended.
-    uint32_t noteHasActiveLayer = 0;
-    for (uint16_t i = 0; i < MAX_SAMPLE_VOICES; ++i) {
-        const SampleVoice &voice = sampleVoices_[i];
-        if (!voice.active || voice.noteSlot >= MAX_NOTES) continue;
-
-        const NoteState &noteState = notes_[voice.noteSlot];
-        if (noteState.active && noteState.token == voice.noteToken) {
-            noteHasActiveLayer |= (1UL << voice.noteSlot);
-        }
-    }
 
     for (uint8_t noteSlot = 0; noteSlot < MAX_NOTES; ++noteSlot) {
         if (notes_[noteSlot].active &&
