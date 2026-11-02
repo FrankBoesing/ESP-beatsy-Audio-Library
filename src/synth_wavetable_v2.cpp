@@ -439,10 +439,14 @@ void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice) {
     const uint64_t gainStepProduct =
         (uint64_t)voice.amplitude * releaseStep;
 
-    voice.releaseGainQ16_16 = (uint32_t)(gainProduct >> 15);
-    voice.releaseGainRemainder = (uint16_t)(gainProduct & 0x7FFFU);
-    voice.releaseGainStepQ16_16 = (uint32_t)(gainStepProduct >> 15);
-    voice.releaseGainStepRemainder = (uint16_t)(gainStepProduct & 0x7FFFU);
+    // Split the 47-bit products at bit 31: the upper part is the exact
+    // 16-bit output gain and the lower part carries its fractional error.
+    // This avoids shifting a Q16.16 value in every rendered sample.
+    voice.releaseGain = (uint16_t)(gainProduct >> 31);
+    voice.releaseGainFraction = (uint32_t)(gainProduct & 0x7FFFFFFFULL);
+    voice.releaseGainStep = (uint16_t)(gainStepProduct >> 31);
+    voice.releaseGainStepFraction =
+        (uint32_t)(gainStepProduct & 0x7FFFFFFFULL);
 
 }
 
@@ -715,10 +719,10 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 voice.envelopeCount = 0;
                 voice.envelopeMultiplier = 0;
                 voice.envelopeIncrement = 0;
-                voice.releaseGainQ16_16 = 0;
-                voice.releaseGainRemainder = 0;
-                voice.releaseGainStepQ16_16 = 0;
-                voice.releaseGainStepRemainder = 0;
+                voice.releaseGain = 0;
+                voice.releaseGainFraction = 0;
+                voice.releaseGainStep = 0;
+                voice.releaseGainStepFraction = 0;
                 voice.phase = phase;
                 return;
             }
@@ -729,14 +733,12 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             // Unsigned underflow marks the remainder borrow in bit 31. Folding
             // that borrow into the 15-bit remainder and Q16 decrement replaces
             // the per-sample if/else without changing the release ramp.
-            const uint32_t remainderDiff =
-                (uint32_t)voice.releaseGainRemainder -
-                (uint32_t)voice.releaseGainStepRemainder;
-            const uint32_t remainderBorrow = remainderDiff >> 31;
-            voice.releaseGainRemainder =
-                (uint16_t)(remainderDiff + (remainderBorrow << 15));
-            voice.releaseGainQ16_16 -=
-                voice.releaseGainStepQ16_16 + remainderBorrow;
+            const uint32_t fractionDiff =
+                voice.releaseGainFraction - voice.releaseGainStepFraction;
+            const uint32_t fractionBorrow = fractionDiff >> 31;
+            voice.releaseGainFraction = fractionDiff & 0x7FFFFFFFU;
+            voice.releaseGain -=
+                (uint16_t)(voice.releaseGainStep + fractionBorrow);
 
             --voice.releaseSamplesRemaining;
 
@@ -755,8 +757,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 sample0 * weight0 + sample1 * (int32_t)interpolation;
             const int32_t interpolated = weightedSample >> 16;
 
-            const uint32_t effectiveAmplitude =
-                voice.releaseGainQ16_16 >> 16;
+            const uint32_t effectiveAmplitude = voice.releaseGain;
             mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
             if (Stereo) {
                 const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
@@ -1389,6 +1390,20 @@ void AudioSynthWavetableV2::update() {
  *   traversal; it does not optimize the release render loop or its arithmetic.
  * - Implementation committed on 2026-11-02. Its control-side timing is not
  *   measured by AudioProcessorUsage(), which starts at update() entry.
+ *
+ * 12. RELEASE GAIN ACCUMULATOR
+ * ----------------------------
+ * - The release gain and step are now split at bit 31: a 16-bit integer output
+ *   gain plus a 31-bit fractional accumulator. This represents the same
+ *   47-bit amplitude*envelope product as the former Q16.16 + 15-bit remainder
+ *   representation, but exposes the output gain directly without a per-sample
+ *   >> 16 operation.
+ * - Each sample subtracts the 31-bit fractional step, extracts its borrow, and
+ *   subtracts the integer step plus borrow from the 16-bit gain. This is
+ *   mathematically equivalent to the previous quotient/remainder update for
+ *   valid release ranges; the intended PCM gain sequence is unchanged.
+ * - Hardware performance impact is pending. Compare the 32-note / 128-layer
+ *   48 kHz release peak and verify release tails against the previous build.
  *
  * 11. RELEASE SAMPLE COUNTDOWN
  * -----------------------------
