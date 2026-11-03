@@ -548,6 +548,13 @@
       "_Bank" + preset.bank + "_Program" + preset.program;
   }
 
+  function soundFontFileSuffix() {
+    var baseName = String(currentFileName || "")
+      .replace(/^.*[\\/]/, "")
+      .replace(/\\.[^.]*$/, "");
+    return safeIdentifier(baseName || "SoundFont");
+  }
+
   function updatePresetInstrumentName() {
     if (!nameInput) return;
     var preset = currentPreset();
@@ -2516,7 +2523,7 @@
 
     return {
       code: lines.join("\n"),
-      fileName: prefix + "_V2.h",
+      fileName: prefix + "_V2_" + soundFontFileSuffix() + ".h",
       zoneCount: zoneEntries.length,
       sampleCount: sampleEntries.length,
       descriptorCount: descriptorEntries.length,
@@ -2655,7 +2662,7 @@
 
     return {
       code: lines.join("\n"),
-      fileName: prefix + "_V1.h",
+      fileName: prefix + "_V1_" + soundFontFileSuffix() + ".h",
       velocity: velocity,
       preset: preset,
       sampleCount: sampleEntries.length,
