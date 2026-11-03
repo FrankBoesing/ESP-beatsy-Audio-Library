@@ -90,6 +90,8 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
 .sf2-check{display:flex;align-items:center;gap:9px;font-weight:600;margin:0 0 7px}
 .sf2-check input{width:18px;height:18px;margin:0;flex:0 0 auto}
 .sf2-mode-info{margin:10px 0 12px}
+.sf2-preview-status{margin:8px 0 12px;padding:10px 12px;border:1px solid #d9a0a0;border-left:4px solid #b42318;border-radius:8px;background:#fff0f0;color:#7a1b1b;font-size:.9rem;line-height:1.4;overflow-wrap:anywhere}
+.sf2-preview-status:empty{display:none}
 .sf2-keyboard{position:relative;display:flex;width:100%;height:160px;touch-action:none;user-select:none;overflow:hidden;border-radius:0 0 7px 7px;background:#17283c}
 .sf2-key{position:relative;display:flex;align-items:flex-end;justify-content:center;min-width:0;margin:0;padding:0 0 7px;border-radius:0 0 5px 5px;box-shadow:none;touch-action:none;user-select:none}
 .sf2-key:focus-visible{outline:3px solid #f0a62b;outline-offset:-3px}
@@ -298,6 +300,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
           </div>
         </div>
         <div id="sf2ModeInfo" class="help sf2-mode-info" aria-live="polite"></div>
+        <div id="sf2PreviewStatus" class="sf2-preview-status" role="alert" aria-live="assertive" aria-atomic="true"></div>
         <div id="sf2Keyboard" class="sf2-keyboard" role="group" aria-label="Two-octave piano keyboard"></div>
         <p id="sf2KeyboardLayout" class="help" aria-live="polite">Keyboard layout: press the Z/Y key once to detect it automatically.</p>
         <p class="help">Play with the mouse, touch screen or PC keyboard. Hold a key for Note On; release it for Note Off. The PC keyboard works while focus is on the selectors, but is disabled while typing in text or number fields.</p>
