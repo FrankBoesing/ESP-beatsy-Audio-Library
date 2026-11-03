@@ -541,6 +541,19 @@
     return name;
   }
 
+  function presetIdentifier(preset) {
+    if (!preset) return "SoundFontInstrument";
+    // Include bank/program so presets with identical display names stay distinct.
+    return safeIdentifier(preset.name) +
+      "_Bank" + preset.bank + "_Program" + preset.program;
+  }
+
+  function updatePresetInstrumentName() {
+    if (!nameInput) return;
+    var preset = currentPreset();
+    if (preset) nameInput.value = presetIdentifier(preset);
+  }
+
   function samplePair(soundFont, sampleIndex) {
     var sample = soundFont.samples[sampleIndex];
     if (!sample) return { error: "Invalid sample index." };
@@ -2285,7 +2298,7 @@
     if (!preset) throw new Error("Select a preset first.");
     if (!preset.zones.length) throw new Error("The selected preset contains no playable sample zones.");
 
-    var prefix = safeIdentifier(nameInput.value || preset.name);
+    var prefix = safeIdentifier(nameInput.value || presetIdentifier(preset));
     var sampleMap = Object.create(null);
     var sampleEntries = [];
     var descriptorEntries = [];
@@ -2519,7 +2532,7 @@
     var preset = font.presets[parseInt(presetSelect.value, 10)];
     if (!preset) throw new Error("Select a preset first.");
     var velocity = Math.max(1, Math.min(127, parseInt(velocityInput.value, 10) || 100));
-    var prefix = safeIdentifier(nameInput.value || preset.name);
+    var prefix = safeIdentifier(nameInput.value || presetIdentifier(preset));
     var matchesByNote = [];
     var noteErrors = [];
     var sampleMap = Object.create(null);
@@ -2642,7 +2655,7 @@
 
     return {
       code: lines.join("\n"),
-      fileName: prefix + ".h",
+      fileName: prefix + "_V1.h",
       velocity: velocity,
       preset: preset,
       sampleCount: sampleEntries.length,
@@ -2734,6 +2747,7 @@
       if (font.sample24Chunk) summary.textContent += " 24-bit sample data found.";
 
       presetSelect.selectedIndex = 0;
+      updatePresetInstrumentName();
       updatePresetInfo();
       setStatus("Loaded " + file.name + ". The first preset is selected; choose another preset in the list to audition it.", "good");
       exportButton.disabled = false;
@@ -2760,6 +2774,7 @@
     stopPreview();
     resetOutput();
     clearPreviewStatus();
+    updatePresetInstrumentName();
     updatePresetInfo();
   });
   if (exportVersionSelect) {
