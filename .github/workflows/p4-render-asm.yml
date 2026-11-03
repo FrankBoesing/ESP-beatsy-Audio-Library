@@ -49,10 +49,12 @@ jobs:
 
               # The SRAM linker-template patch is only needed at final link.
               # This job compiles the renderer object only for disassembly.
-              block, count = re.subn(
-                  r"(?m)^extra_scripts\\s*=\\s*pre:scripts/patch_esp32p4_sram_size\\.py\\s*$",
+              needle_script = "extra_scripts = pre:scripts/patch_esp32p4_sram_size.py"
+              count = block.count(needle_script)
+              block = block.replace(
+                  needle_script,
                   "; extra_scripts bypassed for object-only disassembly",
-                  block,
+                  1,
               )
               if count != 1:
                   raise SystemExit(f"Expected exactly one P4 SRAM pre-script in {path}, got {count}")
