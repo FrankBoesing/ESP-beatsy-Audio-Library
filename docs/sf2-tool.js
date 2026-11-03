@@ -29,6 +29,7 @@
   var exportVersionSelect = document.getElementById("sf2ExportVersion");
   var keyboardStartSelect = document.getElementById("sf2KeyboardStart");
   var keyboardElement = document.getElementById("sf2Keyboard");
+  var previewStatus = document.getElementById("sf2PreviewStatus");
   var modeInfo = document.getElementById("sf2ModeInfo");
   var keyboardLayoutInfo = document.getElementById("sf2KeyboardLayout");
 
@@ -107,6 +108,15 @@
   function setStatus(message, kind) {
     status.className = "status" + (kind ? " " + kind : "");
     status.textContent = message;
+  }
+
+  function setPreviewStatus(message) {
+    if (!previewStatus) return;
+    previewStatus.textContent = message || "";
+  }
+
+  function clearPreviewStatus() {
+    setPreviewStatus("");
   }
 
   function fourCC(view, offset) {
@@ -1841,20 +1851,21 @@
 
     note = Math.max(0, Math.min(127, Math.round(note)));
     velocity = Math.max(1, Math.min(127, Math.round(velocity)));
+    clearPreviewStatus();
     var wavetableMode = isWavetableMode();
     var matches = regionsForNote(preset, note, velocity);
 
     if (!matches.length) {
-      setStatus("No SF2 zone matches " + midiName(note) +
-        " at velocity " + velocity + ".", "");
+      setPreviewStatus("No SF2 zone matches " + midiName(note) +
+        " at velocity " + velocity + ".");
       return;
     }
 
     var layerLimit = wavetableMode ? V2_MAX_LAYERS_PER_NOTE : MAX_PREVIEW_LAYERS_PER_NOTE;
     if (matches.length > layerLimit) {
-      setStatus("Preview refused: " + matches.length +
+      setPreviewStatus("Preview refused: " + matches.length +
         " zones match this note; the selected preview limit is " +
-        layerLimit + " layers per note.", "bad");
+        layerLimit + " layers per note.");
       return;
     }
 
@@ -1862,14 +1873,14 @@
       for (var compatibleIndex = 0; compatibleIndex < matches.length; compatibleIndex++) {
         var compatibleLayout = makeRegionLayout(font, matches[compatibleIndex]);
         if (compatibleLayout.error) {
-          setStatus("Preview failed: " + compatibleLayout.error, "bad");
+          setPreviewStatus("Preview failed: " + compatibleLayout.error);
           return;
         }
         if (compatibleLayout.frames > MAX_SAMPLE_FRAMES) {
-          setStatus("V2-compatible preview refused: this sample has " +
+          setPreviewStatus("V2-compatible preview refused: this sample has " +
             compatibleLayout.frames.toLocaleString() +
             " frames; the V2 16-bit phase index supports at most " +
-            MAX_SAMPLE_FRAMES + ".", "bad");
+            MAX_SAMPLE_FRAMES + ".");
           return;
         }
       }
@@ -1955,7 +1966,7 @@
         " using " + matches.length + " zone(s)." +
         (wavetableMode ? " V2-compatible mode." : " Extended browser mode."), "good");
     } catch (error) {
-      setStatus("Preview failed: " + error.message, "bad");
+      setPreviewStatus("Preview failed: " + error.message);
     }
   }
 
@@ -2509,6 +2520,7 @@
     resetAllPresetScan();
     stopPreview();
     resetOutput();
+    clearPreviewStatus();
     font = null;
     currentFileName = "";
     presetSelect.innerHTML = "";
@@ -2584,6 +2596,7 @@
   presetSelect.addEventListener("change", function () {
     stopPreview();
     resetOutput();
+    clearPreviewStatus();
     updatePresetInfo();
   });
   if (exportVersionSelect) {
@@ -2594,6 +2607,7 @@
   velocityInput.addEventListener("change", function () {
     stopPreview();
     resetOutput();
+    clearPreviewStatus();
     updatePresetInfo();
   });
   noteInput.addEventListener("change", function () {
@@ -2692,6 +2706,7 @@
   if (wavetableModeInput) {
     wavetableModeInput.addEventListener("change", function () {
       stopPreview();
+      clearPreviewStatus();
       updateModeInfo();
     });
   }
