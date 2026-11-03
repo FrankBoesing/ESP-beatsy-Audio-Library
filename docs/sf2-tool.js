@@ -92,9 +92,10 @@
   DEFAULTS[GEN.endLoopCoarse] = 0;
 
   var V1_INDEX_BITS = 16;
-  var V2_INDEX_BITS = 18;
+  var V2_PHASE_FRACTION_BITS = 14;
+  var V2_PHASE_SCALE = Math.pow(2, V2_PHASE_FRACTION_BITS);
   var MAX_SAMPLE_FRAMES_V1 = Math.pow(2, V1_INDEX_BITS) - 1;
-  var MAX_SAMPLE_FRAMES_V2 = Math.pow(2, V2_INDEX_BITS) - 1;
+  var MAX_SAMPLE_FRAMES_V2 = Math.pow(2, 32 - V2_PHASE_FRACTION_BITS) - 1;
   var MAX_FILE_BYTES = 512 * 1024 * 1024;
   var MAX_EXPORT_FRAMES = 2000000;
   var RANGE_OPERATORS = [GEN.keyRange, GEN.velocityRange];
@@ -2236,17 +2237,17 @@
     var playback = playbackRatio(soundFont, region, note);
     // V2 multiplies this per-Hz coefficient by MIDI-note frequency and
     // adapts it to the actual runtime output rate in setInstrument().
-    var phaseCoefficient = Math.pow(2, 32 - V2_INDEX_BITS) *
+    var phaseCoefficient = V2_PHASE_SCALE *
       layout.sampleRate * playback / midiFrequency(note);
     var env = envelopeForNote(values, note);
     var attenuation = Math.max(0, Math.min(1440, values[GEN.attenuation]));
     var initialScalar = Math.round(65535 * Math.pow(10, -attenuation / 200));
     var sustainGain = Math.pow(10, -env.sustainCb / 200);
     var sustainMultiplier = Math.round(2147483647 * (1 - sustainGain));
-    var maxPhase = layout.frames * Math.pow(2, 32 - V2_INDEX_BITS);
-    var loopEnd = layout.loop ? layout.loopEnd * Math.pow(2, 32 - V2_INDEX_BITS) : 0;
+    var maxPhase = layout.frames * V2_PHASE_SCALE;
+    var loopEnd = layout.loop ? layout.loopEnd * V2_PHASE_SCALE : 0;
     var loopLength = layout.loop ?
-      (layout.loopEnd - layout.loopStart) * Math.pow(2, 32 - V2_INDEX_BITS) : 0;
+      (layout.loopEnd - layout.loopStart) * V2_PHASE_SCALE : 0;
 
     if (!Number.isFinite(phaseCoefficient) || phaseCoefficient <= 0 ||
         !Number.isSafeInteger(maxPhase) || maxPhase > 0xffffffff ||
@@ -2414,7 +2415,8 @@
     lines.push("// Bank " + preset.bank + ", program " + preset.program + ".");
     lines.push("// Key and velocity zones are retained; overlapping zones become simultaneous sample layers.");
     lines.push("// Linked stereo sample pairs are preserved as separate left/right PCM arrays.");
-    lines.push("// Requires AudioSynthWavetableV2. Legacy AudioSynthWavetable data is not modified.");
+    lines.push("// Requires AudioSynthWavetableV2 (fixed 18/14 phase format).");
+    lines.push("// Legacy AudioSynthWavetable data is not modified.");
     lines.push("// PCM arrays contain one interpolation guard frame per channel.");
     lines.push("// All SF2 sample rates are retained; V2 adapts playback to the runtime audio sample rate.");
     lines.push("// SF2 filters, arbitrary modulators, pan/placement, chorus/reverb sends and reserved sample modes are not rendered.");
@@ -2459,7 +2461,7 @@
     for (var d = 0; d < descriptorEntries.length; d++) {
       var item = descriptorEntries[d];
       lines.push("    { " + item.pcmName + ", " + item.sampleCount + "U, " +
-        V2_INDEX_BITS + "U, " + item.phaseCoefficient.toFixed(12) +
+        item.phaseCoefficient.toFixed(12) +
         "f / AUDIO_SAMPLE_RATE_EXACT, " + item.maxPhase + "U, " +
         "AudioSynthWavetableV2::LoopMode::" + item.loopMode + ", " +
         item.loopEnd + "U, " + item.loopLength + "U, " +
