@@ -698,16 +698,11 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num, uint3
         return;
     }
 
-    portENTER_CRITICAL(&audio_mux);
-
-    memory_pool = data;
-    memory_pool_size = (uint16_t)(num);
-    memory_pool_available_mask = available_mask;
-    memory_pool_mask_words = (uint16_t)(mask_words);
-    memory_pool_first_mask = 0;
-    memory_used = 0;
-    memory_used_max = 0;
-
+    // AudioTask and the software clock are quiesced here. Prepare the pool
+    // before publishing its pointers, so the critical section only updates
+    // the shared pool metadata instead of masking interrupts for the full
+    // initialization loop. The caller must ensure no other application task
+    // is using audio blocks while reinitializing the pool.
     for (unsigned int i = 0; i < mask_words; ++i) {
         available_mask[i] = 0xFFFFFFFFu;
     }
@@ -723,6 +718,16 @@ void AudioStream::initialize_memory(audio_block_t *data, unsigned int num, uint3
         data[i].reserved1 = 0;
     }
 
+    // Publish the fully initialized pool atomically to the remaining
+    // audio-memory diagnostics and scheduler-side bookkeeping.
+    portENTER_CRITICAL(&audio_mux);
+    memory_pool = data;
+    memory_pool_size = (uint16_t)(num);
+    memory_pool_available_mask = available_mask;
+    memory_pool_mask_words = (uint16_t)(mask_words);
+    memory_pool_first_mask = 0;
+    memory_used = 0;
+    memory_used_max = 0;
     portEXIT_CRITICAL(&audio_mux);
 
     // Create the scheduler if needed, but leave AudioClock stopped until all
