@@ -66,8 +66,8 @@ static inline void wavetableV2ScaleSaturate4XespV(const int32_t *input,
     // Q registers are implicit PIE operands, not GCC GPR clobbers; retain the
     // memory clobber so the vector load sees the initialized temporary.
     register const int32_t *scaledPtr __asm__("s8") = scaled;
-    register const int32_t lowerBound __asm__("s9") = -32768;
-    register const int32_t upperBound __asm__("s10") = 32767;
+    register int32_t lowerBound __asm__("s9") = -32768;
+    register int32_t upperBound __asm__("s10") = 32767;
     register uint32_t out0 __asm__("s11");
     register uint32_t out1 __asm__("t3");
     register uint32_t out2 __asm__("t4");
