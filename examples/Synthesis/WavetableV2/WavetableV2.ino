@@ -1,18 +1,20 @@
 /*
- * AudioSynthWavetableV2 stress test -> USB or I2S output.
+ * AudioSynthWavetableV2 real-SF2 benchmark -> USB or I2S output.
  *
- * Sweeps note counts 1, 2, 4, 8, 16 and 32 (up to the configured maximum),
- * with four matching sample layers per note. This measures the V2 renderer
- * across 4..128 active sample voices without repeated rebuilds.
+ * Instrument: Airfont 340, Detuned EP2 (Bank 8, Program 5).
+ * Every tested note in MIDI range 48..79 should start four mono sample layers.
+ * The benchmark sweeps 1/2/4/8/16/32 notes, up to 128 sample voices.
  *
- * Define WAVETABLE_V2_TEST_STEREO=1 to replace the fourth mono layer with a
- * linked left/right sample and exercise mixed mono/stereo rendering. Build once
- * with stereo disabled and once enabled to compare mono and mixed-stereo cost.
+ * Each sweep is run twice with identical note/velocity sequences:
+ *   FLASH: generated PROGMEM PCM arrays are read directly from mapped flash.
+ *   PSRAM: each unique PCM array is copied once to PSRAM; sample/zone/instrument
+ *          descriptors remain in internal RAM to isolate PCM fetch placement.
+ * The order alternates each cycle (FLASH/PSRAM, then PSRAM/FLASH) to reduce
+ * systematic order bias. The PCM copy includes interpolation guard frames.
  *
- * WAVETABLE_V2_TEST_NOTE_COUNT sets the maximum stage. Set it to 32 for the
- * complete sweep; smaller values produce shorter sweeps. Run the same build
- * and sweep on the ESP32-S3 and ESP32-P4 at 44.1 and 48 kHz.
- * Record USB capture with Audacity, or capture the I2S codec output externally.
+ * WAVETABLE_V2_TEST_NOTE_COUNT sets the maximum stage; default is 32.
+ * Smaller values produce shorter sweeps. Run the same build on ESP32-S3/P4
+ * and at the same sample rate when comparing memory placement.
  *
  * PlatformIO:
  *   ESP32-S3 USB: env:freenove_esp32_s3_display_USBAUDIO (48 kHz UAC1)
@@ -41,15 +43,16 @@
 #include <Arduino.h>
 #include <Audio.h>
 #include <esp_cpu.h>
+#include <esp_heap_caps.h>
+#include <new>
+#include <stddef.h>
+#include <string.h>
+
+#include "detuned_ep2.h"
 
 // Maximum note count for the automatic 1/2/4/8/16/32-note sweep.
-// For the full range use -D WAVETABLE_V2_TEST_NOTE_COUNT=32.
 #ifndef WAVETABLE_V2_TEST_NOTE_COUNT
-#define WAVETABLE_V2_TEST_NOTE_COUNT 1
-#endif
-
-#ifndef WAVETABLE_V2_TEST_STEREO
-#define WAVETABLE_V2_TEST_STEREO 0
+#define WAVETABLE_V2_TEST_NOTE_COUNT 32
 #endif
 
 // Set to 1 to enable periodic console load reports during measurement windows.
@@ -98,81 +101,153 @@ constexpr uint32_t TEST_OUTPUT_RATE = WAVETABLE_V2_TEST_RATE;
 constexpr uint32_t TEST_OUTPUT_RATE = (uint32_t)AUDIO_SAMPLE_RATE_EXACT;
 #endif
 
-// 32 playable frames plus one interpolation guard frame.
-// Each table is one single-cycle waveform; phase wraps naturally at 32 frames.
-static const int16_t sineWave[33] = {
-     0, 6393, 12539, 18204, 23170, 27245, 30273, 32137,
-     32767, 32137, 30273, 27245, 23170, 18204, 12539, 6393,
-     0, -6393, -12539, -18204, -23170, -27245, -30273, -32137,
-     -32767, -32137, -30273, -27245, -23170, -18204, -12539, -6393,
-     0
+// The generated header contains 50 zone sample descriptors. Some descriptors
+// share identical PCM pointers, so copy each distinct PCM allocation only once.
+using SampleData = AudioSynthWavetableV2::sample_data;
+using ZoneData = AudioSynthWavetableV2::zone_data;
+using InstrumentData = AudioSynthWavetableV2::instrument_data;
+
+constexpr size_t SOURCE_SAMPLE_COUNT =
+    sizeof(SoundFontInstrumentSamples) / sizeof(SoundFontInstrumentSamples[0]);
+constexpr size_t SOURCE_ZONE_COUNT =
+    sizeof(SoundFontInstrumentZones) / sizeof(SoundFontInstrumentZones[0]);
+constexpr size_t MAX_UNIQUE_PCM_COPIES = SOURCE_SAMPLE_COUNT * 2U;
+
+struct PcmCopyEntry {
+    const int16_t *source;
+    int16_t *psram;
+    uint32_t frames;
 };
 
-static const int16_t sawWave[33] = {
-    -32768, -30720, -28672, -26624, -24576, -22528, -20480, -18432,
-    -16384, -14336, -12288, -10240, -8192, -6144, -4096, -2048,
-    0, 2047, 4095, 6143, 8191, 10239, 12287, 14335,
-    16383, 18431, 20479, 22527, 24575, 26623, 28671, 30719,
-    -32768
-};
+static PcmCopyEntry psramPcmCopies[MAX_UNIQUE_PCM_COPIES] = {};
+static size_t psramPcmCopyCount = 0;
+static size_t psramPcmBytes = 0;
+static const char *psramCopyError = nullptr;
+static bool psramInstrumentReady = false;
+static InstrumentData *psramInstrument = nullptr;
 
-static const int16_t triangleWave[33] = {
-    -32768, -28672, -24576, -20480, -16384, -12288, -8192, -4096,
-    0, 4096, 8192, 12288, 16384, 20480, 24576, 28672,
-    32767, 28672, 24576, 20480, 16384, 12288, 8192, 4096,
-    0, -4096, -8192, -12288, -16384, -20480, -24576, -28672,
-    -32768
-};
+// Keep descriptor objects in internal RAM. Only PCM sample storage moves to
+// PSRAM, isolating sample-data fetch placement from descriptor access.
+alignas(SampleData) static uint8_t psramSampleStorage[sizeof(SampleData) * SOURCE_SAMPLE_COUNT];
+alignas(ZoneData) static uint8_t psramZoneStorage[sizeof(ZoneData) * SOURCE_ZONE_COUNT];
+alignas(InstrumentData) static uint8_t psramInstrumentStorage[sizeof(InstrumentData)];
 
-static const int16_t squareWave[33] = {
-    -32768, -32768, -32768, -32768, -32768, -32768, -32768, -32768,
-    -32768, -32768, -32768, -32768, -32768, -32768, -32768, -32768,
-     32767,  32767,  32767,  32767,  32767,  32767,  32767,  32767,
-     32767,  32767,  32767,  32767,  32767,  32767,  32767,  32767,
-    -32768
-};
+static void freePsramPcmCopies() {
+    for (size_t i = 0; i < psramPcmCopyCount; ++i) {
+        if (psramPcmCopies[i].psram) heap_caps_free(psramPcmCopies[i].psram);
+        psramPcmCopies[i] = {};
+    }
+    psramPcmCopyCount = 0;
+    psramPcmBytes = 0;
+}
 
-static const AudioSynthWavetableV2::sample_data sineSample(
-    sineWave, 33, 5, 4294967296.0f / AUDIO_SAMPLE_RATE_EXACT,
-    0, AudioSynthWavetableV2::LoopMode::CONTINUOUS,
-    0, 0, 15000, 0, 8, 0, 8, 700, 0);
+static const int16_t *copyPcmToPsram(const int16_t *source, uint32_t frames) {
+    if (!source || frames == 0) {
+        psramCopyError = "Invalid source PCM pointer or frame count.";
+        return nullptr;
+    }
 
-static const AudioSynthWavetableV2::sample_data sawSample(
-    sawWave, 33, 5, 4294967296.0f / AUDIO_SAMPLE_RATE_EXACT,
-    0, AudioSynthWavetableV2::LoopMode::CONTINUOUS,
-    0, 0, 9000, 0, 8, 0, 8, 700, 0);
+    for (size_t i = 0; i < psramPcmCopyCount; ++i) {
+        if (psramPcmCopies[i].source == source) {
+            if (psramPcmCopies[i].frames != frames) {
+                psramCopyError = "One PCM pointer is used with inconsistent frame counts.";
+                return nullptr;
+            }
+            return psramPcmCopies[i].psram;
+        }
+    }
 
-static const AudioSynthWavetableV2::sample_data triangleSample(
-    triangleWave, 33, 5, 4294967296.0f / AUDIO_SAMPLE_RATE_EXACT,
-    0, AudioSynthWavetableV2::LoopMode::CONTINUOUS,
-    0, 0, 9000, 0, 8, 0, 8, 700, 0);
+    if (psramPcmCopyCount >= MAX_UNIQUE_PCM_COPIES) {
+        psramCopyError = "The unique PCM pointer table is full.";
+        return nullptr;
+    }
 
-static const AudioSynthWavetableV2::sample_data squareSample(
-    squareWave, 33, 5, 4294967296.0f / AUDIO_SAMPLE_RATE_EXACT,
-    0, AudioSynthWavetableV2::LoopMode::CONTINUOUS,
-    0, 0, 5000, 0, 8, 0, 8, 700, 0);
+    const size_t bytes = (size_t)frames * sizeof(int16_t);
+    int16_t *destination = (int16_t *)heap_caps_malloc(
+        bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!destination) {
+        psramCopyError = "PSRAM allocation failed while copying PCM data.";
+        return nullptr;
+    }
 
-#if WAVETABLE_V2_TEST_STEREO
-// Deliberately different waveforms make the left/right output distinguishable.
-static const AudioSynthWavetableV2::sample_data stereoTestSample(
-    sineWave, 33, 5, 4294967296.0f / AUDIO_SAMPLE_RATE_EXACT,
-    0, AudioSynthWavetableV2::LoopMode::CONTINUOUS,
-    0, 0, 5000, 0, 8, 0, 8, 700, 0, sawWave);
-#endif
+    // PROGMEM on ESP32 is memory-mapped flash, so memcpy can read the source
+    // normally. Copy every frame, including the interpolation guard frame.
+    memcpy(destination, source, bytes);
 
-// All four zones overlap. Each tested note therefore starts four sample layers.
-static const AudioSynthWavetableV2::zone_data zones[] = {
-    AudioSynthWavetableV2::zone_data(48, 84, 96, 127, sineSample),
-    AudioSynthWavetableV2::zone_data(48, 84, 96, 127, sawSample),
-    AudioSynthWavetableV2::zone_data(48, 84, 96, 127, triangleSample),
-#if WAVETABLE_V2_TEST_STEREO
-    AudioSynthWavetableV2::zone_data(48, 84, 96, 127, stereoTestSample)
-#else
-    AudioSynthWavetableV2::zone_data(48, 84, 96, 127, squareSample)
-#endif
-};
+    PcmCopyEntry &entry = psramPcmCopies[psramPcmCopyCount++];
+    entry.source = source;
+    entry.psram = destination;
+    entry.frames = frames;
+    psramPcmBytes += bytes;
+    return destination;
+}
 
-static const AudioSynthWavetableV2::instrument_data instrument(zones, 4);
+static bool buildPsramInstrument() {
+    if (psramInstrumentReady) return true;
+    psramCopyError = nullptr;
+    freePsramPcmCopies();
+
+    SampleData *copiedSamples = (SampleData *)psramSampleStorage;
+    for (size_t i = 0; i < SOURCE_SAMPLE_COUNT; ++i) {
+        const SampleData &source = SoundFontInstrumentSamples[i];
+        const int16_t *left = copyPcmToPsram(source.SAMPLE, source.SAMPLE_COUNT);
+        if (!left) goto fail;
+
+        const int16_t *right = nullptr;
+        if (source.SAMPLE_RIGHT) {
+            right = copyPcmToPsram(source.SAMPLE_RIGHT, source.SAMPLE_COUNT);
+            if (!right) goto fail;
+        }
+
+        new (&copiedSamples[i]) SampleData(
+            left,
+            source.SAMPLE_COUNT,
+            source.INDEX_BITS,
+            source.PER_HERTZ_PHASE_INCREMENT,
+            source.MAX_PHASE,
+            source.LOOP_MODE,
+            source.LOOP_PHASE_END,
+            source.LOOP_PHASE_LENGTH,
+            source.INITIAL_ATTENUATION_SCALAR,
+            source.DELAY_COUNT,
+            source.ATTACK_COUNT,
+            source.HOLD_COUNT,
+            source.DECAY_COUNT,
+            source.RELEASE_COUNT,
+            source.SUSTAIN_MULT,
+            right);
+    }
+
+    {
+        ZoneData *copiedZones = (ZoneData *)psramZoneStorage;
+        for (size_t i = 0; i < SOURCE_ZONE_COUNT; ++i) {
+            const ZoneData &source = SoundFontInstrumentZones[i];
+            const ptrdiff_t sampleIndex = source.SAMPLE - SoundFontInstrumentSamples;
+            if (sampleIndex < 0 || (size_t)sampleIndex >= SOURCE_SAMPLE_COUNT) {
+                psramCopyError = "A zone refers to a sample descriptor outside the sample table.";
+                goto fail;
+            }
+            new (&copiedZones[i]) ZoneData(
+                source.KEY_LOW,
+                source.KEY_HIGH,
+                source.VELOCITY_LOW,
+                source.VELOCITY_HIGH,
+                copiedSamples[sampleIndex]);
+        }
+
+        psramInstrument = new (psramInstrumentStorage)
+            InstrumentData(copiedZones, SOURCE_ZONE_COUNT);
+    }
+
+    psramInstrumentReady = true;
+    return true;
+
+fail:
+    freePsramPcmCopies();
+    psramInstrument = nullptr;
+    psramInstrumentReady = false;
+    return false;
+}
 
 static void consolePrint(const char *text) {
     Serial.print(text);
@@ -278,35 +353,44 @@ static void monitorFor(uint32_t durationMs) {
 static void playStressChord(uint8_t noteCount) {
     uint8_t startedNotes = 0;
     uint16_t startedSamples = 0;
+    uint8_t minimumLayers = UINT8_MAX;
+    uint8_t maximumLayers = 0;
+    uint8_t layerDistribution[5] = {};
 
     for (uint8_t i = 0; i < noteCount; ++i) {
         const int note = TEST_FIRST_NOTE + i;
-
-        consolePrint("Calling noteOn for MIDI note ");
-        consolePrint((uint32_t)note);
-        consolePrintln(".");
-
         const uint8_t layers = synth.noteOn(note, TEST_VELOCITY);
 
-        consolePrint("noteOn returned; layers = ");
-        consolePrint((uint32_t)layers);
-        consolePrintln(".");
-
-        if (layers != 0) {
-            ++startedNotes;
-            startedSamples += layers;
-        }
+        if (layers != 0) ++startedNotes;
+        startedSamples += layers;
+        if (layers < minimumLayers) minimumLayers = layers;
+        if (layers > maximumLayers) maximumLayers = layers;
+        ++layerDistribution[layers <= 4 ? layers : 4];
     }
 
     consolePrint("Started notes: ");
     consolePrint((uint32_t)startedNotes);
-    consolePrint(", sample layers: ");
+    consolePrint(", active sample layers: ");
     consolePrint((uint32_t)startedSamples);
-    consolePrintln(" started.");
+    consolePrint(", layers/note min..max: ");
+    consolePrint((uint32_t)(minimumLayers == UINT8_MAX ? 0 : minimumLayers));
+    consolePrint("..");
+    consolePrint((uint32_t)maximumLayers);
+    consolePrintln(" (expected 4).");
+
+    consolePrint("Layer distribution 0/1/2/3/4: ");
+    for (uint8_t i = 0; i <= 4; ++i) {
+        if (i) consolePrint("/");
+        consolePrint((uint32_t)layerDistribution[i]);
+    }
+    consolePrintln("");
 }
 
-static void printBenchmarkRow(const char *phase, uint8_t requestedNotes) {
+static void printBenchmarkRow(const char *memoryMode, const char *phase,
+                              uint8_t requestedNotes) {
     consolePrint("BENCH,");
+    consolePrint(memoryMode);
+    consolePrint(",");
     consolePrint(phase);
     consolePrint(",");
     consolePrint(TEST_OUTPUT_RATE);
@@ -331,7 +415,7 @@ static void printBenchmarkRow(const char *phase, uint8_t requestedNotes) {
     consolePrintln("");
 }
 
-static void runBenchmarkStage(uint8_t noteCount) {
+static void runBenchmarkStage(const char *memoryMode, uint8_t noteCount) {
     synth.allSoundOff();
     delay(100);
 
@@ -340,7 +424,9 @@ static void runBenchmarkStage(uint8_t noteCount) {
     AudioMemoryUsageMaxReset();
 
     consolePrintln("");
-    consolePrint("===== BENCHMARK: ");
+    consolePrint("===== ");
+    consolePrint(memoryMode);
+    consolePrint(" BENCHMARK: ");
     consolePrint((uint32_t)noteCount);
     consolePrintln(" notes =====");
     playStressChord(noteCount);
@@ -351,8 +437,9 @@ static void runBenchmarkStage(uint8_t noteCount) {
     synth.AudioProcessorUsageMaxReset();
     AudioMemoryUsageMaxReset();
     monitorFor(3000);
-    printBenchmarkRow("sustain", noteCount);
-    printPhasePeak("Sustain");
+    printBenchmarkRow(memoryMode, "sustain", noteCount);
+    consolePrint(memoryMode);
+    printPhasePeak(" Sustain");
 
     // Measure the release envelope separately from the sustained workload.
     AudioStream::AudioProcessorUsageTotalMaxReset();
@@ -366,11 +453,14 @@ static void runBenchmarkStage(uint8_t noteCount) {
     const uint32_t noteOffCycles = esp_cpu_get_cycle_count() - noteOffStartCycles;
 
     monitorFor(1200);
-    printBenchmarkRow("release", noteCount);
-    printPhasePeak("Release");
+    printBenchmarkRow(memoryMode, "release", noteCount);
+    consolePrint(memoryMode);
+    printPhasePeak(" Release");
 
     const uint32_t noteOffUs = cpuMHz != 0 ? noteOffCycles / cpuMHz : 0;
     consolePrint("NOTE_OFF,");
+    consolePrint(memoryMode);
+    consolePrint(",");
     consolePrint(noteOffCycles);
     consolePrint(",");
     consolePrint(cpuMHz);
@@ -380,6 +470,30 @@ static void runBenchmarkStage(uint8_t noteCount) {
     // Hard-stop residual voices before the next stage, then leave a short gap.
     synth.allSoundOff();
     delay(150);
+}
+
+static void runBenchmarkSweep(const char *memoryMode,
+                              const InstrumentData &selectedInstrument) {
+    synth.allSoundOff();
+    delay(100);
+    if (!synth.setInstrument(selectedInstrument)) {
+        haltWithError("Could not activate the selected benchmark instrument.");
+    }
+
+    consolePrintln("");
+    consolePrint("========== MEMORY MODE: ");
+    consolePrint(memoryMode);
+    consolePrintln(" ==========");
+
+    uint8_t noteCount = 1;
+    for (;;) {
+        runBenchmarkStage(memoryMode, noteCount);
+        if (noteCount >= TEST_NOTE_COUNT) break;
+
+        uint16_t nextCount = (uint16_t)noteCount * 2U;
+        if (nextCount > TEST_NOTE_COUNT) nextCount = TEST_NOTE_COUNT;
+        noteCount = (uint8_t)nextCount;
+    }
 }
 
 void setup() {
@@ -399,31 +513,25 @@ void setup() {
     delay(300);
 
     consolePrintln("");
-    consolePrintln("AudioSynthWavetableV2 stress test.");
+    consolePrintln("AudioSynthWavetableV2 real-SF2 memory benchmark.");
+    consolePrintln("Instrument: Airfont 340 - Detuned EP2 (Bank 8, Program 5).");
+    consolePrintln("MIDI notes 48..79 at velocity 112; expected four mono layers per note.");
     consolePrint("Configured notes: ");
     consolePrint((uint32_t)TEST_NOTE_COUNT);
     consolePrint(", maximum sample voices: ");
     consolePrintln((uint32_t)(TEST_NOTE_COUNT * AudioSynthWavetableV2::MAX_SAMPLE_LAYERS_PER_NOTE));
 #if defined(AUDIO_OUTPUT_USB)
-#if WAVETABLE_V2_TEST_STEREO
-    consolePrintln("USB output: mixed mono/stereo sample test, 16-bit PCM.");
+    consolePrintln("USB output: mono SF2 mix mirrored to stereo, 16-bit PCM.");
 #else
-    consolePrintln("USB output: mono mix mirrored to stereo, 16-bit PCM.");
-#endif
-#else
-#if WAVETABLE_V2_TEST_STEREO
-    consolePrintln("I2S output: mixed mono/stereo sample test.");
-#else
-    consolePrintln("I2S output: mono mix mirrored to stereo.");
-#endif
+    consolePrintln("I2S output: mono SF2 mix mirrored to stereo.");
 #endif
 #if defined(AUDIO_OUTPUT_USB)
     consolePrintln("Select the ESP32 USB microphone in Audacity and start recording.");
 #else
     consolePrintln("Record the codec output through line-in or an external recorder.");
 #endif
-    consolePrintln("BENCH CSV: phase,rate_hz,requested_notes,active_notes,active_layers,node_us,node_peak_us,graph_us,graph_peak_us,blocks,blocks_peak");
-    consolePrintln("NOTE_OFF CSV: NOTE_OFF,cycles,cpu_mhz,elapsed_us");
+    consolePrintln("BENCH CSV: BENCH,memory_mode,phase,rate_hz,requested_notes,active_notes,active_layers,node_us,node_peak_us,graph_us,graph_peak_us,blocks,blocks_peak");
+    consolePrintln("NOTE_OFF CSV: NOTE_OFF,memory_mode,cycles,cpu_mhz,elapsed_us");
 #if WAVETABLE_V2_TEST_VERBOSE
     consolePrintln("Periodic diagnostic output enabled.");
 #else
@@ -449,8 +557,25 @@ void setup() {
 #endif
 #endif
 
-    if (!synth.setInstrument(instrument)) {
-        haltWithError("Invalid V2 instrument data.");
+    if (!synth.setInstrument(SoundFontInstrumentInstrument)) {
+        haltWithError("Invalid Detuned EP2 V2 instrument data.");
+    }
+
+    const size_t psramFreeBefore = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    if (buildPsramInstrument()) {
+        consolePrint("PSRAM PCM copy ready: ");
+        consolePrint((uint32_t)psramPcmCopyCount);
+        consolePrint(" unique arrays, ");
+        consolePrint((uint32_t)psramPcmBytes);
+        consolePrint(" bytes; free PSRAM ");
+        consolePrint((uint32_t)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+        consolePrintln(" bytes.");
+    } else {
+        consolePrint("PSRAM copy unavailable: ");
+        consolePrintln(psramCopyError ? psramCopyError : "unknown allocation/copy error");
+        consolePrint("PSRAM free before copy: ");
+        consolePrint((uint32_t)psramFreeBefore);
+        consolePrintln(" bytes. FLASH benchmark will still run.");
     }
     synth.amplitude(0.35f);
 
@@ -467,19 +592,20 @@ void setup() {
 }
 
 void loop() {
-    // Run a logarithmic polyphony sweep in one firmware build.
-    // The last stage is always the configured maximum, even when it is not
-    // an exact power of two (for example, 6 produces 1, 2, 4, 6).
-    uint8_t noteCount = 1;
-    for (;;) {
-        runBenchmarkStage(noteCount);
-        if (noteCount >= TEST_NOTE_COUNT) break;
+    // Alternate order on successive cycles to reduce systematic order bias.
+    static bool psramFirst = false;
 
-        uint16_t nextCount = (uint16_t)noteCount * 2U;
-        if (nextCount > TEST_NOTE_COUNT) nextCount = TEST_NOTE_COUNT;
-        noteCount = (uint8_t)nextCount;
+    if (psramInstrumentReady && psramFirst) {
+        runBenchmarkSweep("PSRAM", *psramInstrument);
+        runBenchmarkSweep("FLASH", SoundFontInstrumentInstrument);
+    } else {
+        runBenchmarkSweep("FLASH", SoundFontInstrumentInstrument);
+        if (psramInstrumentReady) {
+            runBenchmarkSweep("PSRAM", *psramInstrument);
+        }
     }
 
-    consolePrintln("Sweep complete. Repeating in 1 second.");
+    psramFirst = !psramFirst;
+    consolePrintln("FLASH/PSRAM comparison complete. Repeating in 1 second.");
     delay(1000);
 }
