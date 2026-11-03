@@ -1701,7 +1701,8 @@ void AudioSynthWavetableV2::update() {
  * - The PSRAM mode rebuilds sample, zone and instrument descriptors while
  *   keeping those descriptors in internal RAM. Only PCM data is placed in
  *   PSRAM, so the comparison focuses on the sample-data access path. Copies
- *   include guard frames and are allocated once during setup, never in update().
+ *   include guard frames, are byte-verified after memcpy, and are allocated
+ *   once during setup, never in update().
  * - The run order alternates FLASH/PSRAM and PSRAM/FLASH on successive cycles.
  *   BENCH and NOTE_OFF CSV records include the memory_mode field.
  * - If PSRAM allocation is unavailable, the example reports the failure and
