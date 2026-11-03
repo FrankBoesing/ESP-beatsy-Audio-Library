@@ -1,0 +1,163 @@
+name: Temporary ESP32-P4 wavetable disassembly comparison
+
+on:
+  push:
+    branches:
+      - fix/wavetable-v2-loop-interpolation
+    paths:
+      - ".github/workflows/p4-render-asm.yml"
+      - "src/synth_wavetable_v2.cpp"
+      - "platformio.ini"
+
+permissions:
+  contents: read
+
+jobs:
+  disassemble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout baseline
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: baseline
+
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: candidate
+
+      - name: Install PlatformIO
+        run: python -m pip install --upgrade pip platformio
+
+      - name: Enable temporary assembler output and bypass link-only pre-script
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          for name in ("baseline", "candidate"):
+              path = Path(name) / "platformio.ini"
+              text = path.read_text(encoding="utf-8")
+              start = text.index("[env:esp32-p4]")
+              end = text.find("\n[", start + 1)
+              if end < 0:
+                  end = len(text)
+              block = text[start:end]
+
+              # The SRAM linker-template patch is only needed at final link.
+              # This job compiles the renderer object only for disassembly.
+              needle_script = "extra_scripts = pre:scripts/patch_esp32p4_sram_size.py"
+              count = block.count(needle_script)
+              block = block.replace(
+                  needle_script,
+                  "; extra_scripts bypassed for object-only disassembly",
+                  1,
+              )
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one P4 SRAM pre-script in {path}, got {count}")
+
+              needle = "    -march=rv32imafc_zbb_zicsr_zifencei_xesploop_xespv"
+              if needle not in block:
+                  raise SystemExit(f"Expected ESP32-P4 march flag not found in {path}")
+              block = block.replace(
+                  needle,
+                  needle + "\n    -save-temps=obj\n    -fverbose-asm",
+                  1,
+              )
+              path.write_text(text[:start] + block + text[end:], encoding="utf-8")
+          PY
+
+      - name: Compile only the Wavetable V2 translation unit
+        run: |
+          set -euxo pipefail
+          for variant in baseline candidate; do
+            (
+              cd "$variant"
+              pio run -e esp32-p4 -t compiledb
+            )
+          done
+
+      - name: Extract P4 renderVoicePath disassembly
+        run: |
+          set -euxo pipefail
+          mkdir -p asm-artifacts
+          OBJDUMP="$(find "$HOME/.platformio/packages" -type f -name 'riscv32-esp-elf-objdump' | head -n 1)"
+          NM="$(find "$HOME/.platformio/packages" -type f -name 'riscv32-esp-elf-nm' | head -n 1)"
+          test -x "$OBJDUMP"
+          test -x "$NM"
+
+          for variant in baseline candidate; do
+            (
+              cd "$variant"
+              pio run -e esp32-p4
+            )
+            OBJ="$(find "$variant/.pio/build/esp32-p4" -type f -name 'synth_wavetable_v2.cpp.o' | head -n 1)"
+            test -n "$OBJ"
+            "$OBJDUMP" -dC -S --no-show-raw-insn "$OBJ" > "asm-artifacts/$variant.disasm"
+            "$NM" -C --defined-only "$OBJ" > "asm-artifacts/$variant.symbols.txt"
+            find "$variant/.pio/build/esp32-p4" -type f -name 'synth_wavetable_v2.cpp.s' -exec cp {} "asm-artifacts/$variant.s" \;
+            test -s "asm-artifacts/$variant.disasm"
+            test -s "asm-artifacts/$variant.symbols.txt"
+          done
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          branch_mnemonics = {
+              "beq", "bne", "blt", "bge", "bltu", "bgeu",
+              "beqz", "bnez", "blez", "bgez", "bltz", "bgtz",
+              "j", "jal", "jr", "jalr",
+          }
+
+          def extract(path):
+              lines = Path(path).read_text(errors="replace").splitlines()
+              sections = []
+              current = None
+              for line in lines:
+                  if re.match(r"^[0-9a-fA-F]+ <.*renderVoicePath.*>:$", line):
+                      if current:
+                          sections.append(current)
+                      current = [line]
+                  elif current is not None:
+                      if re.match(r"^[0-9a-fA-F]+ <", line):
+                          sections.append(current)
+                          current = None
+                      else:
+                          current.append(line)
+              if current:
+                  sections.append(current)
+              return sections
+
+          report = []
+          for variant in ("baseline", "candidate"):
+              sections = extract(f"asm-artifacts/{variant}.disasm")
+              report.append(f"## {variant}: {len(sections)} renderVoicePath specializations")
+              for section in sections:
+                  header = section[0]
+                  instructions = []
+                  for line in section[1:]:
+                      match = re.match(r"\\s*[0-9a-fA-F]+:\\s+(?:[0-9a-fA-F ]+\\s+)?([.a-zA-Z][.a-zA-Z0-9_]*)\\b", line)
+                      if match:
+                          instructions.append(match.group(1).lower())
+                  branches = [x for x in instructions if x in branch_mnemonics or x.startswith("b.")]
+                  loops = [x for x in instructions if "loop" in x or x.startswith("lp.")]
+                  report.append(
+                      f"{header}\\n"
+                      f"  instructions={len(instructions)} "
+                      f"branches/jumps={len(branches)} loop_ops={len(loops)}\\n"
+                      f"  branch mnemonics={','.join(branches)}"
+                  )
+          Path("asm-artifacts/summary.txt").write_text("\\n\\n".join(report) + "\\n")
+          PY
+
+      - name: Upload disassembly artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-p4-wavetable-disassembly
+          path: asm-artifacts/
+          if-no-files-found: error
+          retention-days: 7

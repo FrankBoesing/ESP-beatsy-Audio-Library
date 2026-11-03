@@ -43,15 +43,16 @@ static inline int16_t wavetableV2Saturate16(int32_t value) {
 #endif
 }
 
-#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xespv)
-// ESP32-P4 XespV: clamp four signed 32-bit values in parallel. The temporary
-// and bound vectors are 16-byte aligned because VLD.128 requires alignment.
+#if defined(__riscv) && defined(__riscv_xespv)
+// Espressif XespV: scale four values and clamp four signed 32-bit lanes in parallel.
+// The temporary vector is 16-byte aligned because VLD.128 requires alignment.
+// VSAT.S32 reads its lower and upper clamp bounds directly from AR registers.
 // MOVI.16.A extracts the low half-word of each clamped 32-bit lane. This runs
 // in AudioTask task context; ESP-IDF FreeRTOS manages PIE lazy context switching.
 // Do not call this helper from an ISR.
-static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
-                                                uint16_t gain,
-                                                int16_t *output) {
+static inline void wavetableV2ScaleSaturate4XespV(const int32_t *input,
+                                                   uint16_t gain,
+                                                   int16_t *output) {
     alignas(16) int32_t scaled[4] = {
         wavetableV2ScaleQ16(input[0], gain),
         wavetableV2ScaleQ16(input[1], gain),
@@ -59,23 +60,14 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
         wavetableV2ScaleQ16(input[3], gain)
     };
 
-    alignas(16) static const int32_t lowerBound[4] = {
-        -32768, -32768, -32768, -32768
-    };
-    alignas(16) static const int32_t upperBound[4] = {
-        32767, 32767, 32767, 32767
-    };
-
-    // PIE instructions can address only AR registers x8-x15 and x24-x31.
-    // GCC's generic RISC-V "r" constraint does not distinguish this subset,
-    // and the target toolchain cannot satisfy the "cr" constraint for all
-    // seven operands. Bind the operands to valid PIE registers explicitly.
-    // Local register variables are guaranteed in these registers when used
-    // as extended-asm operands. The Q registers remain implicit PIE operands,
-    // not GCC clobbers; retain "memory" for the vector loads.
+    // PIE scalar operands and MOVI output registers must use AR registers
+    // x8-x15 or x24-x31. The selected registers are all PIE-addressable.
+    // scaledPtr is read/write because VLD.128.IP advances it by 16 bytes.
+    // Q registers are implicit PIE operands, not GCC GPR clobbers; retain the
+    // memory clobber so the vector load sees the initialized temporary.
     register const int32_t *scaledPtr __asm__("s8") = scaled;
-    register const int32_t *lowerPtr __asm__("s9") = lowerBound;
-    register const int32_t *upperPtr __asm__("s10") = upperBound;
+    register int32_t lowerBound __asm__("s9") = -32768;
+    register int32_t upperBound __asm__("s10") = 32767;
     register uint32_t out0 __asm__("s11");
     register uint32_t out1 __asm__("t3");
     register uint32_t out2 __asm__("t4");
@@ -83,22 +75,18 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
 
     __asm__ volatile(
         "esp.vld.128.ip q0, %[scaled], 16\n"
-        "esp.vld.128.ip q1, %[lower], 16\n"
-        "esp.vmax.s32 q2, q0, q1\n"
-        "esp.vld.128.ip q1, %[upper], 16\n"
-        "esp.vmin.s32 q2, q2, q1\n"
+        "esp.vsat.s32 q2, q0, %[lower], %[upper]\n"
         "esp.movi.16.a q2, %[out0], 0\n"
         "esp.movi.16.a q2, %[out1], 2\n"
         "esp.movi.16.a q2, %[out2], 4\n"
         "esp.movi.16.a q2, %[out3], 6\n"
         : [scaled] "+&r"(scaledPtr),
-          [lower] "+&r"(lowerPtr),
-          [upper] "+&r"(upperPtr),
           [out0] "=&r"(out0),
           [out1] "=&r"(out1),
           [out2] "=&r"(out2),
           [out3] "=&r"(out3)
-        :
+        : [lower] "r"(lowerBound),
+          [upper] "r"(upperBound)
         : "memory");
 
     output[0] = (int16_t)out0;
@@ -106,7 +94,6 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
     output[2] = (int16_t)out2;
     output[3] = (int16_t)out3;
 }
-#endif
 
 // MIDI note frequencies in Q16.16 Hz.
 static const uint32_t wavetableV2NoteFrequencyQ16[128] = {
@@ -699,6 +686,15 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
     const uint32_t maxPhase = maximumPhase(sample);
     const uint32_t loopLength = sample.LOOP_PHASE_LENGTH;
     const uint32_t loopEnd = sample.LOOP_PHASE_END;
+    const uint32_t loopStart = loopEnd - loopLength;
+    const int16_t *const loopStartSample = sample.SAMPLE + (loopStart >> 14U);
+    const int16_t *const loopStartSampleRight = Stereo
+        ? sample.SAMPLE_RIGHT + (loopStart >> 14U)
+        : nullptr;
+    const uint32_t loopEndFrameCount =
+        (loopEnd >> 14U) + ((loopEnd & 0x3FFFU) != 0U);
+    const uint32_t loopBoundaryPhase =
+        loopEndFrameCount != 0U ? (loopEndFrameCount - 1U) << 14U : 0U;
     // Fixed 18/14 phase extraction. These constants compile to immediate
     // shifts/masks; no per-voice phase-format field or runtime selection.
     const uint32_t maxSampleIndex = sample.SAMPLE_COUNT - 2U;
@@ -712,13 +708,43 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
     // by beginReleaseLocked(), so this path needs only integer subtracts and one
     // sample multiply per frame; the generic ADSR state machine is bypassed.
     if (voice.envelopeState == STATE_RELEASE) {
-        for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            if (!voice.active) break;
-
+        uint32_t i = 0;
+        while (i < AUDIO_BLOCK_SAMPLES && voice.active) {
             if (StopAtEnd && phase >= maxPhase) {
                 voice.active = false;
                 voice.envelopeState = STATE_IDLE;
                 break;
+            }
+
+            uint32_t sampleIndex = phase >> 14U;
+            if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
+                sampleIndex = maxSampleIndex;
+            }
+
+            const int16_t *sample0Ptr;
+            const int16_t *sample1Ptr;
+            const int16_t *sample0RightPtr = nullptr;
+            const int16_t *sample1RightPtr = nullptr;
+
+            if (WrapLoop && __builtin_expect(phase >= loopBoundaryPhase, 0)) {
+                if (phase >= loopEnd) {
+                    const uint32_t overshoot = phase - loopEnd;
+                    phase = loopStart + (overshoot % loopLength);
+                    continue;
+                }
+                sample0Ptr = sample.SAMPLE + sampleIndex;
+                sample1Ptr = loopStartSample;
+                if (Stereo) {
+                    sample0RightPtr = sample.SAMPLE_RIGHT + sampleIndex;
+                    sample1RightPtr = loopStartSampleRight;
+                }
+            } else {
+                sample0Ptr = sample.SAMPLE + sampleIndex;
+                sample1Ptr = sample0Ptr + 1U;
+                if (Stereo) {
+                    sample0RightPtr = sample.SAMPLE_RIGHT + sampleIndex;
+                    sample1RightPtr = sample0RightPtr + 1U;
+                }
             }
 
             if (voice.releaseSamplesRemaining == 0) {
@@ -749,47 +775,39 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
 
             --voice.releaseSamplesRemaining;
 
-            uint32_t sampleIndex = phase >> 14U;
-            if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
-                sampleIndex = maxSampleIndex;
-            }
-
             const uint32_t interpolation = phase & 0x3FFFU;
-            const int32_t sample0 = sample.SAMPLE[sampleIndex];
-            const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+            const int32_t sample0 = *sample0Ptr;
+            const int32_t sample1 = *sample1Ptr;
 
-            const int32_t weight0 = (int32_t)(0x4000U - interpolation);
-            const int32_t weightedSample =
-                sample0 * weight0 + sample1 * (int32_t)interpolation;
-            const int32_t interpolated = weightedSample >> 14U;
+            const int32_t sampleDelta = sample1 - sample0;
+            const int32_t interpolated =
+                sample0 + ((sampleDelta * (int32_t)interpolation) >> 14U);
 
             const uint32_t effectiveAmplitude = voice.releaseGain;
             mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
             if (Stereo) {
-                const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
-                const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
-                const int32_t weightedSampleRight =
-                    sample0Right * weight0 + sample1Right * (int32_t)interpolation;
-                const int32_t interpolatedRight = weightedSampleRight >> 14U;
+                const int32_t sample0Right = *sample0RightPtr;
+                const int32_t sample1Right = *sample1RightPtr;
+                const int32_t sampleDeltaRight = sample1Right - sample0Right;
+                const int32_t interpolatedRight =
+                    sample0Right + ((sampleDeltaRight * (int32_t)interpolation) >> 14U);
                 mixRight[i] +=
                     ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
             }
 
             phase += phaseIncrement;
-
-            if (WrapLoop && phase >= loopEnd) {
-                const uint32_t loopStart = loopEnd - loopLength;
-                const uint32_t overshoot = phase - loopEnd;
-                phase = loopStart + (overshoot % loopLength);
-            }
+            ++i;
+        }
+        if (WrapLoop && phase >= loopEnd) {
+            const uint32_t overshoot = phase - loopEnd;
+            phase = loopStart + (overshoot % loopLength);
         }
         voice.phase = phase;
         return;
     }
 
-    for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        if (!voice.active) break;
-
+    uint32_t i = 0;
+    while (i < AUDIO_BLOCK_SAMPLES && voice.active) {
         // A sustained envelope is constant until Note-Off. Render the rest of
         // this block without per-sample envelope bookkeeping or gain setup.
         if (voice.envelopeState == STATE_SUSTAIN) {
@@ -798,9 +816,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             const uint32_t effectiveAmplitude =
                 ((uint32_t)voice.amplitude * envelopeGainQ16) >> 16;
 
-            for (; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                if (!voice.active) break;
-
+            while (i < AUDIO_BLOCK_SAMPLES && voice.active) {
                 if (StopAtEnd && phase >= maxPhase) {
                     voice.active = false;
                     voice.envelopeState = STATE_IDLE;
@@ -812,33 +828,56 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                     sampleIndex = maxSampleIndex;
                 }
 
-                const uint32_t interpolation = phase & 0x3FFFU;
-                const int32_t sample0 = sample.SAMPLE[sampleIndex];
-                const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+                const int16_t *sample0Ptr;
+                const int16_t *sample1Ptr;
+                const int16_t *sample0RightPtr = nullptr;
+                const int16_t *sample1RightPtr = nullptr;
 
-                const int32_t weight0 = (int32_t)(0x4000U - interpolation);
-                const int32_t weightedSample =
-                    sample0 * weight0 + sample1 * (int32_t)interpolation;
-                const int32_t interpolated = weightedSample >> 14U;
+                if (WrapLoop && __builtin_expect(phase >= loopBoundaryPhase, 0)) {
+                    if (phase >= loopEnd) {
+                        const uint32_t overshoot = phase - loopEnd;
+                        phase = loopStart + (overshoot % loopLength);
+                        continue;
+                    }
+                    sample0Ptr = sample.SAMPLE + sampleIndex;
+                    sample1Ptr = loopStartSample;
+                    if (Stereo) {
+                        sample0RightPtr = sample.SAMPLE_RIGHT + sampleIndex;
+                        sample1RightPtr = loopStartSampleRight;
+                    }
+                } else {
+                    sample0Ptr = sample.SAMPLE + sampleIndex;
+                    sample1Ptr = sample0Ptr + 1U;
+                    if (Stereo) {
+                        sample0RightPtr = sample.SAMPLE_RIGHT + sampleIndex;
+                        sample1RightPtr = sample0RightPtr + 1U;
+                    }
+                }
+                const uint32_t interpolation = phase & 0x3FFFU;
+                const int32_t sample0 = *sample0Ptr;
+                const int32_t sample1 = *sample1Ptr;
+
+                const int32_t sampleDelta = sample1 - sample0;
+                const int32_t interpolated =
+                    sample0 + ((sampleDelta * (int32_t)interpolation) >> 14U);
 
                 mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
                 if (Stereo) {
-                    const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
-                    const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
-                    const int32_t weightedSampleRight =
-                        sample0Right * weight0 + sample1Right * (int32_t)interpolation;
-                    const int32_t interpolatedRight = weightedSampleRight >> 14U;
+                    const int32_t sample0Right = *sample0RightPtr;
+                    const int32_t sample1Right = *sample1RightPtr;
+                    const int32_t sampleDeltaRight = sample1Right - sample0Right;
+                    const int32_t interpolatedRight =
+                        sample0Right + ((sampleDeltaRight * (int32_t)interpolation) >> 14U);
                     mixRight[i] +=
                         ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
                 }
 
                 phase += phaseIncrement;
-
-                if (WrapLoop && phase >= loopEnd) {
-                    const uint32_t loopStart = loopEnd - loopLength;
-                    const uint32_t overshoot = phase - loopEnd;
-                    phase = loopStart + (overshoot % loopLength);
-                }
+                ++i;
+            }
+            if (WrapLoop && phase >= loopEnd) {
+                const uint32_t overshoot = phase - loopEnd;
+                phase = loopStart + (overshoot % loopLength);
             }
             break;
         }
@@ -847,6 +886,37 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             voice.active = false;
             voice.envelopeState = STATE_IDLE;
             break;
+        }
+
+        uint32_t sampleIndex = phase >> 14U;
+        if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
+            sampleIndex = maxSampleIndex;
+        }
+
+        const int16_t *sample0Ptr;
+        const int16_t *sample1Ptr;
+        const int16_t *sample0RightPtr = nullptr;
+        const int16_t *sample1RightPtr = nullptr;
+
+        if (WrapLoop && __builtin_expect(phase >= loopBoundaryPhase, 0)) {
+            if (phase >= loopEnd) {
+                const uint32_t overshoot = phase - loopEnd;
+                phase = loopStart + (overshoot % loopLength);
+                continue;
+            }
+            sample0Ptr = sample.SAMPLE + sampleIndex;
+            sample1Ptr = loopStartSample;
+            if (Stereo) {
+                sample0RightPtr = sample.SAMPLE_RIGHT + sampleIndex;
+                sample1RightPtr = loopStartSampleRight;
+            }
+        } else {
+            sample0Ptr = sample.SAMPLE + sampleIndex;
+            sample1Ptr = sample0Ptr + 1U;
+            if (Stereo) {
+                sample0RightPtr = sample.SAMPLE_RIGHT + sampleIndex;
+                sample1RightPtr = sample0RightPtr + 1U;
+            }
         }
 
         // Advance the envelope at audio-sample rate. State transitions and
@@ -938,19 +1008,13 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             }
         }
 
-        uint32_t sampleIndex = phase >> 14U;
-        if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
-            sampleIndex = maxSampleIndex;
-        }
-
         const uint32_t interpolation = phase & 0x3FFFU;
-        const int32_t sample0 = sample.SAMPLE[sampleIndex];
-        const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+        const int32_t sample0 = *sample0Ptr;
+        const int32_t sample1 = *sample1Ptr;
 
-        const int32_t weight0 = (int32_t)(0x4000U - interpolation);
-        const int32_t weightedSample =
-            sample0 * weight0 + sample1 * (int32_t)interpolation;
-        const int32_t interpolated = weightedSample >> 14U;
+        const int32_t sampleDelta = sample1 - sample0;
+        const int32_t interpolated =
+            sample0 + ((sampleDelta * (int32_t)interpolation) >> 14U);
 
         // Fold the Q31 envelope into a Q16 voice amplitude. The resulting
         // 16-bit gain has at most one Q16 gain-step of quantization and lets
@@ -964,23 +1028,22 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
 
         mixLeft[i] += value;
         if (Stereo) {
-            const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
-            const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
-            const int32_t weightedSampleRight =
-                sample0Right * weight0 + sample1Right * (int32_t)interpolation;
-            const int32_t interpolatedRight = weightedSampleRight >> 14U;
+            const int32_t sample0Right = *sample0RightPtr;
+            const int32_t sample1Right = *sample1RightPtr;
+            const int32_t sampleDeltaRight = sample1Right - sample0Right;
+            const int32_t interpolatedRight =
+                sample0Right + ((sampleDeltaRight * (int32_t)interpolation) >> 14U);
             const int32_t valueRight =
                 ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
             mixRight[i] += valueRight;
         }
 
         phase += phaseIncrement;
-
-        if (WrapLoop && phase >= loopEnd) {
-            const uint32_t loopStart = loopEnd - loopLength;
-            const uint32_t overshoot = phase - loopEnd;
-            phase = loopStart + (overshoot % loopLength);
-        }
+        ++i;
+    }
+    if (WrapLoop && phase >= loopEnd) {
+        const uint32_t overshoot = phase - loopEnd;
+        phase = loopStart + (overshoot % loopLength);
     }
     voice.phase = phase;
 }
@@ -1049,14 +1112,14 @@ void AudioSynthWavetableV2::updateStereo(uint16_t masterGain) {
     }
 
     if (blockRight != nullptr) {
-#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xespv)
+#if defined(__riscv) && defined(__riscv_xespv)
         uint16_t i = 0;
 #if defined(__GNUC__)
 #pragma GCC unroll 2
 #endif
         for (; (uint16_t)(i + 3U) < AUDIO_BLOCK_SAMPLES; i += 4U) {
-            wavetableV2ScaleSaturate4P4(&mixLeft[i], masterGain, &blockLeft->data[i]);
-            wavetableV2ScaleSaturate4P4(&mixRight[i], masterGain, &blockRight->data[i]);
+            wavetableV2ScaleSaturate4XespV(&mixLeft[i], masterGain, &blockLeft->data[i]);
+            wavetableV2ScaleSaturate4XespV(&mixRight[i], masterGain, &blockRight->data[i]);
         }
         for (; i < AUDIO_BLOCK_SAMPLES; ++i) {
             blockLeft->data[i] =
@@ -1147,13 +1210,13 @@ void AudioSynthWavetableV2::update() {
     }
 
     // Apply Q16 master gain and saturate to signed 16-bit PCM.
-#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xespv)
+#if defined(__riscv) && defined(__riscv_xespv)
     uint16_t i = 0;
 #if defined(__GNUC__)
 #pragma GCC unroll 2
 #endif
     for (; (uint16_t)(i + 3U) < AUDIO_BLOCK_SAMPLES; i += 4U) {
-        wavetableV2ScaleSaturate4P4(&mix[i], masterGain, &block->data[i]);
+        wavetableV2ScaleSaturate4XespV(&mix[i], masterGain, &block->data[i]);
     }
     for (; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const int32_t scaled = wavetableV2ScaleQ16(mix[i], masterGain);
@@ -1295,11 +1358,13 @@ void AudioSynthWavetableV2::update() {
  * -----------------------------------------
  * - ESP32-S3 / Xtensa LX7: wavetableV2Saturate16() uses CLAMPS when the core
  *   advertises XCHAL_HAVE_CLAMPS; otherwise it uses the portable scalar clamp.
- * - ESP32-P4 / XespV: wavetableV2ScaleSaturate4P4() scales four values with
- *   the Q16 helper, then uses XespV vector instructions for parallel signed
- *   32-bit clamping and 16-bit extraction. A scalar tail and portable fallback
- *   remain. This optimizes final scaling/saturation; it does not vectorize the
- *   per-voice sample renderer.
+ * - XespV targets: wavetableV2ScaleSaturate4XespV() scales four values with
+ *   the Q16 helper, clamps four signed 32-bit lanes with esp.vsat.s32 using
+ *   scalar AR-register bounds, then extracts the low 16-bit PCM results.
+ *   The path is selected by the compiler-defined __riscv_xespv feature macro,
+ *   not by an ESP32-P4 target check, so future targets with the same XespV
+ *   instruction set can use it. A scalar tail and portable fallback remain.
+ *   This optimizes final scaling/saturation; it does not vectorize the renderer.
  * - These target paths must continue to produce bit-identical PCM to the
  *   scalar reference. Verify with builds and comparison tests after changes.
  *
@@ -1831,6 +1896,71 @@ void AudioSynthWavetableV2::update() {
  *   128-voice FLASH and PSRAM sweeps. It does not constitute an audible
  *   comparison or establish bit-identical output against the old 16/16
  *   phase format.
+ *
+ *
+ * 25. FORWARD-LOOP INTERPOLATION BOUNDARY FIX — IMPLEMENTED / PENDING HARDWARE TEST
+ * --------------------------------------------------------------------------------
+ * - Codex review of the integrated V2 renderer identified that interpolation
+ *   at a forward loop's final frame fetched the PCM frame at exclusive
+ *   LOOP_PHASE_END. When the stored sample continued beyond the loop, that
+ *   blended post-loop audio into every loop cycle.
+ * - Loop-boundary detection is performed before interpolation. In the final
+ *   loop frame, the right-hand interpolation sample points directly to the
+ *   precomputed LOOP_START sample; if phase has crossed the exclusive end,
+ *   phase is normalized before any PCM pointer is formed or sample is emitted.
+ * - The common ordinary-loop path uses sample0Ptr + 1 directly. A single
+ *   unlikely boundary branch handles the last loop frame and the exclusive-end
+ *   wrap together; the loop-start neighbor is selected only inside that branch.
+ *   Stereo performs the corresponding right-channel selection in the same arm.
+ * - Mix accumulation remains expressed as mixLeft[i]/mixRight[i]; the P4
+ *   compiler already lowers these to running output pointers in the generated
+ *   loop, so an explicit source-level output pointer is unnecessary.
+ * - Release, sustain fast path, and normal ADSR use the same boundary handling.
+ *   One-shot and non-looping template paths compile without the loop-boundary
+ *   test. The modulo operation remains confined to the exceptional wrap path.
+ * - This pointer-oriented revision targets the extra address-generation
+ *   instructions observed in the first P4 disassembly. P4 rebuild, new assembly
+ *   comparison, phase-sequence verification, hardware audio listening, and
+ *   cycle-level performance measurements remain pending.
+ *
+ *
+ * 26. Q14 DELTA INTERPOLATION / 32-BIT SAMPLE LOOP INDEX — IMPLEMENTED / PENDING BENCHMARK — 2026-11-03
+ * ---------------------------------------------------------------------------------------
+ * - Replaced the weighted-sum Q14 interpolation in the release, sustain and
+ *   ADSR rendering paths with the algebraically equivalent delta form:
+ *   sample0 + (((sample1 - sample0) * fraction) >> 14).
+ * - Removed the complementary weight calculation. This reduces the left-channel
+ *   interpolation from two integer multiplications to one; stereo applies the
+ *   same transformation independently to the right channel.
+ * - For signed 16-bit PCM, |sample1 - sample0| <= 65535 and fraction <= 16383.
+ *   The largest product magnitude is 1,073,659,905, which fits signed int32_t.
+ *   The result is algebraically identical under arithmetic right shift; a
+ *   bit-exact test and P4 build remain part of validation.
+ * - Changed the renderVoicePath sample-loop index from uint16_t to uint32_t.
+ *   This avoids explicit 16-bit narrowing in source; the generated P4 code must
+ *   be inspected to confirm whether it reduces conversion instructions.
+ * - P4 FLASH/PSRAM audio benchmark — 2026-11-03 (user-provided): the combined
+ *   delta-interpolation / 32-bit-index change showed no reproducible CPU-load
+ *   difference from the preceding build. The changes are retained.
+ *
+ *
+ * 27. XESPV VSAT.S32 FINAL PCM CLAMP — IMPLEMENTED / MICROBENCHMARKED — 2026-11-03
+ * --------------------------------------------------------------------------------
+ * - Replaced the XespV VMAX.S32 + VMIN.S32 clamp sequence and two vector-bound
+ *   loads with one esp.vsat.s32 instruction. The signed lower/upper bounds
+ *   (-32768 / 32767) are passed directly in PIE-addressable AR registers.
+ * - The existing VLD.128.IP and MOVI.16.A extraction remain unchanged.
+ * - User-run P4 microbenchmark: VMAX/VMIN median 5,852,530 cycles
+ *   (22.32 cycles/sample); VSAT lower-then-upper median 5,523,944 cycles
+ *   (21.07 cycles/sample), a 5.61% reduction for the complete tested
+ *   four-sample scale/clamp/extract path. Upper-then-lower measured 5,523,907
+ *   cycles, effectively identical. All three variants matched the scalar
+ *   reference for the 1,024-value correctness set and had identical checksums.
+ * - The XespV path is guarded by __riscv_xespv together with __riscv, allowing
+ *   future targets whose compiler enables this same extension to use it.
+ *   Rebuild on each target/toolchain and retain the scalar fallback.
+ * - The microbenchmark does not establish the gain in full wavetable playback.
+ *   Repeat the audio FLASH/PSRAM benchmark after integrating this change.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
