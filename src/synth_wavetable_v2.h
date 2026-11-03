@@ -46,6 +46,7 @@ class AudioSynthWavetableV2 : public AudioStream {
         const int16_t *SAMPLE_RIGHT;
         // Number of stored PCM frames per channel, including the interpolation guard frame.
         const uint32_t SAMPLE_COUNT;
+        // V2 phase layout: 16/16 for existing data or 18/14 for current exports.
         const uint8_t INDEX_BITS;
         const float PER_HERTZ_PHASE_INCREMENT;
         // Exclusive end position in 32-bit phase units. Zero derives it from
