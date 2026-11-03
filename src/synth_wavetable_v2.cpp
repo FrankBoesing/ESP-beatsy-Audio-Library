@@ -716,8 +716,6 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
     // store it back once, rather than loading/storing it for every sample.
     uint32_t phase = voice.phase;
     const uint32_t phaseIncrement = voice.phaseIncrement;
-    int32_t *outLeft = mixLeft;
-    int32_t *outRight = mixRight;
 
     // Release has a fixed linear slope. Its amplitude-scaled ramp was prepared
     // by beginReleaseLocked(), so this path needs only integer subtracts and one
@@ -744,14 +742,16 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             }
 
             const int16_t *sample0Ptr = sample.SAMPLE + sampleIndex;
-            const int16_t *sample1Ptr =
-                loopBoundary ? loopStartSample : sample0Ptr + 1U;
+            const int16_t *sample1Ptr = sample0Ptr + 1U;
             const int16_t *sample0RightPtr =
                 Stereo ? sample.SAMPLE_RIGHT + sampleIndex : nullptr;
             const int16_t *sample1RightPtr =
-                Stereo
-                    ? (loopBoundary ? loopStartSampleRight : sample0RightPtr + 1U)
-                    : nullptr;
+                Stereo ? sample0RightPtr + 1U : nullptr;
+
+            if (__builtin_expect(loopBoundary, 0)) {
+                sample1Ptr = loopStartSample;
+                if (Stereo) sample1RightPtr = loopStartSampleRight;
+            }
 
             if (voice.releaseSamplesRemaining == 0) {
                 voice.active = false;
@@ -791,19 +791,17 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             const int32_t interpolated = weightedSample >> 14U;
 
             const uint32_t effectiveAmplitude = voice.releaseGain;
-            *outLeft += ((int32_t)effectiveAmplitude * interpolated) >> 16;
+            mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
             if (Stereo) {
                 const int32_t sample0Right = *sample0RightPtr;
                 const int32_t sample1Right = *sample1RightPtr;
                 const int32_t weightedSampleRight =
                     sample0Right * weight0 + sample1Right * (int32_t)interpolation;
                 const int32_t interpolatedRight = weightedSampleRight >> 14U;
-                *outRight +=
+                mixRight[i] +=
                     ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
             }
 
-            ++outLeft;
-            if (Stereo) ++outRight;
             phase += phaseIncrement;
             ++i;
         }
@@ -845,14 +843,16 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 }
 
                 const int16_t *sample0Ptr = sample.SAMPLE + sampleIndex;
-                const int16_t *sample1Ptr =
-                    loopBoundary ? loopStartSample : sample0Ptr + 1U;
+                const int16_t *sample1Ptr = sample0Ptr + 1U;
                 const int16_t *sample0RightPtr =
                     Stereo ? sample.SAMPLE_RIGHT + sampleIndex : nullptr;
                 const int16_t *sample1RightPtr =
-                    Stereo
-                        ? (loopBoundary ? loopStartSampleRight : sample0RightPtr + 1U)
-                        : nullptr;
+                    Stereo ? sample0RightPtr + 1U : nullptr;
+
+                if (__builtin_expect(loopBoundary, 0)) {
+                    sample1Ptr = loopStartSample;
+                    if (Stereo) sample1RightPtr = loopStartSampleRight;
+                }
                 const uint32_t interpolation = phase & 0x3FFFU;
                 const int32_t sample0 = *sample0Ptr;
                 const int32_t sample1 = *sample1Ptr;
@@ -862,19 +862,17 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                     sample0 * weight0 + sample1 * (int32_t)interpolation;
                 const int32_t interpolated = weightedSample >> 14U;
 
-                *outLeft += ((int32_t)effectiveAmplitude * interpolated) >> 16;
+                mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
                 if (Stereo) {
                     const int32_t sample0Right = *sample0RightPtr;
                     const int32_t sample1Right = *sample1RightPtr;
                     const int32_t weightedSampleRight =
                         sample0Right * weight0 + sample1Right * (int32_t)interpolation;
                     const int32_t interpolatedRight = weightedSampleRight >> 14U;
-                    *outRight +=
+                    mixRight[i] +=
                         ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
                 }
 
-                ++outLeft;
-                if (Stereo) ++outRight;
                 phase += phaseIncrement;
                 ++i;
             }
@@ -904,14 +902,16 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         }
 
         const int16_t *sample0Ptr = sample.SAMPLE + sampleIndex;
-        const int16_t *sample1Ptr =
-            loopBoundary ? loopStartSample : sample0Ptr + 1U;
+        const int16_t *sample1Ptr = sample0Ptr + 1U;
         const int16_t *sample0RightPtr =
             Stereo ? sample.SAMPLE_RIGHT + sampleIndex : nullptr;
         const int16_t *sample1RightPtr =
-            Stereo
-                ? (loopBoundary ? loopStartSampleRight : sample0RightPtr + 1U)
-                : nullptr;
+            Stereo ? sample0RightPtr + 1U : nullptr;
+
+        if (__builtin_expect(loopBoundary, 0)) {
+            sample1Ptr = loopStartSample;
+            if (Stereo) sample1RightPtr = loopStartSampleRight;
+        }
 
         // Advance the envelope at audio-sample rate. State transitions and
         // envelope-time divisions happen only once per ENVELOPE_PERIOD samples.
@@ -1021,7 +1021,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         const int32_t value =
             ((int32_t)effectiveAmplitude * interpolated) >> 16;
 
-        *outLeft += value;
+        mixLeft[i] += value;
         if (Stereo) {
             const int32_t sample0Right = *sample0RightPtr;
             const int32_t sample1Right = *sample1RightPtr;
@@ -1030,11 +1030,9 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             const int32_t interpolatedRight = weightedSampleRight >> 14U;
             const int32_t valueRight =
                 ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
-            *outRight += valueRight;
+            mixRight[i] += valueRight;
         }
 
-        ++outLeft;
-        if (Stereo) ++outRight;
         phase += phaseIncrement;
         ++i;
     }
@@ -1903,12 +1901,13 @@ void AudioSynthWavetableV2::update() {
  *   loop frame, the right-hand interpolation sample points directly to the
  *   precomputed LOOP_START sample; if phase has crossed the exclusive end,
  *   phase is normalized before any PCM pointer is formed or sample is emitted.
- * - PCM neighbor access uses pointers: sample1Ptr is sample0Ptr + 1 in the
- *   ordinary path and switches to the precomputed loop-start pointer only at
- *   the final loop frame. Stereo uses the corresponding right-channel pointers.
- * - The render paths use running output pointers rather than repeatedly forming
- *   mixLeft[i]/mixRight[i] addresses. Output pointers advance only after a
- *   sample has actually been rendered, not when a phase wrap causes a retry.
+ * - PCM neighbor access starts with the ordinary adjacent-frame pointer
+ *   (sample0Ptr + 1). The loop-start pointer overrides it only when the
+ *   predicted boundary condition is true; stereo applies the same override to
+ *   the right channel. The boundary case is marked unlikely for code layout.
+ * - Mix accumulation remains expressed as mixLeft[i]/mixRight[i]; the P4
+ *   compiler already lowers these to running output pointers in the generated
+ *   loop, so an explicit source-level output pointer is unnecessary.
  * - Release, sustain fast path, and normal ADSR use the same boundary handling.
  *   One-shot and non-looping template paths compile without the loop-boundary
  *   test. The modulo operation remains confined to the exceptional wrap path.
