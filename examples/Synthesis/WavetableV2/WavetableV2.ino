@@ -173,6 +173,11 @@ static const int16_t *copyPcmToPsram(const int16_t *source, uint32_t frames) {
     // PROGMEM on ESP32 is memory-mapped flash, so memcpy can read the source
     // normally. Copy every frame, including the interpolation guard frame.
     memcpy(destination, source, bytes);
+    if (memcmp(destination, source, bytes) != 0) {
+        heap_caps_free(destination);
+        psramCopyError = "PCM data verification failed after the PSRAM copy.";
+        return nullptr;
+    }
 
     PcmCopyEntry &entry = psramPcmCopies[psramPcmCopyCount++];
     entry.source = source;
