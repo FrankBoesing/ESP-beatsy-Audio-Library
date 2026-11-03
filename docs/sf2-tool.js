@@ -841,7 +841,13 @@
     var stereoGrid = new Int32Array(ANALYZER_GRID_STRIDE * ANALYZER_GRID_STRIDE);
     var sampleSet = Object.create(null);
     var sampleHeaderSet = Object.create(null);
+    var pcmSampleSet = Object.create(null);
     var instrumentSet = Object.create(null);
+    var uniquePcmSamples = 0;
+    var oversizedPcmSamples = 0;
+    var invalidSampleLayouts = 0;
+    var maxSampleFrames = 0;
+    var longestSampleName = "";
     var stereoZones = 0;
     var invalidStereoLinks = 0;
     var romZones = 0;
@@ -857,6 +863,29 @@
       if (!sample) continue;
 
       var sampleInfo = analyzerSampleInfo(font, region);
+
+      // Use the same PCM identity as the V2 exporter. This counts unique
+      // effective sample data ranges after SF2 address generators and stereo
+      // pairing, rather than counting a reused zone multiple times.
+      var layout = makeRegionLayout(font, region);
+      if (layout.error) {
+        invalidSampleLayouts++;
+      } else {
+        var pcmGuardFrame = layout.loop && layout.loopEnd === layout.frames ?
+          layout.loopStart : -1;
+        var pcmKey = (layout.right ? "stereo:" : "mono:") + layout.start + ":" +
+          layout.rightStart + ":" + layout.frames + ":" + pcmGuardFrame;
+        if (!pcmSampleSet[pcmKey]) {
+          pcmSampleSet[pcmKey] = true;
+          uniquePcmSamples++;
+          if (layout.frames > MAX_SAMPLE_FRAMES) oversizedPcmSamples++;
+          if (layout.frames > maxSampleFrames) {
+            maxSampleFrames = layout.frames;
+            longestSampleName = layout.sampleName || sample.name || region.instrumentName;
+          }
+        }
+      }
+
       addAnalyzerRectangle(layerGrid, region.keyRange, region.velocityRange);
       if (sampleInfo.stereo) {
         addAnalyzerRectangle(stereoGrid, region.keyRange, region.velocityRange);
@@ -974,6 +1003,11 @@
       instrumentCount: Object.keys(instrumentSet).length,
       uniqueSampleSets: Object.keys(sampleSet).length,
       sampleHeaders: Object.keys(sampleHeaderSet).length,
+      uniquePcmSamples: uniquePcmSamples,
+      oversizedPcmSamples: oversizedPcmSamples,
+      invalidSampleLayouts: invalidSampleLayouts,
+      maxSampleFrames: maxSampleFrames,
+      longestSampleName: longestSampleName,
       stereoZones: stereoZones,
       invalidStereoLinks: invalidStereoLinks,
       romZones: romZones,
@@ -1109,6 +1143,12 @@
       analysis.zoneCount + " / " + analysis.instrumentCount + " / " +
         analysis.sampleHeaders + " / " + analysis.uniqueSampleSets,
       "A linked stereo pair counts as two sample headers and one sample set.");
+    appendAnalyzerMetric(metrics, "Unique PCM samples / over V2 frame limit",
+      analysis.uniquePcmSamples + " / " + analysis.oversizedPcmSamples,
+      "V2 limit: " + MAX_SAMPLE_FRAMES.toLocaleString() + " frames. Longest: " +
+        (analysis.maxSampleFrames ? analysis.maxSampleFrames.toLocaleString() + " frames (" +
+          (analysis.longestSampleName || "unnamed sample") + ")." : "no valid sample layouts.") +
+        (analysis.invalidSampleLayouts ? " Invalid sample layouts: " + analysis.invalidSampleLayouts + "." : ""));
     analyzerPanel.appendChild(metrics);
 
     var selectedNoteEntry = analysis.perNote[selectedNote];
@@ -1261,6 +1301,12 @@
     var presetsWithStereo = 0;
     var maxLayerHistogram = [0, 0, 0, 0, 0, 0];
     var totalResolvedZones = 0;
+    var presetsWithOversizedSamples = 0;
+    var totalUniquePcmSamples = 0;
+    var totalOversizedPcmSamples = 0;
+    var maxSampleFramesOverall = 0;
+    var longestSamplePreset = "";
+    var longestSampleNameOverall = "";
 
     stopPreview();
     allPresetScanButton.disabled = true;
@@ -1294,6 +1340,15 @@
         if (maxLayers > MAX_PREVIEW_LAYERS_PER_NOTE) presetsAboveEightLayers++;
         if (analysis.stereoZones) presetsWithStereo++;
         totalResolvedZones += analysis.zoneCount;
+        if (analysis.oversizedPcmSamples) presetsWithOversizedSamples++;
+        totalUniquePcmSamples += analysis.uniquePcmSamples;
+        totalOversizedPcmSamples += analysis.oversizedPcmSamples;
+        if (analysis.maxSampleFrames > maxSampleFramesOverall) {
+          maxSampleFramesOverall = analysis.maxSampleFrames;
+          longestSamplePreset = preset.name + " (Bank " + preset.bank +
+            ", Program " + preset.program + ")";
+          longestSampleNameOverall = analysis.longestSampleName;
+        }
 
         results.push({
           bank: preset.bank,
@@ -1304,6 +1359,11 @@
           instruments: names.join(", "),
           sampleHeaders: analysis.sampleHeaders,
           sampleSets: analysis.uniqueSampleSets,
+          uniquePcmSamples: analysis.uniquePcmSamples,
+          oversizedPcmSamples: analysis.oversizedPcmSamples,
+          maxSampleFrames: analysis.maxSampleFrames,
+          longestSample: analysis.longestSampleName,
+          invalidSampleLayouts: analysis.invalidSampleLayouts,
           maxLayers: maxLayers,
           peakLayers: analyzerPeakNoteList(analysis.peakLayerNotes, "peakLayerRange"),
           maxChannels: analysis.maxChannels,
@@ -1344,6 +1404,13 @@
       lines.push("SoundFont instruments: " + soundFont.instrumentCount);
       lines.push("Sample headers: " + Math.max(0, soundFont.samples.length - 1));
       lines.push("Resolved preset zones (sum over presets): " + totalResolvedZones);
+      lines.push("Unique PCM samples (sum over presets, V2 exporter deduplication): " + totalUniquePcmSamples);
+      lines.push("Unique PCM samples above V2 frame limit (" + MAX_SAMPLE_FRAMES + ", sum over presets): " +
+        totalOversizedPcmSamples);
+      lines.push("Presets with samples above V2 frame limit: " + presetsWithOversizedSamples);
+      lines.push("Maximum resolved sample length: " +
+        (maxSampleFramesOverall ? maxSampleFramesOverall.toLocaleString() + " frames (" +
+          (longestSampleNameOverall || "unnamed sample") + "; " + longestSamplePreset + ")" : "—"));
       lines.push("Maximum simultaneous layers in any preset: " + maxLayersOverall);
       lines.push("Maximum mono PCM channels in any preset: " + maxChannelsOverall);
       lines.push("Presets by maximum layers: " +
@@ -1357,7 +1424,9 @@
       lines.push("");
       lines.push([
         "Bank", "Program", "Preset", "Zones", "Instrument count", "Instrument names",
-        "Sample headers", "Sample sets", "Max layers", "Notes/velocity at max layers",
+        "Sample headers", "Sample sets", "Unique PCM samples", "Samples > V2 frame limit",
+        "Max sample frames", "Longest sample", "Invalid sample layouts",
+        "Max layers", "Notes/velocity at max layers",
         "Max PCM channels", "Notes/velocity at max PCM", "Covered key/velocity cells",
         "Cells above V2 limit", "Stereo zones", "ROM zones", "Ogg/SF3 zones",
         "Invalid stereo links"
@@ -1368,7 +1437,9 @@
         lines.push([
           item.bank, item.program, safeLogField(item.name), item.zones,
           item.instrumentCount, safeLogField(item.instruments), item.sampleHeaders,
-          item.sampleSets, item.maxLayers, safeLogField(item.peakLayers), item.maxChannels,
+          item.sampleSets, item.uniquePcmSamples, item.oversizedPcmSamples,
+          item.maxSampleFrames, safeLogField(item.longestSample), item.invalidSampleLayouts,
+          item.maxLayers, safeLogField(item.peakLayers), item.maxChannels,
           safeLogField(item.peakChannels), item.coveredCells, item.overV2Cells,
           item.stereoZones, item.romZones, item.compressedZones, item.invalidStereoLinks
         ].join("\t"));
@@ -1382,7 +1453,8 @@
       allPresetScanStatus.textContent =
         "Completed: " + results.length + " presets. Maximum " +
         maxLayersOverall + " simultaneous layers and " + maxChannelsOverall +
-        " mono PCM channels. The report is sorted by maximum layer count.";
+        " mono PCM channels; " + presetsWithOversizedSamples +
+        " preset(s) contain samples over the V2 frame limit. The report is sorted by maximum layer count.";
       console.log("ESP-beatsy SF2 all-preset voice analysis\n" + report);
     } catch (error) {
       if (scanGeneration === allPresetScanGeneration && soundFont === font) {
