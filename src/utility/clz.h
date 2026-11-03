@@ -17,18 +17,16 @@
 // global architecture attributes. Use it on ESP32-S31 and ESP32-P4 rev >= 3.0.
 static inline int audio_clz32(uint32_t x) __attribute__((always_inline, unused));
 static inline int audio_clz32(uint32_t x) {
-#if defined(__riscv) && defined(__riscv_xlen) && (__riscv_xlen == 32) && \
-    (defined(CONFIG_IDF_TARGET_ESP32S31) || \
+#if defined(__riscv) && defined(__riscv_xlen) && (__riscv_xlen == 32) &&                                               \
+    (defined(__riscv_zbb) || defined(__riscv_b) || defined(CONFIG_IDF_TARGET_ESP32S31) ||                             \
      (defined(CONFIG_IDF_TARGET_ESP32P4) && defined(CONFIG_ESP32P4_REV_MIN_300)))
     uint32_t result;
-    __asm__(
-        ".option push\n"
-        ".option arch, +zbb\n"
-        "clz %0, %1\n"
-        ".option pop\n"
-        : "=r"(result)
-        : "r"(x)
-    );
+    __asm__(".option push\n"
+            ".option arch, +zbb\n"
+            "clz %0, %1\n"
+            ".option pop\n"
+            : "=r"(result)
+            : "r"(x));
     return (int)result;
 #else
     // __builtin_clz(0) is undefined; preserve the library's 32-bit behavior.
