@@ -1780,6 +1780,58 @@ void AudioSynthWavetableV2::update() {
  *   resolution is an intentional phase-format trade-off, not an established
  *   bit-identical output change.
  *
+ * 24. FIXED 18/14 REAL-SF2 FLASH / PSRAM BENCHMARK — 2026-11-03
+ * -----------------------------------------------------------------
+ * - User-provided ESP32-P4 hardware run after converting AudioSynthWavetableV2
+ *   and the bundled Airfont 340 Detuned EP2 instrument to the fixed 18/14
+ *   phase format. Configuration: 400 MHz CPU, 44.1 kHz output, 128-sample
+ *   blocks, four mono sample layers per note, 1/2/4/8/16/32 notes
+ *   (4/8/16/32/64/128 active sample voices).
+ * - Both FLASH and PSRAM sweeps completed. Every stage reported exactly four
+ *   active sample layers per note. No setInstrument or rendering error was
+ *   reported.
+ * - Maximum graph peak timings from the BENCH CSV (sustain / release):
+ *   FLASH:
+ *     1 note / 4 voices: 97 / 92 us;
+ *     2 notes / 8 voices: 168 / 164 us;
+ *     4 notes / 16 voices: 312 / 308 us;
+ *     8 notes / 32 voices: 601 / 600 us;
+ *     16 notes / 64 voices: 1182 / 1178 us;
+ *     32 notes / 128 voices: 2342 / 2338 us.
+ *   PSRAM:
+ *     1 note / 4 voices: 95 / 92 us;
+ *     2 notes / 8 voices: 167 / 167 us;
+ *     4 notes / 16 voices: 312 / 308 us;
+ *     8 notes / 32 voices: 601 / 597 us;
+ *     16 notes / 64 voices: 1182 / 1178 us;
+ *     32 notes / 128 voices: 2342 / 2340 us.
+ * - At 128 voices, the maximum graph peak was 2342 us (80.7% of the
+ *   approximately 2902 us block period), leaving about 560 us (19.3%)
+ *   of measured block headroom. Both memory modes met the measured deadline.
+ * - Compared with section 21's 16/16 run using the same real-SF2 preset and
+ *   nominal 400 MHz / 44.1 kHz / 128-sample configuration, the FLASH graph
+ *   peaks changed from 97/97, 172/168, 320/317, 617/617, 1219/1211 and
+ *   2415/2406 us to 97/92, 168/164, 312/308, 601/600, 1182/1178 and
+ *   2342/2338 us at 4/8/16/32/64/128 voices. At 128 voices this is
+ *   73 us (3.0%) lower in sustain and 68 us (2.8%) lower in release.
+ *   This is an observed difference, not proof that the 18/14 arithmetic
+ *   itself caused the improvement; compiler output, fixed immediate
+ *   operations, instrumentation and run-to-run variation were not isolated.
+ * - FLASH and PSRAM remain practically equivalent for this sample set.
+ *   At 128 voices their worst graph peaks differ by only 2 us. The 28.8 kB
+ *   PCM working set and access pattern do not characterize large banks,
+ *   cache-cold/random access or concurrent PSRAM traffic.
+ * - allNotesOff() readings were 5..58 us across the reported stages and
+ *   memory modes (cycle counter at 400 MHz). No anomalous high outlier like
+ *   the one noted in section 21 appeared in this run.
+ * - The arithmetic benchmark preceding this run measured the isolated Q14
+ *   interpolation expression at the same 8.024 cycles/interpolation as Q16
+ *   on the P4. This real-SF2 run additionally confirms that the converted
+ *   instrument data and fixed-format renderer execute through the full
+ *   128-voice FLASH and PSRAM sweeps. It does not constitute an audible
+ *   comparison or establish bit-identical output against the old 16/16
+ *   phase format.
+ *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
  * State whether the optimization is implemented, experimentally measured,
