@@ -91,8 +91,10 @@
   DEFAULTS[GEN.startLoopCoarse] = 0;
   DEFAULTS[GEN.endLoopCoarse] = 0;
 
-  var INDEX_BITS = 16;
-  var MAX_SAMPLE_FRAMES = 65535;
+  var V1_INDEX_BITS = 16;
+  var V2_INDEX_BITS = 18;
+  var MAX_SAMPLE_FRAMES_V1 = Math.pow(2, V1_INDEX_BITS) - 1;
+  var MAX_SAMPLE_FRAMES_V2 = Math.pow(2, V2_INDEX_BITS) - 1;
   var MAX_FILE_BYTES = 512 * 1024 * 1024;
   var MAX_EXPORT_FRAMES = 2000000;
   var RANGE_OPERATORS = [GEN.keyRange, GEN.velocityRange];
@@ -878,7 +880,7 @@
         if (!pcmSampleSet[pcmKey]) {
           pcmSampleSet[pcmKey] = true;
           uniquePcmSamples++;
-          if (layout.frames > MAX_SAMPLE_FRAMES) oversizedPcmSamples++;
+          if (layout.frames > MAX_SAMPLE_FRAMES_V2) oversizedPcmSamples++;
           if (layout.frames > maxSampleFrames) {
             maxSampleFrames = layout.frames;
             longestSampleName = layout.sampleName || sample.name || region.instrumentName;
@@ -1145,7 +1147,7 @@
       "A linked stereo pair counts as two sample headers and one sample set.");
     appendAnalyzerMetric(metrics, "Unique PCM samples / over V2 frame limit",
       analysis.uniquePcmSamples + " / " + analysis.oversizedPcmSamples,
-      "V2 limit: " + MAX_SAMPLE_FRAMES.toLocaleString() + " frames. Longest: " +
+      "V2 limit: " + MAX_SAMPLE_FRAMES_V2.toLocaleString() + " frames. Longest: " +
         (analysis.maxSampleFrames ? analysis.maxSampleFrames.toLocaleString() + " frames (" +
           (analysis.longestSampleName || "unnamed sample") + ")." : "no valid sample layouts.") +
         (analysis.invalidSampleLayouts ? " Invalid sample layouts: " + analysis.invalidSampleLayouts + "." : ""));
@@ -1405,7 +1407,7 @@
       lines.push("Sample headers: " + Math.max(0, soundFont.samples.length - 1));
       lines.push("Resolved preset zones (sum over presets): " + totalResolvedZones);
       lines.push("Unique PCM samples (sum over presets, V2 exporter deduplication): " + totalUniquePcmSamples);
-      lines.push("Unique PCM samples above V2 frame limit (" + MAX_SAMPLE_FRAMES + ", sum over presets): " +
+      lines.push("Unique PCM samples above V2 frame limit (" + MAX_SAMPLE_FRAMES_V2 + ", sum over presets): " +
         totalOversizedPcmSamples);
       lines.push("Presets with samples above V2 frame limit: " + presetsWithOversizedSamples);
       lines.push("Maximum resolved sample length: " +
@@ -1486,7 +1488,7 @@
 
     var wavetableMode = isWavetableMode();
     var layerLimit = wavetableMode ? V2_MAX_LAYERS_PER_NOTE : MAX_PREVIEW_LAYERS_PER_NOTE;
-    var frameLimit = wavetableMode ? MAX_SAMPLE_FRAMES : MAX_PREVIEW_SAMPLE_FRAMES;
+    var frameLimit = wavetableMode ? MAX_SAMPLE_FRAMES_V2 : MAX_PREVIEW_SAMPLE_FRAMES;
     var analysis = analyzePresetVoices(preset);
     var problems = [];
 
@@ -1734,8 +1736,8 @@
       modeInfo.textContent =
         "V2-compatible preview: polyphonic (up to " + V2_MAX_NOTES +
         " held notes), up to " + V2_MAX_LAYERS_PER_NOTE +
-        " sample layers per note, mono or linked stereo PCM, velocity-scaled level and a maximum of " +
-        MAX_SAMPLE_FRAMES.toLocaleString() +
+        " sample layers per note, 18-bit sample index / 14-bit fractional phase, mono or linked stereo PCM, velocity-scaled level and a maximum of " +
+        MAX_SAMPLE_FRAMES_V2.toLocaleString() +
         " sample frames per layer. Note Off exits loop-until-release loops and starts the release envelope. SF2 filters, arbitrary modulators, pan and effects sends are not rendered.";
     } else {
       modeInfo.textContent =
@@ -2033,11 +2035,11 @@
           setPreviewStatus("Preview failed: " + compatibleLayout.error);
           return;
         }
-        if (compatibleLayout.frames > MAX_SAMPLE_FRAMES) {
+        if (compatibleLayout.frames > MAX_SAMPLE_FRAMES_V2) {
           setPreviewStatus("V2-compatible preview refused: this sample has " +
             compatibleLayout.frames.toLocaleString() +
-            " frames; the V2 16-bit phase index supports at most " +
-            MAX_SAMPLE_FRAMES + ".");
+            " frames; the V2 18-bit sample index supports at most " +
+            MAX_SAMPLE_FRAMES_V2 + ".");
           return;
         }
       }
@@ -2185,16 +2187,16 @@
     var root = rootKeyForRegion(soundFont, region);
     var playback = playbackRatio(soundFont, region, note);
     var phase = 4294967296.0 * layout.sampleRate * playback /
-      (Math.pow(2, INDEX_BITS) * midiFrequency(note));
+      (Math.pow(2, V1_INDEX_BITS) * midiFrequency(note));
     var env = envelopeForNote(values, note);
     var attenuation = Math.max(0, Math.min(1440, values[GEN.attenuation]));
     var initialScalar = Math.round(65535 * Math.pow(10, -attenuation / 200));
     var sustainGain = Math.pow(10, -env.sustainCb / 200);
     var sustainMultiplier = Math.round(2147483647 * (1 - sustainGain));
-    var maxPhase = layout.frames * Math.pow(2, 32 - INDEX_BITS);
-    var loopEnd = layout.loop ? layout.loopEnd * Math.pow(2, 32 - INDEX_BITS) : 0;
+    var maxPhase = layout.frames * Math.pow(2, 32 - V1_INDEX_BITS);
+    var loopEnd = layout.loop ? layout.loopEnd * Math.pow(2, 32 - V1_INDEX_BITS) : 0;
     var loopLength = layout.loop ?
-      (layout.loopEnd - layout.loopStart) * Math.pow(2, 32 - INDEX_BITS) : 0;
+      (layout.loopEnd - layout.loopStart) * Math.pow(2, 32 - V1_INDEX_BITS) : 0;
     if (!Number.isSafeInteger(maxPhase) || maxPhase > 0xffffffff ||
         loopEnd > 0xffffffff || loopLength > 0xffffffff) {
       throw new Error("Sample phase range exceeds the current AudioSynthWavetable limits.");
@@ -2234,17 +2236,17 @@
     var playback = playbackRatio(soundFont, region, note);
     // V2 multiplies this per-Hz coefficient by MIDI-note frequency and
     // adapts it to the actual runtime output rate in setInstrument().
-    var phaseCoefficient = Math.pow(2, 32 - INDEX_BITS) *
+    var phaseCoefficient = Math.pow(2, 32 - V2_INDEX_BITS) *
       layout.sampleRate * playback / midiFrequency(note);
     var env = envelopeForNote(values, note);
     var attenuation = Math.max(0, Math.min(1440, values[GEN.attenuation]));
     var initialScalar = Math.round(65535 * Math.pow(10, -attenuation / 200));
     var sustainGain = Math.pow(10, -env.sustainCb / 200);
     var sustainMultiplier = Math.round(2147483647 * (1 - sustainGain));
-    var maxPhase = layout.frames * Math.pow(2, 32 - INDEX_BITS);
-    var loopEnd = layout.loop ? layout.loopEnd * Math.pow(2, 32 - INDEX_BITS) : 0;
+    var maxPhase = layout.frames * Math.pow(2, 32 - V2_INDEX_BITS);
+    var loopEnd = layout.loop ? layout.loopEnd * Math.pow(2, 32 - V2_INDEX_BITS) : 0;
     var loopLength = layout.loop ?
-      (layout.loopEnd - layout.loopStart) * Math.pow(2, 32 - INDEX_BITS) : 0;
+      (layout.loopEnd - layout.loopStart) * Math.pow(2, 32 - V2_INDEX_BITS) : 0;
 
     if (!Number.isFinite(phaseCoefficient) || phaseCoefficient <= 0 ||
         !Number.isSafeInteger(maxPhase) || maxPhase > 0xffffffff ||
@@ -2325,10 +2327,10 @@
       if (layout.error) {
         throw new Error("Zone " + (r + 1) + " (" + region.instrumentName + "): " + layout.error);
       }
-      if (layout.frames > MAX_SAMPLE_FRAMES) {
+      if (layout.frames > MAX_SAMPLE_FRAMES_V2) {
         throw new Error("Zone " + (r + 1) + " uses " + layout.frames +
-          " frames; V2 supports at most " + MAX_SAMPLE_FRAMES +
-          " frames per layer with INDEX_BITS=16.");
+          " frames; V2 supports at most " + MAX_SAMPLE_FRAMES_V2 +
+          " frames per layer with INDEX_BITS=18.");
       }
       if (layout.loopMode === 2) {
         featureWarningMap.reservedSampleMode = "SF2 sampleModes value 2 is reserved/unsupported and was exported as one-shot audio.";
@@ -2457,7 +2459,7 @@
     for (var d = 0; d < descriptorEntries.length; d++) {
       var item = descriptorEntries[d];
       lines.push("    { " + item.pcmName + ", " + item.sampleCount + "U, " +
-        INDEX_BITS + "U, " + item.phaseCoefficient.toFixed(12) +
+        V2_INDEX_BITS + "U, " + item.phaseCoefficient.toFixed(12) +
         "f / AUDIO_SAMPLE_RATE_EXACT, " + item.maxPhase + "U, " +
         "AudioSynthWavetableV2::LoopMode::" + item.loopMode + ", " +
         item.loopEnd + "U, " + item.loopLength + "U, " +
@@ -2532,9 +2534,9 @@
         var layout = makeRegionLayout(font, region);
         if (layout.error) {
           noteErrors.push(midiName(note) + ": " + layout.error);
-        } else if (layout.frames > MAX_SAMPLE_FRAMES) {
+        } else if (layout.frames > MAX_SAMPLE_FRAMES_V1) {
           noteErrors.push(midiName(note) + " uses " + layout.frames +
-            " sample frames; the current wavetable index is limited to " + MAX_SAMPLE_FRAMES);
+            " sample frames; the legacy V1 wavetable index is limited to " + MAX_SAMPLE_FRAMES_V1);
         } else {
           var sampleKey = region.sampleIndex + ":" + layout.start + ":" + layout.frames +
             ":" + layout.loopStart + ":" + layout.loopEnd;
