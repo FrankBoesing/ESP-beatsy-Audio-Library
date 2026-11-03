@@ -39,6 +39,12 @@ class AudioSynthWavetableV2 : public AudioStream {
     static const int32_t UNITY_GAIN = INT32_MAX;
     static const uint8_t ENVELOPE_PERIOD = 8;
 
+    // Fixed 18/14 phase format: 18-bit sample index, 14-bit fraction.
+    static const uint8_t SAMPLE_INDEX_BITS = 18;
+    static const uint8_t SAMPLE_FRACTION_BITS = 14;
+    static const uint32_t MAX_SAMPLE_FRAMES = 262143UL;
+    static const uint32_t MAX_SAMPLE_COUNT = MAX_SAMPLE_FRAMES + 1UL;
+
     struct sample_data {
         const int16_t *SAMPLE; // Mono PCM or the left channel of a stereo pair.
         // Optional linked right-channel PCM. nullptr keeps this layer mono.
@@ -46,11 +52,9 @@ class AudioSynthWavetableV2 : public AudioStream {
         const int16_t *SAMPLE_RIGHT;
         // Number of stored PCM frames per channel, including the interpolation guard frame.
         const uint32_t SAMPLE_COUNT;
-        // V2 phase layout: 16/16 for existing data or 18/14 for current exports.
-        const uint8_t INDEX_BITS;
         const float PER_HERTZ_PHASE_INCREMENT;
         // Exclusive end position in 32-bit phase units. Zero derives it from
-        // SAMPLE_COUNT and INDEX_BITS.
+        // The fixed 18/14 phase layout and SAMPLE_COUNT.
         const uint32_t MAX_PHASE;
         const LoopMode LOOP_MODE;
         const uint32_t LOOP_PHASE_END;
@@ -66,7 +70,7 @@ class AudioSynthWavetableV2 : public AudioStream {
         // Q31 attenuation from unity: 0 = full sustain, UNITY_GAIN = silence.
         const int32_t SUSTAIN_MULT;
 
-        sample_data(const int16_t *sample, uint32_t sampleCount, uint8_t indexBits,
+        sample_data(const int16_t *sample, uint32_t sampleCount,
                     float perHertzPhaseIncrement, uint32_t maxPhase = 0,
                     LoopMode loopMode = LoopMode::ONE_SHOT,
                     uint32_t loopPhaseEnd = 0, uint32_t loopPhaseLength = 0,
@@ -75,7 +79,7 @@ class AudioSynthWavetableV2 : public AudioStream {
                     uint32_t holdCount = 0, uint32_t decayCount = 1,
                     uint32_t releaseCount = 1, int32_t sustainMult = 0,
                     const int16_t *sampleRight = nullptr)
-        : SAMPLE(sample), SAMPLE_RIGHT(sampleRight), SAMPLE_COUNT(sampleCount), INDEX_BITS(indexBits),
+        : SAMPLE(sample), SAMPLE_RIGHT(sampleRight), SAMPLE_COUNT(sampleCount),
           PER_HERTZ_PHASE_INCREMENT(perHertzPhaseIncrement), MAX_PHASE(maxPhase),
           LOOP_MODE(loopMode), LOOP_PHASE_END(loopPhaseEnd),
           LOOP_PHASE_LENGTH(loopPhaseLength),
