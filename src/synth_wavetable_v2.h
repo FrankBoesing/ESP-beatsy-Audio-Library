@@ -42,8 +42,8 @@ class AudioSynthWavetableV2 : public AudioStream {
     // Fixed 18/14 phase format: 18-bit sample index, 14-bit fraction.
     static const uint8_t SAMPLE_INDEX_BITS = 18;
     static const uint8_t SAMPLE_FRACTION_BITS = 14;
-    static const uint32_t MAX_SAMPLE_FRAMES = 262143UL;
-    static const uint32_t MAX_SAMPLE_COUNT = MAX_SAMPLE_FRAMES + 1UL;
+    static const uint32_t MAX_SAMPLE_COUNT = 1UL << SAMPLE_INDEX_BITS;
+    static const uint32_t MAX_SAMPLE_FRAMES = MAX_SAMPLE_COUNT - 1UL;
 
     struct sample_data {
         const int16_t *SAMPLE; // Mono PCM or the left channel of a stereo pair.
@@ -54,7 +54,7 @@ class AudioSynthWavetableV2 : public AudioStream {
         const uint32_t SAMPLE_COUNT;
         const float PER_HERTZ_PHASE_INCREMENT;
         // Exclusive end position in 32-bit phase units. Zero derives it from
-        // The fixed 18/14 phase layout and SAMPLE_COUNT.
+        // SAMPLE_COUNT using the fixed 14-bit fractional phase.
         const uint32_t MAX_PHASE;
         const LoopMode LOOP_MODE;
         const uint32_t LOOP_PHASE_END;
