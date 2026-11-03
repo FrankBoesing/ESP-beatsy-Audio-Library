@@ -1846,6 +1846,25 @@ void AudioSynthWavetableV2::update() {
  *   comparison or establish bit-identical output against the old 16/16
  *   phase format.
  *
+ *
+ * 25. FORWARD-LOOP INTERPOLATION BOUNDARY FIX — IMPLEMENTED / PENDING HARDWARE TEST
+ * --------------------------------------------------------------------------------
+ * - Codex review of the integrated V2 renderer identified that interpolation
+ *   at a forward loop's final frame fetched the PCM frame at exclusive
+ *   LOOP_PHASE_END. When the stored sample continued beyond the loop, that
+ *   blended post-loop audio into every loop cycle.
+ * - Added a wrapped interpolation-neighbor index in all three render paths:
+ *   release, sustain fast path, and normal ADSR. The left and right stereo
+ *   channels use the same neighbor index, wrapping to LOOP_START when the
+ *   current frame is the last frame before the exclusive loop end.
+ * - The change is compile-time specialized by WrapLoop. One-shot and
+ *   non-looping paths retain their original neighbor index. No additional
+ *   per-sample modulo, 64-bit arithmetic, or channel-dependent work is added
+ *   to the mono path.
+ * - Source review confirms all six sample1 loads (left/right across the three
+ *   render paths) now use the selected nextSampleIndex. Build, hardware audio
+ *   listening, and cycle-level performance comparison remain pending.
+ *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
  * State whether the optimization is implemented, experimentally measured,
