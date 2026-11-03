@@ -773,7 +773,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
             if (Stereo) {
                 const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
-                const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
+                const int32_t sample1Right = sample.SAMPLE_RIGHT[nextSampleIndex];
                 const int32_t weightedSampleRight =
                     sample0Right * weight0 + sample1Right * (int32_t)interpolation;
                 const int32_t interpolatedRight = weightedSampleRight >> 14U;
@@ -834,7 +834,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
                 if (Stereo) {
                     const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
-                    const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
+                    const int32_t sample1Right = sample.SAMPLE_RIGHT[nextSampleIndex];
                     const int32_t weightedSampleRight =
                         sample0Right * weight0 + sample1Right * (int32_t)interpolation;
                     const int32_t interpolatedRight = weightedSampleRight >> 14U;
@@ -979,7 +979,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         mixLeft[i] += value;
         if (Stereo) {
             const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
-            const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
+            const int32_t sample1Right = sample.SAMPLE_RIGHT[nextSampleIndex];
             const int32_t weightedSampleRight =
                 sample0Right * weight0 + sample1Right * (int32_t)interpolation;
             const int32_t interpolatedRight = weightedSampleRight >> 14U;
