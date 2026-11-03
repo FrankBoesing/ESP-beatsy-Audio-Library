@@ -721,7 +721,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
     // by beginReleaseLocked(), so this path needs only integer subtracts and one
     // sample multiply per frame; the generic ADSR state machine is bypassed.
     if (voice.envelopeState == STATE_RELEASE) {
-    uint32_t i = 0;
+        uint32_t i = 0;
         while (i < AUDIO_BLOCK_SAMPLES && voice.active) {
             if (StopAtEnd && phase >= maxPhase) {
                 voice.active = false;
