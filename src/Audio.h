@@ -67,6 +67,7 @@
 #include "synth_pinknoise.h"
 #include "synth_waveform.h"
 #include "synth_wavetable.h"
+#include "synth_wavetable_v2.h"
 #include "synth_pwm.h"
 #include "synth_simple_drum.h"
 #include "synth_drumkit.h"

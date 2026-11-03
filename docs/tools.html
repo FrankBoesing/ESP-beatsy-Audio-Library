@@ -56,11 +56,42 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
 .sf2-metadata{margin-top:10px;color:var(--muted);font-size:.88rem;overflow-wrap:anywhere}
 .sf2-metadata div{margin:3px 0}
 .sf2-zone-info{white-space:pre-wrap;overflow-wrap:anywhere;background:#f7f9fb;border:1px solid var(--line);border-radius:8px;padding:12px;font-size:.86rem;line-height:1.45;margin:14px 0 4px}
+
+ .sf2-analyzer{margin:12px 0 4px;padding:14px;border:1px solid var(--line);border-radius:10px;background:#f9fbfd}
+ .sf2-analyzer h3{margin:0 0 6px;font-size:1.05rem}
+ .sf2-analyzer h4{margin:14px 0 6px;font-size:.94rem}
+ .sf2-analyzer .help{margin:6px 0;color:var(--muted);font-size:.82rem}
+ .sf2-analyzer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:10px}
+ .sf2-analyzer-metric{min-width:0;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+ .sf2-analyzer-metric strong{display:block;font-size:1.28rem;line-height:1.25;overflow-wrap:anywhere}
+ .sf2-analyzer-metric span{display:block;margin-top:3px;font-size:.82rem;font-weight:650}
+ .sf2-analyzer-metric small{display:block;margin-top:4px;color:var(--muted);font-size:.74rem;line-height:1.35;overflow-wrap:anywhere}
+ .sf2-analyzer-summary{margin:5px 0;font-size:.84rem;overflow-wrap:anywhere}
+ .sf2-analyzer-distribution{display:grid;gap:5px;margin:8px 0}
+ .sf2-analyzer-bar-row{display:grid;grid-template-columns:76px minmax(50px,1fr) minmax(112px,auto);gap:8px;align-items:center;font-size:.76rem}
+ .sf2-analyzer-bar-track{height:9px;overflow:hidden;border-radius:5px;background:#e7edf3}
+ .sf2-analyzer-bar{height:100%;min-width:0;border-radius:5px;background:#477fae}
+ .sf2-analyzer-warning{margin:8px 0;padding:8px 10px;border-left:3px solid #c48b28;background:#fff8e9;font-size:.8rem}
+ .sf2-analyzer-details{margin-top:12px;border-top:1px solid var(--line);padding-top:9px}
+ .sf2-analyzer-details summary{cursor:pointer;font-weight:650;font-size:.84rem}
+ .sf2-analyzer-table-wrap{max-height:360px;overflow:auto;margin-top:8px}
+ .sf2-analyzer table{width:100%;border-collapse:collapse;font-size:.78rem;background:#fff}
+ .sf2-analyzer th,.sf2-analyzer td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+ .sf2-analyzer th{position:sticky;top:0;background:#edf2f7;z-index:1}
+ @media(max-width:560px){.sf2-analyzer-bar-row{grid-template-columns:62px minmax(25px,1fr) 104px;gap:6px;font-size:.68rem}.sf2-analyzer{padding:10px}}
+
+ .sf2-scan-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0 6px}
+ .sf2-scan-tools .help{margin:0;color:var(--muted);font-size:.8rem}
+ .sf2-scan-panel{margin:8px 0 14px;padding:12px;border:1px solid var(--line);border-radius:9px;background:#f9fbfd}
+ .sf2-scan-panel label{display:block;margin:8px 0 5px;font-weight:650}
+ .sf2-scan-panel textarea{display:block;width:100%;min-height:260px;resize:vertical;font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre;overflow:auto}
 .sf2-player{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:10px;background:#f9fbfd}
 .sf2-player-options{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(180px,1fr);gap:12px;align-items:end}
 .sf2-check{display:flex;align-items:center;gap:9px;font-weight:600;margin:0 0 7px}
 .sf2-check input{width:18px;height:18px;margin:0;flex:0 0 auto}
 .sf2-mode-info{margin:10px 0 12px}
+.sf2-preview-status{margin:8px 0 12px;padding:10px 12px;border:1px solid #d9a0a0;border-left:4px solid #b42318;border-radius:8px;background:#fff0f0;color:#7a1b1b;font-size:.9rem;line-height:1.4;overflow-wrap:anywhere}
+.sf2-preview-status:empty{display:none}
 .sf2-keyboard{position:relative;display:flex;width:100%;height:160px;touch-action:none;user-select:none;overflow:hidden;border-radius:0 0 7px 7px;background:#17283c}
 .sf2-key{position:relative;display:flex;align-items:flex-end;justify-content:center;min-width:0;margin:0;padding:0 0 7px;border-radius:0 0 5px 5px;box-shadow:none;touch-action:none;user-select:none}
 .sf2-key:focus-visible{outline:3px solid #f0a62b;outline-offset:-3px}
@@ -206,8 +237,8 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
       <div class="note">Defaults: six tone generators, all 16 MIDI channels, balanced track scheduling, no velocity bytes, zero key shift and C source output. Select 1–32 voices. MIDI parsing and conversion run locally in the browser; the file is not uploaded.</div>
     </section>
     <section class="card" aria-labelledby="sf2-heading">
-      <h2 id="sf2-heading">4. SF2 SoundFont to AudioSynthWavetable</h2>
-      <p class="lede">Load a SoundFont, audition its presets and generate an instrument header for the current AudioSynthWavetable API.</p>
+      <h2 id="sf2-heading">4. SF2 SoundFont to AudioSynthWavetableV2</h2>
+      <p class="lede">Load a SoundFont, audition its presets and generate a zone-based V2 instrument header. Legacy V1 export remains available.</p>
       <label for="sf2File">SoundFont 2 file (.sf2)</label>
       <input id="sf2File" type="file" accept=".sf2,application/octet-stream">
       <p class="help">The file is parsed locally in your browser. It is not uploaded.</p>
@@ -220,7 +251,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
           <select id="sf2Preset" disabled></select>
         </div>
         <div>
-          <label for="sf2Velocity">Preview / export velocity (1–127)</label>
+          <label for="sf2Velocity">Preview velocity / V1 export velocity (1–127)</label>
           <input id="sf2Velocity" type="number" min="1" max="127" step="1" value="100">
         </div>
         <div>
@@ -228,16 +259,35 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
           <input id="sf2PreviewNote" type="number" min="0" max="127" step="1" value="60">
         </div>
         <div>
-          <label for="sf2Name">C++ instrument name</label>
-          <input id="sf2Name" type="text" value="SoundFontInstrument" spellcheck="false" autocomplete="off">
+          <label for="sf2Name">C++ name prefix (auto-filled from selected preset)</label>
+          <input id="sf2Name" type="text" value="" placeholder="Selected preset name" spellcheck="false" autocomplete="off">
+        </div>
+        <div>
+          <label for="sf2ExportVersion">Export target</label>
+          <select id="sf2ExportVersion">
+            <option value="v2" selected>AudioSynthWavetableV2 (zones, stereo, fixed 18/14)</option>
+            <option value="v1">Legacy AudioSynthWavetable V1 (mono, fixed velocity)</option>
+          </select>
         </div>
       </div>
       <pre id="sf2PresetInfo" class="sf2-zone-info" aria-live="polite"></pre>
+      <div id="sf2Analyzer" class="sf2-analyzer" aria-live="polite"></div>
+      <div class="sf2-scan-tools">
+        <button id="sf2ScanAllPresets" type="button" disabled>Analyze all banks / presets</button>
+        <span id="sf2ScanStatus" class="help" role="status" aria-live="polite"></span>
+      </div>
+      <div id="sf2ScanPanel" class="sf2-scan-panel hidden">
+        <p class="help">Full SoundFont scan, sorted by maximum simultaneous layers. Tab-separated columns can be pasted into a spreadsheet.</p>
+        <label for="sf2ScanLog">All-presets analysis log</label>
+        <textarea id="sf2ScanLog" rows="16" readonly spellcheck="false"></textarea>
+        <button id="sf2ScanCopy" type="button" class="secondary" disabled>Copy report</button>
+        <button id="sf2ScanDownload" type="button" class="secondary" disabled>Download report (.txt)</button>
+      </div>
       <div class="sf2-player">
         <div class="sf2-player-options">
           <label class="sf2-check" for="sf2WavetableMode">
             <input id="sf2WavetableMode" type="checkbox" checked>
-            Wavetable-compatible preview (current synth limits)
+            V2-compatible preview (up to four layers per note)
           </label>
           <div>
             <label for="sf2KeyboardStart">Keyboard range</label>
@@ -250,6 +300,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
           </div>
         </div>
         <div id="sf2ModeInfo" class="help sf2-mode-info" aria-live="polite"></div>
+        <div id="sf2PreviewStatus" class="sf2-preview-status" role="alert" aria-live="assertive" aria-atomic="true"></div>
         <div id="sf2Keyboard" class="sf2-keyboard" role="group" aria-label="Two-octave piano keyboard"></div>
         <p id="sf2KeyboardLayout" class="help" aria-live="polite">Keyboard layout: press the Z/Y key once to detect it automatically.</p>
         <p class="help">Play with the mouse, touch screen or PC keyboard. Hold a key for Note On; release it for Note Off. The PC keyboard works while focus is on the selectors, but is disabled while typing in text or number fields.</p>
@@ -264,7 +315,7 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:v
         <button id="sf2Download" type="button" disabled>Download .h</button>
         <button id="sf2Copy" type="button" class="secondary" disabled>Copy code</button>
       </div>
-      <div class="note"><strong>V1 export limits:</strong> one sample per MIDI note; the selected velocity is baked into the exported header. Overlapping zones are auditionable in browser polyphonic mode but are refused for export. The checked wavetable-compatible preview also refuses overlapping zones and samples longer than 65,535 frames, and behaves monophonically. Uncheck it to audition multiple notes/layers in the browser. Linked stereo pairs are downmixed to mono and SF2 24-bit data is rounded to 16-bit PCM. SF2 modulators, filters, pan and effects sends are not rendered. The current wavetable engine continues loop-until-release samples looping during release. See the SF2 entry in <code>docs/todo.md</code> for the planned engine extension.</div>
+      <div class="note"><strong>V2 export:</strong> preserves key and velocity zones, overlapping sample layers (up to four per note), linked left/right stereo PCM and supported forward-loop modes. Samples are deduplicated and include an interpolation guard frame. Source sample rates are retained; the V2 engine adapts playback to the runtime audio sample rate. SF2 24-bit <code>sm24</code> data is rounded to signed 16-bit PCM. Unsupported modulators, filters, pan/placement, chorus/reverb sends and ping-pong loops are reported but not rendered. Presets with more than four simultaneous zones per note/velocity combination are rejected instead of silently dropping layers. Select the legacy V1 target only for existing <code>AudioSynthWavetable</code> sketches; it mono-downmixes stereo and bakes one selected velocity into the header.</div>
     </section>
   </div>
   <footer>ESP-beatsy Audio Tools · File handling runs locally in your browser. No network upload is performed by these utilities.</footer>

@@ -28,51 +28,105 @@ the audio recorder are intentionally omitted because they are already present.
   setup code. Reuse existing biquad stages initially; a new DSP class is not
   required.
 
-## SF2 SoundFont Import / AudioSynthWavetable
+## SF2 SoundFont Import / AudioSynthWavetableV2
 
-The planned SF2 tool should generate native `AudioSynthWavetable` instrument
-headers, not just extract WAV files. This requires a small, backwards-compatible
-extension of the wavetable engine before the converter can export complete
-presets.
+The SF2 tool will target the new, independent `AudioSynthWavetableV2` class.
+The legacy `AudioSynthWavetable` class, its data layout and its API remain
+unchanged so existing sketches and generated headers continue to work.
 
-- [ ] **Extend `AudioSynthWavetable` to represent SF2 sample zones.** The
-  current `instrument_data` model uses sorted `sample_note_ranges` and selects
-  exactly one sample using the note number. It cannot express SF2 key *and*
-  velocity rectangles, preset/instrument global and local zone combinations,
-  or overlapping zones that layer multiple samples. Add a zone-based instrument
-  representation with key-low/high and velocity-low/high bounds, and resolve
-  all matching zones at note-on. Support a bounded number of simultaneous
-  sample layers per note, with independent sample phase, loop and envelope
-  state per layer; mix them safely without heap allocation in `update()`.
-  Keep the existing `instrument_data` layout and current API working for
-  existing generated instruments and examples.
-- [ ] **Add explicit velocity-zone selection without breaking amplitude
-  control.** The existing `playNote(note, amp)` argument controls note level
-  and is not currently used to select a zone. Define an unambiguous velocity
-  input/path (and retain a separate output-level control if needed), then use
-  MIDI velocity to select/intersect SF2 velocity ranges. Define how overlapping
-  velocity layers are mixed and how the maximum layer count is enforced.
-- [ ] **Complete the SF2 loop behaviour needed by the engine.** Map forward
-  sample loops to `LOOP_PHASE_END` and `LOOP_PHASE_LENGTH`. Add a loop mode
-  that can leave the loop on note-off for SF2 loop-until-release zones; the
-  current `LOOP` flag wraps continuously even while the release envelope is
-  running. Define and document the handling of unsupported ping-pong/reverse
-  loops. Preserve the existing one-shot and continuous-loop behaviour.
-- [ ] **Map supported SF2 generators to `sample_data`.** Convert root key,
-  coarse/fine tuning and sample rate into the phase increment; convert sample
-  start/end and loop offsets into phase limits; translate volume-envelope
+- [x] **Add the initial polyphonic `AudioSynthWavetableV2` engine.** The new
+  class has a fixed pool for 32 MIDI notes and up to four sample layers per
+  note (128 sample-playback instances total), matches key/velocity zones,
+  keeps independent phase and volume-envelope state per layer, supports
+  note-on/note-off, 16 MIDI channels, sustain pedal, one-shot/continuous/
+  loop-until-release playback and oldest-note voice stealing. Voice stealing is
+  currently immediate; click-free stealing/crossfades remain a later task.
+  Mixing uses a single 32-bit accumulator and saturates once at the output. No heap
+  allocation occurs in `update()`. V2 supports mono PCM and optional linked
+  left/right signed 16-bit PCM per sample layer. Stereo layers share phase,
+  pitch, loop and envelope state; the two channels use independent interpolation
+  and mix accumulators. Mono layers remain on the mono kernel and are mirrored
+  to both outputs when any stereo layer is active. Each channel array includes
+  one interpolation guard frame.
+- [x] **Add a configurable hardware stress-test example for V2.**
+  `examples/Synthesis/WavetableV2` routes output indices 0/1 to the two
+  channels of `AudioOutputUSB` and reports total audio-graph CPU usage,
+  V2-node CPU usage, peak load and audio-block memory usage. Define
+  `WAVETABLE_V2_TEST_STEREO=1` to replace one mono layer with a linked
+  left/right sample and exercise mixed mono/stereo rendering. The test defaults
+  to one MIDI note with four overlapping sample layers; set
+  `WAVETABLE_V2_TEST_NOTE_COUNT` in build flags to increase the load up to
+  32 notes / 128 sample layers. The host PC can record the stereo 16-bit USB
+  microphone stream with Audacity or another audio recorder.
+- [x] **Apply the first portable scalar optimization pass to V2.** The renderer
+  traverses a dense active-voice slot list instead of scanning all 128 pool
+  entries every block; mono rendering removes ended voices in-place, while
+  stereo rendering compacts once after its mono/stereo passes. An active stereo
+  voice counter avoids a separate full-pool dispatch scan. The render loop
+  advances envelopes inline with saturating 32-bit arithmetic, hoists
+  loop/phase invariants, and uses a Q16 effective envelope gain plus 32-bit
+  interpolation/mixing multiplies instead of per-sample 64-bit multiplies.
+- [ ] **Benchmark and continue optimizing the V2 render and mix hot paths.**
+  The `WavetableV2` example now sweeps 1, 2, 4, 8, 16 and 32 notes (up to the
+  configured maximum), with four sample layers per note. It logs CSV rows for
+  sustain and release, including current/peak node and graph time in
+  microseconds and audio-block use. It supports USB output on the tested S3
+  configuration and I2S output on P4; I2S builds can select 44.1 or 48 kHz with
+  `WAVETABLE_V2_TEST_RATE`. Run mono and mixed-stereo builds. Hardware
+  measurements against the pre-optimization baseline are still pending.
+  Check continuity, envelope/release behavior, interpolation error and
+  worst-case block time at 4, 8, 16, 32, 64 and 128 sample voices. Keep a
+  portable scalar implementation as the reference/fallback. Evaluate
+  target-specific kernels only where repeatable measurements show a benefit.
+- [ ] **Benchmark V2 polyphony and memory placement.** On ESP32-S3 and
+  ESP32-P4, measure 4, 8, 16, 32, 64 and 128 simultaneous sample instances at
+  44.1 and 48 kHz. Record V2-node and total graph CPU use, peak block time,
+  audio-memory use, clipping and underruns. Compare mono against mixed
+  mono/stereo workloads, and compare internal SRAM with PSRAM sample data,
+  aligned and unaligned access, and realistic SF2 sample lengths. Keep results
+  by target, sample rate and toolchain version.
+- [ ] **Add per-layer vibrato / pitch modulation.** Implement SF2-compatible
+  vibrato delay, rate and depth with independent state per sample layer.
+  Verify pitch range, modulation update cost and stable behavior when notes
+  are released or voices are stolen. Add additional supported modulators only
+  after the baseline vibrato path is measured.
+- [x] **Add stereo sample playback.** A sample layer may reference optional
+  linked left/right PCM arrays while sharing phase, pitch, loop and envelope
+  state. Stereo uses output indices 0/1; mono samples are mirrored to both
+  channels without entering the stereo sample loop. If the audio block pool
+  cannot provide the second output block, the current update falls back to a
+  mono average for that block. SF2 pan generators and arbitrary stereo
+  placement are not applied yet. The legacy V1 converter remains mono and
+  deliberately downmixes linked stereo pairs; the V2 exporter now preserves
+  linked left/right sample arrays.
+- [x] **Add key/velocity zone selection.** V2 resolves all matching
+  key-low/high and velocity-low/high rectangles at note-on. Velocity selects
+  the zones and also sets the initial note level; `amplitude()` is a separate
+  master control that affects already-playing notes. The current hard limit is
+  four matching sample layers per note; additional matching zones are ignored
+  after the first four.
+- [x] **Add SF2 forward-loop modes.** V2 supports one-shot, continuous looping
+  and loop-until-release. SF2 `sampleModes` value 2 is reserved/unsupported
+  and is exported as one-shot with a warning.
+
+- [x] **Map the core SF2 playback generators to V2 `sample_data`.** The
+  converter maps root key, coarse/fine tuning, pitch correction and each
+  sample's native sample rate into the phase coefficient; maps sample start/end
+  and forward-loop offsets into phase limits; converts volume-envelope
   timecents and sustain centibels into delay/attack/hold/decay/release counts
-  and `SUSTAIN_MULT`; map initial attenuation and supported vibrato/modulation
-  parameters to the existing fields. Verify the time and phase calculations at
-  all runtime sample rates supported by the library.
-- [ ] **Define explicit handling for SF2 features the current node cannot
-  render.** `AudioSynthWavetable` is currently a mono output with one
-  `int16_t` sample stream per layer. The first converter version should
-  downmix linked stereo sample pairs to mono and convert optional SF2 24-bit
-  `sm24` data to the engine's 16-bit PCM format. Report unsupported filter
-  generators, arbitrary modulators, stereo placement and effects instead of
-  silently implying that they are reproduced. Keep those features as possible
-  later extensions, not prerequisites for the first usable converter.
+  and `SUSTAIN_MULT`; and maps initial attenuation. When fixed key number,
+  non-100-cent scale tuning, or key-tracked hold/decay changes the values by
+  note, the exporter splits that SF2 key range into single-key descriptors.
+  Runtime sample-rate adaptation is handled by V2 relative to
+  `AUDIO_SAMPLE_RATE_EXACT`. Per-layer vibrato and other modulation remain a
+  separate TODO; unsupported generators are reported.
+- [x] **Define explicit handling for SF2 features V2 cannot render.**
+  The V2 exporter preserves mono PCM and linked left/right `int16_t` PCM
+  streams, including interpolation guard frames, and rounds optional `sm24`
+  low-byte data to 16-bit PCM. It reports unsupported generators, fixed-velocity
+  overrides, modulators, filters, pan/placement, effects sends, invalid forward
+  loops and the reserved sample mode instead of implying that they are
+  reproduced. Legacy V1 export continues to downmix linked stereo pairs.
 - [x] **Create V1 of the offline SF2 converter for the legacy wavetable API.**
   Implemented in `docs/tools.html` and `docs/sf2-tool.js`: local SF2 parsing,
   preset/instrument global-local zone resolution, fixed-velocity export,
@@ -82,32 +136,32 @@ presets.
   of producing incomplete instrument data. This does not complete the target
   feature below; the converter must be upgraded after the `AudioSynthWavetable`
   zone/layer API exists.
-- [x] **Add an interactive SF2 keyboard player.** The browser tool now provides
+- [x] **Add an interactive SF2 keyboard player.** The browser tool provides
   a two-octave keyboard for mouse/touch input and the PC keyboard, including
   held-note Note On/Off and volume-envelope release. QWERTZ/QWERTY labels are
   read from the browser keyboard map when available, or detected from the
-  actual Y/Z key event (also suitable for Firefox). Its default
-  compatibility mode is monophonic, requires exactly one matching sample zone
-  per note at the selected velocity, applies the current default wavetable
-  amplitude and enforces the legacy 65,535-frame sample limit. An optional
-  browser mode allows up to 16 simultaneous notes and eight layers per note.
-  Browser sample buffers are bounded to avoid unbounded memory growth. This is
-  preview functionality only; it does not implement missing SF2 modulators,
-  filters, pan or effects in the ESP32 synth.
-- [ ] **Upgrade the SF2 browser tool to the extended instrument model.** Keep
-  local/offline file processing, but export a compile-ready C++ header for a
-  selected SF2 preset with deduplicated PCM arrays, key/velocity rectangles,
-  per-zone `sample_data` parameters and the extended instrument descriptor.
-  Preserve linked stereo samples by the documented mono-downmix policy and
-  convert `sm24` data to 16-bit PCM. Correctly combine preset and instrument
-  global/local generators. Preview and export must share the same velocity-zone
-  selection and layered-sample rules. Keep optional per-sample WAV export only
-  as a diagnostic feature, not as the primary result.
+  actual Y/Z key event (also suitable for Firefox). Its default V2-compatible
+  mode previews up to 32 held notes and four layers per note, including linked
+  stereo playback. The extended browser preview allows up to 16 simultaneous
+  notes and 16 layers per note. Browser sample buffers are bounded to avoid
+  unbounded memory growth. This is still a preview, not a complete SF2 synth;
+  unsupported modulators, filters, pan and effects are not rendered.
+- [x] **Upgrade the SF2 browser tool to the V2 instrument model.** The offline
+  tool now defaults to a compile-ready `AudioSynthWavetableV2` header and
+  keeps an explicit legacy V1 export option. V2 export preserves resolved
+  key/velocity rectangles, overlapping layers (with a full-domain check
+  against the engine's four-layer limit), deduplicated mono or linked stereo
+  PCM arrays, per-zone sample descriptors, supported envelope/tuning/loop
+  parameters and `sm24` conversion. Key-specific descriptors are emitted
+  where SF2 key-number, scale-tuning or key-tracked envelope settings require
+  them. The browser preview can play linked stereo and has a V2-compatible
+  32-note/four-layer mode. Unsupported features are described in the generated
+  header and preset report.
 - [ ] **Validate SF2 conversion and playback end-to-end.** Check preset/bank
   selection, key/velocity boundaries, overlapping layers, root-key tuning,
   loops including note-off, envelope timing, sample-rate adaptation, memory
   footprint and clipping. Compare browser preview with the generated
-  `AudioSynthWavetable` output on ESP32-S3 and ESP32-P4. Include at least one
+  `AudioSynthWavetableV2` output on ESP32-S3 and ESP32-P4. Include at least one
   simple single-zone preset and one preset with velocity splits and layered
   zones in the tests.
 
