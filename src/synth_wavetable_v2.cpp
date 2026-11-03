@@ -695,6 +695,10 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         (loopEnd >> 14U) + ((loopEnd & 0x3FFFU) != 0U);
     const uint32_t loopBoundaryPhase =
         loopEndFrameCount != 0U ? (loopEndFrameCount - 1U) << 14U : 0U;
+    // Do not redirect interpolation to the loop start before playback enters
+    // the loop. Compute the effective threshold once, outside the sample loops.
+    const uint32_t loopInterpolationStart =
+        loopBoundaryPhase > loopStart ? loopBoundaryPhase : loopStart;
     // Fixed 18/14 phase extraction. These constants compile to immediate
     // shifts/masks; no per-voice phase-format field or runtime selection.
     const uint32_t maxSampleIndex = sample.SAMPLE_COUNT - 2U;
@@ -726,7 +730,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             const int16_t *sample0RightPtr = nullptr;
             const int16_t *sample1RightPtr = nullptr;
 
-            if (WrapLoop && __builtin_expect(phase >= loopBoundaryPhase, 0)) {
+            if (WrapLoop && __builtin_expect(phase >= loopInterpolationStart, 0)) {
                 if (phase >= loopEnd) {
                     const uint32_t overshoot = phase - loopEnd;
                     phase = loopStart + (overshoot % loopLength);
@@ -833,7 +837,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 const int16_t *sample0RightPtr = nullptr;
                 const int16_t *sample1RightPtr = nullptr;
 
-                if (WrapLoop && __builtin_expect(phase >= loopBoundaryPhase, 0)) {
+                if (WrapLoop && __builtin_expect(phase >= loopInterpolationStart, 0)) {
                     if (phase >= loopEnd) {
                         const uint32_t overshoot = phase - loopEnd;
                         phase = loopStart + (overshoot % loopLength);
@@ -898,7 +902,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         const int16_t *sample0RightPtr = nullptr;
         const int16_t *sample1RightPtr = nullptr;
 
-        if (WrapLoop && __builtin_expect(phase >= loopBoundaryPhase, 0)) {
+        if (WrapLoop && __builtin_expect(phase >= loopInterpolationStart, 0)) {
             if (phase >= loopEnd) {
                 const uint32_t overshoot = phase - loopEnd;
                 phase = loopStart + (overshoot % loopLength);
@@ -1918,6 +1922,10 @@ void AudioSynthWavetableV2::update() {
  * - Release, sustain fast path, and normal ADSR use the same boundary handling.
  *   One-shot and non-looping template paths compile without the loop-boundary
  *   test. The modulo operation remains confined to the exceptional wrap path.
+ * - Copilot review caught a same-PCM-frame edge case: loopBoundaryPhase can
+ *   precede loopStart. The effective interpolation threshold is now the
+ *   greater of both values, computed once before the sample loops and reused
+ *   by release, sustain, and ADSR without adding a per-sample comparison.
  * - This pointer-oriented revision targets the extra address-generation
  *   instructions observed in the first P4 disassembly. P4 rebuild, new assembly
  *   comparison, phase-sequence verification, hardware audio listening, and
