@@ -699,6 +699,12 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
     const uint32_t maxPhase = maximumPhase(sample);
     const uint32_t loopLength = sample.LOOP_PHASE_LENGTH;
     const uint32_t loopEnd = sample.LOOP_PHASE_END;
+    const uint32_t loopStart = loopEnd - loopLength;
+    const uint32_t loopStartIndex = loopStart >> 14U;
+    const uint32_t loopEndFrameCount =
+        (loopEnd >> 14U) + ((loopEnd & 0x3FFFU) != 0U);
+    const uint32_t loopBoundaryPhase =
+        loopEndFrameCount != 0U ? (loopEndFrameCount - 1U) << 14U : 0U;
     // Fixed 18/14 phase extraction. These constants compile to immediate
     // shifts/masks; no per-voice phase-format field or runtime selection.
     const uint32_t maxSampleIndex = sample.SAMPLE_COUNT - 2U;
@@ -712,13 +718,30 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
     // by beginReleaseLocked(), so this path needs only integer subtracts and one
     // sample multiply per frame; the generic ADSR state machine is bypassed.
     if (voice.envelopeState == STATE_RELEASE) {
-        for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            if (!voice.active) break;
-
+        uint16_t i = 0;
+        while (i < AUDIO_BLOCK_SAMPLES && voice.active) {
             if (StopAtEnd && phase >= maxPhase) {
                 voice.active = false;
                 voice.envelopeState = STATE_IDLE;
                 break;
+            }
+
+            uint32_t sampleIndex = phase >> 14U;
+            if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
+                sampleIndex = maxSampleIndex;
+            }
+            uint32_t nextSampleIndex = sampleIndex + 1U;
+
+            // Reuse the loop-control test to identify the final loop frame.
+            // If phase has crossed the exclusive end, wrap before rendering;
+            // otherwise use LOOP_START as the interpolation neighbor.
+            if (WrapLoop && phase >= loopBoundaryPhase) {
+                if (phase >= loopEnd) {
+                    const uint32_t overshoot = phase - loopEnd;
+                    phase = loopStart + (overshoot % loopLength);
+                    continue;
+                }
+                nextSampleIndex = loopStartIndex;
             }
 
             if (voice.releaseSamplesRemaining == 0) {
@@ -749,17 +772,6 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
 
             --voice.releaseSamplesRemaining;
 
-            uint32_t sampleIndex = phase >> 14U;
-            if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
-                sampleIndex = maxSampleIndex;
-            }
-
-            // LOOP_PHASE_END is exclusive. Interpolate the last loop frame
-            // against LOOP_START, not against audio stored after the loop.
-            const uint32_t nextSampleIndex =
-                WrapLoop && sampleIndex + 1U >= (loopEnd >> 14U)
-                    ? (loopEnd - loopLength) >> 14U
-                    : sampleIndex + 1U;
             const uint32_t interpolation = phase & 0x3FFFU;
             const int32_t sample0 = sample.SAMPLE[sampleIndex];
             const int32_t sample1 = sample.SAMPLE[nextSampleIndex];
@@ -782,20 +794,18 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             }
 
             phase += phaseIncrement;
-
-            if (WrapLoop && phase >= loopEnd) {
-                const uint32_t loopStart = loopEnd - loopLength;
-                const uint32_t overshoot = phase - loopEnd;
-                phase = loopStart + (overshoot % loopLength);
-            }
+            ++i;
+        }
+        if (WrapLoop && phase >= loopEnd) {
+            const uint32_t overshoot = phase - loopEnd;
+            phase = loopStart + (overshoot % loopLength);
         }
         voice.phase = phase;
         return;
     }
 
-    for (uint16_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-        if (!voice.active) break;
-
+    uint16_t i = 0;
+    while (i < AUDIO_BLOCK_SAMPLES && voice.active) {
         // A sustained envelope is constant until Note-Off. Render the rest of
         // this block without per-sample envelope bookkeeping or gain setup.
         if (voice.envelopeState == STATE_SUSTAIN) {
@@ -804,9 +814,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             const uint32_t effectiveAmplitude =
                 ((uint32_t)voice.amplitude * envelopeGainQ16) >> 16;
 
-            for (; i < AUDIO_BLOCK_SAMPLES; ++i) {
-                if (!voice.active) break;
-
+            while (i < AUDIO_BLOCK_SAMPLES && voice.active) {
                 if (StopAtEnd && phase >= maxPhase) {
                     voice.active = false;
                     voice.envelopeState = STATE_IDLE;
@@ -817,11 +825,16 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
                     sampleIndex = maxSampleIndex;
                 }
+                uint32_t nextSampleIndex = sampleIndex + 1U;
 
-                const uint32_t nextSampleIndex =
-                    WrapLoop && sampleIndex + 1U >= (loopEnd >> 14U)
-                        ? (loopEnd - loopLength) >> 14U
-                        : sampleIndex + 1U;
+                if (WrapLoop && phase >= loopBoundaryPhase) {
+                    if (phase >= loopEnd) {
+                        const uint32_t overshoot = phase - loopEnd;
+                        phase = loopStart + (overshoot % loopLength);
+                        continue;
+                    }
+                    nextSampleIndex = loopStartIndex;
+                }
                 const uint32_t interpolation = phase & 0x3FFFU;
                 const int32_t sample0 = sample.SAMPLE[sampleIndex];
                 const int32_t sample1 = sample.SAMPLE[nextSampleIndex];
@@ -843,12 +856,11 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 }
 
                 phase += phaseIncrement;
-
-                if (WrapLoop && phase >= loopEnd) {
-                    const uint32_t loopStart = loopEnd - loopLength;
-                    const uint32_t overshoot = phase - loopEnd;
-                    phase = loopStart + (overshoot % loopLength);
-                }
+                ++i;
+            }
+            if (WrapLoop && phase >= loopEnd) {
+                const overshoot = phase - loopEnd;
+                phase = loopStart + (overshoot % loopLength);
             }
             break;
         }
@@ -857,6 +869,21 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             voice.active = false;
             voice.envelopeState = STATE_IDLE;
             break;
+        }
+
+        uint32_t sampleIndex = phase >> 14U;
+        if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
+            sampleIndex = maxSampleIndex;
+        }
+        uint32_t nextSampleIndex = sampleIndex + 1U;
+
+        if (WrapLoop && phase >= loopBoundaryPhase) {
+            if (phase >= loopEnd) {
+                const uint32_t overshoot = phase - loopEnd;
+                phase = loopStart + (overshoot % loopLength);
+                continue;
+            }
+            nextSampleIndex = loopStartIndex;
         }
 
         // Advance the envelope at audio-sample rate. State transitions and
@@ -948,15 +975,6 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             }
         }
 
-        uint32_t sampleIndex = phase >> 14U;
-        if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
-            sampleIndex = maxSampleIndex;
-        }
-
-        const uint32_t nextSampleIndex =
-            WrapLoop && sampleIndex + 1U >= (loopEnd >> 14U)
-                ? (loopEnd - loopLength) >> 14U
-                : sampleIndex + 1U;
         const uint32_t interpolation = phase & 0x3FFFU;
         const int32_t sample0 = sample.SAMPLE[sampleIndex];
         const int32_t sample1 = sample.SAMPLE[nextSampleIndex];
@@ -989,12 +1007,11 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         }
 
         phase += phaseIncrement;
-
-        if (WrapLoop && phase >= loopEnd) {
-            const uint32_t loopStart = loopEnd - loopLength;
-            const uint32_t overshoot = phase - loopEnd;
-            phase = loopStart + (overshoot % loopLength);
-        }
+        ++i;
+    }
+    if (WrapLoop && phase >= loopEnd) {
+        const uint32_t overshoot = phase - loopEnd;
+        phase = loopStart + (overshoot % loopLength);
     }
     voice.phase = phase;
 }
@@ -1853,17 +1870,22 @@ void AudioSynthWavetableV2::update() {
  *   at a forward loop's final frame fetched the PCM frame at exclusive
  *   LOOP_PHASE_END. When the stored sample continued beyond the loop, that
  *   blended post-loop audio into every loop cycle.
- * - Added a wrapped interpolation-neighbor index in all three render paths:
- *   release, sustain fast path, and normal ADSR. The left and right stereo
- *   channels use the same neighbor index, wrapping to LOOP_START when the
- *   current frame is the last frame before the exclusive loop end.
- * - The change is compile-time specialized by WrapLoop. One-shot and
- *   non-looping paths retain their original neighbor index. No additional
- *   per-sample modulo, 64-bit arithmetic, or channel-dependent work is added
- *   to the mono path.
+ * - Loop-boundary detection was moved to the beginning of each rendered
+ *   sample and now reuses the existing per-sample loop-control comparison.
+ *   The normal path uses the direct next-frame index (sampleIndex + 1); only
+ *   when phase enters the final loop frame does the boundary path select
+ *   LOOP_START as the interpolation neighbor. Phase wrapping is performed
+ *   before rendering the next sample, with a final normalization at block end.
+ * - Release, sustain fast path, and normal ADSR all use this structure.
+ *   Both stereo channels share the selected neighbor index. One-shot and
+ *   non-looping template paths compile without the loop-boundary branch.
+ * - No additional per-sample neighbor-selection comparison, modulo or
+ *   64-bit arithmetic is introduced. The existing loop-control branch remains
+ *   per sample for looped voices; its threshold is moved to the start of the
+ *   sample iteration so the last loop frame can be handled separately.
  * - Source review confirms all six sample1 loads (left/right across the three
- *   render paths) now use the selected nextSampleIndex. Build, hardware audio
- *   listening, and cycle-level performance comparison remain pending.
+ *   render paths) use nextSampleIndex. Build, hardware audio listening, and
+ *   cycle-level performance comparison remain pending.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
