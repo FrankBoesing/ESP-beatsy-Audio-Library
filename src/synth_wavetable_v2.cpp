@@ -1683,6 +1683,33 @@ void AudioSynthWavetableV2::update() {
  *   PSRAM sample-fetch performance or bit-identical PIE output versus scalar
  *   reference PCM. Those checks remain open.
  *
+ * 21. REAL-SF2 FLASH / PSRAM BENCHMARK — IMPLEMENTED, HARDWARE RUN PENDING
+ * -------------------------------------------------------------------------------
+ * - The WavetableV2 example now uses Airfont 340, Detuned EP2 (Bank 8,
+ *   Program 5) instead of short synthetic test waveforms.
+ * - The generated preset contains 50 sample descriptors/zones that reference
+ *   14 unique mono PCM arrays. The arrays contain 14,426 stored frames in
+ *   total, including interpolation guard frames, or 28,852 bytes.
+ * - Notes MIDI 48..79 at velocity 112 resolve to exactly four matching zones
+ *   per note according to the generated zone map. The runtime benchmark also
+ *   prints the observed layer distribution so a data/zone mismatch is visible.
+ * - Each cycle sweeps 1/2/4/8/16/32 notes (up to the configured maximum),
+ *   reaching 128 simultaneous sample voices at 32 notes.
+ * - The same instrument is measured in two memory modes:
+ *   FLASH reads the generated PROGMEM PCM arrays directly;
+ *   PSRAM copies each distinct PCM pointer once to MALLOC_CAP_SPIRAM memory.
+ * - The PSRAM mode rebuilds sample, zone and instrument descriptors while
+ *   keeping those descriptors in internal RAM. Only PCM data is placed in
+ *   PSRAM, so the comparison focuses on the sample-data access path. Copies
+ *   include guard frames and are allocated once during setup, never in update().
+ * - The run order alternates FLASH/PSRAM and PSRAM/FLASH on successive cycles.
+ *   BENCH and NOTE_OFF CSV records include the memory_mode field.
+ * - If PSRAM allocation is unavailable, the example reports the failure and
+ *   continues with the FLASH benchmark. No performance result is implied by
+ *   this implementation entry; actual P4 FLASH-vs-PSRAM measurements remain
+ *   pending. Cache state and hardware/toolchain must be kept consistent when
+ *   comparing runs.
+ *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
  * State whether the optimization is implemented, experimentally measured,
