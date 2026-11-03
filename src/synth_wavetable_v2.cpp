@@ -721,7 +721,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
     // by beginReleaseLocked(), so this path needs only integer subtracts and one
     // sample multiply per frame; the generic ADSR state machine is bypassed.
     if (voice.envelopeState == STATE_RELEASE) {
-        uint16_t i = 0;
+    uint32_t i = 0;
         while (i < AUDIO_BLOCK_SAMPLES && voice.active) {
             if (StopAtEnd && phase >= maxPhase) {
                 voice.active = false;
@@ -792,19 +792,18 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             const int32_t sample0 = *sample0Ptr;
             const int32_t sample1 = *sample1Ptr;
 
-            const int32_t weight0 = (int32_t)(0x4000U - interpolation);
-            const int32_t weightedSample =
-                sample0 * weight0 + sample1 * (int32_t)interpolation;
-            const int32_t interpolated = weightedSample >> 14U;
+            const int32_t sampleDelta = sample1 - sample0;
+            const int32_t interpolated =
+                sample0 + ((sampleDelta * (int32_t)interpolation) >> 14U);
 
             const uint32_t effectiveAmplitude = voice.releaseGain;
             mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
             if (Stereo) {
                 const int32_t sample0Right = *sample0RightPtr;
                 const int32_t sample1Right = *sample1RightPtr;
-                const int32_t weightedSampleRight =
-                    sample0Right * weight0 + sample1Right * (int32_t)interpolation;
-                const int32_t interpolatedRight = weightedSampleRight >> 14U;
+                const int32_t sampleDeltaRight = sample1Right - sample0Right;
+                const int32_t interpolatedRight =
+                    sample0Right + ((sampleDeltaRight * (int32_t)interpolation) >> 14U);
                 mixRight[i] +=
                     ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
             }
@@ -820,7 +819,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         return;
     }
 
-    uint16_t i = 0;
+    uint32_t i = 0;
     while (i < AUDIO_BLOCK_SAMPLES && voice.active) {
         // A sustained envelope is constant until Note-Off. Render the rest of
         // this block without per-sample envelope bookkeeping or gain setup.
@@ -871,18 +870,17 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 const int32_t sample0 = *sample0Ptr;
                 const int32_t sample1 = *sample1Ptr;
 
-                const int32_t weight0 = (int32_t)(0x4000U - interpolation);
-                const int32_t weightedSample =
-                    sample0 * weight0 + sample1 * (int32_t)interpolation;
-                const int32_t interpolated = weightedSample >> 14U;
+                const int32_t sampleDelta = sample1 - sample0;
+                const int32_t interpolated =
+                    sample0 + ((sampleDelta * (int32_t)interpolation) >> 14U);
 
                 mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
                 if (Stereo) {
                     const int32_t sample0Right = *sample0RightPtr;
                     const int32_t sample1Right = *sample1RightPtr;
-                    const int32_t weightedSampleRight =
-                        sample0Right * weight0 + sample1Right * (int32_t)interpolation;
-                    const int32_t interpolatedRight = weightedSampleRight >> 14U;
+                    const int32_t sampleDeltaRight = sample1Right - sample0Right;
+                    const int32_t interpolatedRight =
+                        sample0Right + ((sampleDeltaRight * (int32_t)interpolation) >> 14U);
                     mixRight[i] +=
                         ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
                 }
@@ -1027,10 +1025,9 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         const int32_t sample0 = *sample0Ptr;
         const int32_t sample1 = *sample1Ptr;
 
-        const int32_t weight0 = (int32_t)(0x4000U - interpolation);
-        const int32_t weightedSample =
-            sample0 * weight0 + sample1 * (int32_t)interpolation;
-        const int32_t interpolated = weightedSample >> 14U;
+        const int32_t sampleDelta = sample1 - sample0;
+        const int32_t interpolated =
+            sample0 + ((sampleDelta * (int32_t)interpolation) >> 14U);
 
         // Fold the Q31 envelope into a Q16 voice amplitude. The resulting
         // 16-bit gain has at most one Q16 gain-step of quantization and lets
@@ -1046,9 +1043,9 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         if (Stereo) {
             const int32_t sample0Right = *sample0RightPtr;
             const int32_t sample1Right = *sample1RightPtr;
-            const int32_t weightedSampleRight =
-                sample0Right * weight0 + sample1Right * (int32_t)interpolation;
-            const int32_t interpolatedRight = weightedSampleRight >> 14U;
+            const int32_t sampleDeltaRight = sample1Right - sample0Right;
+            const int32_t interpolatedRight =
+                sample0Right + ((sampleDeltaRight * (int32_t)interpolation) >> 14U);
             const int32_t valueRight =
                 ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
             mixRight[i] += valueRight;
@@ -1936,6 +1933,25 @@ void AudioSynthWavetableV2::update() {
  *   instructions observed in the first P4 disassembly. P4 rebuild, new assembly
  *   comparison, phase-sequence verification, hardware audio listening, and
  *   cycle-level performance measurements remain pending.
+ *
+ *
+ * 26. Q14 DELTA INTERPOLATION / 32-BIT SAMPLE LOOP INDEX — IMPLEMENTED / PENDING BENCHMARK — 2026-11-03
+ * ---------------------------------------------------------------------------------------
+ * - Replaced the weighted-sum Q14 interpolation in the release, sustain and
+ *   ADSR rendering paths with the algebraically equivalent delta form:
+ *   sample0 + (((sample1 - sample0) * fraction) >> 14).
+ * - Removed the complementary weight calculation. This reduces the left-channel
+ *   interpolation from two integer multiplications to one; stereo applies the
+ *   same transformation independently to the right channel.
+ * - For signed 16-bit PCM, |sample1 - sample0| <= 65535 and fraction <= 16383.
+ *   The largest product magnitude is 1,073,659,905, which fits signed int32_t.
+ *   The result is algebraically identical under arithmetic right shift; a
+ *   bit-exact test and P4 build remain part of validation.
+ * - Changed the renderVoicePath sample-loop index from uint16_t to uint32_t.
+ *   This avoids explicit 16-bit narrowing in source; the generated P4 code must
+ *   be inspected to confirm whether it reduces conversion instructions.
+ * - P4 assembly comparison, hardware audio test and repeated FLASH/PSRAM cycle
+ *   benchmark are pending. Keep or revert each change based on measured results.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
