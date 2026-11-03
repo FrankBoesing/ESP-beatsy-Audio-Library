@@ -859,7 +859,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 ++i;
             }
             if (WrapLoop && phase >= loopEnd) {
-                const overshoot = phase - loopEnd;
+                const uint32_t overshoot = phase - loopEnd;
                 phase = loopStart + (overshoot % loopLength);
             }
             break;
