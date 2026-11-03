@@ -754,9 +754,15 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 sampleIndex = maxSampleIndex;
             }
 
+            // LOOP_PHASE_END is exclusive. Interpolate the last loop frame
+            // against LOOP_START, not against audio stored after the loop.
+            const uint32_t nextSampleIndex =
+                WrapLoop && sampleIndex + 1U >= (loopEnd >> 14U)
+                    ? (loopEnd - loopLength) >> 14U
+                    : sampleIndex + 1U;
             const uint32_t interpolation = phase & 0x3FFFU;
             const int32_t sample0 = sample.SAMPLE[sampleIndex];
-            const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+            const int32_t sample1 = sample.SAMPLE[nextSampleIndex];
 
             const int32_t weight0 = (int32_t)(0x4000U - interpolation);
             const int32_t weightedSample =
@@ -812,9 +818,13 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                     sampleIndex = maxSampleIndex;
                 }
 
+                const uint32_t nextSampleIndex =
+                    WrapLoop && sampleIndex + 1U >= (loopEnd >> 14U)
+                        ? (loopEnd - loopLength) >> 14U
+                        : sampleIndex + 1U;
                 const uint32_t interpolation = phase & 0x3FFFU;
                 const int32_t sample0 = sample.SAMPLE[sampleIndex];
-                const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+                const int32_t sample1 = sample.SAMPLE[nextSampleIndex];
 
                 const int32_t weight0 = (int32_t)(0x4000U - interpolation);
                 const int32_t weightedSample =
@@ -943,9 +953,13 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             sampleIndex = maxSampleIndex;
         }
 
+        const uint32_t nextSampleIndex =
+            WrapLoop && sampleIndex + 1U >= (loopEnd >> 14U)
+                ? (loopEnd - loopLength) >> 14U
+                : sampleIndex + 1U;
         const uint32_t interpolation = phase & 0x3FFFU;
         const int32_t sample0 = sample.SAMPLE[sampleIndex];
-        const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
+        const int32_t sample1 = sample.SAMPLE[nextSampleIndex];
 
         const int32_t weight0 = (int32_t)(0x4000U - interpolation);
         const int32_t weightedSample =
