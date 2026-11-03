@@ -6,7 +6,8 @@
 // Linked stereo sample pairs are preserved as separate left/right PCM arrays.
 // Requires AudioSynthWavetableV2. Legacy AudioSynthWavetable data is not modified.
 // PCM arrays contain one interpolation guard frame per channel.
-// All SF2 sample rates are retained; V2 adapts playback to the runtime audio sample rate.
+// Phase format is fixed at 18/14; phase coefficients and endpoints use 14 fractional bits.
+ // All SF2 sample rates are retained; V2 adapts playback to the runtime audio sample rate.
 // SF2 filters, arbitrary modulators, pan/placement, chorus/reverb sends and reserved sample modes are not rendered.
 // WARNING: 5983 SF2 modulator record(s) were ignored.
 // WARNING: unsupported SF2 generators are present; see the tool's preset report.
