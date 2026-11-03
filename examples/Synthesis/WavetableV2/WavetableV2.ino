@@ -207,7 +207,6 @@ static bool buildPsramInstrument() {
         new (&copiedSamples[i]) SampleData(
             left,
             source.SAMPLE_COUNT,
-            source.INDEX_BITS,
             source.PER_HERTZ_PHASE_INCREMENT,
             source.MAX_PHASE,
             source.LOOP_MODE,
