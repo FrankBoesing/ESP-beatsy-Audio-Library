@@ -1418,6 +1418,10 @@
     var analysis = analyzePresetVoices(preset);
     var problems = [];
 
+    if (!preset.zones.length) {
+      problems.push("the preset contains no resolved playable sample zones");
+    }
+
     if (analysis.maxLayers > layerLimit) {
       var overflow = null;
       for (var note = 0; note < 128 && !overflow; note++) {
