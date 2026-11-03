@@ -214,6 +214,12 @@ class AudioStream {
     // the common entry point for timer and future I2S/DMA clock sources.
     static void update_all(void);
     static bool IRAM_ATTR update_all_from_isr(void);
+    // Pause/resume AudioTask graph traversal. The normal configuration runs
+    // AudioTask and the application task on AUDIO_PROCESSING_CORE, with
+    // AudioTask at higher priority. The lock-free AudioTask pool path relies
+    // on this single-core ownership model. Application code accessing shared
+    // audio state from another core or a higher-priority task must pause
+    // updates for the complete operation and coordinate other users itself.
     static void disableUpdates(void);
     static void enableUpdates(void);
 
