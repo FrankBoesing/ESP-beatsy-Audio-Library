@@ -30,13 +30,14 @@ jobs:
           path: candidate
 
       - name: Install PlatformIO
-        run: |
-          python -m pip install --upgrade pip platformio
+        run: python -m pip install --upgrade pip platformio
 
-      - name: Enable temporary assembler output
+      - name: Enable temporary assembler output and bypass link-only pre-script
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
+
           for name in ("baseline", "candidate"):
               path = Path(name) / "platformio.ini"
               text = path.read_text(encoding="utf-8")
@@ -45,6 +46,17 @@ jobs:
               if end < 0:
                   end = len(text)
               block = text[start:end]
+
+              # The SRAM linker-template patch is only needed at final link.
+              # This job compiles the renderer object only for disassembly.
+              block, count = re.subn(
+                  r"(?m)^extra_scripts\\s*=\\s*pre:scripts/patch_esp32p4_sram_size\\.py\\s*$",
+                  "; extra_scripts bypassed for object-only disassembly",
+                  block,
+              )
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one P4 SRAM pre-script in {path}, got {count}")
+
               needle = "    -march=rv32imafc_zbb_zicsr_zifencei_xesploop_xespv"
               if needle not in block:
                   raise SystemExit(f"Expected ESP32-P4 march flag not found in {path}")
@@ -56,11 +68,15 @@ jobs:
               path.write_text(text[:start] + block + text[end:], encoding="utf-8")
           PY
 
-      - name: Build baseline and candidate
+      - name: Compile only the Wavetable V2 translation unit
         run: |
           set -euxo pipefail
-          (cd baseline && pio run -e esp32-p4)
-          (cd candidate && pio run -e esp32-p4)
+          for variant in baseline candidate; do
+            (
+              cd "$variant"
+              pio run -e esp32-p4 -t compiledb
+            )
+          done
 
       - name: Extract P4 renderVoicePath disassembly
         run: |
@@ -72,6 +88,10 @@ jobs:
           test -x "$NM"
 
           for variant in baseline candidate; do
+            (
+              cd "$variant"
+              pio run -e esp32-p4
+            )
             OBJ="$(find "$variant/.pio/build/esp32-p4" -type f -name 'synth_wavetable_v2.cpp.o' | head -n 1)"
             test -n "$OBJ"
             "$OBJDUMP" -dC -S --no-show-raw-insn "$OBJ" > "asm-artifacts/$variant.disasm"
@@ -118,18 +138,18 @@ jobs:
                   header = section[0]
                   instructions = []
                   for line in section[1:]:
-                      match = re.match(r"\s*[0-9a-fA-F]+:\s+(?:[0-9a-fA-F ]+\s+)?([.a-zA-Z][.a-zA-Z0-9_]*)\b", line)
+                      match = re.match(r"\\s*[0-9a-fA-F]+:\\s+(?:[0-9a-fA-F ]+\\s+)?([.a-zA-Z][.a-zA-Z0-9_]*)\\b", line)
                       if match:
                           instructions.append(match.group(1).lower())
                   branches = [x for x in instructions if x in branch_mnemonics or x.startswith("b.")]
                   loops = [x for x in instructions if "loop" in x or x.startswith("lp.")]
                   report.append(
-                      f"{header}\n"
+                      f"{header}\\n"
                       f"  instructions={len(instructions)} "
-                      f"branches/jumps={len(branches)} loop_ops={len(loops)}\n"
+                      f"branches/jumps={len(branches)} loop_ops={len(loops)}\\n"
                       f"  branch mnemonics={','.join(branches)}"
                   )
-          Path("asm-artifacts/summary.txt").write_text("\n\n".join(report) + "\n")
+          Path("asm-artifacts/summary.txt").write_text("\\n\\n".join(report) + "\\n")
           PY
 
       - name: Upload disassembly artifacts
