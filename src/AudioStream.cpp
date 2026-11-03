@@ -246,10 +246,9 @@ bool AudioStream::setSampleRate(float rate) {
 
 OSPEED
 float AudioStream::sampleRate(void) {
-    portENTER_CRITICAL(&audio_mux);
-    const float rate = audio_sample_rate;
-    portEXIT_CRITICAL(&audio_mux);
-    return rate;
+    // setSampleRate() is serialized with AudioTask by audio_update_mutex.
+    // Reading the configured rate therefore needs no critical section.
+    return audio_sample_rate;
 }
 
 OSIZE
@@ -581,21 +580,15 @@ void AudioStream::process_all_now(void) {
         return;
     }
 
-    // The recursive update mutex serializes the realtime graph traversal with
-    // all graph modifications performed by connect(), disconnect(), stream
-    // construction and stream destruction. No graph lock is needed inside the
-    // realtime loop itself.
-    portENTER_CRITICAL(&audio_mux);
-
+    // The recursive update mutex serializes graph traversal with all graph
+    // modifications and scheduler stop operations. No audio_mux is needed to
+    // inspect update_scheduled or first_update while this mutex is held.
     if (!update_scheduled) {
-        portEXIT_CRITICAL(&audio_mux);
         xSemaphoreGiveRecursive(audio_update_mutex);
         return;
     }
 
     AudioStream *stream = first_update;
-
-    portEXIT_CRITICAL(&audio_mux);
 
     // -------------------------------------------------------------------------
     // Realtime audio processing
