@@ -164,8 +164,7 @@ bool AudioSynthWavetableV2::setInstrument(const instrument_data &newInstrument) 
 
         const sample_data &sample = *zone.SAMPLE;
         if (sample.SAMPLE == nullptr || sample.SAMPLE_COUNT < 2 ||
-            (sample.INDEX_BITS != 16 && sample.INDEX_BITS != 18) ||
-            sample.SAMPLE_COUNT > (1UL << sample.INDEX_BITS) ||
+            sample.SAMPLE_COUNT > MAX_SAMPLE_COUNT ||
             !isfinite(sample.PER_HERTZ_PHASE_INCREMENT) ||
             sample.PER_HERTZ_PHASE_INCREMENT <= 0.0f) {
             return false;
@@ -178,7 +177,7 @@ bool AudioSynthWavetableV2::setInstrument(const instrument_data &newInstrument) 
         }
 
         const uint64_t phaseCapacity =
-            (uint64_t)(sample.SAMPLE_COUNT - 1U) << (32U - sample.INDEX_BITS);
+            (uint64_t)(sample.SAMPLE_COUNT - 1U) << SAMPLE_FRACTION_BITS;
         if (sample.MAX_PHASE != 0 && (uint64_t)sample.MAX_PHASE > phaseCapacity) {
             return false;
         }
@@ -228,7 +227,7 @@ uint32_t AudioSynthWavetableV2::maximumPhase(const sample_data &sample) const {
     }
 
     const uint64_t validFrames = sample.SAMPLE_COUNT - 1U;
-    const uint64_t derived = validFrames << (32U - sample.INDEX_BITS);
+    const uint64_t derived = validFrames << SAMPLE_FRACTION_BITS;
     return derived >= (uint64_t)UINT32_MAX ? UINT32_MAX : (uint32_t)derived;
 }
 
@@ -700,11 +699,8 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
     const uint32_t maxPhase = maximumPhase(sample);
     const uint32_t loopLength = sample.LOOP_PHASE_LENGTH;
     const uint32_t loopEnd = sample.LOOP_PHASE_END;
-    // The phase uses INDEX_BITS for the sample address and the remaining
-    // bits for the fractional position (16/16 legacy V2 or 18/14 current V2).
-    const uint32_t fractionalBits = 32U - sample.INDEX_BITS;
-    const uint32_t interpolationScale = 1UL << fractionalBits;
-    const uint32_t interpolationMask = interpolationScale - 1U;
+    // Fixed 18/14 phase extraction. These constants compile to immediate
+    // shifts/masks; no per-voice phase-format field or runtime selection.
     const uint32_t maxSampleIndex = sample.SAMPLE_COUNT - 2U;
 
     // Keep the phase accumulator in a register throughout this block. Only
@@ -753,19 +749,19 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
 
             --voice.releaseSamplesRemaining;
 
-            uint32_t sampleIndex = phase >> fractionalBits;
+            uint32_t sampleIndex = phase >> 14U;
             if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
                 sampleIndex = maxSampleIndex;
             }
 
-            const uint32_t interpolation = phase & interpolationMask;
+            const uint32_t interpolation = phase & 0x3FFFU;
             const int32_t sample0 = sample.SAMPLE[sampleIndex];
             const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
 
-            const int32_t weight0 = (int32_t)(interpolationScale - interpolation);
+            const int32_t weight0 = (int32_t)(0x4000U - interpolation);
             const int32_t weightedSample =
                 sample0 * weight0 + sample1 * (int32_t)interpolation;
-            const int32_t interpolated = weightedSample >> fractionalBits;
+            const int32_t interpolated = weightedSample >> 14U;
 
             const uint32_t effectiveAmplitude = voice.releaseGain;
             mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
@@ -774,7 +770,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
                 const int32_t weightedSampleRight =
                     sample0Right * weight0 + sample1Right * (int32_t)interpolation;
-                const int32_t interpolatedRight = weightedSampleRight >> fractionalBits;
+                const int32_t interpolatedRight = weightedSampleRight >> 14U;
                 mixRight[i] +=
                     ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
             }
@@ -811,19 +807,19 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                     break;
                 }
 
-                uint32_t sampleIndex = phase >> fractionalBits;
+                uint32_t sampleIndex = phase >> 14U;
                 if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
                     sampleIndex = maxSampleIndex;
                 }
 
-                const uint32_t interpolation = phase & interpolationMask;
+                const uint32_t interpolation = phase & 0x3FFFU;
                 const int32_t sample0 = sample.SAMPLE[sampleIndex];
                 const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
 
-                const int32_t weight0 = (int32_t)(interpolationScale - interpolation);
+                const int32_t weight0 = (int32_t)(0x4000U - interpolation);
                 const int32_t weightedSample =
                     sample0 * weight0 + sample1 * (int32_t)interpolation;
-                const int32_t interpolated = weightedSample >> fractionalBits;
+                const int32_t interpolated = weightedSample >> 14U;
 
                 mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
                 if (Stereo) {
@@ -831,7 +827,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                     const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
                     const int32_t weightedSampleRight =
                         sample0Right * weight0 + sample1Right * (int32_t)interpolation;
-                    const int32_t interpolatedRight = weightedSampleRight >> fractionalBits;
+                    const int32_t interpolatedRight = weightedSampleRight >> 14U;
                     mixRight[i] +=
                         ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
                 }
@@ -942,19 +938,19 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             }
         }
 
-        uint32_t sampleIndex = phase >> fractionalBits;
+        uint32_t sampleIndex = phase >> 14U;
         if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
             sampleIndex = maxSampleIndex;
         }
 
-        const uint32_t interpolation = phase & interpolationMask;
+        const uint32_t interpolation = phase & 0x3FFFU;
         const int32_t sample0 = sample.SAMPLE[sampleIndex];
         const int32_t sample1 = sample.SAMPLE[sampleIndex + 1U];
 
-        const int32_t weight0 = (int32_t)(interpolationScale - interpolation);
+        const int32_t weight0 = (int32_t)(0x4000U - interpolation);
         const int32_t weightedSample =
             sample0 * weight0 + sample1 * (int32_t)interpolation;
-        const int32_t interpolated = weightedSample >> fractionalBits;
+        const int32_t interpolated = weightedSample >> 14U;
 
         // Fold the Q31 envelope into a Q16 voice amplitude. The resulting
         // 16-bit gain has at most one Q16 gain-step of quantization and lets
@@ -972,7 +968,7 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             const int32_t sample1Right = sample.SAMPLE_RIGHT[sampleIndex + 1U];
             const int32_t weightedSampleRight =
                 sample0Right * weight0 + sample1Right * (int32_t)interpolation;
-            const int32_t interpolatedRight = weightedSampleRight >> fractionalBits;
+            const int32_t interpolatedRight = weightedSampleRight >> 14U;
             const int32_t valueRight =
                 ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
             mixRight[i] += valueRight;
@@ -1756,30 +1752,33 @@ void AudioSynthWavetableV2::update() {
  *   82.9% (release), versus 37.4% and 57.1% for the earlier short-sample
  *   mono test. The 2902 us block deadline was still met, with less headroom.
  *
- * 23. V2 SAMPLE PHASE FORMAT — 18/14
- * ------------------------------------
- * - The V2 renderer accepts both INDEX_BITS=16 (existing generated
- *   descriptors) and INDEX_BITS=18. The current SF2 V2 exporter emits 18.
- * - With INDEX_BITS=18, the 32-bit phase consists of an 18-bit sample index
- *   and a 14-bit fractional position. The maximum usable sample length is
- *   262143 frames, plus one stored interpolation guard frame (262144 total).
- * - The renderer derives the fractional width from INDEX_BITS. It extracts
- *   the sample index with phase >> fractionalBits and performs linear
- *   interpolation directly with Q14 weights for 18/14 or Q16 weights for
- *   legacy 16/16 descriptors. No per-sample 64-bit arithmetic is introduced.
- * - Existing 16/16 V2 descriptors remain accepted. The V1 AudioSynthWavetable
- *   engine and V1 exporter remain unchanged at 16 index bits / 65535 frames.
- * - User-provided ESP32-P4 standalone assembly benchmark: variable and
- *   immediate right shifts measured about 1.003 cycles per shift for all
+ * 23. V2 SAMPLE PHASE FORMAT — FIXED 18/14
+ * --------------------------------------------
+ * - AudioSynthWavetableV2 now has one phase format only: 18 sample-index bits
+ *   and 14 fractional bits in the 32-bit phase accumulator.
+ * - The per-sample INDEX_BITS field and its constructor argument were removed.
+ *   There is no runtime format branch or per-voice format metadata.
+ * - The hot path uses fixed phase >> 14, phase & 0x3FFF, Q14 interpolation
+ *   weights (0x4000 - fraction), and a fixed >> 14 interpolation result.
+ *   These are compile-time constants; no dynamic shift, format selection,
+ *   extra 64-bit arithmetic, or format-dependent helper call is introduced.
+ * - Maximum usable sample length is 262143 frames plus one interpolation
+ *   guard frame (262144 stored frames). MAX_PHASE and loop positions use
+ *   14 fractional phase bits.
+ * - The SF2 V2 exporter now generates only this format and scales the
+ *   per-Hertz phase coefficient, maximum phase and loop positions by 2^14.
+ *   The bundled Detuned EP2 example data was converted to the same scale.
+ * - V1 AudioSynthWavetable and its exporter remain on their original
+ *   independent 16-index-bit format and 65535-frame limit.
+ * - User-provided ESP32-P4 standalone assembly benchmarks: variable and
+ *   immediate right shifts measured about 1.003 cycles per shift across
  *   tested shift amounts. Linear interpolation arithmetic measured
- *   8.024 cycles/interpolation for both 16/16 and 18/14, in dependent and
- *   independent tests. These tests exclude PCM loads, sample addressing,
- *   phase advance, gain and the rest of the renderer; they are not a complete
- *   AudioSynthWavetableV2 hardware benchmark.
- * - No audible comparison was requested or performed. The reduced
- *   interpolation/phase resolution is an intentional format trade-off;
- *   practical audio impact is expected to be negligible, but is not
- *   established by the arithmetic benchmark.
+ *   8.024 cycles/interpolation for both Q16 and Q14 forms, in dependent
+ *   and independent tests. PCM loads, address generation, phase advance,
+ *   gain and the complete renderer were excluded from that comparison.
+ * - No audible comparison was requested or performed. Lower fractional
+ *   resolution is an intentional phase-format trade-off, not an established
+ *   bit-identical output change.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
