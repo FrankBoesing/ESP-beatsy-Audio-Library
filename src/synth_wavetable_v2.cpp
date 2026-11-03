@@ -700,7 +700,10 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
     const uint32_t loopLength = sample.LOOP_PHASE_LENGTH;
     const uint32_t loopEnd = sample.LOOP_PHASE_END;
     const uint32_t loopStart = loopEnd - loopLength;
-    const uint32_t loopStartIndex = loopStart >> 14U;
+    const int16_t *const loopStartSample = sample.SAMPLE + (loopStart >> 14U);
+    const int16_t *const loopStartSampleRight = Stereo
+        ? sample.SAMPLE_RIGHT + (loopStart >> 14U)
+        : nullptr;
     const uint32_t loopEndFrameCount =
         (loopEnd >> 14U) + ((loopEnd & 0x3FFFU) != 0U);
     const uint32_t loopBoundaryPhase =
@@ -713,6 +716,8 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
     // store it back once, rather than loading/storing it for every sample.
     uint32_t phase = voice.phase;
     const uint32_t phaseIncrement = voice.phaseIncrement;
+    int32_t *outLeft = mixLeft;
+    int32_t *outRight = mixRight;
 
     // Release has a fixed linear slope. Its amplitude-scaled ramp was prepared
     // by beginReleaseLocked(), so this path needs only integer subtracts and one
@@ -730,19 +735,23 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
                 sampleIndex = maxSampleIndex;
             }
-            uint32_t nextSampleIndex = sampleIndex + 1U;
 
-            // Reuse the loop-control test to identify the final loop frame.
-            // If phase has crossed the exclusive end, wrap before rendering;
-            // otherwise use LOOP_START as the interpolation neighbor.
-            if (WrapLoop && phase >= loopBoundaryPhase) {
-                if (phase >= loopEnd) {
-                    const uint32_t overshoot = phase - loopEnd;
-                    phase = loopStart + (overshoot % loopLength);
-                    continue;
-                }
-                nextSampleIndex = loopStartIndex;
+            const bool loopBoundary = WrapLoop && phase >= loopBoundaryPhase;
+            if (loopBoundary && phase >= loopEnd) {
+                const uint32_t overshoot = phase - loopEnd;
+                phase = loopStart + (overshoot % loopLength);
+                continue;
             }
+
+            const int16_t *sample0Ptr = sample.SAMPLE + sampleIndex;
+            const int16_t *sample1Ptr =
+                loopBoundary ? loopStartSample : sample0Ptr + 1U;
+            const int16_t *sample0RightPtr =
+                Stereo ? sample.SAMPLE_RIGHT + sampleIndex : nullptr;
+            const int16_t *sample1RightPtr =
+                Stereo
+                    ? (loopBoundary ? loopStartSampleRight : sample0RightPtr + 1U)
+                    : nullptr;
 
             if (voice.releaseSamplesRemaining == 0) {
                 voice.active = false;
@@ -773,8 +782,8 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             --voice.releaseSamplesRemaining;
 
             const uint32_t interpolation = phase & 0x3FFFU;
-            const int32_t sample0 = sample.SAMPLE[sampleIndex];
-            const int32_t sample1 = sample.SAMPLE[nextSampleIndex];
+            const int32_t sample0 = *sample0Ptr;
+            const int32_t sample1 = *sample1Ptr;
 
             const int32_t weight0 = (int32_t)(0x4000U - interpolation);
             const int32_t weightedSample =
@@ -782,17 +791,19 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
             const int32_t interpolated = weightedSample >> 14U;
 
             const uint32_t effectiveAmplitude = voice.releaseGain;
-            mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
+            *outLeft += ((int32_t)effectiveAmplitude * interpolated) >> 16;
             if (Stereo) {
-                const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
-                const int32_t sample1Right = sample.SAMPLE_RIGHT[nextSampleIndex];
+                const int32_t sample0Right = *sample0RightPtr;
+                const int32_t sample1Right = *sample1RightPtr;
                 const int32_t weightedSampleRight =
                     sample0Right * weight0 + sample1Right * (int32_t)interpolation;
                 const int32_t interpolatedRight = weightedSampleRight >> 14U;
-                mixRight[i] +=
+                *outRight +=
                     ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
             }
 
+            ++outLeft;
+            if (Stereo) ++outRight;
             phase += phaseIncrement;
             ++i;
         }
@@ -825,36 +836,45 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
                 if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
                     sampleIndex = maxSampleIndex;
                 }
-                uint32_t nextSampleIndex = sampleIndex + 1U;
 
-                if (WrapLoop && phase >= loopBoundaryPhase) {
-                    if (phase >= loopEnd) {
-                        const uint32_t overshoot = phase - loopEnd;
-                        phase = loopStart + (overshoot % loopLength);
-                        continue;
-                    }
-                    nextSampleIndex = loopStartIndex;
+                const bool loopBoundary = WrapLoop && phase >= loopBoundaryPhase;
+                if (loopBoundary && phase >= loopEnd) {
+                    const uint32_t overshoot = phase - loopEnd;
+                    phase = loopStart + (overshoot % loopLength);
+                    continue;
                 }
+
+                const int16_t *sample0Ptr = sample.SAMPLE + sampleIndex;
+                const int16_t *sample1Ptr =
+                    loopBoundary ? loopStartSample : sample0Ptr + 1U;
+                const int16_t *sample0RightPtr =
+                    Stereo ? sample.SAMPLE_RIGHT + sampleIndex : nullptr;
+                const int16_t *sample1RightPtr =
+                    Stereo
+                        ? (loopBoundary ? loopStartSampleRight : sample0RightPtr + 1U)
+                        : nullptr;
                 const uint32_t interpolation = phase & 0x3FFFU;
-                const int32_t sample0 = sample.SAMPLE[sampleIndex];
-                const int32_t sample1 = sample.SAMPLE[nextSampleIndex];
+                const int32_t sample0 = *sample0Ptr;
+                const int32_t sample1 = *sample1Ptr;
 
                 const int32_t weight0 = (int32_t)(0x4000U - interpolation);
                 const int32_t weightedSample =
                     sample0 * weight0 + sample1 * (int32_t)interpolation;
                 const int32_t interpolated = weightedSample >> 14U;
 
-                mixLeft[i] += ((int32_t)effectiveAmplitude * interpolated) >> 16;
+                *outLeft += ((int32_t)effectiveAmplitude * interpolated) >> 16;
                 if (Stereo) {
-                    const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
-                    const int32_t sample1Right = sample.SAMPLE_RIGHT[nextSampleIndex];
+                    const int32_t sample0Right = *sample0RightPtr;
+                    const int32_t sample1Right = *sample1RightPtr;
                     const int32_t weightedSampleRight =
                         sample0Right * weight0 + sample1Right * (int32_t)interpolation;
                     const int32_t interpolatedRight = weightedSampleRight >> 14U;
-                    mixRight[i] +=
+                    *outRight +=
                         ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
                 }
 
+                ++outLeft;
+                if (Stereo) ++outRight;
                 phase += phaseIncrement;
                 ++i;
             }
@@ -875,16 +895,23 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         if (!StopAtEnd && !WrapLoop && sampleIndex > maxSampleIndex) {
             sampleIndex = maxSampleIndex;
         }
-        uint32_t nextSampleIndex = sampleIndex + 1U;
 
-        if (WrapLoop && phase >= loopBoundaryPhase) {
-            if (phase >= loopEnd) {
-                const uint32_t overshoot = phase - loopEnd;
-                phase = loopStart + (overshoot % loopLength);
-                continue;
-            }
-            nextSampleIndex = loopStartIndex;
+        const bool loopBoundary = WrapLoop && phase >= loopBoundaryPhase;
+        if (loopBoundary && phase >= loopEnd) {
+            const uint32_t overshoot = phase - loopEnd;
+            phase = loopStart + (overshoot % loopLength);
+            continue;
         }
+
+        const int16_t *sample0Ptr = sample.SAMPLE + sampleIndex;
+        const int16_t *sample1Ptr =
+            loopBoundary ? loopStartSample : sample0Ptr + 1U;
+        const int16_t *sample0RightPtr =
+            Stereo ? sample.SAMPLE_RIGHT + sampleIndex : nullptr;
+        const int16_t *sample1RightPtr =
+            Stereo
+                ? (loopBoundary ? loopStartSampleRight : sample0RightPtr + 1U)
+                : nullptr;
 
         // Advance the envelope at audio-sample rate. State transitions and
         // envelope-time divisions happen only once per ENVELOPE_PERIOD samples.
@@ -976,8 +1003,8 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         }
 
         const uint32_t interpolation = phase & 0x3FFFU;
-        const int32_t sample0 = sample.SAMPLE[sampleIndex];
-        const int32_t sample1 = sample.SAMPLE[nextSampleIndex];
+        const int32_t sample0 = *sample0Ptr;
+        const int32_t sample1 = *sample1Ptr;
 
         const int32_t weight0 = (int32_t)(0x4000U - interpolation);
         const int32_t weightedSample =
@@ -994,18 +1021,20 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         const int32_t value =
             ((int32_t)effectiveAmplitude * interpolated) >> 16;
 
-        mixLeft[i] += value;
+        *outLeft += value;
         if (Stereo) {
-            const int32_t sample0Right = sample.SAMPLE_RIGHT[sampleIndex];
-            const int32_t sample1Right = sample.SAMPLE_RIGHT[nextSampleIndex];
+            const int32_t sample0Right = *sample0RightPtr;
+            const int32_t sample1Right = *sample1RightPtr;
             const int32_t weightedSampleRight =
                 sample0Right * weight0 + sample1Right * (int32_t)interpolation;
             const int32_t interpolatedRight = weightedSampleRight >> 14U;
             const int32_t valueRight =
                 ((int32_t)effectiveAmplitude * interpolatedRight) >> 16;
-            mixRight[i] += valueRight;
+            *outRight += valueRight;
         }
 
+        ++outLeft;
+        if (Stereo) ++outRight;
         phase += phaseIncrement;
         ++i;
     }
@@ -1870,22 +1899,23 @@ void AudioSynthWavetableV2::update() {
  *   at a forward loop's final frame fetched the PCM frame at exclusive
  *   LOOP_PHASE_END. When the stored sample continued beyond the loop, that
  *   blended post-loop audio into every loop cycle.
- * - Loop-boundary detection was moved to the beginning of each rendered
- *   sample and now reuses the existing per-sample loop-control comparison.
- *   The normal path uses the direct next-frame index (sampleIndex + 1); only
- *   when phase enters the final loop frame does the boundary path select
- *   LOOP_START as the interpolation neighbor. Phase wrapping is performed
- *   before rendering the next sample, with a final normalization at block end.
- * - Release, sustain fast path, and normal ADSR all use this structure.
- *   Both stereo channels share the selected neighbor index. One-shot and
- *   non-looping template paths compile without the loop-boundary branch.
- * - No additional per-sample neighbor-selection comparison, modulo or
- *   64-bit arithmetic is introduced. The existing loop-control branch remains
- *   per sample for looped voices; its threshold is moved to the start of the
- *   sample iteration so the last loop frame can be handled separately.
- * - Source review confirms all six sample1 loads (left/right across the three
- *   render paths) use nextSampleIndex. Build, hardware audio listening, and
- *   cycle-level performance comparison remain pending.
+ * - Loop-boundary detection is performed before interpolation. In the final
+ *   loop frame, the right-hand interpolation sample points directly to the
+ *   precomputed LOOP_START sample; if phase has crossed the exclusive end,
+ *   phase is normalized before any PCM pointer is formed or sample is emitted.
+ * - PCM neighbor access uses pointers: sample1Ptr is sample0Ptr + 1 in the
+ *   ordinary path and switches to the precomputed loop-start pointer only at
+ *   the final loop frame. Stereo uses the corresponding right-channel pointers.
+ * - The render paths use running output pointers rather than repeatedly forming
+ *   mixLeft[i]/mixRight[i] addresses. Output pointers advance only after a
+ *   sample has actually been rendered, not when a phase wrap causes a retry.
+ * - Release, sustain fast path, and normal ADSR use the same boundary handling.
+ *   One-shot and non-looping template paths compile without the loop-boundary
+ *   test. The modulo operation remains confined to the exceptional wrap path.
+ * - This pointer-oriented revision targets the extra address-generation
+ *   instructions observed in the first P4 disassembly. P4 rebuild, new assembly
+ *   comparison, phase-sequence verification, hardware audio listening, and
+ *   cycle-level performance measurements remain pending.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
