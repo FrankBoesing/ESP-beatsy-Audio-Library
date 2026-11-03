@@ -2331,7 +2331,7 @@
       if (layout.frames > MAX_SAMPLE_FRAMES_V2) {
         throw new Error("Zone " + (r + 1) + " uses " + layout.frames +
           " frames; V2 supports at most " + MAX_SAMPLE_FRAMES_V2 +
-          " frames per layer with INDEX_BITS=18.");
+          " frames per layer with the fixed 18/14 phase format.");
       }
       if (layout.loopMode === 2) {
         featureWarningMap.reservedSampleMode = "SF2 sampleModes value 2 is reserved/unsupported and was exported as one-shot audio.";
