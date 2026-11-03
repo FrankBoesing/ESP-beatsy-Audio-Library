@@ -43,15 +43,16 @@ static inline int16_t wavetableV2Saturate16(int32_t value) {
 #endif
 }
 
-#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xespv)
-// ESP32-P4 XespV: clamp four signed 32-bit values in parallel. The temporary
-// and bound vectors are 16-byte aligned because VLD.128 requires alignment.
+#if defined(__riscv) && defined(__riscv_xespv)
+// Espressif XespV: scale four values and clamp four signed 32-bit lanes in parallel.
+// The temporary vector is 16-byte aligned because VLD.128 requires alignment.
+// VSAT.S32 reads its lower and upper clamp bounds directly from AR registers.
 // MOVI.16.A extracts the low half-word of each clamped 32-bit lane. This runs
 // in AudioTask task context; ESP-IDF FreeRTOS manages PIE lazy context switching.
 // Do not call this helper from an ISR.
-static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
-                                                uint16_t gain,
-                                                int16_t *output) {
+static inline void wavetableV2ScaleSaturate4XespV(const int32_t *input,
+                                                   uint16_t gain,
+                                                   int16_t *output) {
     alignas(16) int32_t scaled[4] = {
         wavetableV2ScaleQ16(input[0], gain),
         wavetableV2ScaleQ16(input[1], gain),
@@ -59,23 +60,14 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
         wavetableV2ScaleQ16(input[3], gain)
     };
 
-    alignas(16) static const int32_t lowerBound[4] = {
-        -32768, -32768, -32768, -32768
-    };
-    alignas(16) static const int32_t upperBound[4] = {
-        32767, 32767, 32767, 32767
-    };
-
-    // PIE instructions can address only AR registers x8-x15 and x24-x31.
-    // GCC's generic RISC-V "r" constraint does not distinguish this subset,
-    // and the target toolchain cannot satisfy the "cr" constraint for all
-    // seven operands. Bind the operands to valid PIE registers explicitly.
-    // Local register variables are guaranteed in these registers when used
-    // as extended-asm operands. The Q registers remain implicit PIE operands,
-    // not GCC clobbers; retain "memory" for the vector loads.
+    // PIE scalar operands and MOVI output registers must use AR registers
+    // x8-x15 or x24-x31. The selected registers are all PIE-addressable.
+    // scaledPtr is read/write because VLD.128.IP advances it by 16 bytes.
+    // Q registers are implicit PIE operands, not GCC GPR clobbers; retain the
+    // memory clobber so the vector load sees the initialized temporary.
     register const int32_t *scaledPtr __asm__("s8") = scaled;
-    register const int32_t *lowerPtr __asm__("s9") = lowerBound;
-    register const int32_t *upperPtr __asm__("s10") = upperBound;
+    register const int32_t lowerBound __asm__("s9") = -32768;
+    register const int32_t upperBound __asm__("s10") = 32767;
     register uint32_t out0 __asm__("s11");
     register uint32_t out1 __asm__("t3");
     register uint32_t out2 __asm__("t4");
@@ -83,22 +75,18 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
 
     __asm__ volatile(
         "esp.vld.128.ip q0, %[scaled], 16\n"
-        "esp.vld.128.ip q1, %[lower], 16\n"
-        "esp.vmax.s32 q2, q0, q1\n"
-        "esp.vld.128.ip q1, %[upper], 16\n"
-        "esp.vmin.s32 q2, q2, q1\n"
+        "esp.vsat.s32 q2, q0, %[lower], %[upper]\n"
         "esp.movi.16.a q2, %[out0], 0\n"
         "esp.movi.16.a q2, %[out1], 2\n"
         "esp.movi.16.a q2, %[out2], 4\n"
         "esp.movi.16.a q2, %[out3], 6\n"
         : [scaled] "+&r"(scaledPtr),
-          [lower] "+&r"(lowerPtr),
-          [upper] "+&r"(upperPtr),
           [out0] "=&r"(out0),
           [out1] "=&r"(out1),
           [out2] "=&r"(out2),
           [out3] "=&r"(out3)
-        :
+        : [lower] "r"(lowerBound),
+          [upper] "r"(upperBound)
         : "memory");
 
     output[0] = (int16_t)out0;
@@ -106,7 +94,6 @@ static inline void wavetableV2ScaleSaturate4P4(const int32_t *input,
     output[2] = (int16_t)out2;
     output[3] = (int16_t)out3;
 }
-#endif
 
 // MIDI note frequencies in Q16.16 Hz.
 static const uint32_t wavetableV2NoteFrequencyQ16[128] = {
@@ -1125,14 +1112,14 @@ void AudioSynthWavetableV2::updateStereo(uint16_t masterGain) {
     }
 
     if (blockRight != nullptr) {
-#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xespv)
+#if defined(__riscv) && defined(__riscv_xespv)
         uint16_t i = 0;
 #if defined(__GNUC__)
 #pragma GCC unroll 2
 #endif
         for (; (uint16_t)(i + 3U) < AUDIO_BLOCK_SAMPLES; i += 4U) {
-            wavetableV2ScaleSaturate4P4(&mixLeft[i], masterGain, &blockLeft->data[i]);
-            wavetableV2ScaleSaturate4P4(&mixRight[i], masterGain, &blockRight->data[i]);
+            wavetableV2ScaleSaturate4XespV(&mixLeft[i], masterGain, &blockLeft->data[i]);
+            wavetableV2ScaleSaturate4XespV(&mixRight[i], masterGain, &blockRight->data[i]);
         }
         for (; i < AUDIO_BLOCK_SAMPLES; ++i) {
             blockLeft->data[i] =
@@ -1223,13 +1210,13 @@ void AudioSynthWavetableV2::update() {
     }
 
     // Apply Q16 master gain and saturate to signed 16-bit PCM.
-#if defined(__riscv) && defined(CONFIG_IDF_TARGET_ESP32P4) && defined(__riscv_xespv)
+#if defined(__riscv) && defined(__riscv_xespv)
     uint16_t i = 0;
 #if defined(__GNUC__)
 #pragma GCC unroll 2
 #endif
     for (; (uint16_t)(i + 3U) < AUDIO_BLOCK_SAMPLES; i += 4U) {
-        wavetableV2ScaleSaturate4P4(&mix[i], masterGain, &block->data[i]);
+        wavetableV2ScaleSaturate4XespV(&mix[i], masterGain, &block->data[i]);
     }
     for (; i < AUDIO_BLOCK_SAMPLES; ++i) {
         const int32_t scaled = wavetableV2ScaleQ16(mix[i], masterGain);
@@ -1371,11 +1358,13 @@ void AudioSynthWavetableV2::update() {
  * -----------------------------------------
  * - ESP32-S3 / Xtensa LX7: wavetableV2Saturate16() uses CLAMPS when the core
  *   advertises XCHAL_HAVE_CLAMPS; otherwise it uses the portable scalar clamp.
- * - ESP32-P4 / XespV: wavetableV2ScaleSaturate4P4() scales four values with
- *   the Q16 helper, then uses XespV vector instructions for parallel signed
- *   32-bit clamping and 16-bit extraction. A scalar tail and portable fallback
- *   remain. This optimizes final scaling/saturation; it does not vectorize the
- *   per-voice sample renderer.
+ * - XespV targets: wavetableV2ScaleSaturate4XespV() scales four values with
+ *   the Q16 helper, clamps four signed 32-bit lanes with esp.vsat.s32 using
+ *   scalar AR-register bounds, then extracts the low 16-bit PCM results.
+ *   The path is selected by the compiler-defined __riscv_xespv feature macro,
+ *   not by an ESP32-P4 target check, so future targets with the same XespV
+ *   instruction set can use it. A scalar tail and portable fallback remain.
+ *   This optimizes final scaling/saturation; it does not vectorize the renderer.
  * - These target paths must continue to produce bit-identical PCM to the
  *   scalar reference. Verify with builds and comparison tests after changes.
  *
@@ -1950,8 +1939,28 @@ void AudioSynthWavetableV2::update() {
  * - Changed the renderVoicePath sample-loop index from uint16_t to uint32_t.
  *   This avoids explicit 16-bit narrowing in source; the generated P4 code must
  *   be inspected to confirm whether it reduces conversion instructions.
- * - P4 assembly comparison, hardware audio test and repeated FLASH/PSRAM cycle
- *   benchmark are pending. Keep or revert each change based on measured results.
+ * - P4 FLASH/PSRAM audio benchmark — 2026-11-03 (user-provided): the combined
+ *   delta-interpolation / 32-bit-index change showed no reproducible CPU-load
+ *   difference from the preceding build. The changes are retained.
+ *
+ *
+ * 27. XESPV VSAT.S32 FINAL PCM CLAMP — IMPLEMENTED / MICROBENCHMARKED — 2026-11-03
+ * --------------------------------------------------------------------------------
+ * - Replaced the XespV VMAX.S32 + VMIN.S32 clamp sequence and two vector-bound
+ *   loads with one esp.vsat.s32 instruction. The signed lower/upper bounds
+ *   (-32768 / 32767) are passed directly in PIE-addressable AR registers.
+ * - The existing VLD.128.IP and MOVI.16.A extraction remain unchanged.
+ * - User-run P4 microbenchmark: VMAX/VMIN median 5,852,530 cycles
+ *   (22.32 cycles/sample); VSAT lower-then-upper median 5,523,944 cycles
+ *   (21.07 cycles/sample), a 5.61% reduction for the complete tested
+ *   four-sample scale/clamp/extract path. Upper-then-lower measured 5,523,907
+ *   cycles, effectively identical. All three variants matched the scalar
+ *   reference for the 1,024-value correctness set and had identical checksums.
+ * - The XespV path is guarded by __riscv_xespv together with __riscv, allowing
+ *   future targets whose compiler enables this same extension to use it.
+ *   Rebuild on each target/toolchain and retain the scalar fallback.
+ * - The microbenchmark does not establish the gain in full wavetable playback.
+ *   Repeat the audio FLASH/PSRAM benchmark after integrating this change.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
