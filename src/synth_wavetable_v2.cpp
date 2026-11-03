@@ -1683,33 +1683,77 @@ void AudioSynthWavetableV2::update() {
  *   PSRAM sample-fetch performance or bit-identical PIE output versus scalar
  *   reference PCM. Those checks remain open.
  *
- * 21. REAL-SF2 FLASH / PSRAM BENCHMARK — IMPLEMENTED, HARDWARE RUN PENDING
- * -------------------------------------------------------------------------------
- * - The WavetableV2 example now uses Airfont 340, Detuned EP2 (Bank 8,
- *   Program 5) instead of short synthetic test waveforms.
- * - The generated preset contains 50 sample descriptors/zones that reference
- *   14 unique mono PCM arrays. The arrays contain 14,426 stored frames in
- *   total, including interpolation guard frames, or 28,852 bytes.
+ * 21. REAL-SF2 FLASH / PSRAM BENCHMARK — HARDWARE MEASURED
+ * ---------------------------------------------------------
+ * - The WavetableV2 example uses Airfont 340, Detuned EP2 (Bank 8,
+ *   Program 5), rather than short synthetic test waveforms.
+ * - The generated preset contains 50 sample descriptors/zones referencing
+ *   14 unique mono PCM arrays. The arrays contain 14,426 stored frames,
+ *   including interpolation guard frames, or 28,852 bytes.
  * - Notes MIDI 48..79 at velocity 112 resolve to exactly four matching zones
- *   per note according to the generated zone map. The runtime benchmark also
- *   prints the observed layer distribution so a data/zone mismatch is visible.
- * - Each cycle sweeps 1/2/4/8/16/32 notes (up to the configured maximum),
- *   reaching 128 simultaneous sample voices at 32 notes.
- * - The same instrument is measured in two memory modes:
- *   FLASH reads the generated PROGMEM PCM arrays directly;
- *   PSRAM copies each distinct PCM pointer once to MALLOC_CAP_SPIRAM memory.
- * - The PSRAM mode rebuilds sample, zone and instrument descriptors while
- *   keeping those descriptors in internal RAM. Only PCM data is placed in
- *   PSRAM, so the comparison focuses on the sample-data access path. Copies
- *   include guard frames, are byte-verified after memcpy, and are allocated
- *   once during setup, never in update().
- * - The run order alternates FLASH/PSRAM and PSRAM/FLASH on successive cycles.
- *   BENCH and NOTE_OFF CSV records include the memory_mode field.
- * - If PSRAM allocation is unavailable, the example reports the failure and
- *   continues with the FLASH benchmark. No performance result is implied by
- *   this implementation entry; actual P4 FLASH-vs-PSRAM measurements remain
- *   pending. Cache state and hardware/toolchain must be kept consistent when
- *   comparing runs.
+ *   per note. The hardware log confirmed 4 layers/note at every tested stage.
+ * - User-provided ESP32-P4 hardware run: 400 MHz CPU, I2S, 44.1 kHz,
+ *   128-sample blocks. FLASH and PSRAM both completed the full 1/2/4/8/16/32
+ *   note sweep (4/8/16/32/64/128 active sample voices).
+ * - FLASH reads the generated PROGMEM PCM arrays directly. PSRAM copies
+ *   each distinct PCM pointer once to MALLOC_CAP_SPIRAM memory. Sample, zone
+ *   and instrument descriptors remain in internal RAM; only PCM data moves.
+ *   Copies include guard frames and are byte-verified after memcpy.
+ * - Maximum graph peak timings, sustain / release:
+ *   1 note / 4 voices: FLASH 97/97 us; PSRAM 97/94 us;
+ *   2 notes / 8 voices: FLASH 172/168 us; PSRAM 171/168 us;
+ *   4 notes / 16 voices: FLASH 320/317 us; PSRAM 320/317 us;
+ *   8 notes / 32 voices: FLASH 617/617 us; PSRAM 617/617 us;
+ *   16 notes / 64 voices: FLASH 1219/1211 us; PSRAM 1215/1211 us;
+ *   32 notes / 128 voices: FLASH 2415/2406 us; PSRAM 2408/2404 us.
+ * - At 128 voices, maximum graph load was approximately 83.2% in FLASH
+ *   and 83.0% in PSRAM. The 44.1 kHz / 128-sample block period is about
+ *   2902 us, leaving approximately 487 us (FLASH) or 494 us (PSRAM).
+ *   Both modes met the measured block deadline in this instrument test,
+ *   but the remaining headroom is limited.
+ * - The largest FLASH-to-PSRAM graph-peak difference was 7 us (about 0.3%)
+ *   at 128 voices. No practically relevant performance advantage was
+ *   observed for either memory mode with this preset/access pattern.
+ * - Scope limitation: the unique PCM set is only 28,852 bytes. These results
+ *   do not establish behavior for large SF2 banks, long samples, cache-cold
+ *   or random access, or concurrent PSRAM traffic. Cache residency may
+ *   contribute to the similar results, but was not measured independently.
+ * - allNotesOff() cycle-counter readings were mostly 3..56 us. One FLASH
+ *   result at 16 notes was 356,461 cycles / 400 MHz = 891 us, versus
+ *   11,725 cycles / 400 MHz = 29 us in PSRAM at the same stage. This isolated
+ *   outlier is inconsistent with the other stages; timing interference is
+ *   possible but its cause is unknown. Do not use it as evidence of a
+ *   memory-mode penalty without repeated measurements.
+ *
+ * 22. REAL-SF2 VS SHORT SYNTHETIC SAMPLE BENCHMARK — 2026-11-03
+ * --------------------------------------------------------------
+ * - Direct comparison against section 19 (P4 mono, short generated looping
+ *   samples) at matching voice counts, 400 MHz, 44.1 kHz and 128-sample
+ *   blocks. Graph peak timings, sustain / release:
+ *   32 voices: short 290/431 us; real SF2 617/617 us
+ *     (+327/+186 us, +112.8%/+43.2%);
+ *   64 voices: short 553/840 us; real SF2 1219/1211 us
+ *     (+666/+371 us, +120.4%/+44.2%);
+ *   128 voices: short 1086/1657 us; real SF2 2415/2406 us
+ *     (+1329/+749 us, +122.4%/+45.2%).
+ * - The real-SF2 sustain path therefore took about 2.1..2.2 times as long
+ *   as the short-sample mono benchmark; release took about 1.43..1.45 times
+ *   as long. Both runs used four layers per note at the reported stages.
+ * - Compared with section 20's synthetic mixed-stereo benchmark (three mono
+ *   plus one stereo layer per note), the new real-SF2 mono run was also
+ *   slower: at 32/64/128 voices, sustain increased from 345/654/1277 us
+ *   to 617/1219/2415 us; release increased from 492/952/1870 us to
+ *   617/1211/2406 us. These are not like-for-like sample-layout tests:
+ *   section 20 includes a stereo layer, while the real-SF2 preset is mono.
+ * - The comparison establishes a higher measured cost for the real SF2
+ *   sample set, but does not isolate its cause. Longer/more varied sample
+ *   addresses and cache behavior are plausible contributors; differences
+ *   in sample metadata, envelope parameters and test data also remain
+ *   possible factors. Do not attribute the full delta to Flash/PSRAM or
+ *   sample length alone without a controlled test.
+ * - At 128 voices, real-SF2 graph peaks reached about 83.2% (sustain) and
+ *   82.9% (release), versus 37.4% and 57.1% for the earlier short-sample
+ *   mono test. The 2902 us block deadline was still met, with less headroom.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
