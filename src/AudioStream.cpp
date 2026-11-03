@@ -109,8 +109,8 @@ AudioStream::AudioStream(unsigned char ninput, audio_block_t **iqueue)
     // still works during normal static initialization.
     disableUpdates();
 
-    portENTER_CRITICAL(&audio_mux);
-
+    // disableUpdates() owns the graph mutex, so AudioTask cannot traverse
+    // or modify the update list while this control-plane change is in progress.
     if (first_update == nullptr) {
         first_update = this;
     } else {
@@ -122,8 +122,6 @@ AudioStream::AudioStream(unsigned char ninput, audio_block_t **iqueue)
 
         p->next_update = this;
     }
-
-    portEXIT_CRITICAL(&audio_mux);
 
     enableUpdates();
 }
@@ -178,16 +176,16 @@ AudioStream::~AudioStream() {
     // queues belonging to connections have already been cleared above, but
     // clearing the whole array makes the object lifetime boundary explicit and
     // robust against orphaned queue entries.
-    portENTER_CRITICAL(&audio_mux);
-
     for (unsigned int i = 0; i < num_inputs; ++i) {
-        if (inputQueue[i] != nullptr) {
-            release_locked(inputQueue[i]);
-            inputQueue[i] = nullptr;
+        audio_block_t *pending = inputQueue[i];
+        inputQueue[i] = nullptr;
+        if (pending != nullptr) {
+            release(pending);
         }
     }
 
-    // Remove the stream from the scheduler update list.
+    // Remove the stream from the scheduler update list. disableUpdates()
+    // already excludes AudioTask for the entire lifetime operation.
     if (first_update == this) {
         first_update = next_update;
     } else {
@@ -205,8 +203,6 @@ AudioStream::~AudioStream() {
     destination_list = nullptr;
     active = false;
     numConnections = 0;
-
-    portEXIT_CRITICAL(&audio_mux);
 
     enableUpdates();
 }
@@ -800,7 +796,10 @@ bool AudioStream::is_block_from_pool(const audio_block_t *block) {
 // =============================================================================
 // Allocate block - internal
 //
-// The caller MUST hold audio_mux.
+// Callers either hold audio_mux (application-side allocate()) or are AudioTask
+// running on AUDIO_PROCESSING_CORE. AudioTask is higher priority than the
+// application task and is the exclusive pool user while it runs. Application
+// calls from another core must stop updates before accessing the pool.
 // =============================================================================
 
 OSPEED
@@ -853,6 +852,14 @@ audio_block_t *AudioStream::allocate_locked(void) {
 
 OSPEED
 audio_block_t *AudioStream::allocate(void) {
+    // The normal DSP path runs in AudioTask on AUDIO_PROCESSING_CORE. Since it
+    // preempts the user task, it cannot overlap an application-side pool
+    // operation protected by audio_mux. Avoid taking the critical section in
+    // this hot path. Calls from other tasks retain the protected path.
+    if (xTaskGetCurrentTaskHandle() == audio_task_handle) {
+        return allocate_locked();
+    }
+
     portENTER_CRITICAL(&audio_mux);
     audio_block_t *block = allocate_locked();
     portEXIT_CRITICAL(&audio_mux);
@@ -863,7 +870,10 @@ audio_block_t *AudioStream::allocate(void) {
 // =============================================================================
 // Release block - internal
 //
-// The caller MUST hold audio_mux.
+// Callers either hold audio_mux (application-side release()) or are AudioTask
+// running on AUDIO_PROCESSING_CORE. AudioTask is higher priority than the
+// application task and is the exclusive pool user while it runs. Application
+// calls from another core must stop updates before accessing the pool.
 // =============================================================================
 
 OSPEED
@@ -917,6 +927,14 @@ void AudioStream::release_locked(audio_block_t *block) {
 
 OSPEED
 void AudioStream::release(audio_block_t *block) {
+    // See allocate(): AudioTask owns the pool while it is executing on the
+    // processing core, so it does not need to lock against the lower-priority
+    // application task. Public/application-side releases remain protected.
+    if (xTaskGetCurrentTaskHandle() == audio_task_handle) {
+        release_locked(block);
+        return;
+    }
+
     portENTER_CRITICAL(&audio_mux);
     release_locked(block);
     portEXIT_CRITICAL(&audio_mux);
@@ -931,8 +949,14 @@ void AudioStream::transmit(audio_block_t *block, unsigned char index) {
         return;
     }
 
-    portENTER_CRITICAL(&audio_mux);
+    const bool onAudioTask = xTaskGetCurrentTaskHandle() == audio_task_handle;
+    if (!onAudioTask) {
+        portENTER_CRITICAL(&audio_mux);
+    }
 
+    // In the scheduler path, graph traversal is serialized by
+    // audio_update_mutex and AudioTask is the sole graph consumer. The
+    // audio_mux fallback remains for synchronous non-AudioTask test callers.
     for (AudioConnection *c = destination_list; c != nullptr; c = c->next_dest) {
         if (c->src_index != index) {
             continue;
@@ -952,7 +976,9 @@ void AudioStream::transmit(audio_block_t *block, unsigned char index) {
         }
     }
 
-    portEXIT_CRITICAL(&audio_mux);
+    if (!onAudioTask) {
+        portEXIT_CRITICAL(&audio_mux);
+    }
 }
 
 // =============================================================================
@@ -964,10 +990,19 @@ audio_block_t *AudioStream::receiveReadOnly(unsigned int index) {
         return nullptr;
     }
 
-    portENTER_CRITICAL(&audio_mux);
+    const bool onAudioTask = xTaskGetCurrentTaskHandle() == audio_task_handle;
+    if (!onAudioTask) {
+        portENTER_CRITICAL(&audio_mux);
+    }
+
+    // inputQueue is consumed by the audio graph only. Graph changes are
+    // performed while disableUpdates() owns audio_update_mutex.
     audio_block_t *block = inputQueue[index];
     inputQueue[index] = nullptr;
-    portEXIT_CRITICAL(&audio_mux);
+
+    if (!onAudioTask) {
+        portEXIT_CRITICAL(&audio_mux);
+    }
 
     return block;
 }
@@ -983,47 +1018,50 @@ audio_block_t *AudioStream::receiveWritable(unsigned int index) {
         return nullptr;
     }
 
-    portENTER_CRITICAL(&audio_mux);
+    const bool onAudioTask = xTaskGetCurrentTaskHandle() == audio_task_handle;
+    if (!onAudioTask) {
+        portENTER_CRITICAL(&audio_mux);
+    }
 
     audio_block_t *input = inputQueue[index];
-
     inputQueue[index] = nullptr;
 
     if (input == nullptr) {
-        portEXIT_CRITICAL(&audio_mux);
+        if (!onAudioTask) {
+            portEXIT_CRITICAL(&audio_mux);
+        }
         return nullptr;
     }
 
     if (input->ref_count <= 1) {
         // We are the sole owner.
-        portEXIT_CRITICAL(&audio_mux);
+        if (!onAudioTask) {
+            portEXIT_CRITICAL(&audio_mux);
+        }
         return input;
     }
 
-    // Shared block: create a private copy.
-
+    // Shared block: create a private copy. The audio-task path can perform
+    // the copy without holding audio_mux; only the application-side fallback
+    // needs the critical section while manipulating the shared pool.
     audio_block_t *copy = allocate_locked();
 
     if (copy != nullptr) {
         memcpy(copy->data, input->data, sizeof(copy->data));
-
-        // We no longer own the input block.
         release_locked(input);
-        portEXIT_CRITICAL(&audio_mux);
 
+        if (!onAudioTask) {
+            portEXIT_CRITICAL(&audio_mux);
+        }
         return copy;
     }
 
-    // Allocation failed.
-    //
-    // We cannot return the shared block as writable because that would
-    // violate the ownership contract.
-    //
-    // Give up our reference and report failure.
-
+    // Allocation failed. Drop this stream's reference to the shared block.
     release_locked(input);
-    portEXIT_CRITICAL(&audio_mux);
 
+    if (!onAudioTask) {
+        portEXIT_CRITICAL(&audio_mux);
+    }
     return nullptr;
 }
 
@@ -1157,8 +1195,8 @@ int AudioConnection::connect_locked(void) {
         return 2;
     }
 
-    // The caller holds the graph mutex, so the graph is stable while this
-    // control-plane search runs. Keep the spinlock only around list mutation.
+    // connect() holds audio_update_mutex, so AudioTask cannot traverse
+    // the graph while this control-plane change is in progress.
     for (AudioStream *s = AudioStream::first_update; s != nullptr; s = s->next_update) {
         for (AudioConnection *p = s->destination_list; p != nullptr; p = p->next_dest) {
             if (p->dst == dst && p->dest_index == dest_index) {
@@ -1167,9 +1205,8 @@ int AudioConnection::connect_locked(void) {
         }
     }
 
-    portENTER_CRITICAL(&AudioStream::audio_mux);
-
-    // Insert into source destination list.
+    // Insert into source destination list. The graph mutex provides exclusive
+    // access; audio_mux is reserved for shared pool and scheduler state.
     AudioConnection *p = src->destination_list;
 
     if (p == nullptr) {
@@ -1191,8 +1228,6 @@ int AudioConnection::connect_locked(void) {
     dst->active = true;
 
     isConnected = true;
-
-    portEXIT_CRITICAL(&AudioStream::audio_mux);
 
     return 0;
 }
@@ -1245,8 +1280,8 @@ int AudioConnection::disconnect_locked(void) {
         return 2;
     }
 
-    portENTER_CRITICAL(&AudioStream::audio_mux);
-
+    // disconnect() holds audio_update_mutex, so AudioTask cannot traverse
+    // the graph or consume destination input queues during this operation.
     // Remove this connection from the source list.
     AudioConnection *p = src->destination_list;
 
@@ -1269,17 +1304,13 @@ int AudioConnection::disconnect_locked(void) {
     // Do not alter counters or destination queues if the connection was not
     // actually present in the source list.
     if (!found) {
-        portEXIT_CRITICAL(&AudioStream::audio_mux);
         return 3;
     }
 
-    // Release any block that is still queued at the destination.
+    // Detach any block which is still queued at the destination. release()
+    // uses audio_mux only for the shared memory-pool bookkeeping.
     audio_block_t *pending = dst->inputQueue[dest_index];
-
-    if (pending != nullptr) {
-        dst->inputQueue[dest_index] = nullptr;
-        AudioStream::release_locked(pending);
-    }
+    dst->inputQueue[dest_index] = nullptr;
 
     // Update active state.
     if (src->numConnections > 0) {
@@ -1301,7 +1332,9 @@ int AudioConnection::disconnect_locked(void) {
     isConnected = false;
     next_dest = nullptr;
 
-    portEXIT_CRITICAL(&AudioStream::audio_mux);
+    if (pending != nullptr) {
+        AudioStream::release(pending);
+    }
 
     return 0;
 }
