@@ -50,6 +50,7 @@
   var playbackGeneration = 0;
   var generatedCode = "";
   var generatedFileName = "";
+  var presetCompatibilityMessage = "";
   
   var GEN = {
     startOffset: 0, endOffset: 1, startLoopOffset: 2, endLoopOffset: 3,
@@ -839,6 +840,7 @@
     var layerGrid = new Int32Array(ANALYZER_GRID_STRIDE * ANALYZER_GRID_STRIDE);
     var stereoGrid = new Int32Array(ANALYZER_GRID_STRIDE * ANALYZER_GRID_STRIDE);
     var sampleSet = Object.create(null);
+    var sampleHeaderSet = Object.create(null);
     var instrumentSet = Object.create(null);
     var stereoZones = 0;
     var invalidStereoLinks = 0;
@@ -866,6 +868,9 @@
       if (sampleInfo.linked) linkedZones++;
       if (sampleInfo.invalid) invalidTypeZones++;
       instrumentSet[region.instrumentName] = true;
+
+      sampleHeaderSet[region.sampleIndex] = true;
+      if (sampleInfo.stereo) sampleHeaderSet[sample.link] = true;
 
       var sampleType = sample.type & 0x000f;
       var sampleKey = sampleInfo.stereo ?
@@ -968,6 +973,7 @@
       zoneCount: preset.zones.length,
       instrumentCount: Object.keys(instrumentSet).length,
       uniqueSampleSets: Object.keys(sampleSet).length,
+      sampleHeaders: Object.keys(sampleHeaderSet).length,
       stereoZones: stereoZones,
       invalidStereoLinks: invalidStereoLinks,
       romZones: romZones,
@@ -1099,9 +1105,10 @@
     appendAnalyzerMetric(metrics, "Stereo sample zones",
       String(analysis.stereoZones),
       "One valid stereo zone is one musical layer but two mono PCM streams.");
-    appendAnalyzerMetric(metrics, "Resolved zones / instruments / sample sets",
-      analysis.zoneCount + " / " + analysis.instrumentCount + " / " + analysis.uniqueSampleSets,
-      "Linked left/right headers are counted as one sample set.");
+    appendAnalyzerMetric(metrics, "Resolved zones / instruments / sample headers / sample sets",
+      analysis.zoneCount + " / " + analysis.instrumentCount + " / " +
+        analysis.sampleHeaders + " / " + analysis.uniqueSampleSets,
+      "A linked stereo pair counts as two sample headers and one sample set.");
     analyzerPanel.appendChild(metrics);
 
     var selectedNoteEntry = analysis.perNote[selectedNote];
@@ -1295,6 +1302,7 @@
           zones: analysis.zoneCount,
           instrumentCount: analysis.instrumentCount,
           instruments: names.join(", "),
+          sampleHeaders: analysis.sampleHeaders,
           sampleSets: analysis.uniqueSampleSets,
           maxLayers: maxLayers,
           peakLayers: analyzerPeakNoteList(analysis.peakLayerNotes, "peakLayerRange"),
@@ -1349,7 +1357,7 @@
       lines.push("");
       lines.push([
         "Bank", "Program", "Preset", "Zones", "Instrument count", "Instrument names",
-        "Sample sets", "Max layers", "Notes/velocity at max layers",
+        "Sample headers", "Sample sets", "Max layers", "Notes/velocity at max layers",
         "Max PCM channels", "Notes/velocity at max PCM", "Covered key/velocity cells",
         "Cells above V2 limit", "Stereo zones", "ROM zones", "Ogg/SF3 zones",
         "Invalid stereo links"
@@ -1359,8 +1367,8 @@
         var item = results[r];
         lines.push([
           item.bank, item.program, safeLogField(item.name), item.zones,
-          item.instrumentCount, safeLogField(item.instruments), item.sampleSets,
-          item.maxLayers, safeLogField(item.peakLayers), item.maxChannels,
+          item.instrumentCount, safeLogField(item.instruments), item.sampleHeaders,
+          item.sampleSets, item.maxLayers, safeLogField(item.peakLayers), item.maxChannels,
           safeLogField(item.peakChannels), item.coveredCells, item.overV2Cells,
           item.stereoZones, item.romZones, item.compressedZones, item.invalidStereoLinks
         ].join("\t"));
@@ -1397,6 +1405,78 @@
     if (allPresetScanDownloadButton) allPresetScanDownloadButton.disabled = true;
   }
 
+  function updatePresetCompatibilityStatus(preset) {
+    presetCompatibilityMessage = "";
+    if (!font || !preset) {
+      setPreviewStatus("");
+      return;
+    }
+
+    var wavetableMode = isWavetableMode();
+    var layerLimit = wavetableMode ? V2_MAX_LAYERS_PER_NOTE : MAX_PREVIEW_LAYERS_PER_NOTE;
+    var frameLimit = wavetableMode ? MAX_SAMPLE_FRAMES : MAX_PREVIEW_SAMPLE_FRAMES;
+    var analysis = analyzePresetVoices(preset);
+    var problems = [];
+
+    if (analysis.maxLayers > layerLimit) {
+      var overflow = null;
+      for (var note = 0; note < 128 && !overflow; note++) {
+        for (var velocity = 1; velocity <= 127; velocity++) {
+          var layers = analysis.layerGrid[note * ANALYZER_GRID_STRIDE + velocity];
+          if (layers > layerLimit) {
+            overflow = { note: note, velocity: velocity, layers: layers };
+            break;
+          }
+        }
+      }
+      if (overflow) {
+        problems.push(midiName(overflow.note) + " at velocity " + overflow.velocity +
+          " has " + overflow.layers + " simultaneous layers (limit " + layerLimit + ")");
+      }
+    }
+
+    var oversizedZones = [];
+    var invalidZones = [];
+    for (var zoneIndex = 0; zoneIndex < preset.zones.length; zoneIndex++) {
+      var region = preset.zones[zoneIndex];
+      var layout = makeRegionLayout(font, region);
+      if (layout.error) {
+        invalidZones.push({
+          instrument: region.instrumentName,
+          reason: layout.error
+        });
+      } else if (layout.frames > frameLimit) {
+        oversizedZones.push({
+          instrument: region.instrumentName,
+          frames: layout.frames
+        });
+      }
+    }
+
+    if (oversizedZones.length) {
+      var firstOversized = oversizedZones[0];
+      problems.push(oversizedZones.length + " zone(s) exceed the " +
+        frameLimit.toLocaleString() + "-frame sample limit; first: " +
+        firstOversized.instrument + " (" +
+        firstOversized.frames.toLocaleString() + " frames)");
+    }
+    if (invalidZones.length) {
+      var firstInvalid = invalidZones[0];
+      problems.push(invalidZones.length + " zone(s) have unsupported or invalid sample data; first: " +
+        firstInvalid.instrument + " (" + firstInvalid.reason + ")");
+    }
+
+    if (problems.length) {
+      var modeName = wavetableMode ? "V2-compatible Preview" : "extended browser preview";
+      presetCompatibilityMessage = "This preset is not fully playable in the selected " +
+        modeName + ": " + problems.join("; ") +
+        ". The affected key/velocity regions cannot be auditioned.";
+      setPreviewStatus(presetCompatibilityMessage);
+    } else {
+      setPreviewStatus("");
+    }
+  }
+
   function updatePresetInfo() {
     presetInfo.textContent = "";
     if (analyzerPanel) analyzerPanel.textContent = "";
@@ -1431,6 +1511,7 @@
     }
     presetInfo.textContent = lines.join("\n");
     renderPresetVoiceAnalyzer(preset);
+    updatePresetCompatibilityStatus(preset);
   }
 
   function renderMetadata(info) {
@@ -1851,7 +1932,7 @@
 
     note = Math.max(0, Math.min(127, Math.round(note)));
     velocity = Math.max(1, Math.min(127, Math.round(velocity)));
-    clearPreviewStatus();
+    setPreviewStatus(presetCompatibilityMessage);
     var wavetableMode = isWavetableMode();
     var matches = regionsForNote(preset, note, velocity);
 
@@ -2521,6 +2602,7 @@
     stopPreview();
     resetOutput();
     clearPreviewStatus();
+    presetCompatibilityMessage = "";
     font = null;
     currentFileName = "";
     presetSelect.innerHTML = "";
@@ -2580,6 +2662,7 @@
     } catch (error) {
       if (thisLoad !== loadGeneration) return;
       font = null;
+      presetCompatibilityMessage = "";
       currentFileName = "";
       presetSelect.innerHTML = "";
       presetSelect.disabled = true;
@@ -2708,6 +2791,7 @@
       stopPreview();
       clearPreviewStatus();
       updateModeInfo();
+      updatePresetInfo();
     });
   }
   exportButton.addEventListener("click", async function () {
