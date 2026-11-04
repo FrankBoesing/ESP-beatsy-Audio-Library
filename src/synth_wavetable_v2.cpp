@@ -2052,27 +2052,6 @@ void AudioSynthWavetableV2::update() {
  *   Neither run isolates its performance contribution from other changes.
  *
  *
- * 28. SF2 EXCLUSIVE-CLASS VOICE RELEASE
- *     IMPLEMENTED / NOT YET HARDWARE-TESTED — 2026-11-04
- * -----------------------------------------------------------------------------
- * - Added the SF2 exclusiveClass value to zone_data and copied it into every
- *   started SampleVoice. The SF2 importer reads generator 57 as unsigned
- *   16-bit data; the V2 exporter writes it into generated zone initializers.
- * - On Note-On, the compact active-voice list is scanned once against the
- *   nonzero classes of the matching new zones. Older voices with a matching
- *   class on the same MIDI channel enter the existing release renderer.
- * - The 300 ms release count is calculated once in setInstrument(), scaled
- *   for the active sample rate and stored in ENVELOPE_PERIOD units. Release
- *   initialization reuses the existing fixed-point ramp preparation; no
- *   exclusive-class branch or arithmetic was added to the sample loop.
- * - A voice already in its release phase is left on its existing ramp. This
- *   avoids restarting a release and keeps Note-On handling free of division.
- * - The browser SF2 preview applies the same class matching and 300 ms release.
- *   Legacy V1 export emits a warning because its API cannot represent classes.
- * - Hardware/audio regression tests and a Note-On timing measurement remain
- *   pending; no performance improvement is claimed.
- *
- *
  * 27. XESPV VSAT.S32 FINAL PCM CLAMP
  *     IMPLEMENTED / MICROBENCHMARKED / FULL AUDIO RUN RECORDED
  * -----------------------------------------------------------------------------
@@ -2095,6 +2074,27 @@ void AudioSynthWavetableV2::update() {
  *   modes. This confirms operation in the full renderer but, without a
  *   controlled pre-VSAT audio baseline, does not quantify its full-synth CPU
  *   contribution. The 5.61% result applies only to the isolated helper test.
+ *
+ * 28. SF2 EXCLUSIVE-CLASS VOICE RELEASE
+ *     IMPLEMENTED / NOT YET HARDWARE-TESTED — 2026-11-04
+ * -----------------------------------------------------------------------------
+ * - Added the SF2 exclusiveClass value to zone_data and copied it into every
+ *   started SampleVoice. The SF2 importer reads generator 57 as unsigned
+ *   16-bit data; the V2 exporter writes it into generated zone initializers.
+ * - On Note-On, the compact active-voice list is scanned once against the
+ *   nonzero classes of the matching new zones. Older voices with a matching
+ *   class on the same MIDI channel enter the existing release renderer.
+ * - The 300 ms release count is calculated once in setInstrument(), scaled
+ *   for the active sample rate and stored in ENVELOPE_PERIOD units. Release
+ *   initialization reuses the existing fixed-point ramp preparation; no
+ *   exclusive-class branch or arithmetic was added to the sample loop.
+ * - A voice already in its release phase is left on its existing ramp. This
+ *   avoids restarting a release and keeps Note-On handling free of division.
+ * - The browser SF2 preview applies the same class matching and 300 ms release.
+ *   Legacy V1 export emits a warning because its API cannot represent classes.
+ * - Hardware/audio regression tests and a Note-On timing measurement remain
+ *   pending; no performance improvement is claimed.
+ *
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
