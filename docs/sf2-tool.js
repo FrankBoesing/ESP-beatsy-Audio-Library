@@ -119,6 +119,8 @@
     { label: "20/12", fractionBits: 12, maxFrames: MAX_SAMPLE_FRAMES_20_12 }
   ];
   var PHASE_ANALYSIS_OUTPUT_RATES = [44100, 48000];
+  // Mirrors src/common.h's default; adjust if the build overrides this macro.
+  var PHASE_ANALYSIS_REFERENCE_RATE = 44100.0;
   var MAX_FILE_BYTES = 512 * 1024 * 1024;
   var MAX_EXPORT_FRAMES = 2000000;
   var RANGE_OPERATORS = [GEN.keyRange, GEN.velocityRange];
@@ -1071,10 +1073,10 @@
     );
     if (!Number.isFinite(perHertzCoefficient) || perHertzCoefficient <= 0) return null;
 
-    // Model a build whose AUDIO_SAMPLE_RATE_EXACT matches the tested output
-    // rate. Runtime sample-rate changes relative to the build rate are not
-    // part of this first comparison.
-    var phaseScale = Math.fround(outputRate / outputRate);
+    // common.h defaults AUDIO_SAMPLE_RATE_EXACT to 44100 Hz. The runtime
+    // sample rate may differ, in which case V2 scales the increment by
+    // AUDIO_SAMPLE_RATE_EXACT / AudioStream::sampleRate().
+    var phaseScale = Math.fround(PHASE_ANALYSIS_REFERENCE_RATE / outputRate);
     var coefficient = Math.fround(perHertzCoefficient * phaseScale);
     var coefficientQ16Float = Math.fround(coefficient * 65536.0);
     if (!Number.isFinite(coefficientQ16Float) ||
@@ -2143,7 +2145,7 @@
       lines.push("Phase-format numeric comparison (analysis only; live V2 remains fixed at 18/14):");
       lines.push("Formats: 18/14 = 262143 maximum frames; 20/12 = 1048575 maximum frames.");
       lines.push("Phase increment model: float per-Hz coefficient, Q16.16 conversion and rounded uint32 phase step, matching wavetableV2PhaseIncrement().");
-      lines.push("Assumption: build-time and runtime sample rates match for each tested rate (44100 Hz and 48000 Hz); runtime sample-rate switching is not modelled.");
+      lines.push("Assumption: AUDIO_SAMPLE_RATE_EXACT is the project default 44100 Hz from src/common.h; runtime rates tested are 44100 Hz and 48000 Hz. Change PHASE_ANALYSIS_REFERENCE_RATE if the build overrides that macro.");
       lines.push("Pitch error is the steady-state error caused by integer phase-increment quantization; drift is the accumulated position difference after traversing the complete sample once.");
       lines.push([
         "Output rate", "Format", "Note-zone tests", "Max |pitch error| (cent)",
