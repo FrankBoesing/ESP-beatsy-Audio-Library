@@ -405,12 +405,11 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
 }
 
 void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice) {
-    beginReleaseLocked(voice, voice.releaseCount, false);
+    beginReleaseLocked(voice, voice.releaseCount);
 }
 
 void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice,
-                                                uint32_t releaseCount,
-                                                bool shortenExisting) {
+                                                uint32_t releaseCount) {
     if (!voice.active) return;
 
     voice.released = true;
@@ -425,23 +424,9 @@ void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice,
     if (releaseCount > maxReleaseCount) releaseCount = maxReleaseCount;
     const uint32_t releaseSamples = releaseCount * ENVELOPE_PERIOD;
 
-    if (voice.envelopeState == STATE_RELEASE) {
-        // Normal Note-Off must not restart an active release. An exclusive
-        // class may shorten a longer release, using the current Q16.31 gain
-        // rather than the envelope multiplier (which is no longer updated).
-        if (!shortenExisting || voice.releaseSamplesRemaining <= releaseSamples) {
-            return;
-        }
-
-        const uint64_t currentGain =
-            ((uint64_t)voice.releaseGain << 31) | voice.releaseGainFraction;
-        const uint64_t releaseStep = currentGain / releaseSamples;
-        voice.releaseSamplesRemaining = releaseSamples;
-        voice.releaseGainStep = (uint16_t)(releaseStep >> 31);
-        voice.releaseGainStepFraction =
-            (uint32_t)(releaseStep & 0x7FFFFFFFULL);
-        return;
-    }
+    // A voice already in its release phase is already ending. Do not restart
+    // or recalculate its ramp; this keeps Note-On processing free of division.
+    if (voice.envelopeState == STATE_RELEASE) return;
 
     voice.releaseSamplesRemaining = releaseSamples;
     voice.envelopeState = STATE_RELEASE;
