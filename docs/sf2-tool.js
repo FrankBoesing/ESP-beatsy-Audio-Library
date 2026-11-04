@@ -119,6 +119,16 @@
     { label: "20/12", fractionBits: 12, maxFrames: MAX_SAMPLE_FRAMES_20_12 }
   ];
   var PHASE_ANALYSIS_OUTPUT_RATES = [44100, 48000];
+  // Disjoint MIDI bands plus the standard 88-key piano span (A0..C8).
+  var PHASE_ANALYSIS_NOTE_RANGES = [
+    { label: "0-20", low: 0, high: 20 },
+    { label: "21-40", low: 21, high: 40 },
+    { label: "41-60", low: 41, high: 60 },
+    { label: "61-80", low: 61, high: 80 },
+    { label: "81-100", low: 81, high: 100 },
+    { label: "101-127", low: 101, high: 127 },
+    { label: "21-108 (88-key)", low: 21, high: 108, aggregate: true }
+  ];
   // Mirrors src/common.h's default; adjust if the build overrides this macro.
   var PHASE_ANALYSIS_REFERENCE_RATE = 44100.0;
   var MAX_FILE_BYTES = 512 * 1024 * 1024;
@@ -1039,13 +1049,13 @@
   }
 
 
-  function createPhaseQuantizationStats() {
+  function createPhaseQuantizationStats(storeAbsoluteErrors) {
     var result = Object.create(null);
     for (var f = 0; f < PHASE_ANALYSIS_FORMATS.length; f++) {
       var format = PHASE_ANALYSIS_FORMATS[f];
       result[format.label] = Object.create(null);
       for (var r = 0; r < PHASE_ANALYSIS_OUTPUT_RATES.length; r++) {
-        result[format.label][PHASE_ANALYSIS_OUTPUT_RATES[r]] = {
+        var entry = {
           tests: 0,
           sumCentsSquared: 0,
           overOneCent: 0,
@@ -1055,9 +1065,32 @@
           maxAbsDriftFrames: 0,
           worstDrift: null
         };
+        if (storeAbsoluteErrors) {
+          entry.absCentsValues = [];
+          entry.absCentsSorted = false;
+        }
+        result[format.label][PHASE_ANALYSIS_OUTPUT_RATES[r]] = entry;
       }
     }
     return result;
+  }
+
+  function createPhaseQuantizationNoteRangeStats() {
+    var result = Object.create(null);
+    for (var i = 0; i < PHASE_ANALYSIS_NOTE_RANGES.length; i++) {
+      var range = PHASE_ANALYSIS_NOTE_RANGES[i];
+      result[range.label] = createPhaseQuantizationStats(true);
+    }
+    return result;
+  }
+
+  function phaseAnalysisNoteRangeLabels(note) {
+    var labels = [];
+    for (var i = 0; i < PHASE_ANALYSIS_NOTE_RANGES.length; i++) {
+      var range = PHASE_ANALYSIS_NOTE_RANGES[i];
+      if (note >= range.low && note <= range.high) labels.push(range.label);
+    }
+    return labels;
   }
 
   // Mirrors wavetableV2PhaseIncrement() in synth_wavetable_v2.cpp:
@@ -1131,6 +1164,10 @@
 
     entry.tests++;
     entry.sumCentsSquared += centsError * centsError;
+    if (entry.absCentsValues) {
+      entry.absCentsValues.push(Math.abs(centsError));
+      entry.absCentsSorted = false;
+    }
     if (Math.abs(centsError) > 1) entry.overOneCent++;
     if (Math.abs(centsError) > 5) entry.overFiveCents++;
     if (Math.abs(centsError) > entry.maxAbsCents) {
@@ -1161,8 +1198,9 @@
     }
   }
 
-  function analyzeRegionPhaseQuantization(preset, region, layout, stats) {
+  function analyzeRegionPhaseQuantization(preset, region, layout, stats, statsByNoteRange) {
     for (var note = region.keyRange.low; note <= region.keyRange.high; note++) {
+      var noteRangeLabels = phaseAnalysisNoteRangeLabels(note);
       for (var f = 0; f < PHASE_ANALYSIS_FORMATS.length; f++) {
         var format = PHASE_ANALYSIS_FORMATS[f];
         for (var r = 0; r < PHASE_ANALYSIS_OUTPUT_RATES.length; r++) {
@@ -1170,7 +1208,7 @@
           var measurement = phaseIncrementForAnalysis(
             region, layout, note, format, outputRate
           );
-          addPhaseQuantizationMeasurement(stats, measurement, {
+          var context = {
             frames: layout.frames,
             bank: preset.bank,
             program: preset.program,
@@ -1179,7 +1217,13 @@
             sample: layout.sampleName || "unnamed sample",
             note: note,
             sampleRate: layout.sampleRate
-          }, format, outputRate);
+          };
+          addPhaseQuantizationMeasurement(stats, measurement, context, format, outputRate);
+          for (var nr = 0; nr < noteRangeLabels.length; nr++) {
+            addPhaseQuantizationMeasurement(
+              statsByNoteRange[noteRangeLabels[nr]], measurement, context, format, outputRate
+            );
+          }
         }
       }
     }
@@ -1204,7 +1248,20 @@
           to.maxAbsDriftFrames = from.maxAbsDriftFrames;
           to.worstDrift = from.worstDrift;
         }
+        if (to.absCentsValues && from.absCentsValues) {
+          for (var v = 0; v < from.absCentsValues.length; v++) {
+            to.absCentsValues.push(from.absCentsValues[v]);
+          }
+          to.absCentsSorted = false;
+        }
       }
+    }
+  }
+
+  function mergePhaseQuantizationNoteRangeStats(target, source) {
+    for (var i = 0; i < PHASE_ANALYSIS_NOTE_RANGES.length; i++) {
+      var label = PHASE_ANALYSIS_NOTE_RANGES[i].label;
+      mergePhaseQuantizationStats(target[label], source[label]);
     }
   }
 
@@ -1397,6 +1454,18 @@
     return entry.tests ? Math.sqrt(entry.sumCentsSquared / entry.tests) : 0;
   }
 
+  // Exact nearest-rank percentile of absolute pitch error, in cents.
+  function phaseStatsPercentileAbsCents(entry, percentile) {
+    var values = entry.absCentsValues;
+    if (!values || !values.length) return 0;
+    if (!entry.absCentsSorted) {
+      values.sort(function (a, b) { return a - b; });
+      entry.absCentsSorted = true;
+    }
+    var index = Math.ceil(percentile * values.length) - 1;
+    return values[Math.max(0, Math.min(values.length - 1, index))];
+  }
+
   function analyzePresetVoices(preset, retainGrid) {
     if (preset.voiceAnalysis) return preset.voiceAnalysis;
     var keepGrid = retainGrid !== false;
@@ -1426,6 +1495,7 @@
     var modulatorCount = 0;
     var oversizedPcmSamples20_12 = 0;
     var phaseQuantizationStats = createPhaseQuantizationStats();
+    var phaseQuantizationByNoteRange = createPhaseQuantizationNoteRangeStats();
 
     // Each resolved preset zone is one potential musical layer. A valid
     // linked left/right pair remains one layer but needs two PCM channel reads.
@@ -1495,7 +1565,9 @@
             longestSampleName = layout.sampleName || sample.name || region.instrumentName;
           }
         }
-        analyzeRegionPhaseQuantization(preset, region, layout, phaseQuantizationStats);
+        analyzeRegionPhaseQuantization(
+          preset, region, layout, phaseQuantizationStats, phaseQuantizationByNoteRange
+        );
       }
 
       addAnalyzerRectangle(layerGrid, region.keyRange, region.velocityRange);
@@ -1619,6 +1691,7 @@
       oversizedPcmSamples: oversizedPcmSamples,
       oversizedPcmSamples20_12: oversizedPcmSamples20_12,
       phaseQuantizationStats: phaseQuantizationStats,
+      phaseQuantizationByNoteRange: phaseQuantizationByNoteRange,
       invalidSampleLayouts: invalidSampleLayouts,
       maxSampleFrames: maxSampleFrames,
       longestSampleName: longestSampleName,
@@ -1929,6 +2002,7 @@
     var presetsWithOversizedSamples20_12 = 0;
     var totalOversizedPcmSamples20_12 = 0;
     var globalPhaseQuantizationStats = createPhaseQuantizationStats();
+    var globalPhaseQuantizationByNoteRange = createPhaseQuantizationNoteRangeStats();
     var maxSampleFramesOverall = 0;
     var longestSamplePreset = "";
     var longestSampleNameOverall = "";
@@ -2014,6 +2088,9 @@
         totalOversizedPcmSamples += analysis.oversizedPcmSamples;
         totalOversizedPcmSamples20_12 += analysis.oversizedPcmSamples20_12;
         mergePhaseQuantizationStats(globalPhaseQuantizationStats, analysis.phaseQuantizationStats);
+        mergePhaseQuantizationNoteRangeStats(
+          globalPhaseQuantizationByNoteRange, analysis.phaseQuantizationByNoteRange
+        );
         if (analysis.maxSampleFrames > maxSampleFramesOverall) {
           maxSampleFramesOverall = analysis.maxSampleFrames;
           longestSamplePreset = preset.name + " (Bank " + preset.bank +
@@ -2175,6 +2252,39 @@
             phaseEntry.maxAbsDriftFrames.toFixed(3),
             phaseWorstDescription(phaseEntry.worstPitch)
           ].join("\t"));
+        }
+      }
+
+      lines.push("");
+      lines.push("Phase error by MIDI note range (absolute pitch-error percentiles):");
+      lines.push("P95/P99 use exact nearest-rank percentiles of absolute error across resolved note-zone tests.");
+      lines.push("21-108 is the standard 88-key piano note span (A0-C8); other rows are disjoint MIDI bands.");
+      lines.push([
+        "MIDI range", "Output rate", "Format", "Note-zone tests",
+        "RMS |error| (cent)", "P95 |error| (cent)", "P99 |error| (cent)",
+        "Max |error| (cent)", "Cases >1 cent", "Cases >5 cents"
+      ].join("\t"));
+      for (var rn = 0; rn < PHASE_ANALYSIS_NOTE_RANGES.length; rn++) {
+        var noteRange = PHASE_ANALYSIS_NOTE_RANGES[rn];
+        for (var rf = 0; rf < PHASE_ANALYSIS_FORMATS.length; rf++) {
+          var rangeFormat = PHASE_ANALYSIS_FORMATS[rf];
+          for (var rr = 0; rr < PHASE_ANALYSIS_OUTPUT_RATES.length; rr++) {
+            var rangeRate = PHASE_ANALYSIS_OUTPUT_RATES[rr];
+            var rangeEntry = globalPhaseQuantizationByNoteRange[noteRange.label]
+              [rangeFormat.label][rangeRate];
+            lines.push([
+              noteRange.label,
+              rangeRate,
+              rangeFormat.label,
+              rangeEntry.tests,
+              phaseStatsRmsCents(rangeEntry).toFixed(5),
+              phaseStatsPercentileAbsCents(rangeEntry, 0.95).toFixed(5),
+              phaseStatsPercentileAbsCents(rangeEntry, 0.99).toFixed(5),
+              rangeEntry.maxAbsCents.toFixed(5),
+              rangeEntry.overOneCent,
+              rangeEntry.overFiveCents
+            ].join("\t"));
+          }
         }
       }
 
