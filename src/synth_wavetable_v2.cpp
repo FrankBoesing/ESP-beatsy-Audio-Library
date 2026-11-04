@@ -491,7 +491,7 @@ void AudioSynthWavetableV2::releaseExclusiveVoicesLocked(
 
         if (!exclusiveMatch) continue;
 
-        beginReleaseLocked(voice, exclusiveReleaseCount_, true);
+        beginReleaseLocked(voice, exclusiveReleaseCount_);
         affectedNoteMask |= (1UL << voice.noteSlot);
     }
 
