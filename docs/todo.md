@@ -67,23 +67,26 @@ unchanged so existing sketches and generated headers continue to work.
   loop/phase invariants, and uses a Q16 effective envelope gain plus 32-bit
   interpolation/mixing multiplies instead of per-sample 64-bit multiplies.
 - [ ] **Benchmark and continue optimizing the V2 render and mix hot paths.**
-  The `WavetableV2` example now sweeps 1, 2, 4, 8, 16 and 32 notes (up to the
-  configured maximum), with four sample layers per note. It logs CSV rows for
-  sustain and release, including current/peak node and graph time in
-  microseconds and audio-block use. It supports USB output on the tested S3
-  configuration and I2S output on P4; I2S builds can select 44.1 or 48 kHz with
-  `WAVETABLE_V2_TEST_RATE`. Run mono and mixed-stereo builds. Hardware
-  measurements against the pre-optimization baseline are still pending.
-  Check continuity, envelope/release behavior, interpolation error and
-  worst-case block time at 4, 8, 16, 32, 64 and 128 sample voices. Keep a
-  portable scalar implementation as the reference/fallback. Evaluate
-  target-specific kernels only where repeatable measurements show a benefit.
+  The `WavetableV2` example sweeps 1, 2, 4, 8, 16 and 32 notes with four sample
+  layers per note and logs current/peak node and graph time plus audio-block
+  use. It supports USB on the tested S3 configuration and I2S on P4; I2S builds
+  can select 44.1 or 48 kHz with `WAVETABLE_V2_TEST_RATE`.
+  **Completed partial measurement:** ESP32-P4, 44.1 kHz, four-layer instrument,
+  FLASH and PSRAM, 1–32 notes / 4–128 sample layers, on 2026-11-04. At 128
+  layers the V2-node peak was 84.0%; detailed results are recorded in the
+  optimization history in `src/synth_wavetable_v2.cpp`. This is not a
+  controlled pre-optimization baseline. Still pending: 48 kHz, ESP32-S3,
+  mixed-stereo workload and a comparable pre-optimization baseline. Continue
+  checking continuity, envelope/release behavior, interpolation error and
+  worst-case block time. Keep a portable scalar implementation as the
+  reference/fallback; evaluate target-specific kernels only where repeatable
+  measurements show a benefit.
 - [ ] **Benchmark V2 polyphony and memory placement.** On ESP32-S3 and
   ESP32-P4, measure 4, 8, 16, 32, 64 and 128 simultaneous sample instances at
-  44.1 and 48 kHz. Record V2-node and total graph CPU use, peak block time,
-  audio-memory use, clipping and underruns. Compare mono against mixed
-  mono/stereo workloads, and compare internal SRAM with PSRAM sample data,
-  aligned and unaligned access, and realistic SF2 sample lengths. Keep results
+  44.1 and 48 kHz. The P4 44.1 kHz four-layer FLASH/PSRAM sweep for 4–128
+  layers is complete; see `src/synth_wavetable_v2.cpp`. Still pending are
+  ESP32-S3, 48 kHz, mixed mono/stereo workloads, aligned/unaligned access,
+  realistic larger SF2 sample banks, clipping and underrun checks. Keep results
   by target, sample rate and toolchain version.
 - [ ] **Add per-layer vibrato / pitch modulation.** Implement SF2-compatible
   vibrato delay, rate and depth with independent state per sample layer.

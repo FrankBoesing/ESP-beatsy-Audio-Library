@@ -94,6 +94,7 @@ static inline void wavetableV2ScaleSaturate4XespV(const int32_t *input,
     output[2] = (int16_t)out2;
     output[3] = (int16_t)out3;
 }
+#endif // defined(__riscv) && defined(__riscv_xespv)
 
 // MIDI note frequencies in Q16.16 Hz.
 static const uint32_t wavetableV2NoteFrequencyQ16[128] = {
@@ -693,8 +694,12 @@ void AudioSynthWavetableV2::renderVoicePath(SampleVoice &voice,
         : nullptr;
     const uint32_t loopEndFrameCount =
         (loopEnd >> 14U) + ((loopEnd & 0x3FFFU) != 0U);
-    const uint32_t loopBoundaryPhase =
+    uint32_t loopBoundaryPhase =
         loopEndFrameCount != 0U ? (loopEndFrameCount - 1U) << 14U : 0U;
+    // Do not redirect interpolation to the loop start before playback enters
+    // the loop. Raise the existing threshold once, outside the sample loops.
+    loopBoundaryPhase =
+        loopBoundaryPhase > loopStart ? loopBoundaryPhase : loopStart;
     // Fixed 18/14 phase extraction. These constants compile to immediate
     // shifts/masks; no per-voice phase-format field or runtime selection.
     const uint32_t maxSampleIndex = sample.SAMPLE_COUNT - 2U;
@@ -1898,69 +1903,102 @@ void AudioSynthWavetableV2::update() {
  *   phase format.
  *
  *
- * 25. FORWARD-LOOP INTERPOLATION BOUNDARY FIX — IMPLEMENTED / PENDING HARDWARE TEST
- * --------------------------------------------------------------------------------
- * - Codex review of the integrated V2 renderer identified that interpolation
- *   at a forward loop's final frame fetched the PCM frame at exclusive
- *   LOOP_PHASE_END. When the stored sample continued beyond the loop, that
- *   blended post-loop audio into every loop cycle.
- * - Loop-boundary detection is performed before interpolation. In the final
- *   loop frame, the right-hand interpolation sample points directly to the
- *   precomputed LOOP_START sample; if phase has crossed the exclusive end,
- *   phase is normalized before any PCM pointer is formed or sample is emitted.
- * - The common ordinary-loop path uses sample0Ptr + 1 directly. A single
- *   unlikely boundary branch handles the last loop frame and the exclusive-end
- *   wrap together; the loop-start neighbor is selected only inside that branch.
- *   Stereo performs the corresponding right-channel selection in the same arm.
- * - Mix accumulation remains expressed as mixLeft[i]/mixRight[i]; the P4
- *   compiler already lowers these to running output pointers in the generated
- *   loop, so an explicit source-level output pointer is unnecessary.
- * - Release, sustain fast path, and normal ADSR use the same boundary handling.
- *   One-shot and non-looping template paths compile without the loop-boundary
- *   test. The modulo operation remains confined to the exceptional wrap path.
- * - This pointer-oriented revision targets the extra address-generation
- *   instructions observed in the first P4 disassembly. P4 rebuild, new assembly
- *   comparison, phase-sequence verification, hardware audio listening, and
- *   cycle-level performance measurements remain pending.
+ * 25. FORWARD-LOOP INTERPOLATION BOUNDARY FIX
+ *     IMPLEMENTED / MONO WAV REGRESSION TESTED / STEREO CODE-REVIEWED — 2026-11-04
+ * -----------------------------------------------------------------------------
+ * - Fixed the forward-loop interpolation neighbor at the final PCM frame:
+ *   interpolation now targets the loop-start sample instead of reading the
+ *   frame at the exclusive LOOP_PHASE_END, which could blend post-loop audio
+ *   into every repeat when the stored sample continues beyond the loop.
+ * - The ordinary loop path retains the direct adjacent-frame pointer. One
+ *   unlikely boundary branch handles the final-frame neighbor and exclusive-end
+ *   wrap; phase is normalized before any pointer is formed after crossing the
+ *   exclusive end. Modulo remains confined to this exceptional wrap path.
+ * - Copilot identified a same-PCM-frame edge case: the raw loopBoundaryPhase
+ *   can precede loopStart. The existing loopBoundaryPhase variable is raised
+ *   to max(raw boundary, loopStart) once before the sample loops. The hot path
+ *   still has one phase comparison and one boundary branch; no extra threshold
+ *   variable or per-sample comparison was added.
+ * - Release, sustain fast path and normal ADSR use the same boundary decision.
+ *   One-shot and non-looping template paths compile without the loop test.
+ * - Stereo code inspection: both channels share the same phase and boundary
+ *   branch. In that branch, the right-channel pointers use the same sampleIndex
+ *   and the precomputed right-channel loop-start pointer. There is no separate
+ *   stereo threshold or decision, so a second recording is not needed to
+ *   validate this control-flow fix.
+ * - User-provided P4 WAV regression — 2026-11-04, 44.1 kHz mono 16-bit PCM,
+ *   test sample {0, 12000, -12000, 0}, LOOP_PHASE_END=0x8000 and
+ *   LOOP_PHASE_LENGTH=0x1000 (loopStart=1.75 frames). The expected neighbor
+ *   switch was observed in all three render paths: Sustain at 84.150 ms
+ *   (-0.14594 -> +0.29294), normal ADSR at 290.748 ms
+ *   (-0.02570 -> +0.05148), and Release at 497.596 ms
+ *   (-0.09567 -> +0.19174). Note-Off for the Release case occurred at 25 ms,
+ *   before loopStart, so Release also traversed the critical pre-loop interval.
+ * - User-provided P4 FLASH/PSRAM audio benchmark — 2026-11-04, 44.1 kHz,
+ *   four sample layers per note, 1/2/4/8/16/32 notes
+ *   (4/8/16/32/64/128 sample layers). Values below are peak CPU percentages
+ *   in graph/V2-node order:
+ *     FLASH sustain: 3.4/3.2, 6.0/5.8, 11.2/11.0, 21.6/21.3,
+ *                    42.5/42.2, 84.3/84.0
+ *     PSRAM sustain: 3.4/3.2, 6.0/5.8, 11.2/11.0, 21.6/21.4,
+ *                    42.5/42.2, 84.3/84.0
+ *     FLASH release: 3.3/3.0, 5.9/5.7, 11.0/10.8, 21.6/21.3,
+ *                    42.4/42.1, 84.1/83.9
+ *     PSRAM release: 3.3/3.0, 6.0/5.8, 11.1/10.8, 21.4/21.2,
+ *                    42.3/42.1, 84.1/84.0
+ *   At 128 layers, the reported sustain node/graph peak times were 2439/2447 us
+ *   (FLASH) and 2438/2445 us (PSRAM); release peaks were 2435/2441 us in both
+ *   memory modes. FLASH and PSRAM were practically equivalent for this sample
+ *   set. This measures the integrated corrected build; it is not a controlled
+ *   before/after comparison of the loop fix.
+ * - Scope: P4 at 44.1 kHz; the WAV regression is mono. 48 kHz, ESP32-S3 and
+ *   mixed-stereo benchmark runs remain deferred/open.
  *
  *
- * 26. Q14 DELTA INTERPOLATION / 32-BIT SAMPLE LOOP INDEX — IMPLEMENTED / PENDING BENCHMARK — 2026-11-03
- * ---------------------------------------------------------------------------------------
- * - Replaced the weighted-sum Q14 interpolation in the release, sustain and
- *   ADSR rendering paths with the algebraically equivalent delta form:
+ * 26. Q14 DELTA INTERPOLATION / 32-BIT SAMPLE LOOP INDEX
+ *     IMPLEMENTED / P4 AUDIO-BENCHMARKED — 2026-11-03 / 2026-11-04
+ * -----------------------------------------------------------------------------
+ * - Replaced weighted-sum Q14 interpolation in release, sustain and ADSR with
+ *   the equivalent delta form:
  *   sample0 + (((sample1 - sample0) * fraction) >> 14).
- * - Removed the complementary weight calculation. This reduces the left-channel
- *   interpolation from two integer multiplications to one; stereo applies the
+ * - This removes the complementary weight and reduces the left-channel
+ *   interpolation from two integer multiplications to one. Stereo applies the
  *   same transformation independently to the right channel.
- * - For signed 16-bit PCM, |sample1 - sample0| <= 65535 and fraction <= 16383.
- *   The largest product magnitude is 1,073,659,905, which fits signed int32_t.
- *   The result is algebraically identical under arithmetic right shift; a
- *   bit-exact test and P4 build remain part of validation.
+ * - For signed 16-bit PCM, |sample1 - sample0| <= 65535 and fraction <= 16383;
+ *   the maximum product magnitude is 1,073,659,905, within signed int32_t.
+ *   The equivalence follows by factoring the weighted sum before the arithmetic
+ *   right shift.
  * - Changed the renderVoicePath sample-loop index from uint16_t to uint32_t.
- *   This avoids explicit 16-bit narrowing in source; the generated P4 code must
- *   be inspected to confirm whether it reduces conversion instructions.
- * - P4 FLASH/PSRAM audio benchmark — 2026-11-03 (user-provided): the combined
- *   delta-interpolation / 32-bit-index change showed no reproducible CPU-load
- *   difference from the preceding build. The changes are retained.
+ *   This avoids explicit 16-bit narrowing in source; a specific reduction in
+ *   generated conversion instructions has not been established.
+ * - The 2026-11-03 P4 FLASH/PSRAM comparison showed no reproducible CPU-load
+ *   difference for the combined delta-interpolation / 32-bit-index change.
+ *   The 2026-11-04 integrated 44.1 kHz P4 benchmark exercised this code again.
+ *   Neither run isolates its performance contribution from other changes.
  *
  *
- * 27. XESPV VSAT.S32 FINAL PCM CLAMP — IMPLEMENTED / MICROBENCHMARKED — 2026-11-03
- * --------------------------------------------------------------------------------
+ * 27. XESPV VSAT.S32 FINAL PCM CLAMP
+ *     IMPLEMENTED / MICROBENCHMARKED / FULL AUDIO RUN RECORDED
+ * -----------------------------------------------------------------------------
  * - Replaced the XespV VMAX.S32 + VMIN.S32 clamp sequence and two vector-bound
  *   loads with one esp.vsat.s32 instruction. The signed lower/upper bounds
  *   (-32768 / 32767) are passed directly in PIE-addressable AR registers.
  * - The existing VLD.128.IP and MOVI.16.A extraction remain unchanged.
  * - User-run P4 microbenchmark: VMAX/VMIN median 5,852,530 cycles
- *   (22.32 cycles/sample); VSAT lower-then-upper median 5,523,944 cycles
- *   (21.07 cycles/sample), a 5.61% reduction for the complete tested
- *   four-sample scale/clamp/extract path. Upper-then-lower measured 5,523,907
- *   cycles, effectively identical. All three variants matched the scalar
- *   reference for the 1,024-value correctness set and had identical checksums.
+ *   (22.32 cycles/sample); VSAT median 5,523,944 cycles (21.07 cycles/sample),
+ *   a 5.61% reduction for the complete tested four-sample scale/clamp/extract
+ *   path. Upper-then-lower measured 5,523,907 cycles, effectively identical.
+ *   All three variants matched the scalar reference for the 1,024-value
+ *   correctness set and had identical checksums.
  * - The XespV path is guarded by __riscv_xespv together with __riscv, allowing
- *   future targets whose compiler enables this same extension to use it.
- *   Rebuild on each target/toolchain and retain the scalar fallback.
- * - The microbenchmark does not establish the gain in full wavetable playback.
- *   Repeat the audio FLASH/PSRAM benchmark after integrating this change.
+ *   future targets with the same compiler-enabled extension to use it. A
+ *   scalar tail and portable fallback remain.
+ * - The 2026-11-04 full P4 FLASH/PSRAM audio benchmark was run with this
+ *   integrated implementation at 44.1 kHz, up to 128 sample layers. It
+ *   recorded 84.0% V2-node peak sustain load at 128 layers in both memory
+ *   modes. This confirms operation in the full renderer but, without a
+ *   controlled pre-VSAT audio baseline, does not quantify its full-synth CPU
+ *   contribution. The 5.61% result applies only to the isolated helper test.
  *
  * MAINTENANCE RULE:
  * When changing a hot path, update the relevant item above in the same change.
