@@ -1619,10 +1619,14 @@
               amountSourceOper: definition.amountSourceOper,
               transform: definition.transform,
               presetCount: 0,
+              presetNames: [],
               resolvedZoneReferences: 0
             };
           }
           globalModulatorDefinitions[definitionKey].presetCount++;
+          globalModulatorDefinitions[definitionKey].presetNames.push(
+            "Bank " + preset.bank + " Program " + preset.program + ": " + preset.name
+          );
           globalModulatorDefinitions[definitionKey].resolvedZoneReferences +=
             definition.resolvedZoneReferences;
         }
@@ -1770,7 +1774,7 @@
       lines.push("Distinct raw modulator records (scope retained; deduplicated by all five SF2 fields):");
       lines.push([
         "Scope", "Source", "Destination", "Amount", "Amount source",
-        "Transform", "Preset count", "Resolved zone references"
+        "Transform", "Preset count", "Presets", "Resolved zone references"
       ].join("\t"));
       var modulatorDefinitionRows = Object.keys(globalModulatorDefinitions).map(function (key) {
         return globalModulatorDefinitions[key];
@@ -1792,6 +1796,7 @@
               modRow.amountSourceOper.toString(16) + ")" : "none",
           modulatorTransformLabel(modRow.transform),
           modRow.presetCount,
+          safeLogField(modRow.presetNames.join("; ")),
           modRow.resolvedZoneReferences
         ].join("\t"));
       }
