@@ -297,11 +297,13 @@
       base = "CC" + index + (controllers[index] ? " " + controllers[index] : "");
     } else {
       var sources = {
-        0: "Constant", 2: "Velocity", 3: "KeyNumber",
+        2: "Velocity", 3: "KeyNumber",
         10: "PolyPressure", 13: "ChannelPressure",
         14: "PitchWheel", 16: "PitchWheelSensitivity"
       };
-      base = sources[index] || ("Source" + index);
+      if (index === 0) base = "Constant(1)";
+      else if (index === 127) base = "ModulatorLink";
+      else base = sources[index] || ("Source" + index);
     }
     var curves = { 0: "linear", 1: "concave", 2: "convex", 3: "switch" };
     return base + (direction ? " reverse" : "") +
@@ -321,6 +323,7 @@
   }
 
   function modulatorTargetLabel(op) {
+    if (op & 0x8000) return "modulatorLink[" + (op & 0x7fff) + "]";
     return generatorLabel(op) + " [" + op + "]";
   }
 
@@ -1657,7 +1660,7 @@
           modulatorTargets: Object.keys(analysis.modulatorTargetCounts).map(Number).sort(function (a, b) {
             return a - b;
           }).map(function (op) {
-            return generatorLabel(op) + "=" + analysis.modulatorTargetCounts[op];
+            return modulatorTargetLabel(op) + "=" + analysis.modulatorTargetCounts[op];
           }).join("; ")
         });
 
@@ -1712,10 +1715,12 @@
         "not present"));
       lines.push("pmod records (preset modulators, sentinel excluded): " + soundFont.pmodulatorCount);
       lines.push("imod records (instrument modulators, sentinel excluded): " + soundFont.imodulatorCount);
-      lines.push("Resolved distinct modulator definitions (deduplicated per preset and scope): " +
+      lines.push("Resolved distinct raw modulator records (deduplicated per preset and scope): " +
         Object.keys(globalModulatorDefinitions).length);
       lines.push("Sample mode zones (resolved zones summed over presets; mode 0/1/2/3): " +
         globalSampleModeCounts.join(" / "));
+      lines.push("Sample mode meaning: 0=no loop, 1=continuous loop, 2=reserved, 3=loop until release.");
+      lines.push("Note: SF2 default modulators are implicit and are not stored in pmod/imod; they are not included here.");
       lines.push("Zones with nonzero exclusiveClass (resolved zones summed over presets): " +
         Object.keys(globalExclusiveClassCounts).sort(function (a, b) {
           return Number(a) - Number(b);
@@ -1733,7 +1738,7 @@
       });
       lines = lines.concat(globalGeneratorLines.length ? globalGeneratorLines : ["  none"]);
       lines.push("");
-      lines.push("Modulator target usage (unique definitions per preset; target is an SF2 generator):");
+      lines.push("Modulator target usage (unique explicit raw records per preset; target may be a generator or modulator link):");
       var targetTotals = Object.create(null);
       Object.keys(globalModulatorDefinitions).forEach(function (key) {
         var definition = globalModulatorDefinitions[key];
@@ -1742,12 +1747,12 @@
       var targetLines = Object.keys(targetTotals).map(Number).sort(function (a, b) {
         return a - b;
       }).map(function (op) {
-        return "  " + op + " " + generatorLabel(op) + ": " +
-          targetTotals[op] + " distinct scoped definition(s)";
+        return "  " + modulatorTargetLabel(op) + ": " +
+          targetTotals[op] + " distinct scoped record(s)";
       });
       lines = lines.concat(targetLines.length ? targetLines : ["  none"]);
       lines.push("");
-      lines.push("Distinct modulator definitions (scope retained; records are deduplicated by all five SF2 fields):");
+      lines.push("Distinct raw modulator records (scope retained; deduplicated by all five SF2 fields):");
       lines.push([
         "Scope", "Source", "Destination", "Amount", "Amount source",
         "Transform", "Preset count", "Resolved zone references"
@@ -1785,7 +1790,7 @@
         "Cells above V2 limit", "Stereo zones", "ROM zones", "Ogg/SF3 zones",
         "Invalid stereo links", "Active generators (zone counts)",
         "Sample modes 0/1/2/3", "Exclusive classes (zone counts)",
-        "Unique modulators", "Modulator targets (unique)"
+        "Distinct modulator records", "Modulator targets (unique records)"
       ].join("\t"));
 
       for (var r = 0; r < results.length; r++) {
