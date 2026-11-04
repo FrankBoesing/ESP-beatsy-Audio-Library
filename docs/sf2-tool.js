@@ -91,16 +91,51 @@
   DEFAULTS[GEN.startLoopCoarse] = 0;
   DEFAULTS[GEN.endLoopCoarse] = 0;
 
+  // SF2 generator defaults used only to classify actual feature usage in the analyzer.
+  // Kept separate from DEFAULTS so preview/export behavior remains unchanged.
+  var ANALYZER_GENERATOR_DEFAULTS = {
+    0: 0, 1: 0, 2: 0, 3: 0, 4: 0,
+    5: 0, 6: 0, 7: 0, 8: 13500, 9: 0, 10: 0, 11: 0, 12: 0,
+    13: 0, 15: 0, 16: 0, 17: 0,
+    21: -12000, 22: 0, 23: -12000, 24: 0,
+    25: -12000, 26: -12000, 27: -12000, 28: -12000,
+    29: 0, 30: -12000, 31: 0, 32: 0,
+    33: -12000, 34: -12000, 35: -12000, 36: -12000,
+    37: 0, 38: -12000, 39: 0, 40: 0,
+    46: -1, 47: -1, 48: 0, 51: 0, 52: 0, 54: 0, 56: 100,
+    57: 0, 58: -1
+  };
+
   var V1_INDEX_BITS = 16;
   var V2_PHASE_FRACTION_BITS = 14;
   var V2_PHASE_SCALE = Math.pow(2, V2_PHASE_FRACTION_BITS);
   var MAX_SAMPLE_FRAMES_V1 = Math.pow(2, V1_INDEX_BITS) - 1;
   var MAX_SAMPLE_FRAMES_V2 = Math.pow(2, 32 - V2_PHASE_FRACTION_BITS) - 1;
+  // Comparison-only format: 20 sample-index bits and 12 fractional bits.
+  // The live V2 player and exporter remain fixed at 18/14.
+  var MAX_SAMPLE_FRAMES_20_12 = Math.pow(2, 20) - 1;
+  var PHASE_ANALYSIS_FORMATS = [
+    { label: "18/14", fractionBits: 14, maxFrames: MAX_SAMPLE_FRAMES_V2 },
+    { label: "20/12", fractionBits: 12, maxFrames: MAX_SAMPLE_FRAMES_20_12 }
+  ];
+  var PHASE_ANALYSIS_OUTPUT_RATES = [44100, 48000];
+  // Disjoint MIDI bands plus the standard 88-key piano span (A0..C8).
+  var PHASE_ANALYSIS_NOTE_RANGES = [
+    { label: "0-20", low: 0, high: 20 },
+    { label: "21-40", low: 21, high: 40 },
+    { label: "41-60", low: 41, high: 60 },
+    { label: "61-80", low: 61, high: 80 },
+    { label: "81-100", low: 81, high: 100 },
+    { label: "101-127", low: 101, high: 127 },
+    { label: "21-108 (88-key)", low: 21, high: 108, aggregate: true }
+  ];
+  // Mirrors src/common.h's default; adjust if the build overrides this macro.
+  var PHASE_ANALYSIS_REFERENCE_RATE = 44100.0;
   var MAX_FILE_BYTES = 512 * 1024 * 1024;
   var MAX_EXPORT_FRAMES = 2000000;
   var RANGE_OPERATORS = [GEN.keyRange, GEN.velocityRange];
   var INDEX_OPERATORS = [GEN.instrument, GEN.sampleId];
-  var UNSIGNED_OPERATORS = [GEN.instrument, GEN.sampleId, GEN.sampleModes];
+  var UNSIGNED_OPERATORS = [GEN.instrument, GEN.sampleId, GEN.sampleModes, 57];
   var PRESET_IGNORED_OPERATORS = [
     0, 1, 2, 3, 4, 12, 45, 46, 47, 50, 54, 57, 58
   ];
@@ -108,6 +143,36 @@
     0, 1, 2, 3, 4, 12, 33, 34, 35, 36, 37, 38, 39, 40,
     41, 43, 44, 45, 46, 47, 48, 50, 51, 52, 53, 54, 56, 58
   ];
+
+  var GENERATOR_NAMES = {
+    0: "startAddrsOffset", 1: "endAddrsOffset",
+    2: "startloopAddrsOffset", 3: "endloopAddrsOffset",
+    4: "startAddrsCoarseOffset", 5: "modLfoToPitch",
+    6: "vibLfoToPitch", 7: "modEnvToPitch",
+    8: "initialFilterFc", 9: "initialFilterQ",
+    10: "modLfoToFilterFc", 11: "modEnvToFilterFc",
+    12: "endAddrsCoarseOffset", 13: "modLfoToVolume",
+    15: "chorusEffectsSend", 16: "reverbEffectsSend", 17: "pan",
+    21: "delayModLFO", 22: "freqModLFO", 23: "delayVibLFO",
+    24: "freqVibLFO", 25: "delayModEnv", 26: "attackModEnv",
+    27: "holdModEnv", 28: "decayModEnv", 29: "sustainModEnv",
+    30: "releaseModEnv", 31: "keynumToModEnvHold",
+    32: "keynumToModEnvDecay", 33: "delayVolEnv",
+    34: "attackVolEnv", 35: "holdVolEnv", 36: "decayVolEnv",
+    37: "sustainVolEnv", 38: "releaseVolEnv",
+    39: "keynumToVolEnvHold", 40: "keynumToVolEnvDecay",
+    41: "instrument", 43: "keyRange", 44: "velocityRange",
+    45: "startloopAddrsCoarseOffset", 46: "keynum",
+    47: "velocity", 48: "initialAttenuation",
+    50: "endloopAddrsCoarseOffset", 51: "coarseTune",
+    52: "fineTune", 53: "sampleID", 54: "sampleModes",
+    56: "scaleTuning", 57: "exclusiveClass",
+    58: "overridingRootKey"
+  };
+
+  function generatorLabel(op) {
+    return GENERATOR_NAMES[op] || ("generator " + op);
+  }
 
   function setStatus(message, kind) {
     status.className = "status" + (kind ? " " + kind : "");
@@ -213,12 +278,88 @@
     });
   }
 
-  function readModulatorCount(chunk, label) {
-    if (!chunk) return 0;
+  function readModulators(view, chunk, label) {
+    if (!chunk) return [];
     if (chunk.size % 10 !== 0 || chunk.size < 10) {
       throw new Error("Invalid " + label + " modulator chunk.");
     }
-    return Math.max(0, chunk.size / 10 - 1);
+    // The final 10-byte record in pmod/imod is the required terminal sentinel.
+    var count = Math.max(0, chunk.size / 10 - 1);
+    var result = [];
+    for (var i = 0; i < count; i++) {
+      var p = chunk.data + i * 10;
+      result.push({
+        sourceOper: view.getUint16(p, true),
+        destOper: view.getUint16(p + 2, true),
+        amount: view.getInt16(p + 4, true),
+        amountSourceOper: view.getUint16(p + 6, true),
+        transform: view.getUint16(p + 8, true)
+      });
+    }
+    return result;
+  }
+
+  function zoneModulators(bags, modulatorList, firstBag, nextBag, label) {
+    if (firstBag < 0 || nextBag <= firstBag || nextBag >= bags.length) {
+      throw new Error("Invalid bag index while reading " + label + " modulators.");
+    }
+    var result = [];
+    for (var i = firstBag; i < nextBag; i++) {
+      var first = bags[i].modIndex;
+      var last = bags[i + 1].modIndex;
+      if (last < first || last > modulatorList.length) {
+        throw new Error("Invalid modulator index in " + label + ".");
+      }
+      result.push(modulatorList.slice(first, last));
+    }
+    return result;
+  }
+
+  function modulatorSourceLabel(raw) {
+    var index = raw & 0x007f;
+    var isController = (raw & 0x0080) !== 0;
+    var direction = (raw >>> 8) & 1;
+    var polarity = (raw >>> 9) & 1;
+    var curve = (raw >>> 10) & 0x003f;
+    var base;
+    if (isController) {
+      var controllers = {
+        1: "ModWheel", 2: "Breath", 4: "Foot", 5: "PortamentoTime",
+        7: "Volume", 10: "Pan", 11: "Expression", 64: "Sustain",
+        65: "Portamento", 66: "Sostenuto", 67: "SoftPedal",
+        71: "Resonance", 74: "Brightness"
+      };
+      base = "CC" + index + (controllers[index] ? " " + controllers[index] : "");
+    } else {
+      var sources = {
+        2: "Velocity", 3: "KeyNumber",
+        10: "PolyPressure", 13: "ChannelPressure",
+        14: "PitchWheel", 16: "PitchWheelSensitivity"
+      };
+      if (index === 0) base = "Constant(1)";
+      else if (index === 127) base = "ModulatorLink";
+      else base = sources[index] || ("Source" + index);
+    }
+    var curves = { 0: "linear", 1: "concave", 2: "convex", 3: "switch" };
+    return base + (direction ? " reverse" : "") +
+      (polarity ? " bipolar" : " unipolar") +
+      " " + (curves[curve] || ("curve" + curve));
+  }
+
+  function modulatorTransformLabel(value) {
+    if (value === 0) return "linear";
+    if (value === 2) return "absolute";
+    return "transform " + value;
+  }
+
+  function modulatorDefinitionKey(scope, mod) {
+    return [scope, mod.sourceOper, mod.destOper, mod.amount,
+      mod.amountSourceOper, mod.transform].join("|");
+  }
+
+  function modulatorTargetLabel(op) {
+    if (op & 0x8000) return "modulatorLink[" + (op & 0x7fff) + "]";
+    return generatorLabel(op) + " [" + op + "]";
   }
 
   function makeMap(zone) {
@@ -350,9 +491,12 @@
 
     var smpl = findChunk(sdta, "smpl");
     var sm24 = findChunk(sdta, "sm24");
+    var sample24Present = !!sm24;
+    var sample24Bytes = sm24 ? sm24.size : 0;
     if (!smpl || (smpl.size & 1)) throw new Error("The SoundFont has no valid 16-bit smpl data.");
     var sampleCount = smpl.size / 2;
-    if (sm24 && sm24.size < sampleCount) sm24 = null;
+    var sample24Usable = !!sm24 && sm24.size >= sampleCount;
+    if (!sample24Usable) sm24 = null;
 
     var info = {};
     if (infoChunks) {
@@ -378,6 +522,8 @@
     });
     var ibag = readBags(view, findChunk(pdta, "ibag"), "ibag");
     var igen = readGenerators(view, findChunk(pdta, "igen"), "igen");
+    var pmod = readModulators(view, findChunk(pdta, "pmod"), "pmod");
+    var imod = readModulators(view, findChunk(pdta, "imod"), "imod");
     var shdr = records(view, findChunk(pdta, "shdr"), 46, "shdr", function (v, p) {
       return {
         name: readName(v, p, 20),
@@ -401,6 +547,10 @@
     var instruments = [];
     for (var n = 0; n < inst.length - 1; n++) {
       var rawZones = zoneGenerators(ibag, igen, inst[n].bag, inst[n + 1].bag, "instrument");
+      var zoneMods = zoneModulators(ibag, imod, inst[n].bag, inst[n + 1].bag, "instrument");
+      for (var mz = 0; mz < rawZones.length; mz++) {
+        rawZones[mz].modulators = zoneMods[mz];
+      }
       var split = splitZones(rawZones, GEN.sampleId, "instrument");
       instruments.push({
         name: inst[n].name || "Unnamed instrument",
@@ -412,6 +562,10 @@
     var presets = [];
     for (var p = 0; p < phdr.length - 1; p++) {
       var rawPresetZones = zoneGenerators(pbag, pgen, phdr[p].bag, phdr[p + 1].bag, "preset");
+      var presetZoneMods = zoneModulators(pbag, pmod, phdr[p].bag, phdr[p + 1].bag, "preset");
+      for (var pmz = 0; pmz < rawPresetZones.length; pmz++) {
+        rawPresetZones[pmz].modulators = presetZoneMods[pmz];
+      }
       var presetSplit = splitZones(rawPresetZones, GEN.instrument, "preset");
       var preset = {
         name: phdr[p].name || "Unnamed preset",
@@ -446,6 +600,37 @@
 
           var instrumentValues = combineInstrumentGenerators(instrument.globalZone, instZone);
           var values = applyPresetOffsets(instrumentValues, presetOffsets);
+          var generatorZones = [presetSplit.globalZone, pz, instrument.globalZone, instZone];
+          var activeGeneratorSet = Object.create(null);
+          for (var gzi = 0; gzi < generatorZones.length; gzi++) {
+            var generatorZone = generatorZones[gzi];
+            if (!generatorZone) continue;
+            for (var ggi = 0; ggi < generatorZone.length; ggi++) {
+              var generatorOp = generatorZone[ggi].op;
+              if (RANGE_OPERATORS.indexOf(generatorOp) >= 0 ||
+                  INDEX_OPERATORS.indexOf(generatorOp) >= 0) continue;
+              var generatorValue = values[generatorOp];
+              if (generatorValue === undefined) continue;
+              var generatorDefault = Object.prototype.hasOwnProperty.call(ANALYZER_GENERATOR_DEFAULTS, generatorOp) ?
+                ANALYZER_GENERATOR_DEFAULTS[generatorOp] : 0;
+              var active = generatorValue !== generatorDefault;
+              if (generatorOp === GEN.keynum || generatorOp === GEN.velocity) {
+                active = generatorValue >= 0;
+              }
+              if (active) activeGeneratorSet[generatorOp] = true;
+            }
+          }
+          var activeGenerators = Object.keys(activeGeneratorSet).map(Number).sort(function (a, b) {
+            return a - b;
+          });
+          var modulatorGroups = [
+            { scope: "preset-global", records: presetSplit.globalZone ?
+              (presetSplit.globalZone.modulators || []) : [] },
+            { scope: "preset-local", records: pz.modulators || [] },
+            { scope: "instrument-global", records: instrument.globalZone ?
+              (instrument.globalZone.modulators || []) : [] },
+            { scope: "instrument-local", records: instZone.modulators || [] }
+          ];
           var unsupported = [];
           Object.keys(values).forEach(function (key) {
             var op = Number(key);
@@ -461,6 +646,8 @@
             keyRange: keyRange,
             velocityRange: velocityRange,
             values: values,
+            activeGenerators: activeGenerators,
+            modulators: modulatorGroups,
             unsupportedGenerators: unsupported
           });
         }
@@ -491,7 +678,8 @@
           15: "chorusEffectsSend",
           16: "reverbEffectsSend",
           17: "pan",
-          47: "fixed velocity override"
+          47: "fixed velocity override",
+          57: "exclusiveClass"
         };
         var descriptions = unsupportedList.map(function (op) {
           return op + (generatorLabels[op] ? " (" + generatorLabels[op] + ")" : "");
@@ -506,19 +694,23 @@
       return a.bank - b.bank || a.program - b.program || a.name.localeCompare(b.name);
     });
 
-    var pmodCount = readModulatorCount(findChunk(pdta, "pmod"), "pmod");
-    var imodCount = readModulatorCount(findChunk(pdta, "imod"), "imod");
-
     return {
       view: view,
       sampleDataChunk: smpl,
       sample24Chunk: sm24,
+      sample24Present: sample24Present,
+      sample24Usable: sample24Usable,
+      sample24Bytes: sample24Bytes,
       sampleCount: sampleCount,
       samples: shdr,
       presets: presets,
       info: info,
       instrumentCount: instruments.length,
-      modulatorCount: pmodCount + imodCount,
+      pmodulators: pmod,
+      imodulators: imod,
+      pmodulatorCount: pmod.length,
+      imodulatorCount: imod.length,
+      modulatorCount: pmod.length + imod.length,
       pcmCache: Object.create(null),
       audioBufferCache: Object.create(null),
       audioBufferFrameCount: 0
@@ -856,6 +1048,424 @@
     return ranges.length ? ranges.join(", ") : "—";
   }
 
+
+  function createPhaseQuantizationStats(storeAbsoluteErrors) {
+    var result = Object.create(null);
+    for (var f = 0; f < PHASE_ANALYSIS_FORMATS.length; f++) {
+      var format = PHASE_ANALYSIS_FORMATS[f];
+      result[format.label] = Object.create(null);
+      for (var r = 0; r < PHASE_ANALYSIS_OUTPUT_RATES.length; r++) {
+        var entry = {
+          tests: 0,
+          sumCentsSquared: 0,
+          overOneCent: 0,
+          overFiveCents: 0,
+          maxAbsCents: 0,
+          worstPitch: null,
+          maxAbsDriftFrames: 0,
+          worstDrift: null
+        };
+        if (storeAbsoluteErrors) {
+          entry.absCentsValues = [];
+          entry.absCentsSorted = false;
+        }
+        result[format.label][PHASE_ANALYSIS_OUTPUT_RATES[r]] = entry;
+      }
+    }
+    return result;
+  }
+
+  function createPhaseQuantizationNoteRangeStats() {
+    var result = Object.create(null);
+    for (var i = 0; i < PHASE_ANALYSIS_NOTE_RANGES.length; i++) {
+      var range = PHASE_ANALYSIS_NOTE_RANGES[i];
+      result[range.label] = createPhaseQuantizationStats(true);
+    }
+    return result;
+  }
+
+  function phaseAnalysisNoteRangeLabels(note) {
+    var labels = [];
+    for (var i = 0; i < PHASE_ANALYSIS_NOTE_RANGES.length; i++) {
+      var range = PHASE_ANALYSIS_NOTE_RANGES[i];
+      if (note >= range.low && note <= range.high) labels.push(range.label);
+    }
+    return labels;
+  }
+
+  // Mirrors wavetableV2PhaseIncrement() in synth_wavetable_v2.cpp:
+  // float coefficient -> Q16.16 coefficient -> rounded uint32 phase step.
+  // The frequency table is the same MIDI Hz Q16.16 table, reconstructed by
+  // rounding the exact equal-tempered MIDI frequencies.
+  function phaseIncrementForAnalysis(region, layout, note, format, outputRate) {
+    var playback = playbackRatio(font, region, note);
+    var noteFrequency = midiFrequency(note);
+    var scale = Math.pow(2, format.fractionBits);
+
+    // Match the value emitted by the V2 exporter: the phase coefficient is
+    // written as a 12-decimal float literal and divided by
+    // AUDIO_SAMPLE_RATE_EXACT in the generated sample_data initializer.
+    // setInstrument() then multiplies it by AUDIO_SAMPLE_RATE_EXACT / outputRate.
+    var exportedPhaseCoefficient = Number((
+      scale * layout.sampleRate * playback / noteFrequency
+    ).toFixed(12));
+    var perHertzCoefficient = Math.fround(
+      Math.fround(exportedPhaseCoefficient) / PHASE_ANALYSIS_REFERENCE_RATE
+    );
+    if (!Number.isFinite(perHertzCoefficient) || perHertzCoefficient <= 0) return null;
+
+    // Mirrors setInstrument(): phaseIncrementScale_ =
+    // AUDIO_SAMPLE_RATE_EXACT / AudioStream::sampleRate().
+    var phaseScale = Math.fround(PHASE_ANALYSIS_REFERENCE_RATE / outputRate);
+    var coefficient = Math.fround(perHertzCoefficient * phaseScale);
+    var coefficientQ16Float = Math.fround(coefficient * 65536.0);
+    if (!Number.isFinite(coefficientQ16Float) ||
+        coefficientQ16Float >= 1.8446744073709552e19) {
+      return {
+        increment: 4294967295,
+        idealFramesPerOutputSample: layout.sampleRate * playback / outputRate
+      };
+    }
+
+    var coefficientQ16 = Math.floor(Math.fround(coefficientQ16Float + 0.5));
+    var frequencyQ16 = Math.round(noteFrequency * 65536.0);
+    var increment;
+    if (typeof BigInt === "function") {
+      var product = BigInt(frequencyQ16) * BigInt(coefficientQ16);
+      var maxUint64 = (1n << 64n) - 1n;
+      if (product > maxUint64 - 0x80000000n) {
+        increment = 4294967295;
+      } else {
+        increment = Number((product + 0x80000000n) >> 32n);
+      }
+    } else {
+      // All normal audio-rate cases stay below Number's exact-integer limit.
+      var productNumber = frequencyQ16 * coefficientQ16;
+      increment = Math.floor((productNumber + 0x80000000) / 4294967296);
+    }
+
+    if (increment === 0) increment = 1;
+    if (increment >= 4294967295) increment = 4294967295;
+    return {
+      increment: increment,
+      idealFramesPerOutputSample: layout.sampleRate * playback / outputRate
+    };
+  }
+
+  function addPhaseQuantizationMeasurement(stats, measurement, context, format, outputRate) {
+    if (!measurement || !(measurement.idealFramesPerOutputSample > 0)) return;
+    var scale = Math.pow(2, format.fractionBits);
+    var actualFramesPerOutputSample = measurement.increment / scale;
+    var relativeError = actualFramesPerOutputSample /
+      measurement.idealFramesPerOutputSample - 1;
+    var centsError = 1200 * Math.log2(1 + relativeError);
+    var driftFrames = context.frames * relativeError;
+    var entry = stats[format.label][outputRate];
+
+    entry.tests++;
+    entry.sumCentsSquared += centsError * centsError;
+    if (entry.absCentsValues) {
+      entry.absCentsValues.push(Math.abs(centsError));
+      entry.absCentsSorted = false;
+    }
+    if (Math.abs(centsError) > 1) entry.overOneCent++;
+    if (Math.abs(centsError) > 5) entry.overFiveCents++;
+    if (Math.abs(centsError) > entry.maxAbsCents) {
+      entry.maxAbsCents = Math.abs(centsError);
+      entry.worstPitch = {
+        cents: centsError,
+        bank: context.bank,
+        program: context.program,
+        preset: context.preset,
+        instrument: context.instrument,
+        sample: context.sample,
+        note: midiName(context.note),
+        sampleRate: context.sampleRate,
+        increment: measurement.increment
+      };
+    }
+    if (Math.abs(driftFrames) > entry.maxAbsDriftFrames) {
+      entry.maxAbsDriftFrames = Math.abs(driftFrames);
+      entry.worstDrift = {
+        frames: driftFrames,
+        bank: context.bank,
+        program: context.program,
+        preset: context.preset,
+        instrument: context.instrument,
+        sample: context.sample,
+        note: midiName(context.note)
+      };
+    }
+  }
+
+  function analyzeRegionPhaseQuantization(preset, region, layout, stats, statsByNoteRange) {
+    for (var note = region.keyRange.low; note <= region.keyRange.high; note++) {
+      var noteRangeLabels = phaseAnalysisNoteRangeLabels(note);
+      for (var f = 0; f < PHASE_ANALYSIS_FORMATS.length; f++) {
+        var format = PHASE_ANALYSIS_FORMATS[f];
+        for (var r = 0; r < PHASE_ANALYSIS_OUTPUT_RATES.length; r++) {
+          var outputRate = PHASE_ANALYSIS_OUTPUT_RATES[r];
+          var measurement = phaseIncrementForAnalysis(
+            region, layout, note, format, outputRate
+          );
+          var context = {
+            frames: layout.frames,
+            bank: preset.bank,
+            program: preset.program,
+            preset: preset.name,
+            instrument: region.instrumentName,
+            sample: layout.sampleName || "unnamed sample",
+            note: note,
+            sampleRate: layout.sampleRate
+          };
+          addPhaseQuantizationMeasurement(stats, measurement, context, format, outputRate);
+          for (var nr = 0; nr < noteRangeLabels.length; nr++) {
+            addPhaseQuantizationMeasurement(
+              statsByNoteRange[noteRangeLabels[nr]], measurement, context, format, outputRate
+            );
+          }
+        }
+      }
+    }
+  }
+
+  function mergePhaseQuantizationStats(target, source) {
+    for (var f = 0; f < PHASE_ANALYSIS_FORMATS.length; f++) {
+      var format = PHASE_ANALYSIS_FORMATS[f];
+      for (var r = 0; r < PHASE_ANALYSIS_OUTPUT_RATES.length; r++) {
+        var rate = PHASE_ANALYSIS_OUTPUT_RATES[r];
+        var to = target[format.label][rate];
+        var from = source[format.label][rate];
+        to.tests += from.tests;
+        to.sumCentsSquared += from.sumCentsSquared;
+        to.overOneCent += from.overOneCent;
+        to.overFiveCents += from.overFiveCents;
+        if (from.maxAbsCents > to.maxAbsCents) {
+          to.maxAbsCents = from.maxAbsCents;
+          to.worstPitch = from.worstPitch;
+        }
+        if (from.maxAbsDriftFrames > to.maxAbsDriftFrames) {
+          to.maxAbsDriftFrames = from.maxAbsDriftFrames;
+          to.worstDrift = from.worstDrift;
+        }
+        if (to.absCentsValues && from.absCentsValues) {
+          for (var v = 0; v < from.absCentsValues.length; v++) {
+            to.absCentsValues.push(from.absCentsValues[v]);
+          }
+          to.absCentsSorted = false;
+        }
+      }
+    }
+  }
+
+  function mergePhaseQuantizationNoteRangeStats(target, source) {
+    for (var i = 0; i < PHASE_ANALYSIS_NOTE_RANGES.length; i++) {
+      var label = PHASE_ANALYSIS_NOTE_RANGES[i].label;
+      mergePhaseQuantizationStats(target[label], source[label]);
+    }
+  }
+
+  function collectUniquePcmRanges(soundFont) {
+    var rangesByKey = Object.create(null);
+    for (var p = 0; p < soundFont.presets.length; p++) {
+      var preset = soundFont.presets[p];
+      for (var z = 0; z < preset.zones.length; z++) {
+        var region = preset.zones[z];
+        var layout = makeRegionLayout(soundFont, region);
+        if (layout.error) continue;
+        var guardFrame = layout.loop && layout.loopEnd === layout.frames ?
+          layout.loopStart : -1;
+        var key = (layout.right ? "stereo:" : "mono:") + layout.start + ":" +
+          layout.rightStart + ":" + layout.frames + ":" + guardFrame;
+        var entry = rangesByKey[key];
+        if (!entry) {
+          entry = {
+            key: key,
+            layout: layout,
+            frames: layout.frames,
+            sampleRate: layout.sampleRate,
+            sampleName: layout.sampleName || soundFont.samples[region.sampleIndex].name ||
+              region.instrumentName || "unnamed sample",
+            channels: layout.right ? 2 : 1,
+            references: [],
+            referenceKeys: Object.create(null)
+          };
+          rangesByKey[key] = entry;
+        }
+        var referenceKey = preset.bank + ":" + preset.program + ":" +
+          preset.name + ":" + region.instrumentName;
+        if (!entry.referenceKeys[referenceKey]) {
+          entry.referenceKeys[referenceKey] = true;
+          entry.references.push(
+            "Bank " + preset.bank + " Program " + preset.program + " " +
+            preset.name + " / " + region.instrumentName
+          );
+        }
+      }
+    }
+    return Object.keys(rangesByKey).map(function (key) {
+      var entry = rangesByKey[key];
+      delete entry.referenceKeys;
+      return entry;
+    });
+  }
+
+  async function analyzePcmInterpolationRanges(soundFont, ranges, scanGeneration) {
+    var aggregate = {
+      ranges: ranges.length,
+      channelFrames: 0,
+      signalSquares: 0,
+      signalValues: 0,
+      deltaSquares: 0,
+      deltaPairs: 0,
+      maxDelta: 0,
+      maxDeltaSample: "",
+      entries: []
+    };
+    var totalChannelFrames = 0;
+    for (var t = 0; t < ranges.length; t++) {
+      totalChannelFrames += ranges[t].frames * ranges[t].channels;
+    }
+    var lastProgressFrames = 0;
+    var chunkSize = 65536;
+
+    for (var r = 0; r < ranges.length; r++) {
+      if (scanGeneration !== allPresetScanGeneration || soundFont !== font) return null;
+      var range = ranges[r];
+      var layout = range.layout;
+      var local = {
+        signalSquares: 0,
+        signalValues: 0,
+        deltaSquares: 0,
+        deltaPairs: 0,
+        maxDelta: 0
+      };
+
+      for (var channel = 0; channel < range.channels; channel++) {
+        var start = channel === 0 ? layout.start : layout.rightStart;
+        var previous = 0;
+        for (var offset = 0; offset < layout.frames; offset++) {
+          var value = readSampleValue(soundFont, start + offset);
+          local.signalSquares += value * value;
+          local.signalValues++;
+          if (offset > 0) {
+            var delta = Math.abs(value - previous);
+            local.deltaSquares += delta * delta;
+            local.deltaPairs++;
+            if (delta > local.maxDelta) local.maxDelta = delta;
+          }
+          previous = value;
+
+          if ((offset + 1) % chunkSize === 0) {
+            if (scanGeneration !== allPresetScanGeneration || soundFont !== font) return null;
+            aggregate.channelFrames += chunkSize;
+            if (aggregate.channelFrames - lastProgressFrames >= 1048576) {
+              lastProgressFrames = aggregate.channelFrames;
+              allPresetScanStatus.textContent =
+                "Analyzing PCM interpolation data: " +
+                aggregate.channelFrames.toLocaleString() + " / " +
+                totalChannelFrames.toLocaleString() + " channel-frames…";
+            }
+            await new Promise(function (resolve) { setTimeout(resolve, 0); });
+          }
+        }
+
+        // Match the V2 export's one-frame interpolation guard at the end.
+        var guardValue = layout.loop && layout.loopEnd === layout.frames ?
+          readSampleValue(soundFont, start + layout.loopStart) : 0;
+        var guardDelta = Math.abs(guardValue - previous);
+        local.deltaSquares += guardDelta * guardDelta;
+        local.deltaPairs++;
+        if (guardDelta > local.maxDelta) local.maxDelta = guardDelta;
+
+        var processedInChannel = layout.frames % chunkSize;
+        aggregate.channelFrames += processedInChannel;
+      }
+
+      aggregate.signalSquares += local.signalSquares;
+      aggregate.signalValues += local.signalValues;
+      aggregate.deltaSquares += local.deltaSquares;
+      aggregate.deltaPairs += local.deltaPairs;
+      if (local.maxDelta > aggregate.maxDelta) {
+        aggregate.maxDelta = local.maxDelta;
+        aggregate.maxDeltaSample = range.sampleName;
+      }
+
+      var signalRms = local.signalValues ?
+        Math.sqrt(local.signalSquares / local.signalValues) : 0;
+      var deltaRms = local.deltaPairs ?
+        Math.sqrt(local.deltaSquares / local.deltaPairs) : 0;
+      var interpolationError12 = deltaRms / (Math.sqrt(12) * 4096);
+      var snr12 = interpolationError12 > 0 && signalRms > 0 ?
+        20 * Math.log10(signalRms / interpolationError12) : Infinity;
+      aggregate.entries.push({
+        sampleName: range.sampleName,
+        frames: range.frames,
+        sampleRate: range.sampleRate,
+        channels: range.channels,
+        signalRms: signalRms,
+        deltaRms: deltaRms,
+        maxDelta: local.maxDelta,
+        interpolationError12: interpolationError12,
+        snr12: snr12,
+        references: range.references
+      });
+
+      if ((r & 15) === 15 || r === ranges.length - 1) {
+        allPresetScanStatus.textContent =
+          "Analyzing PCM interpolation data: " + (r + 1) + " / " +
+          ranges.length + " unique PCM ranges…";
+        await new Promise(function (resolve) { setTimeout(resolve, 0); });
+      }
+    }
+
+    aggregate.signalRms = aggregate.signalValues ?
+      Math.sqrt(aggregate.signalSquares / aggregate.signalValues) : 0;
+    aggregate.deltaRms = aggregate.deltaPairs ?
+      Math.sqrt(aggregate.deltaSquares / aggregate.deltaPairs) : 0;
+    aggregate.interpolationErrors = Object.create(null);
+    for (var f = 0; f < PHASE_ANALYSIS_FORMATS.length; f++) {
+      var format = PHASE_ANALYSIS_FORMATS[f];
+      var scale = Math.pow(2, format.fractionBits);
+      var rmsError = aggregate.deltaRms / (Math.sqrt(12) * scale);
+      aggregate.interpolationErrors[format.label] = {
+        rmsError: rmsError,
+        maxErrorBound: aggregate.maxDelta / (2 * scale),
+        snr: rmsError > 0 && aggregate.signalRms > 0 ?
+          20 * Math.log10(aggregate.signalRms / rmsError) : Infinity
+      };
+    }
+    aggregate.entries.sort(function (a, b) {
+      return b.interpolationError12 - a.interpolationError12 ||
+        b.maxDelta - a.maxDelta ||
+        b.frames - a.frames;
+    });
+    return aggregate;
+  }
+
+  function phaseWorstDescription(entry) {
+    if (!entry) return "—";
+    return "Bank " + entry.bank + " Program " + entry.program + " " +
+      safeLogField(entry.preset) + " / " + safeLogField(entry.instrument) +
+      " / " + safeLogField(entry.sample) + " / " + entry.note;
+  }
+
+  function phaseStatsRmsCents(entry) {
+    return entry.tests ? Math.sqrt(entry.sumCentsSquared / entry.tests) : 0;
+  }
+
+  // Exact nearest-rank percentile of absolute pitch error, in cents.
+  function phaseStatsPercentileAbsCents(entry, percentile) {
+    var values = entry.absCentsValues;
+    if (!values || !values.length) return 0;
+    if (!entry.absCentsSorted) {
+      values.sort(function (a, b) { return a - b; });
+      entry.absCentsSorted = true;
+    }
+    var index = Math.ceil(percentile * values.length) - 1;
+    return values[Math.max(0, Math.min(values.length - 1, index))];
+  }
+
   function analyzePresetVoices(preset, retainGrid) {
     if (preset.voiceAnalysis) return preset.voiceAnalysis;
     var keepGrid = retainGrid !== false;
@@ -877,6 +1487,15 @@
     var compressedZones = 0;
     var linkedZones = 0;
     var invalidTypeZones = 0;
+    var generatorCounts = Object.create(null);
+    var sampleModeCounts = [0, 0, 0, 0];
+    var exclusiveClassCounts = Object.create(null);
+    var modulatorDefinitions = Object.create(null);
+    var modulatorTargetCounts = Object.create(null);
+    var modulatorCount = 0;
+    var oversizedPcmSamples20_12 = 0;
+    var phaseQuantizationStats = createPhaseQuantizationStats();
+    var phaseQuantizationByNoteRange = createPhaseQuantizationNoteRangeStats();
 
     // Each resolved preset zone is one potential musical layer. A valid
     // linked left/right pair remains one layer but needs two PCM channel reads.
@@ -886,6 +1505,44 @@
       if (!sample) continue;
 
       var sampleInfo = analyzerSampleInfo(font, region);
+
+      var sampleMode = (Number(region.values[GEN.sampleModes]) || 0) & 3;
+      sampleModeCounts[sampleMode]++;
+      var exclusiveClass = Number(region.values[57]) || 0;
+      if (exclusiveClass > 0) {
+        exclusiveClassCounts[exclusiveClass] =
+          (exclusiveClassCounts[exclusiveClass] || 0) + 1;
+      }
+
+      var activeGenerators = region.activeGenerators || [];
+      for (var ag = 0; ag < activeGenerators.length; ag++) {
+        var activeOp = activeGenerators[ag];
+        generatorCounts[activeOp] = (generatorCounts[activeOp] || 0) + 1;
+      }
+
+      var modulatorGroups = region.modulators || [];
+      for (var mg = 0; mg < modulatorGroups.length; mg++) {
+        var group = modulatorGroups[mg];
+        for (var mi = 0; mi < group.records.length; mi++) {
+          var mod = group.records[mi];
+          var modKey = modulatorDefinitionKey(group.scope, mod);
+          if (!modulatorDefinitions[modKey]) {
+            modulatorDefinitions[modKey] = {
+              scope: group.scope,
+              sourceOper: mod.sourceOper,
+              destOper: mod.destOper,
+              amount: mod.amount,
+              amountSourceOper: mod.amountSourceOper,
+              transform: mod.transform,
+              resolvedZoneReferences: 0
+            };
+            modulatorTargetCounts[mod.destOper] =
+              (modulatorTargetCounts[mod.destOper] || 0) + 1;
+            modulatorCount++;
+          }
+          modulatorDefinitions[modKey].resolvedZoneReferences++;
+        }
+      }
 
       // Use the same PCM identity as the V2 exporter. This counts unique
       // effective sample data ranges after SF2 address generators and stereo
@@ -902,11 +1559,15 @@
           pcmSampleSet[pcmKey] = true;
           uniquePcmSamples++;
           if (layout.frames > MAX_SAMPLE_FRAMES_V2) oversizedPcmSamples++;
+          if (layout.frames > MAX_SAMPLE_FRAMES_20_12) oversizedPcmSamples20_12++;
           if (layout.frames > maxSampleFrames) {
             maxSampleFrames = layout.frames;
             longestSampleName = layout.sampleName || sample.name || region.instrumentName;
           }
         }
+        analyzeRegionPhaseQuantization(
+          preset, region, layout, phaseQuantizationStats, phaseQuantizationByNoteRange
+        );
       }
 
       addAnalyzerRectangle(layerGrid, region.keyRange, region.velocityRange);
@@ -1028,6 +1689,9 @@
       sampleHeaders: Object.keys(sampleHeaderSet).length,
       uniquePcmSamples: uniquePcmSamples,
       oversizedPcmSamples: oversizedPcmSamples,
+      oversizedPcmSamples20_12: oversizedPcmSamples20_12,
+      phaseQuantizationStats: phaseQuantizationStats,
+      phaseQuantizationByNoteRange: phaseQuantizationByNoteRange,
       invalidSampleLayouts: invalidSampleLayouts,
       maxSampleFrames: maxSampleFrames,
       longestSampleName: longestSampleName,
@@ -1037,6 +1701,14 @@
       compressedZones: compressedZones,
       linkedZones: linkedZones,
       invalidTypeZones: invalidTypeZones,
+      generatorCounts: generatorCounts,
+      sampleModeCounts: sampleModeCounts,
+      exclusiveClassCounts: exclusiveClassCounts,
+      modulatorCount: modulatorCount,
+      modulatorDefinitions: Object.keys(modulatorDefinitions).map(function (key) {
+        return modulatorDefinitions[key];
+      }),
+      modulatorTargetCounts: modulatorTargetCounts,
       maxLayers: maxLayers,
       maxLayerCells: maxLayerCells,
       maxChannels: maxChannels,
@@ -1327,9 +1999,18 @@
     var presetsWithOversizedSamples = 0;
     var totalUniquePcmSamples = 0;
     var totalOversizedPcmSamples = 0;
+    var presetsWithOversizedSamples20_12 = 0;
+    var totalOversizedPcmSamples20_12 = 0;
+    var globalPhaseQuantizationStats = createPhaseQuantizationStats();
+    var globalPhaseQuantizationByNoteRange = createPhaseQuantizationNoteRangeStats();
     var maxSampleFramesOverall = 0;
     var longestSamplePreset = "";
     var longestSampleNameOverall = "";
+    var globalGeneratorCounts = Object.create(null);
+    var globalGeneratorPresetCounts = Object.create(null);
+    var globalSampleModeCounts = [0, 0, 0, 0];
+    var globalExclusiveClassCounts = Object.create(null);
+    var globalModulatorDefinitions = Object.create(null);
 
     stopPreview();
     allPresetScanButton.disabled = true;
@@ -1363,9 +2044,53 @@
         if (maxLayers > MAX_PREVIEW_LAYERS_PER_NOTE) presetsAboveEightLayers++;
         if (analysis.stereoZones) presetsWithStereo++;
         totalResolvedZones += analysis.zoneCount;
+
+        Object.keys(analysis.generatorCounts).forEach(function (op) {
+          globalGeneratorCounts[op] =
+            (globalGeneratorCounts[op] || 0) + analysis.generatorCounts[op];
+          globalGeneratorPresetCounts[op] =
+            (globalGeneratorPresetCounts[op] || 0) + 1;
+        });
+        for (var sm = 0; sm < 4; sm++) {
+          globalSampleModeCounts[sm] += analysis.sampleModeCounts[sm];
+        }
+        Object.keys(analysis.exclusiveClassCounts).forEach(function (classId) {
+          globalExclusiveClassCounts[classId] =
+            (globalExclusiveClassCounts[classId] || 0) +
+            analysis.exclusiveClassCounts[classId];
+        });
+        for (var md = 0; md < analysis.modulatorDefinitions.length; md++) {
+          var definition = analysis.modulatorDefinitions[md];
+          var definitionKey = modulatorDefinitionKey(definition.scope, definition);
+          if (!globalModulatorDefinitions[definitionKey]) {
+            globalModulatorDefinitions[definitionKey] = {
+              scope: definition.scope,
+              sourceOper: definition.sourceOper,
+              destOper: definition.destOper,
+              amount: definition.amount,
+              amountSourceOper: definition.amountSourceOper,
+              transform: definition.transform,
+              presetCount: 0,
+              presetNames: [],
+              resolvedZoneReferences: 0
+            };
+          }
+          globalModulatorDefinitions[definitionKey].presetCount++;
+          globalModulatorDefinitions[definitionKey].presetNames.push(
+            "Bank " + preset.bank + " Program " + preset.program + ": " + preset.name
+          );
+          globalModulatorDefinitions[definitionKey].resolvedZoneReferences +=
+            definition.resolvedZoneReferences;
+        }
         if (analysis.oversizedPcmSamples) presetsWithOversizedSamples++;
+        if (analysis.oversizedPcmSamples20_12) presetsWithOversizedSamples20_12++;
         totalUniquePcmSamples += analysis.uniquePcmSamples;
         totalOversizedPcmSamples += analysis.oversizedPcmSamples;
+        totalOversizedPcmSamples20_12 += analysis.oversizedPcmSamples20_12;
+        mergePhaseQuantizationStats(globalPhaseQuantizationStats, analysis.phaseQuantizationStats);
+        mergePhaseQuantizationNoteRangeStats(
+          globalPhaseQuantizationByNoteRange, analysis.phaseQuantizationByNoteRange
+        );
         if (analysis.maxSampleFrames > maxSampleFramesOverall) {
           maxSampleFramesOverall = analysis.maxSampleFrames;
           longestSamplePreset = preset.name + " (Bank " + preset.bank +
@@ -1384,6 +2109,7 @@
           sampleSets: analysis.uniqueSampleSets,
           uniquePcmSamples: analysis.uniquePcmSamples,
           oversizedPcmSamples: analysis.oversizedPcmSamples,
+          oversizedPcmSamples20_12: analysis.oversizedPcmSamples20_12,
           maxSampleFrames: analysis.maxSampleFrames,
           longestSample: analysis.longestSampleName,
           invalidSampleLayouts: analysis.invalidSampleLayouts,
@@ -1396,7 +2122,24 @@
           stereoZones: analysis.stereoZones,
           romZones: analysis.romZones,
           compressedZones: analysis.compressedZones,
-          invalidStereoLinks: analysis.invalidStereoLinks
+          invalidStereoLinks: analysis.invalidStereoLinks,
+          generatorUsage: Object.keys(analysis.generatorCounts).map(Number).sort(function (a, b) {
+            return a - b;
+          }).map(function (op) {
+            return generatorLabel(op) + "=" + analysis.generatorCounts[op];
+          }).join("; "),
+          sampleModes: analysis.sampleModeCounts.join("/"),
+          exclusiveClasses: Object.keys(analysis.exclusiveClassCounts).sort(function (a, b) {
+            return Number(a) - Number(b);
+          }).map(function (classId) {
+            return classId + "=" + analysis.exclusiveClassCounts[classId];
+          }).join("; "),
+          modulatorCount: analysis.modulatorCount,
+          modulatorTargets: Object.keys(analysis.modulatorTargetCounts).map(Number).sort(function (a, b) {
+            return a - b;
+          }).map(function (op) {
+            return modulatorTargetLabel(op) + "=" + analysis.modulatorTargetCounts[op];
+          }).join("; ")
         });
 
         if ((i & 3) === 3 || i === presets.length - 1) {
@@ -1409,6 +2152,26 @@
       }
 
       if (scanGeneration !== allPresetScanGeneration || soundFont !== font) return;
+
+      var uniquePcmRanges = collectUniquePcmRanges(soundFont);
+      allPresetScanStatus.textContent =
+        "Analyzing PCM interpolation data across " + uniquePcmRanges.length +
+        " unique sample ranges…";
+      var pcmInterpolationAnalysis = await analyzePcmInterpolationRanges(
+        soundFont, uniquePcmRanges, scanGeneration
+      );
+      if (!pcmInterpolationAnalysis ||
+          scanGeneration !== allPresetScanGeneration || soundFont !== font) return;
+
+      var uniqueRangesOver18_14 = uniquePcmRanges.filter(function (entry) {
+        return entry.frames > MAX_SAMPLE_FRAMES_V2;
+      });
+      var uniqueRangesOver20_12 = uniquePcmRanges.filter(function (entry) {
+        return entry.frames > MAX_SAMPLE_FRAMES_20_12;
+      });
+      var longestUniqueRanges = uniquePcmRanges.slice().sort(function (a, b) {
+        return b.frames - a.frames;
+      }).slice(0, 20);
 
       results.sort(function (a, b) {
         return b.maxLayers - a.maxLayers ||
@@ -1428,9 +2191,15 @@
       lines.push("Sample headers: " + Math.max(0, soundFont.samples.length - 1));
       lines.push("Resolved preset zones (sum over presets): " + totalResolvedZones);
       lines.push("Unique PCM samples (sum over presets, V2 exporter deduplication): " + totalUniquePcmSamples);
-      lines.push("Unique PCM samples above V2 frame limit (" + MAX_SAMPLE_FRAMES_V2 + ", sum over presets): " +
-        totalOversizedPcmSamples);
-      lines.push("Presets with samples above V2 frame limit: " + presetsWithOversizedSamples);
+      lines.push("Unique PCM samples above current V2 frame limit / 18-14 (" + MAX_SAMPLE_FRAMES_V2 +
+        ", sum over presets): " + totalOversizedPcmSamples);
+      lines.push("Presets with samples above 18/14 frame limit: " + presetsWithOversizedSamples);
+      lines.push("Unique PCM samples above 20/12 frame limit (" + MAX_SAMPLE_FRAMES_20_12 +
+        ", sum over presets): " + totalOversizedPcmSamples20_12);
+      lines.push("Presets with samples above 20/12 frame limit: " + presetsWithOversizedSamples20_12);
+      lines.push("Unique effective PCM ranges across the complete SoundFont: " + uniquePcmRanges.length);
+      lines.push("Unique PCM ranges above 18/14 / 20/12: " +
+        uniqueRangesOver18_14.length + " / " + uniqueRangesOver20_12.length);
       lines.push("Maximum resolved sample length: " +
         (maxSampleFramesOverall ? maxSampleFramesOverall.toLocaleString() + " frames (" +
           (longestSampleNameOverall || "unnamed sample") + "; " + longestSamplePreset + ")" : "—"));
@@ -1444,15 +2213,220 @@
       lines.push("Presets above browser preview limit (" + MAX_PREVIEW_LAYERS_PER_NOTE + " layers): " +
         presetsAboveEightLayers);
       lines.push("Presets containing valid stereo zones: " + presetsWithStereo);
+      lines.push("sm24 chunk: " + (soundFont.sample24Present ?
+        "present (" + soundFont.sample24Bytes.toLocaleString() + " bytes; " +
+          (soundFont.sample24Usable ? "usable" : "too short for all smpl points") + ")" :
+        "not present"));
+      lines.push("pmod records (preset modulators, sentinel excluded): " + soundFont.pmodulatorCount);
+      lines.push("imod records (instrument modulators, sentinel excluded): " + soundFont.imodulatorCount);
+      lines.push("Resolved distinct raw modulator records (deduplicated per preset and scope): " +
+        Object.keys(globalModulatorDefinitions).length);
+      lines.push("Sample mode zones (resolved zones summed over presets; mode 0/1/2/3): " +
+        globalSampleModeCounts.join(" / "));
+      lines.push("Sample mode meaning: 0=no loop, 1=continuous loop, 2=reserved, 3=loop until release.");
+
+      lines.push("");
+      lines.push("Phase-format numeric comparison (analysis only; live V2 remains fixed at 18/14):");
+      lines.push("Formats: 18/14 = 262143 maximum frames; 20/12 = 1048575 maximum frames.");
+      lines.push("Phase increment model: float per-Hz coefficient, Q16.16 conversion and rounded uint32 phase step, matching wavetableV2PhaseIncrement().");
+      lines.push("Assumption: AUDIO_SAMPLE_RATE_EXACT is the project default 44100 Hz from src/common.h; runtime rates tested are 44100 Hz and 48000 Hz. Change PHASE_ANALYSIS_REFERENCE_RATE if the build overrides that macro.");
+      lines.push("Pitch error is the steady-state error caused by integer phase-increment quantization; drift is the accumulated position difference after traversing the complete sample once.");
+      lines.push([
+        "Output rate", "Format", "Note-zone tests", "Max |pitch error| (cent)",
+        "RMS pitch error (cent)", "Cases >1 cent", "Cases >5 cents",
+        "Max |single-traversal drift| (frames)", "Worst pitch-error case"
+      ].join("\t"));
+      for (var pf = 0; pf < PHASE_ANALYSIS_FORMATS.length; pf++) {
+        var phaseFormat = PHASE_ANALYSIS_FORMATS[pf];
+        for (var pr = 0; pr < PHASE_ANALYSIS_OUTPUT_RATES.length; pr++) {
+          var phaseRate = PHASE_ANALYSIS_OUTPUT_RATES[pr];
+          var phaseEntry = globalPhaseQuantizationStats[phaseFormat.label][phaseRate];
+          lines.push([
+            phaseRate,
+            phaseFormat.label,
+            phaseEntry.tests,
+            phaseEntry.maxAbsCents.toFixed(5),
+            phaseStatsRmsCents(phaseEntry).toFixed(5),
+            phaseEntry.overOneCent,
+            phaseEntry.overFiveCents,
+            phaseEntry.maxAbsDriftFrames.toFixed(3),
+            phaseWorstDescription(phaseEntry.worstPitch)
+          ].join("\t"));
+        }
+      }
+
+      lines.push("");
+      lines.push("Phase error by MIDI note range (absolute pitch-error percentiles):");
+      lines.push("P95/P99 use exact nearest-rank percentiles of absolute error across resolved note-zone tests.");
+      lines.push("21-108 is the standard 88-key piano note span (A0-C8); other rows are disjoint MIDI bands.");
+      lines.push([
+        "MIDI range", "Output rate", "Format", "Note-zone tests",
+        "RMS |error| (cent)", "P95 |error| (cent)", "P99 |error| (cent)",
+        "Max |error| (cent)", "Cases >1 cent", "Cases >5 cents"
+      ].join("\t"));
+      for (var rn = 0; rn < PHASE_ANALYSIS_NOTE_RANGES.length; rn++) {
+        var noteRange = PHASE_ANALYSIS_NOTE_RANGES[rn];
+        for (var rf = 0; rf < PHASE_ANALYSIS_FORMATS.length; rf++) {
+          var rangeFormat = PHASE_ANALYSIS_FORMATS[rf];
+          for (var rr = 0; rr < PHASE_ANALYSIS_OUTPUT_RATES.length; rr++) {
+            var rangeRate = PHASE_ANALYSIS_OUTPUT_RATES[rr];
+            var rangeEntry = globalPhaseQuantizationByNoteRange[noteRange.label]
+              [rangeFormat.label][rangeRate];
+            lines.push([
+              noteRange.label,
+              rangeRate,
+              rangeFormat.label,
+              rangeEntry.tests,
+              phaseStatsRmsCents(rangeEntry).toFixed(5),
+              phaseStatsPercentileAbsCents(rangeEntry, 0.95).toFixed(5),
+              phaseStatsPercentileAbsCents(rangeEntry, 0.99).toFixed(5),
+              rangeEntry.maxAbsCents.toFixed(5),
+              rangeEntry.overOneCent,
+              rangeEntry.overFiveCents
+            ].join("\t"));
+          }
+        }
+      }
+
+      lines.push("");
+      lines.push("PCM interpolation-fraction precision estimate (measured from the actual SF2 PCM ranges):");
+      lines.push("Unique ranges scanned: " + pcmInterpolationAnalysis.ranges);
+      lines.push("PCM channel-frames scanned: " + pcmInterpolationAnalysis.channelFrames.toLocaleString());
+      lines.push("Signal RMS: " + pcmInterpolationAnalysis.signalRms.toFixed(2) + " PCM LSB");
+      lines.push("Adjacent-sample difference RMS / maximum: " +
+        pcmInterpolationAnalysis.deltaRms.toFixed(2) + " / " + pcmInterpolationAnalysis.maxDelta +
+        " PCM LSB (maximum in " + safeLogField(pcmInterpolationAnalysis.maxDeltaSample || "—") + ")");
+      lines.push("Assumption: fractional positions are uniformly distributed and rounded to nearest representable fraction. This estimates phase-fraction quantization only; phase-increment quantization is reported separately, and final integer interpolation-multiply rounding is excluded.");
+      lines.push([
+        "Format", "Estimated RMS interpolation error (PCM LSB)",
+        "Maximum error bound (PCM LSB)", "Estimated interpolation SNR (dB)"
+      ].join("\t"));
+      for (var pe = 0; pe < PHASE_ANALYSIS_FORMATS.length; pe++) {
+        var interpolationFormat = PHASE_ANALYSIS_FORMATS[pe];
+        var interpolationResult =
+          pcmInterpolationAnalysis.interpolationErrors[interpolationFormat.label];
+        lines.push([
+          interpolationFormat.label,
+          interpolationResult.rmsError.toFixed(6),
+          interpolationResult.maxErrorBound.toFixed(6),
+          Number.isFinite(interpolationResult.snr) ?
+            interpolationResult.snr.toFixed(2) : "∞"
+        ].join("\t"));
+      }
+
+      lines.push("");
+      lines.push("Longest unique effective PCM ranges (top 20; deduplicated across presets):");
+      lines.push(["Sample", "Frames", "Source rate (Hz)", "Duration (s)", "Channels", "Preset / instrument references"].join("\t"));
+      for (var lr = 0; lr < longestUniqueRanges.length; lr++) {
+        var longRange = longestUniqueRanges[lr];
+        lines.push([
+          safeLogField(longRange.sampleName),
+          longRange.frames,
+          longRange.sampleRate,
+          (longRange.frames / longRange.sampleRate).toFixed(3),
+          longRange.channels,
+          safeLogField(longRange.references.slice(0, 4).join("; ") +
+            (longRange.references.length > 4 ? "; +" +
+              (longRange.references.length - 4) + " references" : ""))
+        ].join("\t"));
+      }
+
+      lines.push("");
+      lines.push("Samples with the highest estimated 20/12 interpolation-fraction error (top 20):");
+      lines.push(["Sample", "Frames", "Source rate (Hz)", "Channels",
+        "RMS adjacent delta (PCM LSB)", "Max adjacent delta (PCM LSB)",
+        "Estimated RMS error (PCM LSB)", "Estimated SNR (dB)",
+        "Preset / instrument references"].join("\t"));
+      for (var ie = 0; ie < Math.min(20, pcmInterpolationAnalysis.entries.length); ie++) {
+        var interpolationSample = pcmInterpolationAnalysis.entries[ie];
+        lines.push([
+          safeLogField(interpolationSample.sampleName),
+          interpolationSample.frames,
+          interpolationSample.sampleRate,
+          interpolationSample.channels,
+          interpolationSample.deltaRms.toFixed(2),
+          interpolationSample.maxDelta,
+          interpolationSample.interpolationError12.toFixed(6),
+          Number.isFinite(interpolationSample.snr12) ?
+            interpolationSample.snr12.toFixed(2) : "∞",
+          safeLogField(interpolationSample.references.slice(0, 3).join("; ") +
+            (interpolationSample.references.length > 3 ? "; +" +
+              (interpolationSample.references.length - 3) + " references" : ""))
+        ].join("\t"));
+      }
+
+      lines.push("Note: SF2 default modulators are implicit and are not stored in pmod/imod; they are not included here.");
+      lines.push("Zones with nonzero exclusiveClass (resolved zones summed over presets): " +
+        Object.keys(globalExclusiveClassCounts).sort(function (a, b) {
+          return Number(a) - Number(b);
+        }).map(function (classId) {
+          return classId + "=" + globalExclusiveClassCounts[classId];
+        }).join(", "));
+      lines.push("");
+      lines.push("Active generator usage (effective values differing from SF2 defaults; resolved zone counts across presets):");
+      var globalGeneratorLines = Object.keys(globalGeneratorCounts).map(Number).sort(function (a, b) {
+        return a - b;
+      }).map(function (op) {
+        return "  " + op + " " + generatorLabel(op) + ": " +
+          globalGeneratorCounts[op] + " zone reference(s) in " +
+          globalGeneratorPresetCounts[op] + " preset(s)";
+      });
+      lines = lines.concat(globalGeneratorLines.length ? globalGeneratorLines : ["  none"]);
+      lines.push("");
+      lines.push("Modulator target usage (unique explicit raw records per preset; target may be a generator or modulator link):");
+      var targetTotals = Object.create(null);
+      Object.keys(globalModulatorDefinitions).forEach(function (key) {
+        var definition = globalModulatorDefinitions[key];
+        targetTotals[definition.destOper] = (targetTotals[definition.destOper] || 0) + 1;
+      });
+      var targetLines = Object.keys(targetTotals).map(Number).sort(function (a, b) {
+        return a - b;
+      }).map(function (op) {
+        return "  " + modulatorTargetLabel(op) + ": " +
+          targetTotals[op] + " distinct scoped record(s)";
+      });
+      lines = lines.concat(targetLines.length ? targetLines : ["  none"]);
+      lines.push("");
+      lines.push("Distinct raw modulator records (scope retained; deduplicated by all five SF2 fields):");
+      lines.push([
+        "Scope", "Source", "Destination", "Amount", "Amount source",
+        "Transform", "Preset count", "Presets", "Resolved zone references"
+      ].join("\t"));
+      var modulatorDefinitionRows = Object.keys(globalModulatorDefinitions).map(function (key) {
+        return globalModulatorDefinitions[key];
+      }).sort(function (a, b) {
+        return b.presetCount - a.presetCount ||
+          a.destOper - b.destOper ||
+          a.sourceOper - b.sourceOper ||
+          a.amount - b.amount;
+      });
+      for (var mr = 0; mr < modulatorDefinitionRows.length; mr++) {
+        var modRow = modulatorDefinitionRows[mr];
+        lines.push([
+          modRow.scope,
+          modulatorSourceLabel(modRow.sourceOper) + " (0x" + modRow.sourceOper.toString(16) + ")",
+          modulatorTargetLabel(modRow.destOper),
+          modRow.amount,
+          modRow.amountSourceOper ?
+            modulatorSourceLabel(modRow.amountSourceOper) + " (0x" +
+              modRow.amountSourceOper.toString(16) + ")" : "none",
+          modulatorTransformLabel(modRow.transform),
+          modRow.presetCount,
+          safeLogField(modRow.presetNames.join("; ")),
+          modRow.resolvedZoneReferences
+        ].join("\t"));
+      }
       lines.push("");
       lines.push([
         "Bank", "Program", "Preset", "Zones", "Instrument count", "Instrument names",
-        "Sample headers", "Sample sets", "Unique PCM samples", "Samples > V2 frame limit",
-        "Max sample frames", "Longest sample", "Invalid sample layouts",
+        "Sample headers", "Sample sets", "Unique PCM samples", "Samples >18/14 frame limit",
+        "Samples >20/12 frame limit", "Max sample frames", "Longest sample", "Invalid sample layouts",
         "Max layers", "Notes/velocity at max layers",
         "Max PCM channels", "Notes/velocity at max PCM", "Covered key/velocity cells",
         "Cells above V2 limit", "Stereo zones", "ROM zones", "Ogg/SF3 zones",
-        "Invalid stereo links"
+        "Invalid stereo links", "Active generators (zone counts)",
+        "Sample modes 0/1/2/3", "Exclusive classes (zone counts)",
+        "Distinct modulator records", "Modulator targets (unique raw records)"
       ].join("\t"));
 
       for (var r = 0; r < results.length; r++) {
@@ -1461,10 +2435,14 @@
           item.bank, item.program, safeLogField(item.name), item.zones,
           item.instrumentCount, safeLogField(item.instruments), item.sampleHeaders,
           item.sampleSets, item.uniquePcmSamples, item.oversizedPcmSamples,
-          item.maxSampleFrames, safeLogField(item.longestSample), item.invalidSampleLayouts,
+          item.oversizedPcmSamples20_12, item.maxSampleFrames,
+          safeLogField(item.longestSample), item.invalidSampleLayouts,
           item.maxLayers, safeLogField(item.peakLayers), item.maxChannels,
           safeLogField(item.peakChannels), item.coveredCells, item.overV2Cells,
-          item.stereoZones, item.romZones, item.compressedZones, item.invalidStereoLinks
+          item.stereoZones, item.romZones, item.compressedZones, item.invalidStereoLinks,
+          safeLogField(item.generatorUsage), item.sampleModes,
+          safeLogField(item.exclusiveClasses), item.modulatorCount,
+          safeLogField(item.modulatorTargets)
         ].join("\t"));
       }
 
@@ -1473,11 +2451,14 @@
       allPresetScanPanel.classList.remove("hidden");
       allPresetScanCopyButton.disabled = false;
       allPresetScanDownloadButton.disabled = false;
+      var phaseStatus18 = globalPhaseQuantizationStats["18/14"][44100];
+      var phaseStatus20 = globalPhaseQuantizationStats["20/12"][44100];
       allPresetScanStatus.textContent =
-        "Completed: " + results.length + " presets. Maximum " +
-        maxLayersOverall + " simultaneous layers and " + maxChannelsOverall +
-        " mono PCM channels; " + presetsWithOversizedSamples +
-        " preset(s) contain samples over the V2 frame limit. The report is sorted by maximum layer count.";
+        "Completed: " + results.length + " presets; " + uniqueRangesOver18_14.length +
+        " unique PCM ranges exceed 18/14 and " + uniqueRangesOver20_12.length +
+        " exceed 20/12. Worst 44.1 kHz phase-step error: " +
+        phaseStatus18.maxAbsCents.toFixed(3) + " cent (18/14), " +
+        phaseStatus20.maxAbsCents.toFixed(3) + " cent (20/12).";
       console.log("ESP-beatsy SF2 all-preset voice analysis\n" + report);
     } catch (error) {
       if (scanGeneration === allPresetScanGeneration && soundFont === font) {
