@@ -1068,13 +1068,20 @@
     var playback = playbackRatio(font, region, note);
     var noteFrequency = midiFrequency(note);
     var scale = Math.pow(2, format.fractionBits);
-    var perHertzCoefficient = Math.fround(
+
+    // Match the value emitted by the V2 exporter: the phase coefficient is
+    // written as a 12-decimal float literal and divided by
+    // AUDIO_SAMPLE_RATE_EXACT in the generated sample_data initializer.
+    // setInstrument() then multiplies it by AUDIO_SAMPLE_RATE_EXACT / outputRate.
+    var exportedPhaseCoefficient = Number((
       scale * layout.sampleRate * playback / noteFrequency
+    ).toFixed(12));
+    var perHertzCoefficient = Math.fround(
+      Math.fround(exportedPhaseCoefficient) / PHASE_ANALYSIS_REFERENCE_RATE
     );
     if (!Number.isFinite(perHertzCoefficient) || perHertzCoefficient <= 0) return null;
 
-    // common.h defaults AUDIO_SAMPLE_RATE_EXACT to 44100 Hz. The runtime
-    // sample rate may differ, in which case V2 scales the increment by
+    // Mirrors setInstrument(): phaseIncrementScale_ =
     // AUDIO_SAMPLE_RATE_EXACT / AudioStream::sampleRate().
     var phaseScale = Math.fround(PHASE_ANALYSIS_REFERENCE_RATE / outputRate);
     var coefficient = Math.fround(perHertzCoefficient * phaseScale);
