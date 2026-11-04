@@ -91,6 +91,21 @@
   DEFAULTS[GEN.startLoopCoarse] = 0;
   DEFAULTS[GEN.endLoopCoarse] = 0;
 
+  // SF2 generator defaults used only to classify actual feature usage in the analyzer.
+  // Kept separate from DEFAULTS so preview/export behavior remains unchanged.
+  var ANALYZER_GENERATOR_DEFAULTS = {
+    0: 0, 1: 0, 2: 0, 3: 0, 4: 0,
+    5: 0, 6: 0, 7: 0, 8: 13500, 9: 0, 10: 0, 11: 0, 12: 0,
+    13: 0, 15: 0, 16: 0, 17: 0,
+    21: -12000, 22: 0, 23: -12000, 24: 0,
+    25: -12000, 26: -12000, 27: -12000, 28: -12000,
+    29: 0, 30: -12000, 31: 0, 32: 0,
+    33: -12000, 34: -12000, 35: -12000, 36: -12000,
+    37: 0, 38: -12000, 39: 0, 40: 0,
+    46: -1, 47: -1, 48: 0, 51: 0, 52: 0, 54: 0, 56: 100,
+    57: 0, 58: -1
+  };
+
   var V1_INDEX_BITS = 16;
   var V2_PHASE_FRACTION_BITS = 14;
   var V2_PHASE_SCALE = Math.pow(2, V2_PHASE_FRACTION_BITS);
@@ -100,7 +115,7 @@
   var MAX_EXPORT_FRAMES = 2000000;
   var RANGE_OPERATORS = [GEN.keyRange, GEN.velocityRange];
   var INDEX_OPERATORS = [GEN.instrument, GEN.sampleId];
-  var UNSIGNED_OPERATORS = [GEN.instrument, GEN.sampleId, GEN.sampleModes];
+  var UNSIGNED_OPERATORS = [GEN.instrument, GEN.sampleId, GEN.sampleModes, 57];
   var PRESET_IGNORED_OPERATORS = [
     0, 1, 2, 3, 4, 12, 45, 46, 47, 50, 54, 57, 58
   ];
@@ -576,8 +591,8 @@
                   INDEX_OPERATORS.indexOf(generatorOp) >= 0) continue;
               var generatorValue = values[generatorOp];
               if (generatorValue === undefined) continue;
-              var generatorDefault = Object.prototype.hasOwnProperty.call(DEFAULTS, generatorOp) ?
-                DEFAULTS[generatorOp] : 0;
+              var generatorDefault = Object.prototype.hasOwnProperty.call(ANALYZER_GENERATOR_DEFAULTS, generatorOp) ?
+                ANALYZER_GENERATOR_DEFAULTS[generatorOp] : 0;
               var active = generatorValue !== generatorDefault;
               if (generatorOp === GEN.keynum || generatorOp === GEN.velocity) {
                 active = generatorValue >= 0;
@@ -1728,7 +1743,7 @@
           return classId + "=" + globalExclusiveClassCounts[classId];
         }).join(", "));
       lines.push("");
-      lines.push("Active generator usage (non-default/nonzero values; resolved zone counts across presets):");
+      lines.push("Active generator usage (effective values differing from SF2 defaults; resolved zone counts across presets):");
       var globalGeneratorLines = Object.keys(globalGeneratorCounts).map(Number).sort(function (a, b) {
         return a - b;
       }).map(function (op) {
@@ -1790,7 +1805,7 @@
         "Cells above V2 limit", "Stereo zones", "ROM zones", "Ogg/SF3 zones",
         "Invalid stereo links", "Active generators (zone counts)",
         "Sample modes 0/1/2/3", "Exclusive classes (zone counts)",
-        "Distinct modulator records", "Modulator targets (unique records)"
+        "Distinct modulator records", "Modulator targets (unique raw records)"
       ].join("\t"));
 
       for (var r = 0; r < results.length; r++) {
