@@ -1928,10 +1928,19 @@ void AudioSynthWavetableV2::update() {
  *   to the greater of both values once before the sample loops and reused by
  *   release, sustain, and ADSR. No additional long-lived threshold variable
  *   or per-sample comparison is introduced.
- * - This pointer-oriented revision targets the extra address-generation
- *   instructions observed in the first P4 disassembly. P4 rebuild, new assembly
- *   comparison, phase-sequence verification, hardware audio listening, and
- *   cycle-level performance measurements remain pending.
+ * - User-provided ESP32-P4 FLASH/PSRAM benchmark — 2026-11-04, 44.1 kHz,
+ *   four sample layers per note, 4/8/16/32/64/128 active layers:
+ *   FLASH V2 sustain peak: 3.2/5.8/11.0/21.3/42.2/84.0%;
+ *   PSRAM V2 sustain peak: 3.2/5.8/11.0/21.4/42.2/84.0%;
+ *   FLASH V2 release peak: 3.0/5.7/10.8/21.3/42.1/83.9%;
+ *   PSRAM V2 release peak: 3.0/5.8/10.8/21.2/42.1/84.0%.
+ *   At 128 layers, sustain mean/max render times were 2439/2447 us (FLASH)
+ *   and 2438/2445 us (PSRAM). FLASH and PSRAM are practically equivalent
+ *   for this sample set. This run measures the corrected build; without a
+ *   same-method pre-fix baseline it does not isolate the loop-fix cost.
+ * - The benchmark confirms the current renderer runs at 128 layers with
+ *   approximately 84% reported V2 load. Loop-edge phase-sequence verification
+ *   and dedicated audio listening remain separate correctness checks.
  *
  *
  * 26. Q14 DELTA INTERPOLATION / 32-BIT SAMPLE LOOP INDEX — IMPLEMENTED / PENDING BENCHMARK — 2026-11-03
