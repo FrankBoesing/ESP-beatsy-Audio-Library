@@ -2947,25 +2947,13 @@
     p.linearRampToValueAtTime(attenuation * sustainGain * gainScale, peak + env.hold + env.decay);
   }
 
-  function releaseLayer(voice, layer, releaseSeconds, shortenExisting) {
-    if (!layer || layer.ended) return;
+  function releaseLayer(voice, layer, releaseSeconds) {
+    if (!layer || layer.ended || layer.released) return;
 
     var now = audioContext.currentTime;
-    if (layer.released) {
-      var remaining = layer.releaseEndTime - now;
-      if (!shortenExisting || remaining <= releaseSeconds) return;
-    }
-
     var env = envelopeForNote(layer.region.values, voice.note);
     var param = layer.gain.gain;
-    var level;
-    if (layer.released) {
-      // Preserve the instantaneous gain when shortening an existing release.
-      level = param.value;
-    } else {
-      level = envelopeLevelAt(layer.region, voice.note, voice.startTime, now, layer.gainScale);
-    }
-
+    var level = envelopeLevelAt(layer.region, voice.note, voice.startTime, now, layer.gainScale);
     var duration = releaseSeconds === undefined ? Math.max(0, env.release) :
       Math.max(0, releaseSeconds);
     var endTime = now + duration;
@@ -2976,7 +2964,6 @@
     else param.setValueAtTime(0, now);
 
     layer.released = true;
-    layer.releaseEndTime = endTime;
 
     // SF2 mode 3 is loop-until-release; stop looping as soon as release begins.
     if (layer.layout.loopMode === 3) {
@@ -2991,7 +2978,7 @@
     if (!voice || voice.released || voice.finished) return;
     voice.released = true;
     for (var i = 0; i < voice.layers.length; i++) {
-      releaseLayer(voice, voice.layers[i], undefined, false);
+      releaseLayer(voice, voice.layers[i], undefined);
     }
   }
 
@@ -3011,7 +2998,7 @@
         var layer = voice.layers[l];
         var classId = layer.region.values[GEN.exclusiveClass] || 0;
         if (classId && classes.indexOf(classId) >= 0) {
-          releaseLayer(voice, layer, 0.300, true);
+          releaseLayer(voice, layer, 0.300);
         }
       }
 
@@ -3150,7 +3137,6 @@
             layout: layout,
             gainScale: gainScale,
             released: false,
-            releaseEndTime: 0,
             ended: false
           };
           voice.layers.push(layer);
