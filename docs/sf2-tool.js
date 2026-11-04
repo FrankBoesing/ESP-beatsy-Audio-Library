@@ -109,6 +109,36 @@
     41, 43, 44, 45, 46, 47, 48, 50, 51, 52, 53, 54, 56, 58
   ];
 
+  var GENERATOR_NAMES = {
+    0: "startAddrsOffset", 1: "endAddrsOffset",
+    2: "startloopAddrsOffset", 3: "endloopAddrsOffset",
+    4: "startAddrsCoarseOffset", 5: "modLfoToPitch",
+    6: "vibLfoToPitch", 7: "modEnvToPitch",
+    8: "initialFilterFc", 9: "initialFilterQ",
+    10: "modLfoToFilterFc", 11: "modEnvToFilterFc",
+    12: "endAddrsCoarseOffset", 13: "modLfoToVolume",
+    15: "chorusEffectsSend", 16: "reverbEffectsSend", 17: "pan",
+    21: "delayModLFO", 22: "freqModLFO", 23: "delayVibLFO",
+    24: "freqVibLFO", 25: "delayModEnv", 26: "attackModEnv",
+    27: "holdModEnv", 28: "decayModEnv", 29: "sustainModEnv",
+    30: "releaseModEnv", 31: "keynumToModEnvHold",
+    32: "keynumToModEnvDecay", 33: "delayVolEnv",
+    34: "attackVolEnv", 35: "holdVolEnv", 36: "decayVolEnv",
+    37: "sustainVolEnv", 38: "releaseVolEnv",
+    39: "keynumToVolEnvHold", 40: "keynumToVolEnvDecay",
+    41: "instrument", 43: "keyRange", 44: "velocityRange",
+    45: "startloopAddrsCoarseOffset", 46: "keynum",
+    47: "velocity", 48: "initialAttenuation",
+    50: "endloopAddrsCoarseOffset", 51: "coarseTune",
+    52: "fineTune", 53: "sampleID", 54: "sampleModes",
+    56: "scaleTuning", 57: "exclusiveClass",
+    58: "overridingRootKey"
+  };
+
+  function generatorLabel(op) {
+    return GENERATOR_NAMES[op] || ("generator " + op);
+  }
+
   function setStatus(message, kind) {
     status.className = "status" + (kind ? " " + kind : "");
     status.textContent = message;
@@ -213,12 +243,85 @@
     });
   }
 
-  function readModulatorCount(chunk, label) {
-    if (!chunk) return 0;
+  function readModulators(view, chunk, label) {
+    if (!chunk) return [];
     if (chunk.size % 10 !== 0 || chunk.size < 10) {
       throw new Error("Invalid " + label + " modulator chunk.");
     }
-    return Math.max(0, chunk.size / 10 - 1);
+    // The final 10-byte record in pmod/imod is the required terminal sentinel.
+    var count = Math.max(0, chunk.size / 10 - 1);
+    var result = [];
+    for (var i = 0; i < count; i++) {
+      var p = chunk.data + i * 10;
+      result.push({
+        sourceOper: view.getUint16(p, true),
+        destOper: view.getUint16(p + 2, true),
+        amount: view.getInt16(p + 4, true),
+        amountSourceOper: view.getUint16(p + 6, true),
+        transform: view.getUint16(p + 8, true)
+      });
+    }
+    return result;
+  }
+
+  function zoneModulators(bags, modulatorList, firstBag, nextBag, label) {
+    if (firstBag < 0 || nextBag <= firstBag || nextBag >= bags.length) {
+      throw new Error("Invalid bag index while reading " + label + " modulators.");
+    }
+    var result = [];
+    for (var i = firstBag; i < nextBag; i++) {
+      var first = bags[i].modIndex;
+      var last = bags[i + 1].modIndex;
+      if (last < first || last > modulatorList.length) {
+        throw new Error("Invalid modulator index in " + label + ".");
+      }
+      result.push(modulatorList.slice(first, last));
+    }
+    return result;
+  }
+
+  function modulatorSourceLabel(raw) {
+    var index = raw & 0x007f;
+    var isController = (raw & 0x0080) !== 0;
+    var direction = (raw >>> 8) & 1;
+    var polarity = (raw >>> 9) & 1;
+    var curve = (raw >>> 10) & 0x003f;
+    var base;
+    if (isController) {
+      var controllers = {
+        1: "ModWheel", 2: "Breath", 4: "Foot", 5: "PortamentoTime",
+        7: "Volume", 10: "Pan", 11: "Expression", 64: "Sustain",
+        65: "Portamento", 66: "Sostenuto", 67: "SoftPedal",
+        71: "Resonance", 74: "Brightness"
+      };
+      base = "CC" + index + (controllers[index] ? " " + controllers[index] : "");
+    } else {
+      var sources = {
+        0: "Constant", 2: "Velocity", 3: "KeyNumber",
+        10: "PolyPressure", 13: "ChannelPressure",
+        14: "PitchWheel", 16: "PitchWheelSensitivity"
+      };
+      base = sources[index] || ("Source" + index);
+    }
+    var curves = { 0: "linear", 1: "concave", 2: "convex", 3: "switch" };
+    return base + (direction ? " reverse" : "") +
+      (polarity ? " bipolar" : " unipolar") +
+      " " + (curves[curve] || ("curve" + curve));
+  }
+
+  function modulatorTransformLabel(value) {
+    if (value === 0) return "linear";
+    if (value === 2) return "absolute";
+    return "transform " + value;
+  }
+
+  function modulatorDefinitionKey(scope, mod) {
+    return [scope, mod.sourceOper, mod.destOper, mod.amount,
+      mod.amountSourceOper, mod.transform].join("|");
+  }
+
+  function modulatorTargetLabel(op) {
+    return generatorLabel(op) + " [" + op + "]";
   }
 
   function makeMap(zone) {
@@ -350,9 +453,12 @@
 
     var smpl = findChunk(sdta, "smpl");
     var sm24 = findChunk(sdta, "sm24");
+    var sample24Present = !!sm24;
+    var sample24Bytes = sm24 ? sm24.size : 0;
     if (!smpl || (smpl.size & 1)) throw new Error("The SoundFont has no valid 16-bit smpl data.");
     var sampleCount = smpl.size / 2;
-    if (sm24 && sm24.size < sampleCount) sm24 = null;
+    var sample24Usable = !!sm24 && sm24.size >= sampleCount;
+    if (!sample24Usable) sm24 = null;
 
     var info = {};
     if (infoChunks) {
@@ -378,6 +484,8 @@
     });
     var ibag = readBags(view, findChunk(pdta, "ibag"), "ibag");
     var igen = readGenerators(view, findChunk(pdta, "igen"), "igen");
+    var pmod = readModulators(view, findChunk(pdta, "pmod"), "pmod");
+    var imod = readModulators(view, findChunk(pdta, "imod"), "imod");
     var shdr = records(view, findChunk(pdta, "shdr"), 46, "shdr", function (v, p) {
       return {
         name: readName(v, p, 20),
@@ -401,6 +509,10 @@
     var instruments = [];
     for (var n = 0; n < inst.length - 1; n++) {
       var rawZones = zoneGenerators(ibag, igen, inst[n].bag, inst[n + 1].bag, "instrument");
+      var zoneMods = zoneModulators(ibag, imod, inst[n].bag, inst[n + 1].bag, "instrument");
+      for (var mz = 0; mz < rawZones.length; mz++) {
+        rawZones[mz].modulators = zoneMods[mz];
+      }
       var split = splitZones(rawZones, GEN.sampleId, "instrument");
       instruments.push({
         name: inst[n].name || "Unnamed instrument",
@@ -412,6 +524,10 @@
     var presets = [];
     for (var p = 0; p < phdr.length - 1; p++) {
       var rawPresetZones = zoneGenerators(pbag, pgen, phdr[p].bag, phdr[p + 1].bag, "preset");
+      var presetZoneMods = zoneModulators(pbag, pmod, phdr[p].bag, phdr[p + 1].bag, "preset");
+      for (var pmz = 0; pmz < rawPresetZones.length; pmz++) {
+        rawPresetZones[pmz].modulators = presetZoneMods[pmz];
+      }
       var presetSplit = splitZones(rawPresetZones, GEN.instrument, "preset");
       var preset = {
         name: phdr[p].name || "Unnamed preset",
@@ -446,6 +562,37 @@
 
           var instrumentValues = combineInstrumentGenerators(instrument.globalZone, instZone);
           var values = applyPresetOffsets(instrumentValues, presetOffsets);
+          var generatorZones = [presetSplit.globalZone, pz, instrument.globalZone, instZone];
+          var activeGeneratorSet = Object.create(null);
+          for (var gzi = 0; gzi < generatorZones.length; gzi++) {
+            var generatorZone = generatorZones[gzi];
+            if (!generatorZone) continue;
+            for (var ggi = 0; ggi < generatorZone.length; ggi++) {
+              var generatorOp = generatorZone[ggi].op;
+              if (RANGE_OPERATORS.indexOf(generatorOp) >= 0 ||
+                  INDEX_OPERATORS.indexOf(generatorOp) >= 0) continue;
+              var generatorValue = values[generatorOp];
+              if (generatorValue === undefined) continue;
+              var generatorDefault = Object.prototype.hasOwnProperty.call(DEFAULTS, generatorOp) ?
+                DEFAULTS[generatorOp] : 0;
+              var active = generatorValue !== generatorDefault;
+              if (generatorOp === GEN.keynum || generatorOp === GEN.velocity) {
+                active = generatorValue >= 0;
+              }
+              if (active) activeGeneratorSet[generatorOp] = true;
+            }
+          }
+          var activeGenerators = Object.keys(activeGeneratorSet).map(Number).sort(function (a, b) {
+            return a - b;
+          });
+          var modulatorGroups = [
+            { scope: "preset-global", records: presetSplit.globalZone ?
+              (presetSplit.globalZone.modulators || []) : [] },
+            { scope: "preset-local", records: pz.modulators || [] },
+            { scope: "instrument-global", records: instrument.globalZone ?
+              (instrument.globalZone.modulators || []) : [] },
+            { scope: "instrument-local", records: instZone.modulators || [] }
+          ];
           var unsupported = [];
           Object.keys(values).forEach(function (key) {
             var op = Number(key);
@@ -461,6 +608,8 @@
             keyRange: keyRange,
             velocityRange: velocityRange,
             values: values,
+            activeGenerators: activeGenerators,
+            modulators: modulatorGroups,
             unsupportedGenerators: unsupported
           });
         }
@@ -491,7 +640,8 @@
           15: "chorusEffectsSend",
           16: "reverbEffectsSend",
           17: "pan",
-          47: "fixed velocity override"
+          47: "fixed velocity override",
+          57: "exclusiveClass"
         };
         var descriptions = unsupportedList.map(function (op) {
           return op + (generatorLabels[op] ? " (" + generatorLabels[op] + ")" : "");
@@ -506,19 +656,23 @@
       return a.bank - b.bank || a.program - b.program || a.name.localeCompare(b.name);
     });
 
-    var pmodCount = readModulatorCount(findChunk(pdta, "pmod"), "pmod");
-    var imodCount = readModulatorCount(findChunk(pdta, "imod"), "imod");
-
     return {
       view: view,
       sampleDataChunk: smpl,
       sample24Chunk: sm24,
+      sample24Present: sample24Present,
+      sample24Usable: sample24Usable,
+      sample24Bytes: sample24Bytes,
       sampleCount: sampleCount,
       samples: shdr,
       presets: presets,
       info: info,
       instrumentCount: instruments.length,
-      modulatorCount: pmodCount + imodCount,
+      pmodulators: pmod,
+      imodulators: imod,
+      pmodulatorCount: pmod.length,
+      imodulatorCount: imod.length,
+      modulatorCount: pmod.length + imod.length,
       pcmCache: Object.create(null),
       audioBufferCache: Object.create(null),
       audioBufferFrameCount: 0
@@ -877,6 +1031,12 @@
     var compressedZones = 0;
     var linkedZones = 0;
     var invalidTypeZones = 0;
+    var generatorCounts = Object.create(null);
+    var sampleModeCounts = [0, 0, 0, 0];
+    var exclusiveClassCounts = Object.create(null);
+    var modulatorDefinitions = Object.create(null);
+    var modulatorTargetCounts = Object.create(null);
+    var modulatorCount = 0;
 
     // Each resolved preset zone is one potential musical layer. A valid
     // linked left/right pair remains one layer but needs two PCM channel reads.
@@ -886,6 +1046,44 @@
       if (!sample) continue;
 
       var sampleInfo = analyzerSampleInfo(font, region);
+
+      var sampleMode = (Number(region.values[GEN.sampleModes]) || 0) & 3;
+      sampleModeCounts[sampleMode]++;
+      var exclusiveClass = Number(region.values[57]) || 0;
+      if (exclusiveClass > 0) {
+        exclusiveClassCounts[exclusiveClass] =
+          (exclusiveClassCounts[exclusiveClass] || 0) + 1;
+      }
+
+      var activeGenerators = region.activeGenerators || [];
+      for (var ag = 0; ag < activeGenerators.length; ag++) {
+        var activeOp = activeGenerators[ag];
+        generatorCounts[activeOp] = (generatorCounts[activeOp] || 0) + 1;
+      }
+
+      var modulatorGroups = region.modulators || [];
+      for (var mg = 0; mg < modulatorGroups.length; mg++) {
+        var group = modulatorGroups[mg];
+        for (var mi = 0; mi < group.records.length; mi++) {
+          var mod = group.records[mi];
+          var modKey = modulatorDefinitionKey(group.scope, mod);
+          if (!modulatorDefinitions[modKey]) {
+            modulatorDefinitions[modKey] = {
+              scope: group.scope,
+              sourceOper: mod.sourceOper,
+              destOper: mod.destOper,
+              amount: mod.amount,
+              amountSourceOper: mod.amountSourceOper,
+              transform: mod.transform,
+              resolvedZoneReferences: 0
+            };
+            modulatorTargetCounts[mod.destOper] =
+              (modulatorTargetCounts[mod.destOper] || 0) + 1;
+            modulatorCount++;
+          }
+          modulatorDefinitions[modKey].resolvedZoneReferences++;
+        }
+      }
 
       // Use the same PCM identity as the V2 exporter. This counts unique
       // effective sample data ranges after SF2 address generators and stereo
@@ -1037,6 +1235,14 @@
       compressedZones: compressedZones,
       linkedZones: linkedZones,
       invalidTypeZones: invalidTypeZones,
+      generatorCounts: generatorCounts,
+      sampleModeCounts: sampleModeCounts,
+      exclusiveClassCounts: exclusiveClassCounts,
+      modulatorCount: modulatorCount,
+      modulatorDefinitions: Object.keys(modulatorDefinitions).map(function (key) {
+        return modulatorDefinitions[key];
+      }),
+      modulatorTargetCounts: modulatorTargetCounts,
       maxLayers: maxLayers,
       maxLayerCells: maxLayerCells,
       maxChannels: maxChannels,
@@ -1330,6 +1536,11 @@
     var maxSampleFramesOverall = 0;
     var longestSamplePreset = "";
     var longestSampleNameOverall = "";
+    var globalGeneratorCounts = Object.create(null);
+    var globalGeneratorPresetCounts = Object.create(null);
+    var globalSampleModeCounts = [0, 0, 0, 0];
+    var globalExclusiveClassCounts = Object.create(null);
+    var globalModulatorDefinitions = Object.create(null);
 
     stopPreview();
     allPresetScanButton.disabled = true;
@@ -1363,6 +1574,40 @@
         if (maxLayers > MAX_PREVIEW_LAYERS_PER_NOTE) presetsAboveEightLayers++;
         if (analysis.stereoZones) presetsWithStereo++;
         totalResolvedZones += analysis.zoneCount;
+
+        Object.keys(analysis.generatorCounts).forEach(function (op) {
+          globalGeneratorCounts[op] =
+            (globalGeneratorCounts[op] || 0) + analysis.generatorCounts[op];
+          globalGeneratorPresetCounts[op] =
+            (globalGeneratorPresetCounts[op] || 0) + 1;
+        });
+        for (var sm = 0; sm < 4; sm++) {
+          globalSampleModeCounts[sm] += analysis.sampleModeCounts[sm];
+        }
+        Object.keys(analysis.exclusiveClassCounts).forEach(function (classId) {
+          globalExclusiveClassCounts[classId] =
+            (globalExclusiveClassCounts[classId] || 0) +
+            analysis.exclusiveClassCounts[classId];
+        });
+        for (var md = 0; md < analysis.modulatorDefinitions.length; md++) {
+          var definition = analysis.modulatorDefinitions[md];
+          var definitionKey = modulatorDefinitionKey(definition.scope, definition);
+          if (!globalModulatorDefinitions[definitionKey]) {
+            globalModulatorDefinitions[definitionKey] = {
+              scope: definition.scope,
+              sourceOper: definition.sourceOper,
+              destOper: definition.destOper,
+              amount: definition.amount,
+              amountSourceOper: definition.amountSourceOper,
+              transform: definition.transform,
+              presetCount: 0,
+              resolvedZoneReferences: 0
+            };
+          }
+          globalModulatorDefinitions[definitionKey].presetCount++;
+          globalModulatorDefinitions[definitionKey].resolvedZoneReferences +=
+            definition.resolvedZoneReferences;
+        }
         if (analysis.oversizedPcmSamples) presetsWithOversizedSamples++;
         totalUniquePcmSamples += analysis.uniquePcmSamples;
         totalOversizedPcmSamples += analysis.oversizedPcmSamples;
@@ -1396,7 +1641,24 @@
           stereoZones: analysis.stereoZones,
           romZones: analysis.romZones,
           compressedZones: analysis.compressedZones,
-          invalidStereoLinks: analysis.invalidStereoLinks
+          invalidStereoLinks: analysis.invalidStereoLinks,
+          generatorUsage: Object.keys(analysis.generatorCounts).map(Number).sort(function (a, b) {
+            return a - b;
+          }).map(function (op) {
+            return generatorLabel(op) + "=" + analysis.generatorCounts[op];
+          }).join("; "),
+          sampleModes: analysis.sampleModeCounts.join("/"),
+          exclusiveClasses: Object.keys(analysis.exclusiveClassCounts).sort(function (a, b) {
+            return Number(a) - Number(b);
+          }).map(function (classId) {
+            return classId + "=" + analysis.exclusiveClassCounts[classId];
+          }).join("; "),
+          modulatorCount: analysis.modulatorCount,
+          modulatorTargets: Object.keys(analysis.modulatorTargetCounts).map(Number).sort(function (a, b) {
+            return a - b;
+          }).map(function (op) {
+            return generatorLabel(op) + "=" + analysis.modulatorTargetCounts[op];
+          }).join("; ")
         });
 
         if ((i & 3) === 3 || i === presets.length - 1) {
@@ -1444,6 +1706,75 @@
       lines.push("Presets above browser preview limit (" + MAX_PREVIEW_LAYERS_PER_NOTE + " layers): " +
         presetsAboveEightLayers);
       lines.push("Presets containing valid stereo zones: " + presetsWithStereo);
+      lines.push("sm24 chunk: " + (soundFont.sample24Present ?
+        "present (" + soundFont.sample24Bytes.toLocaleString() + " bytes; " +
+          (soundFont.sample24Usable ? "usable" : "too short for all smpl points") + ")" :
+        "not present"));
+      lines.push("pmod records (preset modulators, sentinel excluded): " + soundFont.pmodulatorCount);
+      lines.push("imod records (instrument modulators, sentinel excluded): " + soundFont.imodulatorCount);
+      lines.push("Resolved distinct modulator definitions (deduplicated per preset and scope): " +
+        Object.keys(globalModulatorDefinitions).length);
+      lines.push("Sample mode zones (resolved zones summed over presets; mode 0/1/2/3): " +
+        globalSampleModeCounts.join(" / "));
+      lines.push("Zones with nonzero exclusiveClass (resolved zones summed over presets): " +
+        Object.keys(globalExclusiveClassCounts).sort(function (a, b) {
+          return Number(a) - Number(b);
+        }).map(function (classId) {
+          return classId + "=" + globalExclusiveClassCounts[classId];
+        }).join(", "));
+      lines.push("");
+      lines.push("Active generator usage (non-default/nonzero values; resolved zone counts across presets):");
+      var globalGeneratorLines = Object.keys(globalGeneratorCounts).map(Number).sort(function (a, b) {
+        return a - b;
+      }).map(function (op) {
+        return "  " + op + " " + generatorLabel(op) + ": " +
+          globalGeneratorCounts[op] + " zone reference(s) in " +
+          globalGeneratorPresetCounts[op] + " preset(s)";
+      });
+      lines = lines.concat(globalGeneratorLines.length ? globalGeneratorLines : ["  none"]);
+      lines.push("");
+      lines.push("Modulator target usage (unique definitions per preset; target is an SF2 generator):");
+      var targetTotals = Object.create(null);
+      Object.keys(globalModulatorDefinitions).forEach(function (key) {
+        var definition = globalModulatorDefinitions[key];
+        targetTotals[definition.destOper] = (targetTotals[definition.destOper] || 0) + 1;
+      });
+      var targetLines = Object.keys(targetTotals).map(Number).sort(function (a, b) {
+        return a - b;
+      }).map(function (op) {
+        return "  " + op + " " + generatorLabel(op) + ": " +
+          targetTotals[op] + " distinct scoped definition(s)";
+      });
+      lines = lines.concat(targetLines.length ? targetLines : ["  none"]);
+      lines.push("");
+      lines.push("Distinct modulator definitions (scope retained; records are deduplicated by all five SF2 fields):");
+      lines.push([
+        "Scope", "Source", "Destination", "Amount", "Amount source",
+        "Transform", "Preset count", "Resolved zone references"
+      ].join("\t"));
+      var modulatorDefinitionRows = Object.keys(globalModulatorDefinitions).map(function (key) {
+        return globalModulatorDefinitions[key];
+      }).sort(function (a, b) {
+        return b.presetCount - a.presetCount ||
+          a.destOper - b.destOper ||
+          a.sourceOper - b.sourceOper ||
+          a.amount - b.amount;
+      });
+      for (var mr = 0; mr < modulatorDefinitionRows.length; mr++) {
+        var modRow = modulatorDefinitionRows[mr];
+        lines.push([
+          modRow.scope,
+          modulatorSourceLabel(modRow.sourceOper) + " (0x" + modRow.sourceOper.toString(16) + ")",
+          modulatorTargetLabel(modRow.destOper),
+          modRow.amount,
+          modRow.amountSourceOper ?
+            modulatorSourceLabel(modRow.amountSourceOper) + " (0x" +
+              modRow.amountSourceOper.toString(16) + ")" : "none",
+          modulatorTransformLabel(modRow.transform),
+          modRow.presetCount,
+          modRow.resolvedZoneReferences
+        ].join("\t"));
+      }
       lines.push("");
       lines.push([
         "Bank", "Program", "Preset", "Zones", "Instrument count", "Instrument names",
@@ -1452,7 +1783,9 @@
         "Max layers", "Notes/velocity at max layers",
         "Max PCM channels", "Notes/velocity at max PCM", "Covered key/velocity cells",
         "Cells above V2 limit", "Stereo zones", "ROM zones", "Ogg/SF3 zones",
-        "Invalid stereo links"
+        "Invalid stereo links", "Active generators (zone counts)",
+        "Sample modes 0/1/2/3", "Exclusive classes (zone counts)",
+        "Unique modulators", "Modulator targets (unique)"
       ].join("\t"));
 
       for (var r = 0; r < results.length; r++) {
@@ -1464,7 +1797,10 @@
           item.maxSampleFrames, safeLogField(item.longestSample), item.invalidSampleLayouts,
           item.maxLayers, safeLogField(item.peakLayers), item.maxChannels,
           safeLogField(item.peakChannels), item.coveredCells, item.overV2Cells,
-          item.stereoZones, item.romZones, item.compressedZones, item.invalidStereoLinks
+          item.stereoZones, item.romZones, item.compressedZones, item.invalidStereoLinks,
+          safeLogField(item.generatorUsage), item.sampleModes,
+          safeLogField(item.exclusiveClasses), item.modulatorCount,
+          safeLogField(item.modulatorTargets)
         ].join("\t"));
       }
 
