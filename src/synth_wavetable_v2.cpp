@@ -94,6 +94,7 @@ static inline void wavetableV2ScaleSaturate4XespV(const int32_t *input,
     output[2] = (int16_t)out2;
     output[3] = (int16_t)out3;
 }
+#endif // defined(__riscv) && defined(__riscv_xespv)
 
 // MIDI note frequencies in Q16.16 Hz.
 static const uint32_t wavetableV2NoteFrequencyQ16[128] = {
