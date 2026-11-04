@@ -158,7 +158,9 @@ void setup()
 
     runTestCase(48, "SUSTAIN", 130);
     runTestCase(49, "ADSR", 130);
-    runTestCase(50, "RELEASE", 60);
+    // Note-Off at 25 ms: phase is between frame 1.0 and loopStart 1.75.
+    // The Release renderer must cross the same critical pre-loop interval.
+    runTestCase(50, "RELEASE", 25);
 
     if (recorder.stop()) {
         Serial.println("SUCCESS: saved /loop_boundary.wav");
