@@ -95,11 +95,15 @@ class AudioSynthWavetableV2 : public AudioStream {
         const uint8_t VELOCITY_LOW;
         const uint8_t VELOCITY_HIGH;
         const sample_data *SAMPLE;
+        // SF2 exclusive class. A value of zero disables exclusive voice killing.
+        const uint16_t EXCLUSIVE_CLASS;
 
         zone_data(uint8_t keyLow, uint8_t keyHigh, uint8_t velocityLow,
-                  uint8_t velocityHigh, const sample_data &sample)
+                  uint8_t velocityHigh, const sample_data &sample,
+                  uint16_t exclusiveClass = 0)
         : KEY_LOW(keyLow), KEY_HIGH(keyHigh), VELOCITY_LOW(velocityLow),
-          VELOCITY_HIGH(velocityHigh), SAMPLE(&sample) {}
+          VELOCITY_HIGH(velocityHigh), SAMPLE(&sample),
+          EXCLUSIVE_CLASS(exclusiveClass) {}
     };
 
     struct instrument_data {
@@ -162,6 +166,7 @@ class AudioSynthWavetableV2 : public AudioStream {
         uint8_t noteSlot;
         uint32_t noteToken;
         const sample_data *sample;
+        uint16_t exclusiveClass;
         uint32_t phase;
         uint32_t phaseIncrement;
         uint16_t amplitude;
@@ -190,6 +195,11 @@ class AudioSynthWavetableV2 : public AudioStream {
     uint32_t scaleSampleCount(uint32_t value) const;
     uint32_t maximumPhase(const sample_data &sample) const;
     void beginReleaseLocked(SampleVoice &voice);
+    void beginReleaseLocked(SampleVoice &voice, uint32_t releaseCount,
+                            bool shortenExisting);
+    void releaseExclusiveVoicesLocked(uint8_t channel,
+                                      const zone_data *const *zones,
+                                      uint8_t zoneCount);
     void compactInactiveVoices();
     void releaseNoteLocked(uint8_t noteSlot);
     void stealNoteLocked(uint8_t noteSlot);
@@ -223,6 +233,9 @@ class AudioSynthWavetableV2 : public AudioStream {
     float sampleCountScale_ = 1.0f;
     float phaseIncrementScale_ = 1.0f;
     uint16_t masterGain_ = UINT16_MAX;
+    // 300 ms exclusive-class release in ENVELOPE_PERIOD units, precomputed
+    // when the instrument/sample rate is configured.
+    uint32_t exclusiveReleaseCount_ = 0;
     uint32_t nextToken_ = 0;
     uint32_t nextAge_ = 0;
 };
