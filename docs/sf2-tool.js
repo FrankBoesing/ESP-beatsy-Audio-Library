@@ -111,6 +111,14 @@
   var V2_PHASE_SCALE = Math.pow(2, V2_PHASE_FRACTION_BITS);
   var MAX_SAMPLE_FRAMES_V1 = Math.pow(2, V1_INDEX_BITS) - 1;
   var MAX_SAMPLE_FRAMES_V2 = Math.pow(2, 32 - V2_PHASE_FRACTION_BITS) - 1;
+  // Comparison-only format: 20 sample-index bits and 12 fractional bits.
+  // The live V2 player and exporter remain fixed at 18/14.
+  var MAX_SAMPLE_FRAMES_20_12 = Math.pow(2, 20) - 1;
+  var PHASE_ANALYSIS_FORMATS = [
+    { label: "18/14", fractionBits: 14, maxFrames: MAX_SAMPLE_FRAMES_V2 },
+    { label: "20/12", fractionBits: 12, maxFrames: MAX_SAMPLE_FRAMES_20_12 }
+  ];
+  var PHASE_ANALYSIS_OUTPUT_RATES = [44100, 48000];
   var MAX_FILE_BYTES = 512 * 1024 * 1024;
   var MAX_EXPORT_FRAMES = 2000000;
   var RANGE_OPERATORS = [GEN.keyRange, GEN.velocityRange];
@@ -1028,6 +1036,358 @@
     return ranges.length ? ranges.join(", ") : "—";
   }
 
+
+  function createPhaseQuantizationStats() {
+    var result = Object.create(null);
+    for (var f = 0; f < PHASE_ANALYSIS_FORMATS.length; f++) {
+      var format = PHASE_ANALYSIS_FORMATS[f];
+      result[format.label] = Object.create(null);
+      for (var r = 0; r < PHASE_ANALYSIS_OUTPUT_RATES.length; r++) {
+        result[format.label][PHASE_ANALYSIS_OUTPUT_RATES[r]] = {
+          tests: 0,
+          sumCentsSquared: 0,
+          overOneCent: 0,
+          overFiveCents: 0,
+          maxAbsCents: 0,
+          worstPitch: null,
+          maxAbsDriftFrames: 0,
+          worstDrift: null
+        };
+      }
+    }
+    return result;
+  }
+
+  // Mirrors wavetableV2PhaseIncrement() in synth_wavetable_v2.cpp:
+  // float coefficient -> Q16.16 coefficient -> rounded uint32 phase step.
+  // The frequency table is the same MIDI Hz Q16.16 table, reconstructed by
+  // rounding the exact equal-tempered MIDI frequencies.
+  function phaseIncrementForAnalysis(region, layout, note, format, outputRate) {
+    var playback = playbackRatio(font, region, note);
+    var noteFrequency = midiFrequency(note);
+    var scale = Math.pow(2, format.fractionBits);
+    var perHertzCoefficient = Math.fround(
+      scale * layout.sampleRate * playback / noteFrequency
+    );
+    if (!Number.isFinite(perHertzCoefficient) || perHertzCoefficient <= 0) return null;
+
+    // Model a build whose AUDIO_SAMPLE_RATE_EXACT matches the tested output
+    // rate. Runtime sample-rate changes relative to the build rate are not
+    // part of this first comparison.
+    var phaseScale = Math.fround(outputRate / outputRate);
+    var coefficient = Math.fround(perHertzCoefficient * phaseScale);
+    var coefficientQ16Float = Math.fround(coefficient * 65536.0);
+    if (!Number.isFinite(coefficientQ16Float) ||
+        coefficientQ16Float >= 1.8446744073709552e19) {
+      return {
+        increment: 4294967295,
+        idealFramesPerOutputSample: layout.sampleRate * playback / outputRate
+      };
+    }
+
+    var coefficientQ16 = Math.floor(Math.fround(coefficientQ16Float + 0.5));
+    var frequencyQ16 = Math.round(noteFrequency * 65536.0);
+    var increment;
+    if (typeof BigInt === "function") {
+      var product = BigInt(frequencyQ16) * BigInt(coefficientQ16);
+      var maxUint64 = (1n << 64n) - 1n;
+      if (product > maxUint64 - 0x80000000n) {
+        increment = 4294967295;
+      } else {
+        increment = Number((product + 0x80000000n) >> 32n);
+      }
+    } else {
+      // All normal audio-rate cases stay below Number's exact-integer limit.
+      var productNumber = frequencyQ16 * coefficientQ16;
+      increment = Math.floor((productNumber + 0x80000000) / 4294967296);
+    }
+
+    if (increment === 0) increment = 1;
+    if (increment >= 4294967295) increment = 4294967295;
+    return {
+      increment: increment,
+      idealFramesPerOutputSample: layout.sampleRate * playback / outputRate
+    };
+  }
+
+  function addPhaseQuantizationMeasurement(stats, measurement, context, format, outputRate) {
+    if (!measurement || !(measurement.idealFramesPerOutputSample > 0)) return;
+    var scale = Math.pow(2, format.fractionBits);
+    var actualFramesPerOutputSample = measurement.increment / scale;
+    var relativeError = actualFramesPerOutputSample /
+      measurement.idealFramesPerOutputSample - 1;
+    var centsError = 1200 * Math.log2(1 + relativeError);
+    var driftFrames = context.frames * relativeError;
+    var entry = stats[format.label][outputRate];
+
+    entry.tests++;
+    entry.sumCentsSquared += centsError * centsError;
+    if (Math.abs(centsError) > 1) entry.overOneCent++;
+    if (Math.abs(centsError) > 5) entry.overFiveCents++;
+    if (Math.abs(centsError) > entry.maxAbsCents) {
+      entry.maxAbsCents = Math.abs(centsError);
+      entry.worstPitch = {
+        cents: centsError,
+        bank: context.bank,
+        program: context.program,
+        preset: context.preset,
+        instrument: context.instrument,
+        sample: context.sample,
+        note: midiName(context.note),
+        sampleRate: context.sampleRate,
+        increment: measurement.increment
+      };
+    }
+    if (Math.abs(driftFrames) > entry.maxAbsDriftFrames) {
+      entry.maxAbsDriftFrames = Math.abs(driftFrames);
+      entry.worstDrift = {
+        frames: driftFrames,
+        bank: context.bank,
+        program: context.program,
+        preset: context.preset,
+        instrument: context.instrument,
+        sample: context.sample,
+        note: midiName(context.note)
+      };
+    }
+  }
+
+  function analyzeRegionPhaseQuantization(preset, region, layout, stats) {
+    for (var note = region.keyRange.low; note <= region.keyRange.high; note++) {
+      for (var f = 0; f < PHASE_ANALYSIS_FORMATS.length; f++) {
+        var format = PHASE_ANALYSIS_FORMATS[f];
+        for (var r = 0; r < PHASE_ANALYSIS_OUTPUT_RATES.length; r++) {
+          var outputRate = PHASE_ANALYSIS_OUTPUT_RATES[r];
+          var measurement = phaseIncrementForAnalysis(
+            region, layout, note, format, outputRate
+          );
+          addPhaseQuantizationMeasurement(stats, measurement, {
+            frames: layout.frames,
+            bank: preset.bank,
+            program: preset.program,
+            preset: preset.name,
+            instrument: region.instrumentName,
+            sample: layout.sampleName || "unnamed sample",
+            note: note,
+            sampleRate: layout.sampleRate
+          }, format, outputRate);
+        }
+      }
+    }
+  }
+
+  function mergePhaseQuantizationStats(target, source) {
+    for (var f = 0; f < PHASE_ANALYSIS_FORMATS.length; f++) {
+      var format = PHASE_ANALYSIS_FORMATS[f];
+      for (var r = 0; r < PHASE_ANALYSIS_OUTPUT_RATES.length; r++) {
+        var rate = PHASE_ANALYSIS_OUTPUT_RATES[r];
+        var to = target[format.label][rate];
+        var from = source[format.label][rate];
+        to.tests += from.tests;
+        to.sumCentsSquared += from.sumCentsSquared;
+        to.overOneCent += from.overOneCent;
+        to.overFiveCents += from.overFiveCents;
+        if (from.maxAbsCents > to.maxAbsCents) {
+          to.maxAbsCents = from.maxAbsCents;
+          to.worstPitch = from.worstPitch;
+        }
+        if (from.maxAbsDriftFrames > to.maxAbsDriftFrames) {
+          to.maxAbsDriftFrames = from.maxAbsDriftFrames;
+          to.worstDrift = from.worstDrift;
+        }
+      }
+    }
+  }
+
+  function collectUniquePcmRanges(soundFont) {
+    var rangesByKey = Object.create(null);
+    for (var p = 0; p < soundFont.presets.length; p++) {
+      var preset = soundFont.presets[p];
+      for (var z = 0; z < preset.zones.length; z++) {
+        var region = preset.zones[z];
+        var layout = makeRegionLayout(soundFont, region);
+        if (layout.error) continue;
+        var guardFrame = layout.loop && layout.loopEnd === layout.frames ?
+          layout.loopStart : -1;
+        var key = (layout.right ? "stereo:" : "mono:") + layout.start + ":" +
+          layout.rightStart + ":" + layout.frames + ":" + guardFrame;
+        var entry = rangesByKey[key];
+        if (!entry) {
+          entry = {
+            key: key,
+            layout: layout,
+            frames: layout.frames,
+            sampleRate: layout.sampleRate,
+            sampleName: layout.sampleName || soundFont.samples[region.sampleIndex].name ||
+              region.instrumentName || "unnamed sample",
+            channels: layout.right ? 2 : 1,
+            references: [],
+            referenceKeys: Object.create(null)
+          };
+          rangesByKey[key] = entry;
+        }
+        var referenceKey = preset.bank + ":" + preset.program + ":" +
+          preset.name + ":" + region.instrumentName;
+        if (!entry.referenceKeys[referenceKey]) {
+          entry.referenceKeys[referenceKey] = true;
+          entry.references.push(
+            "Bank " + preset.bank + " Program " + preset.program + " " +
+            preset.name + " / " + region.instrumentName
+          );
+        }
+      }
+    }
+    return Object.keys(rangesByKey).map(function (key) {
+      var entry = rangesByKey[key];
+      delete entry.referenceKeys;
+      return entry;
+    });
+  }
+
+  async function analyzePcmInterpolationRanges(soundFont, ranges, scanGeneration) {
+    var aggregate = {
+      ranges: ranges.length,
+      channelFrames: 0,
+      signalSquares: 0,
+      signalValues: 0,
+      deltaSquares: 0,
+      deltaPairs: 0,
+      maxDelta: 0,
+      maxDeltaSample: "",
+      entries: []
+    };
+    var totalChannelFrames = 0;
+    for (var t = 0; t < ranges.length; t++) {
+      totalChannelFrames += ranges[t].frames * ranges[t].channels;
+    }
+    var lastProgressFrames = 0;
+    var chunkSize = 65536;
+
+    for (var r = 0; r < ranges.length; r++) {
+      if (scanGeneration !== allPresetScanGeneration || soundFont !== font) return null;
+      var range = ranges[r];
+      var layout = range.layout;
+      var local = {
+        signalSquares: 0,
+        signalValues: 0,
+        deltaSquares: 0,
+        deltaPairs: 0,
+        maxDelta: 0
+      };
+
+      for (var channel = 0; channel < range.channels; channel++) {
+        var start = channel === 0 ? layout.start : layout.rightStart;
+        var previous = 0;
+        for (var offset = 0; offset < layout.frames; offset++) {
+          var value = readSampleValue(soundFont, start + offset);
+          local.signalSquares += value * value;
+          local.signalValues++;
+          if (offset > 0) {
+            var delta = Math.abs(value - previous);
+            local.deltaSquares += delta * delta;
+            local.deltaPairs++;
+            if (delta > local.maxDelta) local.maxDelta = delta;
+          }
+          previous = value;
+
+          if ((offset + 1) % chunkSize === 0) {
+            if (scanGeneration !== allPresetScanGeneration || soundFont !== font) return null;
+            aggregate.channelFrames += chunkSize;
+            if (aggregate.channelFrames - lastProgressFrames >= 1048576) {
+              lastProgressFrames = aggregate.channelFrames;
+              allPresetScanStatus.textContent =
+                "Analyzing PCM interpolation data: " +
+                aggregate.channelFrames.toLocaleString() + " / " +
+                totalChannelFrames.toLocaleString() + " channel-frames…";
+            }
+            await new Promise(function (resolve) { setTimeout(resolve, 0); });
+          }
+        }
+
+        // Match the V2 export's one-frame interpolation guard at the end.
+        var guardValue = layout.loop && layout.loopEnd === layout.frames ?
+          readSampleValue(soundFont, start + layout.loopStart) : 0;
+        var guardDelta = Math.abs(guardValue - previous);
+        local.deltaSquares += guardDelta * guardDelta;
+        local.deltaPairs++;
+        if (guardDelta > local.maxDelta) local.maxDelta = guardDelta;
+
+        var processedInChannel = layout.frames % chunkSize;
+        aggregate.channelFrames += processedInChannel;
+      }
+
+      aggregate.signalSquares += local.signalSquares;
+      aggregate.signalValues += local.signalValues;
+      aggregate.deltaSquares += local.deltaSquares;
+      aggregate.deltaPairs += local.deltaPairs;
+      if (local.maxDelta > aggregate.maxDelta) {
+        aggregate.maxDelta = local.maxDelta;
+        aggregate.maxDeltaSample = range.sampleName;
+      }
+
+      var signalRms = local.signalValues ?
+        Math.sqrt(local.signalSquares / local.signalValues) : 0;
+      var deltaRms = local.deltaPairs ?
+        Math.sqrt(local.deltaSquares / local.deltaPairs) : 0;
+      var interpolationError12 = deltaRms / (Math.sqrt(12) * 4096);
+      var snr12 = interpolationError12 > 0 && signalRms > 0 ?
+        20 * Math.log10(signalRms / interpolationError12) : Infinity;
+      aggregate.entries.push({
+        sampleName: range.sampleName,
+        frames: range.frames,
+        sampleRate: range.sampleRate,
+        channels: range.channels,
+        signalRms: signalRms,
+        deltaRms: deltaRms,
+        maxDelta: local.maxDelta,
+        interpolationError12: interpolationError12,
+        snr12: snr12,
+        references: range.references
+      });
+
+      if ((r & 15) === 15 || r === ranges.length - 1) {
+        allPresetScanStatus.textContent =
+          "Analyzing PCM interpolation data: " + (r + 1) + " / " +
+          ranges.length + " unique PCM ranges…";
+        await new Promise(function (resolve) { setTimeout(resolve, 0); });
+      }
+    }
+
+    aggregate.signalRms = aggregate.signalValues ?
+      Math.sqrt(aggregate.signalSquares / aggregate.signalValues) : 0;
+    aggregate.deltaRms = aggregate.deltaPairs ?
+      Math.sqrt(aggregate.deltaSquares / aggregate.deltaPairs) : 0;
+    aggregate.interpolationErrors = Object.create(null);
+    for (var f = 0; f < PHASE_ANALYSIS_FORMATS.length; f++) {
+      var format = PHASE_ANALYSIS_FORMATS[f];
+      var scale = Math.pow(2, format.fractionBits);
+      var rmsError = aggregate.deltaRms / (Math.sqrt(12) * scale);
+      aggregate.interpolationErrors[format.label] = {
+        rmsError: rmsError,
+        maxErrorBound: aggregate.maxDelta / (2 * scale),
+        snr: rmsError > 0 && aggregate.signalRms > 0 ?
+          20 * Math.log10(aggregate.signalRms / rmsError) : Infinity
+      };
+    }
+    aggregate.entries.sort(function (a, b) {
+      return b.interpolationError12 - a.interpolationError12 ||
+        b.maxDelta - a.maxDelta ||
+        b.frames - a.frames;
+    });
+    return aggregate;
+  }
+
+  function phaseWorstDescription(entry) {
+    if (!entry) return "—";
+    return "Bank " + entry.bank + " Program " + entry.program + " " +
+      safeLogField(entry.preset) + " / " + safeLogField(entry.instrument) +
+      " / " + safeLogField(entry.sample) + " / " + entry.note;
+  }
+
+  function phaseStatsRmsCents(entry) {
+    return entry.tests ? Math.sqrt(entry.sumCentsSquared / entry.tests) : 0;
+  }
+
   function analyzePresetVoices(preset, retainGrid) {
     if (preset.voiceAnalysis) return preset.voiceAnalysis;
     var keepGrid = retainGrid !== false;
@@ -1055,6 +1415,8 @@
     var modulatorDefinitions = Object.create(null);
     var modulatorTargetCounts = Object.create(null);
     var modulatorCount = 0;
+    var oversizedPcmSamples20_12 = 0;
+    var phaseQuantizationStats = createPhaseQuantizationStats();
 
     // Each resolved preset zone is one potential musical layer. A valid
     // linked left/right pair remains one layer but needs two PCM channel reads.
@@ -1118,11 +1480,13 @@
           pcmSampleSet[pcmKey] = true;
           uniquePcmSamples++;
           if (layout.frames > MAX_SAMPLE_FRAMES_V2) oversizedPcmSamples++;
+          if (layout.frames > MAX_SAMPLE_FRAMES_20_12) oversizedPcmSamples20_12++;
           if (layout.frames > maxSampleFrames) {
             maxSampleFrames = layout.frames;
             longestSampleName = layout.sampleName || sample.name || region.instrumentName;
           }
         }
+        analyzeRegionPhaseQuantization(preset, region, layout, phaseQuantizationStats);
       }
 
       addAnalyzerRectangle(layerGrid, region.keyRange, region.velocityRange);
@@ -1244,6 +1608,8 @@
       sampleHeaders: Object.keys(sampleHeaderSet).length,
       uniquePcmSamples: uniquePcmSamples,
       oversizedPcmSamples: oversizedPcmSamples,
+      oversizedPcmSamples20_12: oversizedPcmSamples20_12,
+      phaseQuantizationStats: phaseQuantizationStats,
       invalidSampleLayouts: invalidSampleLayouts,
       maxSampleFrames: maxSampleFrames,
       longestSampleName: longestSampleName,
@@ -1551,6 +1917,9 @@
     var presetsWithOversizedSamples = 0;
     var totalUniquePcmSamples = 0;
     var totalOversizedPcmSamples = 0;
+    var presetsWithOversizedSamples20_12 = 0;
+    var totalOversizedPcmSamples20_12 = 0;
+    var globalPhaseQuantizationStats = createPhaseQuantizationStats();
     var maxSampleFramesOverall = 0;
     var longestSamplePreset = "";
     var longestSampleNameOverall = "";
@@ -1631,8 +2000,11 @@
             definition.resolvedZoneReferences;
         }
         if (analysis.oversizedPcmSamples) presetsWithOversizedSamples++;
+        if (analysis.oversizedPcmSamples20_12) presetsWithOversizedSamples20_12++;
         totalUniquePcmSamples += analysis.uniquePcmSamples;
         totalOversizedPcmSamples += analysis.oversizedPcmSamples;
+        totalOversizedPcmSamples20_12 += analysis.oversizedPcmSamples20_12;
+        mergePhaseQuantizationStats(globalPhaseQuantizationStats, analysis.phaseQuantizationStats);
         if (analysis.maxSampleFrames > maxSampleFramesOverall) {
           maxSampleFramesOverall = analysis.maxSampleFrames;
           longestSamplePreset = preset.name + " (Bank " + preset.bank +
@@ -1651,6 +2023,7 @@
           sampleSets: analysis.uniqueSampleSets,
           uniquePcmSamples: analysis.uniquePcmSamples,
           oversizedPcmSamples: analysis.oversizedPcmSamples,
+          oversizedPcmSamples20_12: analysis.oversizedPcmSamples20_12,
           maxSampleFrames: analysis.maxSampleFrames,
           longestSample: analysis.longestSampleName,
           invalidSampleLayouts: analysis.invalidSampleLayouts,
@@ -1694,6 +2067,26 @@
 
       if (scanGeneration !== allPresetScanGeneration || soundFont !== font) return;
 
+      var uniquePcmRanges = collectUniquePcmRanges(soundFont);
+      allPresetScanStatus.textContent =
+        "Analyzing PCM interpolation data across " + uniquePcmRanges.length +
+        " unique sample ranges…";
+      var pcmInterpolationAnalysis = await analyzePcmInterpolationRanges(
+        soundFont, uniquePcmRanges, scanGeneration
+      );
+      if (!pcmInterpolationAnalysis ||
+          scanGeneration !== allPresetScanGeneration || soundFont !== font) return;
+
+      var uniqueRangesOver18_14 = uniquePcmRanges.filter(function (entry) {
+        return entry.frames > MAX_SAMPLE_FRAMES_V2;
+      });
+      var uniqueRangesOver20_12 = uniquePcmRanges.filter(function (entry) {
+        return entry.frames > MAX_SAMPLE_FRAMES_20_12;
+      });
+      var longestUniqueRanges = uniquePcmRanges.slice().sort(function (a, b) {
+        return b.frames - a.frames;
+      }).slice(0, 20);
+
       results.sort(function (a, b) {
         return b.maxLayers - a.maxLayers ||
           b.maxChannels - a.maxChannels ||
@@ -1712,9 +2105,15 @@
       lines.push("Sample headers: " + Math.max(0, soundFont.samples.length - 1));
       lines.push("Resolved preset zones (sum over presets): " + totalResolvedZones);
       lines.push("Unique PCM samples (sum over presets, V2 exporter deduplication): " + totalUniquePcmSamples);
-      lines.push("Unique PCM samples above V2 frame limit (" + MAX_SAMPLE_FRAMES_V2 + ", sum over presets): " +
-        totalOversizedPcmSamples);
-      lines.push("Presets with samples above V2 frame limit: " + presetsWithOversizedSamples);
+      lines.push("Unique PCM samples above current V2 frame limit / 18-14 (" + MAX_SAMPLE_FRAMES_V2 +
+        ", sum over presets): " + totalOversizedPcmSamples);
+      lines.push("Presets with samples above 18/14 frame limit: " + presetsWithOversizedSamples);
+      lines.push("Unique PCM samples above 20/12 frame limit (" + MAX_SAMPLE_FRAMES_20_12 +
+        ", sum over presets): " + totalOversizedPcmSamples20_12);
+      lines.push("Presets with samples above 20/12 frame limit: " + presetsWithOversizedSamples20_12);
+      lines.push("Unique effective PCM ranges across the complete SoundFont: " + uniquePcmRanges.length);
+      lines.push("Unique PCM ranges above 18/14 / 20/12: " +
+        uniqueRangesOver18_14.length + " / " + uniqueRangesOver20_12.length);
       lines.push("Maximum resolved sample length: " +
         (maxSampleFramesOverall ? maxSampleFramesOverall.toLocaleString() + " frames (" +
           (longestSampleNameOverall || "unnamed sample") + "; " + longestSamplePreset + ")" : "—"));
@@ -1739,6 +2138,104 @@
       lines.push("Sample mode zones (resolved zones summed over presets; mode 0/1/2/3): " +
         globalSampleModeCounts.join(" / "));
       lines.push("Sample mode meaning: 0=no loop, 1=continuous loop, 2=reserved, 3=loop until release.");
+
+      lines.push("");
+      lines.push("Phase-format numeric comparison (analysis only; live V2 remains fixed at 18/14):");
+      lines.push("Formats: 18/14 = 262143 maximum frames; 20/12 = 1048575 maximum frames.");
+      lines.push("Phase increment model: float per-Hz coefficient, Q16.16 conversion and rounded uint32 phase step, matching wavetableV2PhaseIncrement().");
+      lines.push("Assumption: build-time and runtime sample rates match for each tested rate (44100 Hz and 48000 Hz); runtime sample-rate switching is not modelled.");
+      lines.push("Pitch error is the steady-state error caused by integer phase-increment quantization; drift is the accumulated position difference after traversing the complete sample once.");
+      lines.push([
+        "Output rate", "Format", "Note-zone tests", "Max |pitch error| (cent)",
+        "RMS pitch error (cent)", "Cases >1 cent", "Cases >5 cents",
+        "Max |single-traversal drift| (frames)", "Worst pitch-error case"
+      ].join("\t"));
+      for (var pf = 0; pf < PHASE_ANALYSIS_FORMATS.length; pf++) {
+        var phaseFormat = PHASE_ANALYSIS_FORMATS[pf];
+        for (var pr = 0; pr < PHASE_ANALYSIS_OUTPUT_RATES.length; pr++) {
+          var phaseRate = PHASE_ANALYSIS_OUTPUT_RATES[pr];
+          var phaseEntry = globalPhaseQuantizationStats[phaseFormat.label][phaseRate];
+          lines.push([
+            phaseRate,
+            phaseFormat.label,
+            phaseEntry.tests,
+            phaseEntry.maxAbsCents.toFixed(5),
+            phaseStatsRmsCents(phaseEntry).toFixed(5),
+            phaseEntry.overOneCent,
+            phaseEntry.overFiveCents,
+            phaseEntry.maxAbsDriftFrames.toFixed(3),
+            phaseWorstDescription(phaseEntry.worstPitch)
+          ].join("\t"));
+        }
+      }
+
+      lines.push("");
+      lines.push("PCM interpolation-fraction precision estimate (measured from the actual SF2 PCM ranges):");
+      lines.push("Unique ranges scanned: " + pcmInterpolationAnalysis.ranges);
+      lines.push("PCM channel-frames scanned: " + pcmInterpolationAnalysis.channelFrames.toLocaleString());
+      lines.push("Signal RMS: " + pcmInterpolationAnalysis.signalRms.toFixed(2) + " PCM LSB");
+      lines.push("Adjacent-sample difference RMS / maximum: " +
+        pcmInterpolationAnalysis.deltaRms.toFixed(2) + " / " + pcmInterpolationAnalysis.maxDelta +
+        " PCM LSB (maximum in " + safeLogField(pcmInterpolationAnalysis.maxDeltaSample || "—") + ")");
+      lines.push("Assumption: fractional positions are uniformly distributed and rounded to nearest representable fraction. This estimates phase-fraction quantization only; phase-increment quantization is reported separately, and final integer interpolation-multiply rounding is excluded.");
+      lines.push([
+        "Format", "Estimated RMS interpolation error (PCM LSB)",
+        "Maximum error bound (PCM LSB)", "Estimated interpolation SNR (dB)"
+      ].join("\t"));
+      for (var pe = 0; pe < PHASE_ANALYSIS_FORMATS.length; pe++) {
+        var interpolationFormat = PHASE_ANALYSIS_FORMATS[pe];
+        var interpolationResult =
+          pcmInterpolationAnalysis.interpolationErrors[interpolationFormat.label];
+        lines.push([
+          interpolationFormat.label,
+          interpolationResult.rmsError.toFixed(6),
+          interpolationResult.maxErrorBound.toFixed(6),
+          Number.isFinite(interpolationResult.snr) ?
+            interpolationResult.snr.toFixed(2) : "∞"
+        ].join("\t"));
+      }
+
+      lines.push("");
+      lines.push("Longest unique effective PCM ranges (top 20; deduplicated across presets):");
+      lines.push(["Sample", "Frames", "Source rate (Hz)", "Duration (s)", "Channels", "Preset / instrument references"].join("\t"));
+      for (var lr = 0; lr < longestUniqueRanges.length; lr++) {
+        var longRange = longestUniqueRanges[lr];
+        lines.push([
+          safeLogField(longRange.sampleName),
+          longRange.frames,
+          longRange.sampleRate,
+          (longRange.frames / longRange.sampleRate).toFixed(3),
+          longRange.channels,
+          safeLogField(longRange.references.slice(0, 4).join("; ") +
+            (longRange.references.length > 4 ? "; +" +
+              (longRange.references.length - 4) + " references" : ""))
+        ].join("\t"));
+      }
+
+      lines.push("");
+      lines.push("Samples with the highest estimated 20/12 interpolation-fraction error (top 20):");
+      lines.push(["Sample", "Frames", "Source rate (Hz)", "Channels",
+        "RMS adjacent delta (PCM LSB)", "Max adjacent delta (PCM LSB)",
+        "Estimated RMS error (PCM LSB)", "Estimated SNR (dB)",
+        "Preset / instrument references"].join("\t"));
+      for (var ie = 0; ie < Math.min(20, pcmInterpolationAnalysis.entries.length); ie++) {
+        var interpolationSample = pcmInterpolationAnalysis.entries[ie];
+        lines.push([
+          safeLogField(interpolationSample.sampleName),
+          interpolationSample.frames,
+          interpolationSample.sampleRate,
+          interpolationSample.channels,
+          interpolationSample.deltaRms.toFixed(2),
+          interpolationSample.maxDelta,
+          interpolationSample.interpolationError12.toFixed(6),
+          Number.isFinite(interpolationSample.snr12) ?
+            interpolationSample.snr12.toFixed(2) : "∞",
+          safeLogField(interpolationSample.references.slice(0, 3).join("; ") +
+            (interpolationSample.references.length > 3 ? "; +" +
+              (interpolationSample.references.length - 3) + " references" : ""))
+        ].join("\t"));
+      }
+
       lines.push("Note: SF2 default modulators are implicit and are not stored in pmod/imod; they are not included here.");
       lines.push("Zones with nonzero exclusiveClass (resolved zones summed over presets): " +
         Object.keys(globalExclusiveClassCounts).sort(function (a, b) {
@@ -1803,8 +2300,8 @@
       lines.push("");
       lines.push([
         "Bank", "Program", "Preset", "Zones", "Instrument count", "Instrument names",
-        "Sample headers", "Sample sets", "Unique PCM samples", "Samples > V2 frame limit",
-        "Max sample frames", "Longest sample", "Invalid sample layouts",
+        "Sample headers", "Sample sets", "Unique PCM samples", "Samples >18/14 frame limit",
+        "Samples >20/12 frame limit", "Max sample frames", "Longest sample", "Invalid sample layouts",
         "Max layers", "Notes/velocity at max layers",
         "Max PCM channels", "Notes/velocity at max PCM", "Covered key/velocity cells",
         "Cells above V2 limit", "Stereo zones", "ROM zones", "Ogg/SF3 zones",
@@ -1819,7 +2316,8 @@
           item.bank, item.program, safeLogField(item.name), item.zones,
           item.instrumentCount, safeLogField(item.instruments), item.sampleHeaders,
           item.sampleSets, item.uniquePcmSamples, item.oversizedPcmSamples,
-          item.maxSampleFrames, safeLogField(item.longestSample), item.invalidSampleLayouts,
+          item.oversizedPcmSamples20_12, item.maxSampleFrames,
+          safeLogField(item.longestSample), item.invalidSampleLayouts,
           item.maxLayers, safeLogField(item.peakLayers), item.maxChannels,
           safeLogField(item.peakChannels), item.coveredCells, item.overV2Cells,
           item.stereoZones, item.romZones, item.compressedZones, item.invalidStereoLinks,
@@ -1834,11 +2332,14 @@
       allPresetScanPanel.classList.remove("hidden");
       allPresetScanCopyButton.disabled = false;
       allPresetScanDownloadButton.disabled = false;
+      var phaseStatus18 = globalPhaseQuantizationStats["18/14"][44100];
+      var phaseStatus20 = globalPhaseQuantizationStats["20/12"][44100];
       allPresetScanStatus.textContent =
-        "Completed: " + results.length + " presets. Maximum " +
-        maxLayersOverall + " simultaneous layers and " + maxChannelsOverall +
-        " mono PCM channels; " + presetsWithOversizedSamples +
-        " preset(s) contain samples over the V2 frame limit. The report is sorted by maximum layer count.";
+        "Completed: " + results.length + " presets; " + uniqueRangesOver18_14.length +
+        " unique PCM ranges exceed 18/14 and " + uniqueRangesOver20_12.length +
+        " exceed 20/12. Worst 44.1 kHz phase-step error: " +
+        phaseStatus18.maxAbsCents.toFixed(3) + " cent (18/14), " +
+        phaseStatus20.maxAbsCents.toFixed(3) + " cent (20/12).";
       console.log("ESP-beatsy SF2 all-preset voice analysis\n" + report);
     } catch (error) {
       if (scanGeneration === allPresetScanGeneration && soundFont === font) {
