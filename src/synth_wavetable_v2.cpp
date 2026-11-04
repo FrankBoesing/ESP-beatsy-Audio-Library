@@ -1938,9 +1938,20 @@ void AudioSynthWavetableV2::update() {
  *   and 2438/2445 us (PSRAM). FLASH and PSRAM are practically equivalent
  *   for this sample set. This run measures the corrected build; without a
  *   same-method pre-fix baseline it does not isolate the loop-fix cost.
+ * - User-provided WAV regression recording — 2026-11-04: 44.1 kHz,
+ *   mono, 16-bit PCM, using the synthetic sample {0, 12000, -12000, 0},
+ *   LOOP_PHASE_END=0x8000 and LOOP_PHASE_LENGTH=0x1000 (loop start 1.75
+ *   frames). The expected neighbor switch was observed in all three mono
+ *   render paths: Sustain at 84.150 ms (-0.14594 -> +0.29294), normal ADSR
+ *   at 290.748 ms (-0.02570 -> +0.05148), and Release at 497.596 ms
+ *   (-0.09567 -> +0.19174). In each case interpolation continued through
+ *   the pre-loop interval and switched only at the actual loop start. The
+ *   Release case entered Note-Off at 25 ms, before reaching the loop start,
+ *   so the critical interval was exercised in STATE_RELEASE as well.
  * - The benchmark confirms the current renderer runs at 128 layers with
- *   approximately 84% reported V2 load. Loop-edge phase-sequence verification
- *   and dedicated audio listening remain separate correctness checks.
+ *   approximately 84% reported V2 load. The mono loop-boundary regression
+ *   test passes for Sustain, ADSR, and Release. A dedicated stereo regression
+ *   recording and separate subjective listening check remain outstanding.
  *
  *
  * 26. Q14 DELTA INTERPOLATION / 32-BIT SAMPLE LOOP INDEX — IMPLEMENTED / PENDING BENCHMARK — 2026-11-03
