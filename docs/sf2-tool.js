@@ -3632,6 +3632,11 @@
     lines.push("// V1 supports one sample zone per MIDI note. Velocity selection is baked into this header.");
     lines.push("// Requires the legacy AudioSynthWavetable::instrument_data interface.");
     lines.push("// SF2 modulators, filters, pan, chorus/reverb sends and stereo placement are not rendered.");
+    if (preset.zones.some(function (zone) {
+      return (zone.values[GEN.exclusiveClass] || 0) !== 0;
+    })) {
+      lines.push("// WARNING: SF2 exclusiveClass is not supported by the legacy V1 player.");
+    }
     if (font.modulatorCount) lines.push("// WARNING: " + font.modulatorCount + " SF2 modulator record(s) were ignored.");
     if (preset.warnings.length) lines.push("// WARNING: unsupported SF2 generators are present; see the tool's preset report.");
     lines.push("#pragma once");
