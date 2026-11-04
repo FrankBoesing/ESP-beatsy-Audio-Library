@@ -195,8 +195,7 @@ class AudioSynthWavetableV2 : public AudioStream {
     uint32_t scaleSampleCount(uint32_t value) const;
     uint32_t maximumPhase(const sample_data &sample) const;
     void beginReleaseLocked(SampleVoice &voice);
-    void beginReleaseLocked(SampleVoice &voice, uint32_t releaseCount,
-                            bool shortenExisting);
+    void beginReleaseLocked(SampleVoice &voice, uint32_t releaseCount);
     void releaseExclusiveVoicesLocked(uint8_t channel,
                                       const zone_data *const *zones,
                                       uint8_t zoneCount);
