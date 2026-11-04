@@ -62,7 +62,7 @@
     instrument: 41, keyRange: 43, velocityRange: 44, startLoopCoarse: 45,
     keynum: 46, velocity: 47, attenuation: 48, endLoopCoarse: 50,
     coarseTune: 51, fineTune: 52, sampleId: 53, sampleModes: 54,
-    scaleTuning: 56, rootKey: 58, endCoarse: 12
+    scaleTuning: 56, exclusiveClass: 57, rootKey: 58, endCoarse: 12
   };
 
   var DEFAULTS = {};
@@ -79,6 +79,7 @@
   DEFAULTS[GEN.fineTune] = 0;
   DEFAULTS[GEN.sampleModes] = 0;
   DEFAULTS[GEN.scaleTuning] = 100;
+  DEFAULTS[GEN.exclusiveClass] = 0;
   DEFAULTS[GEN.rootKey] = -1;
   DEFAULTS[GEN.keynum] = -1;
   DEFAULTS[GEN.velocity] = -1;
@@ -135,13 +136,13 @@
   var MAX_EXPORT_FRAMES = 2000000;
   var RANGE_OPERATORS = [GEN.keyRange, GEN.velocityRange];
   var INDEX_OPERATORS = [GEN.instrument, GEN.sampleId];
-  var UNSIGNED_OPERATORS = [GEN.instrument, GEN.sampleId, GEN.sampleModes, 57];
+  var UNSIGNED_OPERATORS = [GEN.instrument, GEN.sampleId, GEN.sampleModes, GEN.exclusiveClass];
   var PRESET_IGNORED_OPERATORS = [
     0, 1, 2, 3, 4, 12, 45, 46, 47, 50, 54, 57, 58
   ];
   var SUPPORTED_OPERATORS = [
     0, 1, 2, 3, 4, 12, 33, 34, 35, 36, 37, 38, 39, 40,
-    41, 43, 44, 45, 46, 47, 48, 50, 51, 52, 53, 54, 56, 58
+    41, 43, 44, 45, 46, 47, 48, 50, 51, 52, 53, 54, 56, 57, 58
   ];
 
   var GENERATOR_NAMES = {
@@ -2946,30 +2947,78 @@
     p.linearRampToValueAtTime(attenuation * sustainGain * gainScale, peak + env.hold + env.decay);
   }
 
+  function releaseLayer(voice, layer, releaseSeconds, shortenExisting) {
+    if (!layer || layer.ended) return;
+
+    var now = audioContext.currentTime;
+    if (layer.released) {
+      var remaining = layer.releaseEndTime - now;
+      if (!shortenExisting || remaining <= releaseSeconds) return;
+    }
+
+    var env = envelopeForNote(layer.region.values, voice.note);
+    var param = layer.gain.gain;
+    var level;
+    if (layer.released) {
+      // Preserve the instantaneous gain when shortening an existing release.
+      level = param.value;
+    } else {
+      level = envelopeLevelAt(layer.region, voice.note, voice.startTime, now, layer.gainScale);
+    }
+
+    var duration = releaseSeconds === undefined ? Math.max(0, env.release) :
+      Math.max(0, releaseSeconds);
+    var endTime = now + duration;
+
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(level, now);
+    if (duration > 0) param.linearRampToValueAtTime(0, endTime);
+    else param.setValueAtTime(0, now);
+
+    layer.released = true;
+    layer.releaseEndTime = endTime;
+
+    // SF2 mode 3 is loop-until-release; stop looping as soon as release begins.
+    if (layer.layout.loopMode === 3) {
+      layer.source.loop = false;
+    }
+
+    try { layer.source.stop(Math.max(now + 0.005, endTime + 0.025)); }
+    catch (ignoreStop) {}
+  }
+
   function releaseVoice(voice) {
     if (!voice || voice.released || voice.finished) return;
     voice.released = true;
-    var now = audioContext.currentTime;
-
     for (var i = 0; i < voice.layers.length; i++) {
-      var layer = voice.layers[i];
-      var env = envelopeForNote(layer.region.values, voice.note);
-      var param = layer.gain.gain;
-      var level = envelopeLevelAt(layer.region, voice.note, voice.startTime, now, layer.gainScale);
-      var endTime = now + Math.max(0, env.release);
+      releaseLayer(voice, voice.layers[i], undefined, false);
+    }
+  }
 
-      param.cancelScheduledValues(now);
-      param.setValueAtTime(level, now);
-      if (env.release > 0) param.linearRampToValueAtTime(0, endTime);
-      else param.setValueAtTime(0, now);
+  function releaseExclusiveLayers(matches) {
+    var classes = [];
+    for (var i = 0; i < matches.length; i++) {
+      var classId = matches[i].values[GEN.exclusiveClass] || 0;
+      if (classId && classes.indexOf(classId) < 0) classes.push(classId);
+    }
+    if (!classes.length) return;
 
-      // SF2 mode 3 is loop-until-release; V2 exits the loop on Note-Off.
-      if (layer.layout.loopMode === 3) {
-        layer.source.loop = false;
+    for (var v = 0; v < activeVoices.length; v++) {
+      var voice = activeVoices[v];
+      if (voice.finished) continue;
+
+      for (var l = 0; l < voice.layers.length; l++) {
+        var layer = voice.layers[l];
+        var classId = layer.region.values[GEN.exclusiveClass] || 0;
+        if (classId && classes.indexOf(classId) >= 0) {
+          releaseLayer(voice, layer, 0.300, true);
+        }
       }
 
-      try { layer.source.stop(Math.max(now + 0.005, endTime + 0.025)); }
-      catch (ignoreStop) {}
+      if (voice.layers.length &&
+          voice.layers.every(function (layer) { return layer.released; })) {
+        voice.released = true;
+      }
     }
   }
 
@@ -3058,6 +3107,7 @@
       if (startGeneration !== playbackGeneration || soundFont !== font) return;
       if (options.keyboard && !keyboardHolds[note]) return;
 
+      releaseExclusiveLayers(matches);
       var startTime = audioContext.currentTime + 0.015;
       var voice = {
         note: note,
@@ -3099,6 +3149,8 @@
             region: region,
             layout: layout,
             gainScale: gainScale,
+            released: false,
+            releaseEndTime: 0,
             ended: false
           };
           voice.layers.push(layer);
@@ -3391,7 +3443,8 @@
           keyHigh: splitByKey ? note : keyLast,
           velocityLow: region.velocityRange.low,
           velocityHigh: region.velocityRange.high,
-          sampleIndex: descriptorIndex
+          sampleIndex: descriptorIndex,
+          exclusiveClass: region.values[GEN.exclusiveClass] || 0
         });
 
         if (zoneEntries.length > MAX_EXPORT_ZONES ||
@@ -3414,7 +3467,8 @@
     lines.push("// Source: " + currentFileName.replace(/[\r\n]/g, " ").replace(/\*\//g, "* /"));
     lines.push("// Preset: " + preset.name.replace(/[\r\n]/g, " "));
     lines.push("// Bank " + preset.bank + ", program " + preset.program + ".");
-    lines.push("// Key and velocity zones are retained; overlapping zones become simultaneous sample layers.");
+    lines.push("// Key/velocity zones and SF2 exclusive classes are retained.");
+    lines.push("// A new note releases older same-channel voices in matching nonzero classes.");
     lines.push("// Linked stereo sample pairs are preserved as separate left/right PCM arrays.");
     lines.push("// Requires AudioSynthWavetableV2 (fixed 18/14 phase format).");
     lines.push("// Legacy AudioSynthWavetable data is not modified.");
@@ -3485,7 +3539,8 @@
       var zone = zoneEntries[z];
       lines.push("    { " + zone.keyLow + ", " + zone.keyHigh + ", " +
         zone.velocityLow + ", " + zone.velocityHigh + ", " +
-        prefix + "Samples[" + zone.sampleIndex + "] }" +
+        prefix + "Samples[" + zone.sampleIndex + "], " +
+        zone.exclusiveClass + "U }" +
         (z === zoneEntries.length - 1 ? "" : ","));
     }
     lines.push("};");
