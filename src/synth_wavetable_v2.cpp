@@ -187,6 +187,9 @@ bool AudioSynthWavetableV2::setInstrument(const instrument_data &newInstrument) 
     instrument_ = &newInstrument;
     sampleCountScale_ = currentSampleRate / AUDIO_SAMPLE_RATE_EXACT;
     phaseIncrementScale_ = AUDIO_SAMPLE_RATE_EXACT / currentSampleRate;
+    exclusiveReleaseCount_ = scaleSampleCount(
+        (uint32_t)(AUDIO_SAMPLE_RATE_EXACT * 0.300f / ENVELOPE_PERIOD + 0.5f));
+    if (exclusiveReleaseCount_ == 0) exclusiveReleaseCount_ = 1;
 
     for (uint8_t i = 0; i < MAX_NOTES; ++i) {
         notes_[i] = NoteState{};
@@ -251,14 +254,14 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
         return 0;
     }
 
-    const sample_data *matchingSamples[MAX_SAMPLE_LAYERS_PER_NOTE];
+    const zone_data *matchingZones[MAX_SAMPLE_LAYERS_PER_NOTE];
     uint8_t layerCount = 0;
     for (uint16_t i = 0; i < instrument->ZONE_COUNT; ++i) {
         const zone_data &zone = instrument->ZONES[i];
         if (note >= zone.KEY_LOW && note <= zone.KEY_HIGH &&
             velocity >= zone.VELOCITY_LOW && velocity <= zone.VELOCITY_HIGH) {
             if (layerCount < MAX_SAMPLE_LAYERS_PER_NOTE) {
-                matchingSamples[layerCount++] = zone.SAMPLE;
+                matchingZones[layerCount++] = &zone;
             } else {
                 break;
             }
@@ -271,7 +274,7 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
     uint32_t phaseIncrements[MAX_SAMPLE_LAYERS_PER_NOTE];
     for (uint8_t layer = 0; layer < layerCount; ++layer) {
         phaseIncrements[layer] = wavetableV2PhaseIncrement(
-            frequencyQ16, matchingSamples[layer]->PER_HERTZ_PHASE_INCREMENT,
+            frequencyQ16, matchingZones[layer]->SAMPLE->PER_HERTZ_PHASE_INCREMENT,
             phaseScale);
     }
 
@@ -331,6 +334,10 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
         return 0;
     }
 
+    // Stop older voices whose instrument zones share an exclusive class with
+    // any zone selected by this Note-On. New layers have not been allocated yet.
+    releaseExclusiveVoicesLocked(channel, matchingZones, layerCount);
+
     uint32_t token = ++nextToken_;
     if (token == 0) token = ++nextToken_;
 
@@ -350,7 +357,8 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
     for (uint8_t layer = 0; layer < layerCount; ++layer) {
         const uint16_t slot = freeSlots[layer];
         SampleVoice &voice = sampleVoices_[slot];
-        const sample_data *sample = matchingSamples[layer];
+        const zone_data &zone = *matchingZones[layer];
+        const sample_data *sample = zone.SAMPLE;
 
         voice = SampleVoice{};
         voice.active = true;
@@ -358,6 +366,7 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
         voice.noteSlot = (uint8_t)noteSlot;
         voice.noteToken = token;
         voice.sample = sample;
+        voice.exclusiveClass = zone.EXCLUSIVE_CLASS;
         voice.phase = 0;
         voice.phaseIncrement = phaseIncrements[layer];
 
@@ -396,14 +405,17 @@ uint8_t AudioSynthWavetableV2::noteOn(int note, int velocity, uint8_t channel) {
 }
 
 void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice) {
+    beginReleaseLocked(voice, voice.releaseCount, false);
+}
+
+void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice,
+                                                uint32_t releaseCount,
+                                                bool shortenExisting) {
     if (!voice.active) return;
 
     voice.released = true;
-    if (voice.envelopeState == STATE_IDLE || voice.envelopeState == STATE_RELEASE) {
-        return;
-    }
+    if (voice.envelopeState == STATE_IDLE) return;
 
-    uint32_t releaseCount = voice.releaseCount;
     if (releaseCount == 0) releaseCount = 1;
 
     // The render loop counts samples directly. Keep the count in 32 bits so
@@ -411,8 +423,27 @@ void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice) {
     // times at the largest whole ENVELOPE_PERIOD count that fits.
     const uint32_t maxReleaseCount = UINT32_MAX / ENVELOPE_PERIOD;
     if (releaseCount > maxReleaseCount) releaseCount = maxReleaseCount;
-    voice.releaseSamplesRemaining = releaseCount * ENVELOPE_PERIOD;
+    const uint32_t releaseSamples = releaseCount * ENVELOPE_PERIOD;
 
+    if (voice.envelopeState == STATE_RELEASE) {
+        // Normal Note-Off must not restart an active release. An exclusive
+        // class may shorten a longer release, using the current Q16.31 gain
+        // rather than the envelope multiplier (which is no longer updated).
+        if (!shortenExisting || voice.releaseSamplesRemaining <= releaseSamples) {
+            return;
+        }
+
+        const uint64_t currentGain =
+            ((uint64_t)voice.releaseGain << 31) | voice.releaseGainFraction;
+        const uint64_t releaseStep = currentGain / releaseSamples;
+        voice.releaseSamplesRemaining = releaseSamples;
+        voice.releaseGainStep = (uint16_t)(releaseStep >> 31);
+        voice.releaseGainStepFraction =
+            (uint32_t)(releaseStep & 0x7FFFFFFFULL);
+        return;
+    }
+
+    voice.releaseSamplesRemaining = releaseSamples;
     voice.envelopeState = STATE_RELEASE;
     voice.envelopeCount = 0;
     voice.envelopeSubCount = 0;
@@ -442,7 +473,66 @@ void AudioSynthWavetableV2::beginReleaseLocked(SampleVoice &voice) {
     voice.releaseGainStep = (uint16_t)(gainStepProduct >> 31);
     voice.releaseGainStepFraction =
         (uint32_t)(gainStepProduct & 0x7FFFFFFFULL);
+}
 
+void AudioSynthWavetableV2::releaseExclusiveVoicesLocked(
+    uint8_t channel, const zone_data *const *zones, uint8_t zoneCount) {
+    if (zones == nullptr || zoneCount == 0) return;
+
+    uint32_t affectedNoteMask = 0;
+
+    // Note-On processing is control-plane work. Search the compact active list
+    // once; the sample rendering loop receives no exclusive-class checks.
+    for (uint16_t i = 0; i < activeVoiceCount_; ++i) {
+        SampleVoice &voice = sampleVoices_[activeVoiceSlots_[i]];
+        if (!voice.active || voice.exclusiveClass == 0 ||
+            voice.noteSlot >= MAX_NOTES) {
+            continue;
+        }
+
+        const NoteState &oldNote = notes_[voice.noteSlot];
+        if (!oldNote.active || oldNote.token != voice.noteToken ||
+            oldNote.channel != channel) {
+            continue;
+        }
+
+        bool exclusiveMatch = false;
+        for (uint8_t zoneIndex = 0; zoneIndex < zoneCount; ++zoneIndex) {
+            if (zones[zoneIndex]->EXCLUSIVE_CLASS == voice.exclusiveClass) {
+                exclusiveMatch = true;
+                break;
+            }
+        }
+
+        if (!exclusiveMatch) continue;
+
+        beginReleaseLocked(voice, exclusiveReleaseCount_, true);
+        affectedNoteMask |= (1UL << voice.noteSlot);
+    }
+
+    // A NoteState can contain layers from more than one exclusive class.
+    // Mark it no longer held only when all of its active layers are releasing.
+    for (uint8_t noteSlot = 0; noteSlot < MAX_NOTES; ++noteSlot) {
+        if ((affectedNoteMask & (1UL << noteSlot)) == 0) continue;
+
+        NoteState &state = notes_[noteSlot];
+        if (!state.active) continue;
+
+        bool hasUnreleasedVoice = false;
+        for (uint16_t i = 0; i < activeVoiceCount_; ++i) {
+            const SampleVoice &voice = sampleVoices_[activeVoiceSlots_[i]];
+            if (voice.active && voice.noteSlot == noteSlot &&
+                voice.noteToken == state.token && !voice.released) {
+                hasUnreleasedVoice = true;
+                break;
+            }
+        }
+
+        if (!hasUnreleasedVoice) {
+            state.keyDown = false;
+            state.sustainHeld = false;
+        }
+    }
 }
 
 void AudioSynthWavetableV2::compactInactiveVoices() {
